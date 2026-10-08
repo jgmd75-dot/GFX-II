@@ -753,11 +753,11 @@ ui_begin(860, 556);
 // GRAND: indigo into plum; UPRIGHT: pastel blue into cyan
 uprt = slider2 > 0.5;
 uprt ? (
-  P_TOP = 0xCFE6F7; P_BOT = 0x8FD3E3; INK = 0x1F2D4A; NEON = 0xE8489A; CYAN = 0x5CF0FF; SUN1 = 0xFFC27A; SUN2 = 0xFF7AB6;
-  STC = 0x1D6F9A; TCORE = 0xD93A8C; STAR = 0.0;
+  P_TOP = 0x9DBBD6; P_BOT = 0x6AA6BE; INK = 0x1F2D4A; NEON = 0xE8489A; CYAN = 0x5CF0FF; SUN1 = 0xFFC27A; SUN2 = 0xFF7AB6;
+  STC = 0x154F70; TCORE = 0x5B2A8C; TGLO = 0x8A4FD0; STAR = 0.0;
 ) : (
   P_TOP = 0x160D2E; P_BOT = 0x3B1247; INK = 0xD9D2F2; NEON = 0xFF4FB4; CYAN = 0x5CF0FF; SUN1 = 0xFFB347; SUN2 = 0xFF3E8A;
-  STC = CYAN; TCORE = 0xFFD6F0; STAR = 1;
+  STC = CYAN; TCORE = 0xFFD6F0; TGLO = NEON; STAR = 1;
 );
 GOLD = CYAN; GOLDL = CYAN; LEDC = NEON;
 // ---------- helpers ----------
@@ -827,7 +827,7 @@ ui_col(0xB8923A); gfx_circle(50 * sc, 58 * sc, 18 * sc, 1, 1);
 ui_cola(0xFFFFFF, 0.25); gfx_circle(45 * sc, 52 * sc, 8 * sc, 1, 1);
 gfx_setfont(2); ui_col(0x1A1408); ui_text(50 * sc, 51 * sc, "GFX");
 gfx_setfont(6, "Georgia", 30 * sc, 'bi');
-k_ = 0; loop(8, ui_cola(NEON, 0.08); gfx_x = (80 + 2.5 * cos(k_ * 0.785)) * sc; gfx_y = (34 + 2.5 * sin(k_ * 0.785)) * sc; gfx_drawstr("Harbour Keys"); k_ += 1;);
+k_ = 0; loop(8, ui_cola(TGLO, 0.08); gfx_x = (80 + 2.5 * cos(k_ * 0.785)) * sc; gfx_y = (34 + 2.5 * sin(k_ * 0.785)) * sc; gfx_drawstr("Harbour Keys"); k_ += 1;);
 ui_col(TCORE); gfx_x = 80 * sc; gfx_y = 34 * sc; gfx_drawstr("Harbour Keys");
 gfx_setfont(4); ui_cola(STC, 0.85); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("SYNTHETIC PIANO  /  ROM  /  TAPE  /  MOD RACK");
 
