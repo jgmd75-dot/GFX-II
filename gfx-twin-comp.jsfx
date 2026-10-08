@@ -30,7 +30,7 @@ import gfx-dyn.jsfx-inc
 import gfx-faceplate.jsfx-inc
 
 slider1:0<0,7,1{Init,Drum Bus,Vocal Expressor,Bass Tight,Mix Glue,Parallel Smash,Acoustic Natural,Negative Pump}>-Preset
-slider2:0<0,1,1{A > B,B > A}>-Order
+slider2:0<0,1,1{A then B,B then A}>-Order
 slider3:-20<-40,0,0.1>-A Threshold (dB)
 slider4:40<0,100,1>-A Compression (%)
 slider5:1<0,1,1{Off,On}>-A Soft Knee
