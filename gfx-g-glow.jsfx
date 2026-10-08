@@ -972,7 +972,7 @@ ui_knob(344 * sc, 694 * sc, 61, 1, 2000, 500, 1, slider60 ? "(TIME R)" : "TIME R
 ui_knob(420 * sc, 694 * sc, 62, 0, 95, 35, 0, "FEEDBACK", "%.0f%%");
 ui_knob(488 * sc, 694 * sc, 63, 0, 95, 0, 0, "CROSS", "%.0f%%");
 ui_knob(560 * sc, 694 * sc, 64, 500, 20000, 8000, 1, "LP", "%.0f Hz");
-ui_knob(624 * sc, 694 * sc, 65, 20, 2000, 80, 1, "HP", "%.0f Hz");
+ui_kfilter = 1; ui_knob(624 * sc, 694 * sc, 65, 20, 2000, 80, 1, "HP", "%.0f Hz");
 ui_knob(700 * sc, 694 * sc, 66, 0, 100, 25, 0, "MIX", "%.0f%%");
 ui_cola(INKL, 0.5); gfx_setfont(4);
 gfx_x = 740 * sc; gfx_y = 664 * sc; gfx_drawstr("L <-> R");

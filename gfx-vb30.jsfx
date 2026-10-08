@@ -225,7 +225,7 @@ function knob(slot, row, idx, lo, hi, def, lg, s, hot, val) local(cx, cy) (
   cx = 96 + slot * 84; cy = row ? 288 : 128;
   dy_knob(cx, cy, 17, idx, lo, hi, def, lg, PTR, "", "");
   plate(cx, cy + 27, 66, s, hot);
-  dy_lbl(cx, cy + 50, val, 0.65);
+  dy_act ? dy_lbl(cx, cy + 50, val, 1);   // value on hover / drag only
 );
 // orange heading with fine bracket lines down to the knobs it covers
 function bracket(x0, x1, y, s) local(tw, th, cx) (
@@ -329,7 +329,7 @@ sprintf(#v, "%.0f dB", slider10); knob(0, 1, 10, -70, -25, -50, 0, "FREEZE THR",
 sprintf(#v, "%.0f dB", slider12); knob(1, 1, 12, -80, -20, -60, 0, "GATE THR", 1, #v);
 sprintf(#v, "%.0f dB", slider13); knob(2, 1, 13, 0, 60, 15, 0, "RANGE", 0, #v);
 sprintf(#v, "%.0f ms", slider14); knob(3, 1, 14, 20, 2000, 250, 1, "RELEASE", 0, #v);
-slider16 <= 20.5 ? strcpy(#v, "OFF") : sprintf(#v, "%.0f Hz", slider16); knob(4, 1, 16, 20, 300, 20, 1, "SC HPF", 0, #v);
+slider16 <= 20.5 ? strcpy(#v, "OFF") : sprintf(#v, "%.0f Hz", slider16); dy_kf = 1; knob(4, 1, 16, 20, 300, 20, 1, "SC HPF", 0, #v);
 sprintf(#v, "WET %.0f", slider18); knob(5, 1, 18, 0, 100, 100, 0, "MIX", 0, #v);
 dy_btn(554, 240, slider15 == 0, NEON, "GATE") ? ( slider15 = 0; ui_auto(15); );
 dy_btn(600, 240, slider15 == 1, NEON, "EXP") ? ( slider15 = 1; ui_auto(15); );

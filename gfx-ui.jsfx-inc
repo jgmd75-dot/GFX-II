@@ -37,6 +37,9 @@ function ui_auto(idx) (
   idx == 74 ? slider_automate(slider74) : idx == 75 ? slider_automate(slider75);
 );
 
+// house style: knob values show only on hover / drag (a plugin may set ui_hovval = 0 to show them always)
+ui_hovval = 1;
+
 // ---------- colour ----------
 function ui_col(c) (
   gfx_r = ((c >> 16) & 255) / 255; gfx_g = ((c >> 8) & 255) / 255; gfx_b = (c & 255) / 255; gfx_a = 1;
@@ -915,10 +918,10 @@ function ui_knob_cap(cx, cy, r, a1, act, cap) local(i, t, rc, ca, sa) (
 );
 
 // ---------- filter knob: small knurled HPF / LPF knob (set ui_kfilter = 1 HPF / 2 LPF before ui_knob) ----------
-// knurled black skirt; HPF: black cap, yellow pointer; LPF: yellow cap, black pointer.
+// knurled black skirt; HPF: yellow cap, black pointer (house style: HPF caps are always yellow); LPF: black cap, yellow pointer.
 // Optional printed range at the two ends of the travel: put the texts in #kf_lo / #kf_hi.
 function ui_knob_filter(cx, cy, r, a1, act, kind) local(i, t, cap, ptr, rr) (
-  cap = kind == 2 ? 0xF2C21B : 0x141416; ptr = kind == 2 ? 0x141416 : 0xF2C21B;
+  cap = kind == 1 ? 0xF2C21B : 0x141416; ptr = kind == 1 ? 0x141416 : 0xF2C21B;
   ui_cola(0x000000, 0.4); gfx_circle(cx + 1.5 * sc, cy + 2.5 * sc, r, 1, 1);
   ui_col(0x0E0E10); gfx_circle(cx, cy, r, 1, 1);                       // knurled skirt
   i = 0; loop(28, t = i / 28 * 2 * $pi; ui_cola(0xFFFFFF, i % 2 ? 0.05 : 0.16);
@@ -926,7 +929,7 @@ function ui_knob_filter(cx, cy, r, a1, act, kind) local(i, t, cap, ptr, rr) (
   rr = r * 0.74;
   ui_col(ui_mix(cap, 0x000000, 0.35)); gfx_circle(cx, cy, rr + 1 * sc, 1, 1);
   ui_col(cap); gfx_circle(cx, cy, rr, 1, 1);                               // cap
-  ui_cola(0xFFFFFF, kind == 2 ? 0.28 : 0.10); gfx_circle(cx - rr * 0.3, cy - rr * 0.35, rr * 0.45, 1, 1);
+  ui_cola(0xFFFFFF, kind == 1 ? 0.28 : 0.10); gfx_circle(cx - rr * 0.3, cy - rr * 0.35, rr * 0.45, 1, 1);
   ui_col(cap); gfx_circle(cx + rr * 0.05, cy + rr * 0.1, rr * 0.62, 1, 1);
   ui_kline(cx, cy, a1, rr * 0.15, r * 0.98, 2.2, ptr);                     // pointer
   act ? ( ui_cola(0xFFFFFF, 0.12); gfx_circle(cx, cy, r + 2 * sc, 0, 1); );
@@ -1018,6 +1021,7 @@ function ui_knob(cx, cy, idx, vmin, vmax, vdef, lg, label, fmt)
   ) : (
   // ---------- flat knob (drawn a size smaller than its footprint; label and value keep their places) ----------
   rf = ui_kmini || ui_kcap || ui_kfilter ? r : r * ui_flatk;
+  ui_kfilter > 0 ? ( ui_knob_filter(cx, cy, rf, a1, act, ui_kfilter); ) :   // filter knobs keep their caps in the flat look too
   ui_sec == 2 ? (
     ui_knob_main_flat(cx, cy, rf, a1, n, act, knob_step > 0 ? floor((vmax - vmin) / knob_step + 0.5) : 0,
                       act ? C_KAH : C_KA, act ? C_KAH : C_PTR);

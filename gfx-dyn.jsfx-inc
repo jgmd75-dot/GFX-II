@@ -67,7 +67,7 @@ function dy_tick(cx, cy, r, n, s, col) local(a, ca, sa) (
   ui_cola(col, 0.85); gfx_line((cx + ca * (r + 4)) * sc, (cy + sa * (r + 4)) * sc, (cx + ca * (r + 9)) * sc, (cy + sa * (r + 9)) * sc, 1);
   strlen(s) ? ( gfx_setfont(4); ui_col(col); ui_text((cx + ca * (r + 18)) * sc, (cy + sa * (r + 18) - 5) * sc, s); );
 );
-dy_kst = 7; dy_step = 0; dy_kf = 0;   // dy_kf = 1 / 2: the next knob gets the black (high-pass) / yellow (low-pass) filter cap
+dy_kst = 7; dy_step = 0; dy_kf = 0;   // dy_kf = 1 / 2: the next knob gets the yellow (high-pass) / black (low-pass) filter cap
  dy_nov = 0; dy_num = 0; dy_numc = 0xE8E6E0;   // dy_nov = 1: show a knob's value only while it is touched
 // small filter-style knob: knurled black skirt, a coloured cap, a contrasting pointer
 function dy_fcap(cx, cy, r, a, cap) local(i, t, rr, ptr, ca, sa) (
@@ -188,7 +188,8 @@ function dy_knob(cx, cy, r, idx, lo, hi, def, lg, cap, label, val) local(v, n, d
   dy_step = 0; dy_kf = 0;
   (hov || drag_id == did) ? ( ui_cola(0xFFFFFF, 0.08); gfx_circle(cx * sc, cy * sc, (r + 3) * sc, 1, 1); );
   gfx_setfont(5); ui_col(dy_ink); ui_text(cx * sc, (cy + r + 12) * sc, label);
-  (!dy_nov || hov || drag_id == did) ? dy_lbl(cx, cy + r + 26, val, (hov || drag_id == did) ? 1 : 0.65);
+  dy_act = hov || drag_id == did;   // wrappers that print their own value read this
+  dy_act ? dy_lbl(cx, cy + r + 26, val, 1);   // house style: the value shows on hover / drag only
 );
 function dy_btn(x, y, on, led, s) local(hit) (
   hit = pk_ledbtn(x * sc, y * sc, 40 * sc, 26 * sc, on, led);

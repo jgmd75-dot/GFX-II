@@ -276,12 +276,12 @@ dy_knob(200, 247, 17, 5, 0, 5, 1, 0, TOM, "", "");
 // ---------- TILT ----------
 head(450, 179, "TILT");
 sprintf(#v, "%+.1f dB / %+.1f dB", -slider1, slider1); dy_knob(400, 259, 40, 1, -6, 6, 0, 0, TOM, "", "");
-txt(400, 307, slider1 > 0.04 ? "BRIGHTER" : slider1 < -0.04 ? "DARKER" : "FLAT", 0.9); txt(400, 321, #v, 0.6);
+txt(400, 307, slider1 > 0.04 ? "BRIGHTER" : slider1 < -0.04 ? "DARKER" : "FLAT", 0.9); dy_act ? txt(400, 321, #v, 0.6);
 txt(340, 305, "DARK", 0.5); txt(460, 305, "BRIGHT", 0.5);
 sprintf(#v, "%.0f Hz", slider2); slider2 >= 1000 ? sprintf(#v, "%.2f kHz", slider2 / 1000);
 txt(548, 196, "PIVOT", 0.9);
 dy_knob(548, 235, 16, 2, 100, 5000, 800, 1, TOM, "", "");
-txt(548, 260, #v, 0.7);
+dy_act ? txt(548, 260, #v, 0.7);
 tbtn(506, 287, slider3 == 0, "GENTLE") ? ( slider3 = 0; ui_auto(3); );
 tbtn(552, 287, slider3 == 1, "STEEP") ? ( slider3 = 1; ui_auto(3); );
 // ---------- LOW-PASS ----------

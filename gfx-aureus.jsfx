@@ -525,6 +525,7 @@ function frame(x, y, w, h, title) (
 function knob(id, cx, cy, rad, v, vmin, vmax, bip, def) local(dx, dy, fr, nf, ang, sx, sy, sr, k, t, ca, sa, ta) (
   fr = (v - vmin)/(vmax - vmin);
   dx = mx - cx; dy = my - cy;
+  kn_hot = drag_id == id || (dx*dx + dy*dy) < (rad*rad*1.6);   // house style: values show on hover / drag only
   (mouse_cap & 1) && !(pcap & 1) && drag_id == -1 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
     ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? (
       v = def; kc_t = 0; k_rst = id;
@@ -726,7 +727,7 @@ btn(222, 286, 30, 30, "?", hlp, 6, 0) ? ( hlp = 1; hlp_new = 1; );
 // INPUT trim beside the size picker
 setk(4, knob(94, 284, 300, 16, slider4, -24, 24, 1, 0));
 cblk(); gfx_setfont(5); TC(284, 258, "INPUT");
-gfx_setfont(4); TC(284, 330, fdb(slider4)); touch(94, "INPUT", fdb(slider4));
+gfx_setfont(4); kn_hot ? TC(284, 330, fdb(slider4)); touch(94, "INPUT", fdb(slider4));
 
 // Crossover picker: F1 (x10, x100). Fibonacci 34 / 55 / 89 / 144 (steps ~ x phi) + classic 70
 cblk(); gfx_setfont(5); TX(60, 352, "CROSSOVER  F1   x10   x100");
@@ -799,11 +800,11 @@ loop(4,
     // knob
     rw == 0 ? (
       setk(vi, knob(bb*10 + 1, bx + 162, y0 + 40, 25, slider(vi), -12, 12, 1, 0));
-      cblk(); gfx_setfont(4); TC(bx + 162, y0 + 70, fdb(slider(vi)));
+      cblk(); gfx_setfont(4); kn_hot ? TC(bx + 162, y0 + 70, fdb(slider(vi)));
       touch(bb*10 + 1, bb == 0 ? "SUB EQ" : bb == 1 ? "LOW-MID EQ" : bb == 2 ? "HIGH-MID EQ" : "AIR EQ", fdb(slider(vi)));
     ) : (
       setk(vi, knob(bb*10 + 1 + rw, bx + 162, y0 + 40, 25, slider(vi), 0, 100, 0, 0));
-      cblk(); gfx_setfont(4); TC(bx + 162, y0 + 70, fpct(slider(vi)));
+      cblk(); gfx_setfont(4); kn_hot ? TC(bx + 162, y0 + 70, fpct(slider(vi)));
       touch(bb*10 + 1 + rw, rw == 1 ? (bb == 0 ? "SUB DRIVE" : bb == 1 ? "LOW-MID DRIVE" : bb == 2 ? "HIGH-MID DRIVE" : "AIR DRIVE")
                                     : (bb == 0 ? "SUB COMP" : bb == 1 ? "LOW-MID COMP" : bb == 2 ? "HIGH-MID COMP" : "AIR COMP"), fpct(slider(vi)));
     );
@@ -827,7 +828,7 @@ loop(4,
   cblk(); R(bx + 10, 336, 196, 2);
   setk(base + 6, knob(bb*10 + 4, bx + 54, 386, 24, slider(base + 6), -12, 12, 1, 0));
   cblk(); gfx_setfont(3); TC(bx + 54, 420, "GAIN");
-  gfx_setfont(4); TC(bx + 54, 438, fdb(slider(base + 6)));
+  gfx_setfont(4); kn_hot ? TC(bx + 54, 438, fdb(slider(base + 6)));
   touch(bb*10 + 4, bb == 0 ? "SUB GAIN" : bb == 1 ? "LOW-MID GAIN" : bb == 2 ? "HIGH-MID GAIN" : "AIR GAIN", fdb(slider(base + 6)));
   so = slider(base + 7) > 0.5; mu = slider(base + 8) > 0.5;
   btn(bx + 106, 366, 52, 34, "SOLO", so, 4, 0) ? setk(base + 7, !so);
@@ -843,11 +844,11 @@ vu(1312, 160, vuR, "RIGHT", vnd + 1);
 
 frame(1305, 300, 245, 160, "MASTER");
 setk(2, knob(91, 1352, 352, 24, slider2, 0, 100, 0, 25));
-cblk(); gfx_setfont(3); TC(1352, 386, "DRIFT"); gfx_setfont(4); TC(1352, 404, fpct(slider2)); touch(91, "DRIFT (PHI)", fpct(slider2));
+cblk(); gfx_setfont(3); TC(1352, 386, "DRIFT"); gfx_setfont(4); kn_hot ? TC(1352, 404, fpct(slider2)); touch(91, "DRIFT (PHI)", fpct(slider2));
 setk(5, knob(92, 1428, 352, 24, slider5, 0, 100, 0, 100));
-cblk(); gfx_setfont(3); TC(1428, 386, "MIX"); gfx_setfont(4); TC(1428, 404, fpct(slider5)); touch(92, "MIX", fpct(slider5));
+cblk(); gfx_setfont(3); TC(1428, 386, "MIX"); gfx_setfont(4); kn_hot ? TC(1428, 404, fpct(slider5)); touch(92, "MIX", fpct(slider5));
 setk(3, knob(93, 1504, 352, 24, slider3, -24, 12, 1, 0));
-cblk(); gfx_setfont(3); TC(1504, 386, "OUTPUT"); gfx_setfont(4); TC(1504, 404, fdb(slider3)); touch(93, "OUTPUT", fdb(slider3));
+cblk(); gfx_setfont(3); TC(1504, 386, "OUTPUT"); gfx_setfont(4); kn_hot ? TC(1504, 404, fdb(slider3)); touch(93, "OUTPUT", fdb(slider3));
 mLim > 0.5 ? col(1.0, 0.18, 0.10) : col(0.35, 0.08, 0.05); CIRC(1328, 438, 6, 1);
 cblk(); gfx_setfont(5); TX(1340, 432, "LIMIT");
 screw(1530, 440);
