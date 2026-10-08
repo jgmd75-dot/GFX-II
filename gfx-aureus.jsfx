@@ -461,7 +461,7 @@ hw = ui_hw;
   A_R = 0.62; A_G = 0.42; A_B = 0.02;          // knob value arc
 ) : (
   Y_R = 0.184; Y_G = 0.369; Y_B = 0.353;       // faceplate petrol teal
-  K_R = 0.95; K_G = 0.91; K_B = 0.82;          // cream ink
+  K_R = 0.933; K_G = 0.914; K_B = 0.871;       // lime white ink (#EEE9DE)
   A_R = 0.98; A_G = 0.72; A_B = 0.24;          // knob value arc (amber)
 );
 
@@ -484,7 +484,7 @@ function cnear() ( col(0.07, 0.07, 0.07); );   // stays black in every theme (me
 function setk(idx, v) ( slider(idx) != v ? ( slider(idx) = v; slider_automate(2^(idx - 1)); ); );
 // HW: a raised bevel (light top-left, dark bottom-right); inset = 1 for a recess
 function bev(x, y, w, h, inset) (
-  gfx_a = 0.30; inset ? col(0, 0, 0) : col(1, 1, 1); R(x, y, w, 1.5); R(x, y, 1.5, h);
+  gfx_a = au_thm ? 0.18 : 0.30; inset ? col(0, 0, 0) : col(1, 1, 1); R(x, y, w, 1.5); R(x, y, 1.5, h);
   inset ? col(1, 1, 1) : col(0, 0, 0); R(x, y + h - 1.5, w, 1.5); R(x + w - 1.5, y, 1.5, h); gfx_a = 1;
 );
 
@@ -499,7 +499,7 @@ function btn(x, y, w, h, lbl, on, fnt, red) local(sw, sh) (
   hw ? ( gfx_a = 0.35; col(0, 0, 0); R(x + 1, y + 2.5, w, h); gfx_a = 1; );
   on ? ( red ? col(0.86, 0.14, 0.10) : cblk(); ) : cyel();
   R(x, y, w, h);
-  hw ? ( gfx_a = on ? 0.10 : 0.22; col(1, 1, 1); R(x + 2, y + 2, w - 4, h*0.42); gfx_a = 1; bev(x, y, w, h, on); );
+  hw ? ( gfx_a = (on ? 0.10 : 0.22)*(au_thm ? 0.4 : 1); col(1, 1, 1); R(x + 2, y + 2, w - 4, h*0.42); gfx_a = 1; bev(x, y, w, h, on); );
   cblk(); RO(x, y, w, h);
   on ? ( red ? col(1, 1, 1) : cyel(); ) : cblk();
   gfx_setfont(fnt);
@@ -564,8 +564,14 @@ function knob(id, cx, cy, rad, v, vmin, vmax, bip, def) local(dx, dy, fr, nf, an
     gfx_line(sx + sin(ta)*sr*0.82, sy - cos(ta)*sr*0.82, sx + sin(ta)*(sr - 1), sy - cos(ta)*(sr - 1), 1);
     k += 1;
   );
+  kc_r >= 0 ? (
+    col(kc_r*0.7, kc_g*0.7, kc_b*0.7); gfx_circle(sx, sy, sr*0.76, 1, 1);
+    col(kc_r, kc_g, kc_b); gfx_circle(sx, sy, sr*0.72, 1, 1);
+    col(min(1, kc_r + 0.22), min(1, kc_g + 0.22), min(1, kc_b + 0.22)); gfx_circle(sx - sr*0.2, sy - sr*0.24, sr*0.2, 1, 1);
+  ) : (
   col(0.11, 0.11, 0.12); gfx_circle(sx, sy, sr*0.74, 1, 1);
   col(0.22, 0.22, 0.24); gfx_circle(sx - sr*0.2, sy - sr*0.24, sr*0.2, 1, 1);
+  );
   // white pointer
   col(0.97, 0.97, 0.95);
   sa = sin(ang); ca = cos(ang);
@@ -648,6 +654,7 @@ function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cy
 // Draw
 // =====================================================================
 col(0.10, 0.10, 0.10); gfx_rect(0, 0, gfx_w, gfx_h);       // chassis around the faceplate
+kc_r = -1;
 cyel(); R(0, 0, 1600, 480);
 hw ? (
   // brushed enamel: fine streaks and a soft top light
@@ -678,7 +685,7 @@ cblk(); R(44, 0, 1512, 3); R(44, 477, 1512, 3);
 
 // ---- Left: brand, LCD, presets, size ----
 cblk(); gfx_setfont(1); TX(60, 18, "AUREUS");
-gfx_setfont(5); TX(64, 76, "DECADIC  φ  PROCESSOR");
+gfx_setfont(5); TX(64, 76, "MULTIBAND PROCESSOR");
 
 cnear(); R(60, 104, 266, 92);
 col(0.07, 0.05, 0.02); R(64, 108, 258, 84);
@@ -764,7 +771,11 @@ loop(4,
   lvl > 0.89 ? col(1.0, 0.18, 0.10) : lvl > 0.01 ? col(0.25, 0.95, 0.30) : col(0.12, 0.25, 0.12);
   CIRC(bx + 216, 37, 6, 1);
 
-  // three rows: EQ / DRIVE / COMP
+  // three rows: EQ / DRIVE / COMP  (HW: band-coloured caps - SUB brown, LOW-MID blue, HIGH-MID green, AIR red)
+  hw ? (
+    bb == 0 ? ( kc_r = 0.55; kc_g = 0.35; kc_b = 0.17; ) : bb == 1 ? ( kc_r = 0.24; kc_g = 0.44; kc_b = 0.80; ) :
+    bb == 2 ? ( kc_r = 0.20; kc_g = 0.63; kc_b = 0.32; ) : ( kc_r = 0.82; kc_g = 0.18; kc_b = 0.16; );
+  );
   rw = 0;
   loop(3,
     y0 = 60 + rw*92;
@@ -806,6 +817,7 @@ loop(4,
     rw += 1;
   );
 
+  kc_r = -1;
   // GR ladder (0 .. -20 dB, top to bottom)
   grv = bq_[21];
   cnear(); R(bx + 208, 62, 14, 266);
