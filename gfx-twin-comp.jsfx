@@ -1,13 +1,13 @@
 desc:GFX Twin Comp
 // gfx-twin-comp - two classic compressors in one rack, in either order
-//tags: dynamics compressor vca rms overeasy expressor dual
+//tags: dynamics compressor vca rms softknee expressor dual
 //author: JGWizrad / Garden FX (GFX)
 //
-// A  VCA      in the spirit of the dbx 160: true-RMS detection, a fast VCA, OVEREASY soft knee (or hard).
+// A  VCA      in the spirit of the dbx 160: true-RMS detection, a fast VCA, SOFT KNEE (or hard).
 //             COMPRESSION runs 1:1 .. INF:1 and on past it into negative ratios (louder in, quieter out).
 //             Program-dependent timing: the attack quickens the further the signal is over threshold
 //             (about 15 ms for 10 dB, 5 ms for 20 dB) and the release recovers at a steady 120 dB per second.
-//             BELOW / OVEREASY / ABOVE lamps show where the level sits against the threshold.
+//             BELOW / KNEE / ABOVE lamps show where the level sits against the threshold.
 // B  EXPRESSOR in the spirit of the Aphex 651: peak-sensing, smooth knee, DRIVE / RATIO / ATTACK / RELEASE.
 //             EASYRIDER: automatic, opto-smooth timing (quick attack, a two-stage programme-dependent release).
 //             HF EXP: brings the top back up in proportion to the gain reduction, so heavy compression stays open.
@@ -32,7 +32,7 @@ slider1:0<0,7,1{Init,Drum Bus,Vocal Expressor,Bass Tight,Mix Glue,Parallel Smash
 slider2:2<0,3,1{A only,B only,A > B,B > A}>-Order
 slider3:-20<-40,0,0.1>-A Threshold (dB)
 slider4:40<0,100,1>-A Compression (%)
-slider5:1<0,1,1{Off,On}>-A OverEasy
+slider5:1<0,1,1{Off,On}>-A Soft Knee
 slider6:0<-20,20,0.1>-A Output (dB)
 slider7:-20<-40,0,0.1>-B Drive (dB)
 slider8:3<1,20,0.1>-B Ratio
@@ -56,12 +56,12 @@ function g2db(g) ( 8.68588963807*log(max(g, 0.0000000001)); );
 function tc(s) ( 1 - exp(-1/(max(s, 0.000001)*srate)); );
 ost_init(alloc(4096));
 
-// ---------- engine A: VCA, true RMS, OverEasy, program-dependent timing ----------
+// ---------- engine A: VCA, true RMS, soft knee, program-dependent timing ----------
 function engA() local(ms_, lv, over, tg, k) (
   aMs += (max(xL*xL, xR*xR) - aMs)*aRmsC;
   lv = 10*log10(max(aMs, 0.0000000001)) + 3;          // RMS, read against peak dBFS (a sine's RMS + 3 dB)
   over = lv - aThr;
-  aLamp = over < -aKn*0.5 ? 0 : over <= aKn*0.5 && aKn > 0 ? 1 : 2;   // BELOW / OVEREASY / ABOVE
+  aLamp = over < -aKn*0.5 ? 0 : over <= aKn*0.5 && aKn > 0 ? 1 : 2;   // BELOW / KNEE / ABOVE
   tg = min(40, dy_curve(over, aKn)*aSl);
   tg > aGr ? ( k = tc(max(0.0015, 0.15/max(1, tg - aGr))); aGr += (tg - aGr)*k; )
            : aGr = max(tg, aGr - 120/srate);            // 120 dB per second
@@ -195,7 +195,9 @@ function tog(idx) ( slider(idx) = slider(idx) < 0.5; ui_auto(idx); );
 function touch(idx, name, val) ( drag_id == 1600 + idx ? setmsg(name, val); );
 function knob(idx, cx, cy, r, lo, hi, def, lg, cap, ink, st, label, val) (
   dy_kst = st; dy_ink = ink; dy_ntick = 11;
-  dy_knob(cx*0.75, cy*0.75, r*0.75, idx, lo, hi, def, lg, cap, label, val);
+  // house style: the value only shows while the mouse is over the knob (or dragging it)
+  dy_knob(cx*0.75, cy*0.75, r*0.75, idx, lo, hi, def, lg, cap, label,
+    drag_id == 1600 + idx || inbox(cx - r - 8, cy - r - 8, 2*r + 16, 2*r + 52) ? val : "");
   touch(idx, label, val);
 );
 // lit square key with its caption underneath
@@ -259,13 +261,13 @@ o_hov && pressed && drag_id == 0 ? (
 ui_bbckey(712*qs, 16*qs, 150*qs, 44*qs, ord == 0 ? "A ONLY" : ord == 1 ? "B ONLY" : ord == 2 ? "A  >  B" : "B  >  A", o_held, 1, 1, 1, o_hov, o_held, 13);
 gfx_setfont(8); ui_col(0xA8ABB0); TC(787, 62, "ORDER");
 
-knob(16, 900, 36, 16, 0, 100, 100, 0, 0x9DA2A8, 0xD8D8D2, 7, "", "");
-gfx_setfont(8); ui_col(0xA8ABB0); TC(900, 58, "MIX"); touch(16, "MIX", (sprintf(#tv, "%.0f%%", slider16); #tv));
-knob(17, 966, 36, 16, 0, 100, 20, 0, 0x8A6BD8, 0xD8D8D2, 7, "", "");
-gfx_setfont(8); ui_col(0xA8ABB0); TC(966, 58, "DRIFT"); touch(17, "DRIFT", (sprintf(#tv, "%.0f%%", slider17); #tv));
-ui_okfs = 0.8; ui_outkeys(1010*0.75, 8*0.75, 52*0.75, 12, 2, 18);
+knob(16, 1140, 36, 16, 0, 100, 100, 0, 0x9DA2A8, 0xD8D8D2, 7, "", "");
+gfx_setfont(8); ui_col(0xA8ABB0); TC(1140, 58, "MIX"); touch(16, "MIX", (sprintf(#tv, "%.0f%%", slider16); #tv));
+knob(17, 1206, 36, 16, 0, 100, 20, 0, 0x8A6BD8, 0xD8D8D2, 7, "", "");
+gfx_setfont(8); ui_col(0xA8ABB0); TC(1206, 58, "DRIFT"); touch(17, "DRIFT", (sprintf(#tv, "%.0f%%", slider17); #tv));
+ui_okfs = 0.8; ui_outkeys(1262*0.75, 8*0.75, 52*0.75, 12, 2, 18);
 gfx_setfont(8, "Trebuchet MS", 13.5*qs, 'b');
-ui_size_picker(1250*qs, 26*qs);
+ui_size_picker(1336*qs, 26*qs);
 
 // ---- half-rack A: brushed silver ----
 INKA = 0x1A1B1E;
@@ -276,12 +278,12 @@ gfx_setfont(13); ui_col(INKA); TX(44, 98, "A");
 gfx_setfont(8); ui_col(0x3C4048); TX(70, 104, "VCA COMPRESSOR  -  TRUE RMS");
 // threshold lamps
 lamp(66, 178, aLamp == 0, GRN); lamp(66, 220, aLamp == 1 && aKn > 0, AMB); lamp(66, 262, aLamp == 2, RED);
-gfx_setfont(8); ui_col(INKA); TX(82, 171, "BELOW"); TX(82, 213, "OVEREASY"); TX(82, 255, "ABOVE");
+gfx_setfont(8); ui_col(INKA); TX(82, 171, "BELOW"); TX(82, 213, "KNEE"); TX(82, 255, "ABOVE");
 sprintf(#vA1, "%.1f dB", slider3); knob(3, 240, 216, 40, -40, 0, -20, 0, 0x0D0D0F, INKA, 0, "THRESHOLD", #vA1);
 s_ = slider4/100; s_ < 0.795 ? sprintf(#vA2, "%.1f:1", 1/max(0.0001, 1 - s_/0.8)) : s_ <= 0.805 ? strcpy(#vA2, "INF:1") : sprintf(#vA2, "-%.1f:1", 1/max(0.0001, (s_ - 0.8)/0.2*0.5));
 knob(4, 380, 216, 40, 0, 100, 40, 0, 0x0D0D0F, INKA, 0, "COMPRESSION", #vA2);
 sprintf(#vA3, "%+.1f dB", slider6); knob(6, 520, 216, 32, -20, 20, 0, 0, 0x0D0D0F, INKA, 0, "OUTPUT", #vA3);
-key(590, 150, 54, 40, slider5 > 0.5, AMB, "OVEREASY", INKA) ? ( tog(5); setmsg("OVEREASY", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
+key(590, 150, 54, 40, slider5 > 0.5, AMB, "SOFT KNEE", INKA) ? ( tog(5); setmsg("KNEE", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
 vGa = max(mGrA, vGa*0.9); mGrA = 0;
 grl(670, 136, 186, vGa, INKA, "GR");
 
