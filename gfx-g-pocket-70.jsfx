@@ -1282,6 +1282,7 @@ update();
 
 @block
 last_p < 0 ? last_p = slider1 : slider1 != last_p ? ( load_patch(slider1); last_p = slider1; );
+update();                                       // knobs turned on the GUI take effect here
 evn = 0; pc_req = -1;
 while (midirecv(mofs, m1, m2, m3)) (
   stt = m1 & 0xF0; mch = (m1 & 0x0F) + 1;
