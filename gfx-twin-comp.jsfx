@@ -277,13 +277,13 @@ rscrew(24, 100); rscrew(24, 340); rscrew(700, 100); rscrew(700, 340);
 gfx_setfont(13); ui_col(INKA); TX(44, 98, "A");
 gfx_setfont(8); ui_col(0x3C4048); TX(70, 104, "VCA COMPRESSOR  -  TRUE RMS");
 // threshold lamps
-lamp(66, 178, aLamp == 0, GRN); lamp(66, 220, aLamp == 1 && aKn > 0, AMB); lamp(66, 262, aLamp == 2, RED);
-gfx_setfont(8); ui_col(INKA); TX(82, 171, "BELOW"); TX(82, 213, "KNEE"); TX(82, 255, "ABOVE");
-sprintf(#vA1, "%.1f dB", slider3); knob(3, 228, 216, 40, -40, 0, -20, 0, 0x0D0D0F, INKA, 0, "THRESHOLD", #vA1);
+lamp(66, 150, aLamp == 0, GRN); lamp(66, 186, aLamp == 1 && aKn > 0, AMB); lamp(66, 222, aLamp == 2, RED);
+gfx_setfont(8); ui_col(INKA); TX(82, 143, "BELOW"); TX(82, 179, "KNEE"); TX(82, 215, "ABOVE");
+sprintf(#vA1, "%.1f dB", slider3); knob(3, 270, 206, 40, -40, 0, -20, 0, 0x0D0D0F, INKA, 0, "THRESHOLD", #vA1);
 s_ = slider4/100; s_ < 0.795 ? sprintf(#vA2, "%.1f:1", 1/max(0.0001, 1 - s_/0.8)) : s_ <= 0.805 ? strcpy(#vA2, "INF:1") : sprintf(#vA2, "-%.1f:1", 1/max(0.0001, (s_ - 0.8)/0.2*0.5));
-knob(4, 392, 216, 40, 0, 100, 40, 0, 0x0D0D0F, INKA, 0, "COMPRESSION", #vA2);
-sprintf(#vA3, "%+.1f dB", slider6); knob(6, 546, 216, 32, -20, 20, 0, 0, 0x0D0D0F, INKA, 0, "OUTPUT", #vA3);
-key(588, 112, 54, 40, slider5 > 0.5, AMB, "SOFT KNEE", INKA) ? ( tog(5); setmsg("KNEE", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
+knob(4, 420, 206, 40, 0, 100, 40, 0, 0x0D0D0F, INKA, 0, "COMPRESSION", #vA2);
+sprintf(#vA3, "%+.1f dB", slider6); knob(6, 570, 214, 32, -20, 20, 0, 0, 0x0D0D0F, INKA, 0, "OUTPUT", #vA3);
+key(58, 256, 54, 40, slider5 > 0.5, AMB, "SOFT KNEE", INKA) ? ( tog(5); setmsg("KNEE", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
 vGa = max(mGrA, vGa*0.9); mGrA = 0;
 grl(670, 136, 186, vGa, INKA, "GR");
 
@@ -303,11 +303,11 @@ slider9 < 10 ? sprintf(#vB3, "%.2f ms", slider9) : sprintf(#vB3, "%.0f ms", slid
 knob(9, 1040, 186, 30, 0.1, 50, 5, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "ATTACK", bEasy ? "AUTO" : #vB3);
 slider10 >= 1000 ? sprintf(#vB4, "%.2f s", slider10/1000) : sprintf(#vB4, "%.0f ms", slider10);
 knob(10, 1136, 186, 30, 30, 3000, 300, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "RELEASE", bEasy ? "AUTO" : #vB4);
-sprintf(#vB5, "%+.1f dB", slider15); knob(15, 1232, 186, 30, -20, 20, 0, 0, 0x9DA2A8, INKB, 7, "OUTPUT", #vB5);
+sprintf(#vB5, "%+.1f dB", slider15); knob(15, 1268, 186, 30, -20, 20, 0, 0, 0x9DA2A8, INKB, 7, "OUTPUT", #vB5);
 key(906, 270, 70, 30, slider11 > 0.5, BLU, "AUTO", INKB) ? ( tog(11); setmsg("AUTO", slider11 > 0.5 ? "AUTO TIMING" : "MANUAL"); );
 key(1002, 270, 70, 30, slider13 > 0.5, BLU, "SPR", INKB) ? ( tog(13); setmsg("SPR", slider13 > 0.5 ? "LOW END ROTATED" : "OFF"); );
 key(1098, 270, 70, 30, slider14 > 0.5, BLU, "LF CUT", INKB) ? ( tog(14); setmsg("DETECTOR LF CUT", slider14 > 0.5 ? "150 Hz" : "OFF"); );
-sprintf(#vB6, "%.0f%%", slider12); knob(12, 1232, 286, 20, 0, 100, 30, 0, 0xE8E2D4, INKB, 7, "HF EXP", #vB6);
+sprintf(#vB6, "%.0f%%", slider12); knob(12, 1268, 286, 20, 0, 100, 30, 0, 0xE8E2D4, INKB, 7, "HF EXP", #vB6);
 vGb = max(mGrB, vGb*0.9); mGrB = 0;
 grl(1336, 136, 186, vGb, INKB, "GR");
 vOut = max(mOut, vOut*0.9);
