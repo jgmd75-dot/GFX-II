@@ -457,12 +457,22 @@ labs[0] = -24; labs[1] = -18; labs[2] = -12; labs[3] = -6; labs[4] = -3; labs[5]
 i = 0; loop(6, cols[i] = i < 4 ? GRN : i < 5 ? YEL : RED; i += 1; );
 ladder(640, 214, "OUTPUT", 6, th, cols, labs, g2db(mOut));
 
-// ---- WARMTH: level LEDs 1-6 and the key ----
+// ---- WARMTH: a square seven-segment readout (warm yellow -> red as it climbs) over a square orange key ----
 wl = floor(slider4 + 0.5);
-gfx_setfont(9); i = 0;
-loop(6, led(950 + i*17, 112, 4, wl >= i + 1, YEL); ui_col(INK2); sprintf(#wn, "%d", i + 1); TC(950 + i*17, 88, #wn); i += 1; );
-wkey(960, 166, 64, 34) ? ( slider4 = wl >= 6 ? 0 : wl + 1; ui_auto(4); );
-gfx_setfont(7); ui_col(INK); TC(992, 212, "WARMTH");
+wc = ui_mix(0xFFC83C, 0xFF2A14, max(0, wl - 1)/5);
+hw ? ( ui_col(0x020203); R(970, 66, 44, 44); ui_col(0x140A06); R(973, 69, 38, 38); )
+   : ( n_well(970, 66, 44, 44, 5); ui_col(0x1C120C); RR(973, 69, 38, 38, 3); );
+wl ? ( ui_cola(wc, 0.10); R(973, 69, 38, 38); );
+rd_segd(980*qs, 72*qs, 24*qs, 32*qs, wl ? rd_segm('0' + wl) : rd_segm('-'), wl ? wc : 0x5A3418, 0x2A170C, 0);
+hw ? (
+  rd_sq(970*0.75, 136*0.75, 44*0.75, 44*0.75, wl > 0, 0xFF8A1E, "") ? ( slider4 = wl >= 6 ? 0 : wl + 1; ui_auto(4); );
+) : (
+  hov_ = inbox(970, 136, 44, 44);
+  pressed && drag_id == 0 && hov_ ? ( drag_id = -1; slider4 = wl >= 6 ? 0 : wl + 1; ui_auto(4); );
+  n_raised(970, 136, 44, 44, 5, 3);
+  ui_col(wl ? 0xFF8A1E : ui_mix(0xFF8A1E, NB, 0.55)); RR(973, 139, 38, 38, 4);
+);
+gfx_setfont(7); ui_col(INK); TC(992, 192, "WARMTH");
 
 // ---- IRON / BYPASS ----
 led(1166, 88, 5, slider6 > 0.5, AMB);
