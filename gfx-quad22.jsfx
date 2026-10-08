@@ -647,7 +647,7 @@ function plate(x, y, w, h) (
 hw ? ( PNL = 0xC9CCD0; CHS = 0x2E3034; INK = 0x15161A; INK2 = 0x3C4048; TAPE = 0x16171A; TAPET = 0xEDEBE4; ) :
 cr ? ( NB = 0xD0D3D8; NL = 0xF2F4F7; ND = 0xA6ABB4; NW = 0xC3C7CE; NTX = 0x4A5260; NVX = 0x1E232B; )
    : ( NB = 0x1D2433; NL = 0x2B3447; ND = 0x10141D; NW = 0x182030; NTX = 0x9AA8C4; NVX = 0xE6ECF8; );
-LFT = 0xE0503C; EXPC = 0x46C05A;
+LFT = 0xE0503C; EXPC = 0x46C05A; MDG = 0x55595F;   // medium-dark grey caps: EQ + TRIM
 // accents: warm amber on the aluminium hardware, teal on light grey, ice blue on dark blue
 ACC = hw ? 0xF59E1F : cr ? 0x0D8585 : 0x5C99FF;
 hw ? ( AMB = ACC; TAPE = ACC; TAPET = 0x141414; LCDBG = 0x140C04; LCDTX = 0xFFAE2A; ) : (
@@ -764,7 +764,7 @@ loop(4,
   );
   gfx_setfont(8); ui_col(hw ? INK2 : NTX); TC(x0 + 113, 208, "SATURATION");
   mknob(base + 1, x0 + 60, 262, 24, 0, 100, 0, 0, ACC, "DRIVE", fpct(slider(base + 1))); touch(base + 1, "DRIVE", fpct(slider(base + 1)));
-  mknob(base + 3, x0 + 166, 262, 24, -12, 12, 0, 0, CAP_BLU, b_ == 0 ? "LO SHELF" : b_ == 3 ? "HI SHELF" : "BELL", fdb(slider(base + 3)));
+  mknob(base + 3, x0 + 166, 262, 24, -12, 12, 0, 0, MDG, b_ == 0 ? "LO SHELF" : b_ == 3 ? "HI SHELF" : "BELL", fdb(slider(base + 3)));
   touch(base + 3, b_ == 0 ? "LOW SHELF 50 Hz" : b_ == 1 ? "BELL 800 Hz" : b_ == 2 ? "BELL 5 kHz" : "HIGH SHELF 12 kHz", fdb(slider(base + 3)));
   // compand (centre detent)
   cv_ = floor(slider(base + 4) + 0.5);
@@ -785,7 +785,7 @@ plate(938, 110, 254, 482);
 hw ? ( ui_col(0x141518); R(939, 111, 252, 7); ui_col(ACC); R(939, 117, 252, 2); ) : ( ui_col(ACC); RR(958, 113, 214, 5, 2.5); );
 tape(954, 122, "MASTER");
 mknob(5, 1002, 214, 26, 0, 100, 100, 0, ACC, "MIX", fpct(slider5)); touch(5, "DRY / WET MIX", fpct(slider5));
-mknob(2, 1002, 340, 26, -24, 24, 0, 0, CAP_BLU, "TRIM", fdb(slider2)); touch(2, "MASTER TRIM", fdb(slider2));
+mknob(2, 1002, 340, 26, -24, 24, 0, 0, MDG, "TRIM", fdb(slider2)); touch(2, "MASTER TRIM", fdb(slider2));
 mknob(3, 1002, 466, 26, -12, 0, -0.3, 0, CAP_RED, "CEILING", fdb(slider3)); touch(3, "CEILING", fdb(slider3));
 // vertical output meter, -48 .. +3 dB
 mdb = mtr[4] > 0.0000001 ? 20*log10(mtr[4]) : -100;
