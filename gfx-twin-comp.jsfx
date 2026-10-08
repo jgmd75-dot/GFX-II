@@ -9,7 +9,7 @@ desc:GFX Twin Comp
 //             (about 15 ms for 10 dB, 5 ms for 20 dB) and the release recovers at a steady 120 dB per second.
 //             BELOW / KNEE / ABOVE lamps show where the level sits against the threshold.
 // B  EXPRESSOR in the spirit of the Aphex 651: peak-sensing, smooth knee, DRIVE / RATIO / ATTACK / RELEASE.
-//             EASYRIDER: automatic, opto-smooth timing (quick attack, a two-stage programme-dependent release).
+//             AUTO: automatic, opto-smooth timing (quick attack, a two-stage programme-dependent release).
 //             HF EXP: brings the top back up in proportion to the gain reduction, so heavy compression stays open.
 //             SPR: two all-passes at 180 Hz rotate the low end against the top for a tighter, firmer bottom.
 //             LF CUT: a 150 Hz high-pass on the detector only - bass peaks no longer pump the compressor.
@@ -38,7 +38,7 @@ slider7:-20<-40,0,0.1>-B Drive (dB)
 slider8:3<1,20,0.1>-B Ratio
 slider9:5<0.1,50,0.01>-B Attack (ms)
 slider10:300<30,3000,1>-B Release (ms)
-slider11:0<0,1,1{Off,On}>-B Easyrider
+slider11:0<0,1,1{Off,On}>-B Auto
 slider12:30<0,100,1>-B HF Exp (%)
 slider13:0<0,1,1{Off,On}>-B SPR
 slider14:0<0,1,1{Off,On}>-B LF Cut
@@ -123,7 +123,7 @@ t_ = tan($pi*180/srate); bAp = (t_ - 1)/(t_ + 1);
 dGa = dGb = dCa = 1; dwA = dwB = 0; dtA = dtB = 0; dsA = dsB = 0;
 mGrA = mGrB = 0; mOut = 0; aLamp = 0;
 
-// ---------- presets: order, A thr / comp / OE / out, B drive / ratio / att / rel / easy / hfx / spr / lfcut / out, mix ----------
+// ---------- presets: order, A thr / comp / OE / out, B drive / ratio / att / rel / auto / hfx / spr / lfcut / out, mix ----------
 function pa(o, at, ac, ae, ao) ( slider2 = o; slider3 = at; slider4 = ac; slider5 = ae; slider6 = ao; );
 function pb(bd, br, ba, bl, be, bh, bs, bc, bo, m) (
   slider7 = bd; slider8 = br; slider9 = ba; slider10 = bl; slider11 = be; slider12 = bh; slider13 = bs; slider14 = bc; slider15 = bo; slider16 = m;
@@ -279,11 +279,11 @@ gfx_setfont(8); ui_col(0x3C4048); TX(70, 104, "VCA COMPRESSOR  -  TRUE RMS");
 // threshold lamps
 lamp(66, 178, aLamp == 0, GRN); lamp(66, 220, aLamp == 1 && aKn > 0, AMB); lamp(66, 262, aLamp == 2, RED);
 gfx_setfont(8); ui_col(INKA); TX(82, 171, "BELOW"); TX(82, 213, "KNEE"); TX(82, 255, "ABOVE");
-sprintf(#vA1, "%.1f dB", slider3); knob(3, 240, 216, 40, -40, 0, -20, 0, 0x0D0D0F, INKA, 0, "THRESHOLD", #vA1);
+sprintf(#vA1, "%.1f dB", slider3); knob(3, 228, 216, 40, -40, 0, -20, 0, 0x0D0D0F, INKA, 0, "THRESHOLD", #vA1);
 s_ = slider4/100; s_ < 0.795 ? sprintf(#vA2, "%.1f:1", 1/max(0.0001, 1 - s_/0.8)) : s_ <= 0.805 ? strcpy(#vA2, "INF:1") : sprintf(#vA2, "-%.1f:1", 1/max(0.0001, (s_ - 0.8)/0.2*0.5));
-knob(4, 380, 216, 40, 0, 100, 40, 0, 0x0D0D0F, INKA, 0, "COMPRESSION", #vA2);
-sprintf(#vA3, "%+.1f dB", slider6); knob(6, 520, 216, 32, -20, 20, 0, 0, 0x0D0D0F, INKA, 0, "OUTPUT", #vA3);
-key(590, 150, 54, 40, slider5 > 0.5, AMB, "SOFT KNEE", INKA) ? ( tog(5); setmsg("KNEE", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
+knob(4, 392, 216, 40, 0, 100, 40, 0, 0x0D0D0F, INKA, 0, "COMPRESSION", #vA2);
+sprintf(#vA3, "%+.1f dB", slider6); knob(6, 546, 216, 32, -20, 20, 0, 0, 0x0D0D0F, INKA, 0, "OUTPUT", #vA3);
+key(588, 112, 54, 40, slider5 > 0.5, AMB, "SOFT KNEE", INKA) ? ( tog(5); setmsg("KNEE", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
 vGa = max(mGrA, vGa*0.9); mGrA = 0;
 grl(670, 136, 186, vGa, INKA, "GR");
 
@@ -297,26 +297,26 @@ rscrew(740, 106); rscrew(740, 340); rscrew(1416, 106); rscrew(1416, 340);
 gfx_setfont(13); ui_col(INKB); TX(760, 100, "B");
 gfx_setfont(8); ui_col(0xC6CCD4); TX(786, 106, "EXPRESSOR  -  PEAK");
 CB = 0x3A6FB8;
-sprintf(#vB1, "%.1f dB", slider7);  knob(7, 800, 186, 30, -40, 0, -20, 0, CB, INKB, 7, "DRIVE", #vB1);
-sprintf(#vB2, "%.1f:1", slider8);   knob(8, 896, 186, 30, 1, 20, 3, 1, CB, INKB, 7, "RATIO", #vB2);
+sprintf(#vB1, "%.1f dB", slider7);  knob(7, 816, 196, 42, -40, 0, -20, 0, 0xE8B444, INKB, 7, "DRIVE", #vB1);
+sprintf(#vB2, "%.1f:1", slider8);   knob(8, 944, 186, 30, 1, 20, 3, 1, CB, INKB, 7, "RATIO", #vB2);
 slider9 < 10 ? sprintf(#vB3, "%.2f ms", slider9) : sprintf(#vB3, "%.0f ms", slider9);
-knob(9, 992, 186, 30, 0.1, 50, 5, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "ATTACK", bEasy ? "AUTO" : #vB3);
+knob(9, 1040, 186, 30, 0.1, 50, 5, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "ATTACK", bEasy ? "AUTO" : #vB3);
 slider10 >= 1000 ? sprintf(#vB4, "%.2f s", slider10/1000) : sprintf(#vB4, "%.0f ms", slider10);
-knob(10, 1088, 186, 30, 30, 3000, 300, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "RELEASE", bEasy ? "AUTO" : #vB4);
-sprintf(#vB5, "%+.1f dB", slider15); knob(15, 1184, 186, 30, -20, 20, 0, 0, 0x9DA2A8, INKB, 7, "OUTPUT", #vB5);
-key(790, 270, 70, 30, slider11 > 0.5, BLU, "EASYRIDER", INKB) ? ( tog(11); setmsg("EASYRIDER", slider11 > 0.5 ? "AUTO TIMING" : "MANUAL"); );
-key(880, 270, 70, 30, slider13 > 0.5, BLU, "SPR", INKB) ? ( tog(13); setmsg("SPR", slider13 > 0.5 ? "LOW END ROTATED" : "OFF"); );
-key(970, 270, 70, 30, slider14 > 0.5, BLU, "LF CUT", INKB) ? ( tog(14); setmsg("DETECTOR LF CUT", slider14 > 0.5 ? "150 Hz" : "OFF"); );
-sprintf(#vB6, "%.0f%%", slider12); knob(12, 1140, 288, 20, 0, 100, 30, 0, 0xE8E2D4, INKB, 7, "HF EXP", #vB6);
+knob(10, 1136, 186, 30, 30, 3000, 300, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "RELEASE", bEasy ? "AUTO" : #vB4);
+sprintf(#vB5, "%+.1f dB", slider15); knob(15, 1232, 186, 30, -20, 20, 0, 0, 0x9DA2A8, INKB, 7, "OUTPUT", #vB5);
+key(906, 270, 70, 30, slider11 > 0.5, BLU, "AUTO", INKB) ? ( tog(11); setmsg("AUTO", slider11 > 0.5 ? "AUTO TIMING" : "MANUAL"); );
+key(1002, 270, 70, 30, slider13 > 0.5, BLU, "SPR", INKB) ? ( tog(13); setmsg("SPR", slider13 > 0.5 ? "LOW END ROTATED" : "OFF"); );
+key(1098, 270, 70, 30, slider14 > 0.5, BLU, "LF CUT", INKB) ? ( tog(14); setmsg("DETECTOR LF CUT", slider14 > 0.5 ? "150 Hz" : "OFF"); );
+sprintf(#vB6, "%.0f%%", slider12); knob(12, 1232, 286, 20, 0, 100, 30, 0, 0xE8E2D4, INKB, 7, "HF EXP", #vB6);
 vGb = max(mGrB, vGb*0.9); mGrB = 0;
-grl(1270, 136, 186, vGb, INKB, "GR");
+grl(1336, 136, 186, vGb, INKB, "GR");
 vOut = max(mOut, vOut*0.9);
 // output level ladder (dBFS) beside the GR
 k = 0; od_ = g2db(vOut);
-ui_col(0x08080A); R(1313, 133, 22, 192);
+ui_col(0x08080A); R(1371, 133, 22, 192);
 loop(16, lit_ = od_ >= -30 + (16 - k)*30/16 - 30/16; c_ = k < 2 ? RED : k < 5 ? AMB : GRN;
-  ui_col(lit_ ? c_ : ui_mix(c_, 0x000000, 0.8)); R(1316, 136 + k*11.6 + 1, 16, 9.6); k += 1; );
-gfx_setfont(8); ui_col(INKB); TC(1324, 330, "OUT");
+  ui_col(lit_ ? c_ : ui_mix(c_, 0x000000, 0.8)); R(1374, 136 + k*11.6 + 1, 16, 9.6); k += 1; );
+gfx_setfont(8); ui_col(INKB); TC(1382, 330, "OUT");
 // order lamps between the units
 lamp(720, 220, ord != 1, AMB);
 
