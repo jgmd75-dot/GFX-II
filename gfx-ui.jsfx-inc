@@ -43,6 +43,17 @@ function ui_col(c) (
 );
 function ui_cola(c, a) ( ui_col(c); gfx_a = a; );
 
+// ---------- house palette (named colours for any GFX panel) ----------
+// whites
+GFX_CHIFFON   = 0xEEEFEA;   // warm chiffon white (alt 0xF0F2EF)
+GFX_CHIFFON2  = 0xF0F2EF;
+GFX_ELEPHANT  = 0xC7BEB3;   // elephant's breath
+GFX_COOLWHITE = 0xF4FDFF;   // cool white
+GFX_CREAM     = 0xFFFDD0;   // cream white
+GFX_LIMEWHITE = 0xE8E0CB;   // lime white
+// greys (warm, light to dark)
+GFX_GREY1 = 0xE3D8D8; GFX_GREY2 = 0xC1B5B5; GFX_GREY3 = 0xB2A4A4; GFX_GREY4 = 0xA99999; GFX_GREY5 = 0x9A8A8A;
+
 // opposite hue of c at a fixed mid brightness; -1 if c is too grey to have a hue
 function ui_hsvcomp(c) local(r, g, b, mx, mn, d, h, s, v, i, f, p, q, t) (
   r = ((c >> 16) & 255) / 255; g = ((c >> 8) & 255) / 255; b = (c & 255) / 255;

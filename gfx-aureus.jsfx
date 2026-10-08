@@ -461,7 +461,7 @@ hw = ui_hw;
   A_R = 0.62; A_G = 0.42; A_B = 0.02;          // knob value arc
 ) : (
   Y_R = 0.184; Y_G = 0.369; Y_B = 0.353;       // faceplate petrol teal
-  K_R = 0.933; K_G = 0.914; K_B = 0.871;       // lime white ink (#EEE9DE)
+  K_R = 0.910; K_G = 0.878; K_B = 0.796;       // lime white ink (#E8E0CB)
   A_R = 0.98; A_G = 0.72; A_B = 0.24;          // knob value arc (amber)
 );
 

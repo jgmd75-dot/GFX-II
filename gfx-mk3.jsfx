@@ -69,7 +69,7 @@ slider17:250<20,3000,1>-Release (ms)
 slider18:0<0,1,1{Log,Lin}>-Release Mode
 slider19:0<0,24,0.1>-Comp Gain (dB)
 slider20:1<0,1,1{Off,On}>-Peak Reversion Correction
-slider21:0<0,1,1{EQ > Comp,Comp > EQ}>-Order
+slider21:0<0,1,1{EQ then Comp,Comp then EQ}>-Order
 slider22:0<-24,12,0.1>-Output (dB)
 slider23:0<0,2,1{Flat,Lift,Dip}>-Voice 2k
 slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
