@@ -338,7 +338,7 @@ dy_knob(566, 132, 20, 6, 0, 100, 30, 0, 0x2A2D33, "DRIVE", hover_txt(566, 132, 2
 
 // LO CUT
 sprintf(#v, "%.0f Hz", slider7); dy_kf = 1;
-dy_knob(636, 132, 17, 7, 20, 1000, 120, 1, 0x2A2D33, "LO CUT", hover_txt(636, 132, 17, #v));
+dy_kf = 1; dy_knob(636, 132, 17, 7, 20, 1000, 120, 1, 0x2A2D33, "LO CUT", hover_txt(636, 132, 17, #v));
 
 // HI CUT
 sprintf(#v, "%.0f Hz", slider8); dy_kf = 2;

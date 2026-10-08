@@ -449,7 +449,7 @@ function qslope(k) ( k == 0 ? "6 dB" : k == 1 ? "12 dB" : k == 2 ? "18 dB" : k =
 function qsec(x0, x1, s, col) ( ui_col(col); gfx_rect(x0 * sc, 376 * sc, (x1 - x0) * sc, 2 * sc); dy_lbl((x0 + x1) * 0.5, 381, s, 0.85); );
 dy_btn(30, 392, slider43, dy_grn, "IN") ? ( slider43 = 1 - slider43; ui_auto(43); );
 qsec(92, 246, "HIGH-PASS", 0xE8402E);
-slider37 <= 10.5 ? strcpy(#v, "OFF") : strcpy(#v, qhz(slider37)); dy_knob(130, 432, 18, 37, 10, 1000, 10, 1, 0xE8402E, "FREQ", #v);
+slider37 <= 10.5 ? strcpy(#v, "OFF") : strcpy(#v, qhz(slider37)); dy_knob(130, 432, 18, 37, 10, 1000, 10, 1, 0xF2C21B, "FREQ", #v);   // house style: HPF cap yellow
 dy_step = 6; dy_knob(206, 432, 15, 38, 0, 5, 1, 0, 0xE8402E, "SLOPE", qslope(slider38)); dy_step = 0;
 qsec(262, 498, "TILT", 0xF2F2EE);
 sprintf(#v, "%+.1f dB", slider34); dy_knob(304, 432, 20, 34, -6, 6, 0, 0, 0xF2F2EE, "TILT", #v);

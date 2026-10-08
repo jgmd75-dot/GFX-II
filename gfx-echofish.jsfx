@@ -563,7 +563,7 @@ slider28 ? (
 sprintf(#v, "%.0f%%", slider31); dy_knob(298, 362, 15, 31, 0, 110, 40, 0, WHT, "FEEDBACK", #v);
 sprintf(#v, "%.0f%%", slider32); dy_knob(364, 362, 15, 32, 0, 100, 30, 0, WHT, "DRIVE", #v);
 ui_cola(WHT, 0.18); gfx_rect(400 * sc, 336 * sc, 1 * sc, 62 * sc);
-sprintf(#v, "%.0f Hz", slider33); dy_knob(436, 362, 15, 33, 20, 1000, 120, 1, WHT, "LO CUT", #v);
+sprintf(#v, "%.0f Hz", slider33); dy_kf = 1; dy_knob(436, 362, 15, 33, 20, 1000, 120, 1, WHT, "LO CUT", #v);
 sprintf(#v, "%.0f Hz", slider34); dy_knob(502, 362, 15, 34, 1000, 20000, 6000, 1, WHT, "HI CUT", #v);
 ui_cola(WHT, 0.18); gfx_rect(538 * sc, 336 * sc, 1 * sc, 62 * sc);
 sprintf(#v, "%.0f%%", slider35); dy_knob(574, 362, 15, 35, 0, 100, 0, 0, WHT, "DUCK", #v);

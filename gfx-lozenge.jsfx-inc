@@ -132,7 +132,7 @@ function lz_face_draw(cx, cy, r, a, cap) local(i, t, pc) (
   );
 );
 // a knob bound to a slider: name above, the knob, value display below.
-// lz_kind = 1 / 2: the black (high-pass) / yellow (low-pass) filter cap; lz_cap = a coloured cap; lz_step = positions.
+// lz_kind = 1 / 2: the yellow (high-pass) / black (low-pass) filter cap; lz_cap = a coloured cap; lz_step = positions.
 // Drag (Shift = fine), wheel, double-click = default.
 lz_step = 0; lz_kind = 0; lz_cap = 0; lz_lw = 60;
 function lz_knob(cx, cy, r, idx, lo, hi, def, lg, label, val) local(v, n, dx, dy, hov, did, a) (

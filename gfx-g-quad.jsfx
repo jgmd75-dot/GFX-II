@@ -483,7 +483,7 @@ loop(4,
 // ---------- MASTER EQ ----------
 qgroup(776, 82, 300, 140, "MASTER EQ", ACC, SH1);
 ui_section(3); C_INK = INKL;
-ui_knob(812 * sc, 118 * sc, 14, 20, 500, 20, 1, "HPF", slider14 <= 20.5 ? "OFF" : "%.0f Hz");
+ui_kfilter = 1; ui_knob(812 * sc, 118 * sc, 14, 20, 500, 20, 1, "HPF", slider14 <= 20.5 ? "OFF" : "%.0f Hz");
 ui_knob(872 * sc, 118 * sc, 15, 30, 500, 100, 1, "LO FREQ", "%.0f Hz");
 ui_knob(932 * sc, 118 * sc, 16, -12, 12, 0, 0, "LO SHELF", "%+.1f dB");
 ui_knob(812 * sc, 180 * sc, 19, 2000, 20000, 20000, 1, "LPF", slider19 >= 19990 ? "OFF" : "%.0f Hz");
