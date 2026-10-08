@@ -31,6 +31,19 @@ desc:GFX G Piano
 //           down a bank of 36 open strings (E1 - D#4) joins the junction too. RESONANCE sets how light (how
 //           responsive) the bridge is. Press a key silently (velocity 1 - 3) and hold it to hear its strings
 //           answer the notes you play.
+// STRIKER   FELT hammer; TACK (felt studded with metal tacks: a hard, short, metallic strike); PLUCK (a
+//           plectrum catches the string and lets go when its grip gives: prepared / harpsichord textures);
+//           MALLET (a heavy, soft, damped head striking further along the string). HARDNESS ages the felt
+//           from soft and dark to compacted, bright and metallic. CONTACT stretches or shortens the time the
+//           striker stays on the string (for PLUCK: how long it grips); BOUNCE sets how elastic the felt is
+//           and whether the hammer may strike again on the rebound (low = caught by the backcheck).
+// WIRE AGE  old or worn wire: every string gets its own stiffness (false beats), duller top, shorter sustain.
+// TUNING    each key's own, fixed tuning error across its unison strings (the same key always sounds the same).
+// BOARD     SIZE moves the soundboard's modes (bigger board, lower modes), DENSITY sets the wood (denser:
+//           longer, brighter ringing; lighter: softer, quicker); BODY sets how much of it you hear.
+// LID / MIC OPEN, HALF-STICK or CLOSED lid (brightness, the lid's reflection, the boxed-in sound of a closed
+//           lid); MIC distance from close (attack, width, full top) to far (air absorption, more room).
+// Knob moves glide (soundboard, lid and mic interpolate; SUSTAIN and DAMPER also reach sounding notes).
 // DAMPERS   key up lowers the damper (DAMPER sets how hard it stops the string; the bass rings on longer).
 // ROOM, SPREAD (bass left, treble right as the player hears it), TONE, GRAND / UPRIGHT.
 // CPU       keys are retired as soon as their energy falls below audibility; the open-string bank only runs
@@ -45,9 +58,9 @@ import gfx-ui.jsfx-inc
 import gfx-panel.jsfx-inc
 import gfx-instrument.jsfx-inc
 
-slider1:0<0,11,1{Concert Grand,Studio Grand,Bright Pop Grand,Ballad Grand,Jazz Club Grand,Cinematic Halo,Felt Piano,Rock Upright,Bar Upright,Honky-Tonk,Parlour Upright,Dark Lo-Fi}>-Patch
+slider1:0<0,13,1{Concert Grand,Studio Grand,Bright Pop Grand,Ballad Grand,Jazz Club Grand,Cinematic Halo,Felt Piano,Rock Upright,Bar Upright,Honky-Tonk,Parlour Upright,Dark Lo-Fi,Plucked Prepared,Mallet Grand}>-Patch
 slider2:0<0,1,1{Grand,Upright}>-Model
-slider3:50<0,100,1>-Hammer (%)
+slider3:50<0,100,1>-Hardness / age (%)
 slider4:55<0,100,1>-Dynamics (%)
 slider5:40<0,100,1>-Stiffness (%)
 slider6:20<0,100,1>-Unison detune (%)
@@ -68,6 +81,15 @@ slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
 slider22:20<20,500,1>-Mono below (Hz, 20 = off)
 slider23:0<0,100,1>-Stereo width (%)
+slider24:0<0,3,1{Felt,Tack,Pluck,Mallet}>-Striker
+slider25:50<0,100,1>-Contact (%)
+slider26:40<0,100,1>-Bounce (%)
+slider27:0<0,100,1>-Wire age (%)
+slider28:15<0,100,1>-Tuning variance (%)
+slider29:50<0,100,1>-Board size (%)
+slider30:55<0,100,1>-Board density (%)
+slider31:0<0,2,1{Open,Half,Closed}>-Lid
+slider32:35<0,100,1>-Mic distance (%)
 
 in_pin:none
 out_pin:left output
@@ -101,6 +123,9 @@ s_x1 = alloc(NSTR); s_y1 = alloc(NSTR); s_x2 = alloc(NSTR); s_y2 = alloc(NSTR);
 s_x3 = alloc(NSTR); s_y3 = alloc(NSTR); s_x4 = alloc(NSTR); s_y4 = alloc(NSTR);
 s_p = alloc(NSTR); s_lp = alloc(NSTR); s_g = alloc(NSTR); s_gh = alloc(NSTR); s_gr = alloc(NSTR); s_w = alloc(NSTR);
 s_yi = alloc(NSTR); s_ol = alloc(NSTR); v_dv = alloc(NV);
+s_f = alloc(NSTR); s_mg = alloc(NSTR); s_tk = alloc(NSTR); s_rk = alloc(NSTR);
+h_typ = alloc(NV); h_fx = alloc(NV); h_ct = alloc(NV); v_tk = alloc(NV); v_tl = alloc(NV);
+LD = alloc(2 * 2048); PD = alloc(4096);           // lid reflections (L/R), room pre-delay
 RAIL = alloc(NSTR * RS2);                 // string s: [RAIL + s*RS2] towards the bridge, [+ RS] back to the agraffe
 // open-string bank
 y_L = alloc(NY); y_eta = alloc(NY); y_tx = alloc(NY); y_ty = alloc(NY); y_p = alloc(NY); y_lp = alloc(NY);
@@ -151,10 +176,20 @@ function str_set(s, f, a, nap, p, t60, trel, beta) local(w, per, dl, rl, fd, eta
   s_N[s] = min(rl, RS - 4); s_eta[s] = eta; s_a[s] = a; s_nap[s] = nap; s_p[s] = p;
   s_h[s] = max(1, min(s_N[s] - 1, floor(beta * s_N[s] + 0.5)));
   mag = (1 - p) / sqrt(1 - 2 * p * cos(w) + p * p);
+  s_f[s] = f; s_mg[s] = mag;
   // loop gain per period: the fundamental decays in t60; capped below 1 so the loop always dies away
   s_gh[s] = min(0.99995, 10 ^ (-3 / (t60 * f)) / mag);
   s_gr[s] = min(0.9995, 10 ^ (-3 / (trel * f)) / mag);
 );
+// re-derive a sounding string's loop gains after SUSTAIN or DAMPER moved (no retuning, so no artefacts)
+function str_regain(s) local(t60, trel) (
+  t60 = max(0.35, sus_t * s_tk[s]);
+  trel = s_rk[s] < 0 ? t60 : max(0.04, dmp_t * s_rk[s]);
+  s_gh[s] = min(0.99995, 10 ^ (-3 / (t60 * s_f[s])) / s_mg[s]);
+  s_gr[s] = min(0.9995, 10 ^ (-3 / (trel * s_f[s])) / s_mg[s]);
+);
+// a fixed pseudo-random number in -1..1 for a key (and string): each key keeps its own tuning error
+function khash(k) local(q) ( q = sin(k * 12.9898 + 78.233) * 43758.5453; 2 * (q - floor(q)) - 1; );
 function str_clear(s) local(rb) (
   rb = RAIL + s * RS2; memset(rb, 0, RS2);
   s_tx[s] = s_ty[s] = s_x1[s] = s_y1[s] = s_x2[s] = s_y2[s] = s_x3[s] = s_y3[s] = s_x4[s] = s_y4[s] = s_lp[s] = 0;
@@ -175,7 +210,7 @@ function sym_set(j) local(nt, f, w, per, rl, fd, eta, pp, mag, t60) (
 j = 0; loop(NY, sym_set(j); j += 1; );
 
 // ---------- notes ----------
-function note_on(n, vel) local(i, best, ba, f, ns, kk, a, nap, pp, t60, trel, det, vv, pan, s, jit, beta, mr, tc, pw, v0, B, rstk) (
+function note_on(n, vel) local(i, best, ba, f, ns, kk, a, nap, pp, t60, trel, det, vv, pan, s, jit, beta, mr, tc, pw, v0, B, rstk, tk, rk, aj, sty) (
   best = -1;
   i = 0; loop(NV, v_act[i] && v_note[i] == n && best < 0 ? best = i; i += 1; );            // re-strike: same strings
   best < 0 ? ( i = 0; loop(NV, !v_act[i] && best < 0 ? best = i; i += 1; ); );               // free key
@@ -193,18 +228,24 @@ function note_on(n, vel) local(i, best, ba, f, ns, kk, a, nap, pp, t60, trel, de
   B = 10 ^ kk * (0.1 + 2.4 * stiff ^ 1.5);
   a = disp_a(f, B, nap);
   // losses: how fast the top of each note dies against its fundamental; sustain and damping by key
-  pp = min(0.5, max(0.01, (model ? 0.26 : 0.16) * (0.4 + 1.2 * (1 - tone_s)) * 2 ^ (-(n - 60) / 24)));
-  t60 = max(0.35, sus_t * 17 * 2 ^ (-(n - 21) / 23) * (model ? 0.65 : 1));
-  trel = n >= 89 ? t60 : max(0.04, dmp_t * 0.55 * 2 ^ (-(n - 21) / 34));
-  beta = model ? 1 / 9 : 1 / 8;
+  pp = min(0.5, max(0.01, (model ? 0.26 : 0.16) * (0.4 + 1.2 * (1 - tone_s)) * 2 ^ (-(n - 60) / 24) * (1 + 1.5 * wage)));
+  tk = 17 * 2 ^ (-(n - 21) / 23) * (model ? 0.65 : 1) * (1 - 0.5 * wage);   // sustain factor (x SUSTAIN)
+  rk = n >= 89 ? -1 : 0.55 * 2 ^ (-(n - 21) / 34);                         // damping factor (x DAMPER)
+  t60 = max(0.35, sus_t * tk);
+  trel = rk < 0 ? t60 : max(0.04, dmp_t * rk);
+  sty = striker;
+  beta = sty == 3 ? 1 / 5 : sty == 2 ? 1 / 12 : model ? 1 / 9 : 1 / 8;
   det = uni_c * (0.6 + 0.8 * (n / 108));                      // unison spread in cents
+  f *= 2 ^ (tvar * 6 * khash(n) / 1200);                      // this key's own tuning error (up to 6 cents)
   s = MS * i;
   kk = 0;
   loop(MS,
     kk < ns ? (
-      jit = ns == 1 ? 0 : (rand(2) - 1) * 0.15;
-      str_set(s + kk, f * 2 ^ (((ns == 1 ? 0 : det * (kk / (ns - 1) - 0.5)) + jit) / 1200), a, nap, pp,
+      jit = ns == 1 ? 0 : (rand(2) - 1) * 0.15 + tvar * 2.5 * khash(n * 3.7 + kk);
+      aj = max(-0.95, a * (1 + wage * 0.7 * khash(n * 5.3 + kk * 1.9)));     // worn wire: its own stiffness
+      str_set(s + kk, f * 2 ^ (((ns == 1 ? 0 : det * (kk / (ns - 1) - 0.5)) + jit) / 1200), aj, nap, pp,
               t60 * (1 + 0.12 * kk), trel, beta);
+      s_tk[s + kk] = tk * (1 + 0.12 * kk); s_rk[s + kk] = rk;
       s_w[s + kk] = 1 / ns;
     ) : s_w[s + kk] = 0;
     !rstk ? str_clear(s + kk);
@@ -217,21 +258,31 @@ function note_on(n, vel) local(i, best, ba, f, ns, kk, a, nap, pp, t60, trel, de
   v_sil[i] = vel < 0.03;                     // velocity 1 - 3: the key goes down silently (dampers up)
   v0 = vel ^ (0.6 + 1.6 * dyn) * (soft_pedal ? 0.85 : 1);
   mr = 0.06 * 2 ^ ((n - 21) / 24);           // hammer : string mass, the treble hammer outweighs its strings
-  tc = srate * 0.001 * 2.6 * 2 ^ (-(n - 21) / 32) * (1.45 - 0.9 * ham) * (soft_pedal ? 1.35 : 1);
-  tc = max(tc, max(6, 0.00015 * srate));
+  // contact time: the key, the felt (HARDNESS: soft and dark .. compacted and bright), CONTACT, the soft pedal
+  tc = 2.6 * 2 ^ (-(n - 21) / 32) * (1.45 - 0.9 * ham) * (soft_pedal ? 1.35 : 1) * contact_m;
   pw = 2.2 + (n - 21) / 87 + 0.4 * ham;      // felt stiffening exponent
+  sty == 1 ? ( tc *= 0.28; pw = 1.6; mr *= 1.15; ) :                  // tacks: metal on wire
+  sty == 2 ? ( tc = 0.6 * contact_m; pw = 1; mr *= 30; ) :            // plectrum: a stiff, linear catch
+  sty == 3 ? ( tc *= 2.4; pw = 1.6; mr *= 4; );                       // mallet: heavy and soft
+  tc = max(srate * 0.001 * tc, max(6, 0.00015 * srate));
   h_im[i] = 1 / (mr * 2 * s_N[s] * ns);
   h_pw[i] = pw;
   h_K[i] = (1 / h_im[i]) * (3.2 * 0.5 ^ ((1 - pw) / (pw + 1)) / tc) ^ (pw + 1);
-  h_al[i] = srate * 0.00001 * (2 + 4 * (1 - ham));
+  // hysteresis (felt that does not spring straight back): less bounce, more damping
+  h_al[i] = sty == 2 ? 0 : srate * 0.00001 * (2 + 4 * (1 - ham)) * (2.2 - 2 * bounce) * (sty == 3 ? 2.5 : 1);
+  // the plectrum lets go when its force passes its grip
+  h_fx[i] = h_K[i] * (v0 * tc * 0.55) * (0.5 + contact);
+  h_typ[i] = sty; h_ct[i] = 0;
   h_y[i] = 0; h_ys[i] = 0; h_v[i] = v0; h_cp[i] = 0; h_fr[i] = 0;
   h_on[i] = !v_sil[i];
   v_t[i] = 0;
-  v_ka[i] = v_sil[i] ? 0 : v0 * 0.012 * (model ? 1.3 : 1); v_kl[i] = 0;
+  v_ka[i] = v_sil[i] ? 0 : v0 * 0.012 * (model ? 1.3 : 1) * (sty == 2 ? 0.3 : 1); v_kl[i] = 0;
+  v_tk[i] = v_sil[i] || sty != 1 ? 0 : v0 * 0.03; v_tl[i] = 0;
   // pan: bass left, treble right
   pan = min(1, max(-1, (n - 64) / 44 * spread));
   v_pl[i] = cos((pan + 1) * $pi / 4); v_pr[i] = sin((pan + 1) * $pi / 4);
   v_gn[i] = 1.2 * 2 ^ ((n - 21) / 45);       // output level by key (the treble strings carry less energy)
+  v_gn[i] *= sty == 1 ? 0.5 * 2 ^ (-max(0, n - 60) / 14) : sty == 2 ? 0.5 : sty == 3 ? 0.85 * 2 ^ ((n - 60) / 60) : 1;   // level by striker
   v_act[i] = 1; v_note[i] = n; v_held[i] = 1; v_sus[i] = 0; v_ns[i] = ns;
   v_nd[i] = n >= 89;                         // the top keys have no dampers
   agec += 1; v_age[i] = agec;
@@ -259,13 +310,15 @@ function bq(x, c) local(y) (
   y = c[0] * x + c[1] * c[5] + c[2] * c[6] - c[3] * c[7] - c[4] * c[8];
   c[6] = c[5]; c[5] = x; c[8] = c[7]; c[7] = y; y;
 );
-function body_setup(m) local(kk, f0, f1, f) (
-  f0 = m ? 85 : 52; f1 = m ? 4200 : 3200;
+// SIZE: a bigger board moves every mode down (up to +/- 0.6 octave); DENSITY: denser wood rings longer (higher
+// Q) and carries more of the upper modes. Q is the same for every mode, so the high modes still die fastest.
+function body_setup(m, sz, dn) local(kk, f0, f1, f, sc_) (
+  f0 = m ? 85 : 52; f1 = m ? 4200 : 3200; sc_ = 2 ^ ((0.5 - sz) * 1.2);
   kk = 0;
   loop(16,
-    f = f0 * (f1 / f0) ^ (kk / 15) * (1 + 0.07 * sin(kk * 2.7 + m));
-    bp_set(BM + kk * 9, f, m ? 8 : 11);
-    bm_g[kk] = 1 / (1 + 0.18 * kk);
+    f = f0 * (f1 / f0) ^ (kk / 15) * (1 + 0.07 * sin(kk * 2.7 + m)) * sc_;
+    bp_set(BM + kk * 9, f, (m ? 8 : 11) * (0.45 + 1.3 * dn));
+    bm_g[kk] = 1 / (1 + (0.3 - 0.22 * dn) * kk);
     kk += 1;
   );
 );
@@ -275,36 +328,56 @@ function setp(m, hm, dy, st, un, su, dm, bo, to, pr, ro, sp) (
   slider2 = m; slider3 = hm; slider4 = dy; slider5 = st; slider6 = un; slider7 = su; slider8 = dm;
   slider9 = bo; slider10 = to; slider11 = pr; slider12 = ro; slider13 = sp;
 );
+// striker, contact, bounce, wire age, tuning variance, board size, density, lid, mic
+function setq(sk, ct, bn, wa, tv, bz, dn, ld, mc) (
+  slider24 = sk; slider25 = ct; slider26 = bn; slider27 = wa; slider28 = tv; slider29 = bz; slider30 = dn;
+  slider31 = ld; slider32 = mc;
+);
 function load_patch(p) (
-  p == 0  ? setp(0, 50, 60, 40, 20, 60, 45, 55, 50, 35, 25, 60) :   // Concert Grand
-  p == 1  ? setp(0, 55, 55, 40, 15, 55, 40, 45, 55, 25, 10, 50) :   // Studio Grand
-  p == 2  ? setp(0, 75, 40, 45, 15, 50, 35, 40, 68, 20, 10, 45) :   // Bright Pop Grand
-  p == 3  ? setp(0, 35, 65, 40, 22, 75, 55, 60, 42, 55, 35, 65) :   // Ballad Grand
-  p == 4  ? setp(0, 45, 60, 45, 25, 55, 40, 55, 48, 30, 30, 50) :   // Jazz Club Grand
-  p == 5  ? setp(0, 30, 70, 40, 20, 85, 60, 55, 40, 90, 60, 80) :   // Cinematic Halo
-  p == 6  ? setp(1,  5, 50, 30, 20, 45, 30, 60, 32, 45, 15, 35) :   // Felt Piano
-  p == 7  ? setp(1, 70, 45, 55, 25, 40, 35, 55, 62, 20, 15, 35) :   // Rock Upright
-  p == 8  ? setp(1, 55, 50, 60, 45, 45, 40, 60, 50, 25, 25, 30) :   // Bar Upright
-  p == 9  ? setp(1, 65, 45, 60, 90, 45, 40, 60, 58, 20, 25, 30) :   // Honky-Tonk
-  p == 10 ? setp(1, 40, 55, 55, 35, 50, 45, 65, 45, 35, 20, 30) :   // Parlour Upright
-            setp(1, 25, 40, 50, 40, 40, 35, 60, 25, 30, 20, 30);    // Dark Lo-Fi
+  p == 0  ? ( setp(0, 50, 60, 40, 20, 60, 45, 55, 50, 35, 25, 60); setq(0, 50, 40,  0, 15, 70, 55, 0, 35); ) :  // Concert Grand
+  p == 1  ? ( setp(0, 55, 55, 40, 15, 55, 40, 45, 55, 25, 10, 50); setq(0, 50, 35,  0, 10, 65, 55, 0, 20); ) :  // Studio Grand
+  p == 2  ? ( setp(0, 75, 40, 45, 15, 50, 35, 40, 68, 20, 10, 45); setq(0, 45, 35,  0, 10, 60, 65, 0, 15); ) :  // Bright Pop Grand
+  p == 3  ? ( setp(0, 35, 65, 40, 22, 75, 55, 60, 42, 55, 35, 65); setq(0, 60, 45,  0, 15, 75, 50, 1, 40); ) :  // Ballad Grand
+  p == 4  ? ( setp(0, 45, 60, 45, 25, 55, 40, 55, 48, 30, 30, 50); setq(0, 50, 40, 10, 25, 60, 50, 1, 45); ) :  // Jazz Club Grand
+  p == 5  ? ( setp(0, 30, 70, 40, 20, 85, 60, 55, 40, 90, 60, 80); setq(0, 65, 50,  0, 15, 85, 45, 0, 70); ) :  // Cinematic Halo
+  p == 6  ? ( setp(1,  5, 50, 30, 20, 45, 30, 60, 32, 45, 15, 35); setq(3, 70, 20, 20, 20, 40, 35, 2, 15); ) :  // Felt Piano
+  p == 7  ? ( setp(1, 70, 45, 55, 25, 40, 35, 55, 62, 20, 15, 35); setq(0, 40, 40, 20, 25, 40, 55, 0, 20); ) :  // Rock Upright
+  p == 8  ? ( setp(1, 55, 50, 60, 45, 45, 40, 60, 50, 25, 25, 30); setq(0, 50, 45, 45, 45, 40, 50, 1, 30); ) :  // Bar Upright
+  p == 9  ? ( setp(1, 65, 45, 60, 90, 45, 40, 60, 58, 20, 25, 30); setq(1, 40, 55, 60, 60, 40, 55, 0, 30); ) :  // Honky-Tonk
+  p == 10 ? ( setp(1, 40, 55, 55, 35, 50, 45, 65, 45, 35, 20, 30); setq(0, 55, 40, 50, 40, 35, 45, 2, 35); ) :  // Parlour Upright
+  p == 11 ? ( setp(1, 25, 40, 50, 40, 40, 35, 60, 25, 30, 20, 30); setq(0, 70, 35, 70, 50, 35, 40, 2, 30); ) :  // Dark Lo-Fi
+  p == 12 ? ( setp(1, 70, 50, 65, 30, 45, 40, 50, 60, 40, 20, 45); setq(2, 45, 30, 40, 30, 45, 60, 0, 25); ) :  // Plucked Prepared
+            ( setp(0, 20, 55, 35, 15, 70, 50, 60, 40, 45, 35, 60); setq(3, 60, 15,  0, 10, 70, 50, 1, 40); );   // Mallet Grand
   slider1 = p; last_patch = p; edited = 0;
-  slider_automate(8191);                   // sliders 1-13
+  slider_automate(8191 + 511 * 8388608);   // sliders 1-13 and 24-32
 );
 function patch_name(p) (
   p == 0 ? "CONCERT GRAND" : p == 1 ? "STUDIO GRAND" : p == 2 ? "BRIGHT POP" : p == 3 ? "BALLAD GRAND" :
   p == 4 ? "JAZZ CLUB" : p == 5 ? "CINEMATIC HALO" : p == 6 ? "FELT PIANO" : p == 7 ? "ROCK UPRIGHT" :
-  p == 8 ? "BAR UPRIGHT" : p == 9 ? "HONKY-TONK" : p == 10 ? "PARLOUR" : "DARK LO-FI";
+  p == 8 ? "BAR UPRIGHT" : p == 9 ? "HONKY-TONK" : p == 10 ? "PARLOUR" : p == 11 ? "DARK LO-FI" :
+  p == 12 ? "PLUCKED PREP" : "MALLET GRAND";
 );
 
 // ---------- parameters ----------
 function update() (
   model = slider2 > 0.5;
-  model != last_model ? ( body_setup(model); last_model = model; );
+
   ham = slider3 / 100; dyn = slider4 / 100; stiff = slider5 / 100;
+  striker = floor(slider24 + 0.5); contact = slider25 / 100; contact_m = 0.45 * 5 ^ contact; bounce = slider26 / 100;
+  wage = slider27 / 100; tvar = slider28 / 100;
+  bsz = slider29 / 100; bdn = slider30 / 100;
+  lid = floor(slider31 + 0.5); mic = slider32 / 100;
   uni_c = (slider6 / 100) ^ 1.6 * 28;                         // 0 .. 28 cents (honky-tonk at the top)
   sus_t = 0.25 + 1.5 * (slider7 / 100) ^ 1.3;
   dmp_t = 0.25 + 2.75 * (slider8 / 100) ^ 1.5;
+  // SUSTAIN / DAMPER reach the notes already sounding
+  (sus_t != last_sus || dmp_t != last_dmp) ? (
+    last_sus = sus_t; last_dmp = dmp_t;
+    k_ = 0; loop(NV, v_act[k_] ? (
+      j_ = 0; loop(v_ns[k_], s_ = MS * k_ + j_; str_regain(s_);
+        s_g[s_] = (v_held[k_] || v_sus[k_] || v_nd[k_] || sus_pedal) ? s_gh[s_] : s_gr[s_]; j_ += 1; );
+    ); k_ += 1; );
+  );
   body = slider9 / 100;
   tone_s = slider10 / 100; tilt = (tone_s - 0.5) * 1.1;
   res = slider11 / 100; room = slider12 / 100; spread = slider13 / 100;
@@ -317,7 +390,12 @@ function update() (
   rm_g = 10 ^ (-3 * 0.015 / (0.5 + 0.8 * room));             // room T60 0.5 .. 1.3 s
   ins_output_setup(16); ins_stereo_setup(22);
 );
-last_model = -1;
+last_model = -1; last_sus = -1; last_dmp = -1;
+tkdec = exp(-1 / (0.0025 * srate));
+bsz_s = 0.5; bdn_s = 0.55; lid_lp = 1; lid_hs = 0; lid_bx = 0; lid_r0 = 0; lid_r1 = 0; lid_r2 = 0; mic_s = 0.35;
+lr0 = floor(0.0013 * srate); lr1 = floor(0.0009 * srate); lr2 = floor(0.0005 * srate); pdl = floor(0.02 * srate);
+hsc = 1 - exp(-TP * 5000 / srate); bxc = 1 - exp(-TP * 350 / srate);
+ld_w = 0;
 tlc = 1 - exp(-TP * 900 / srate);
 klc = 1 - exp(-TP * 700 / srate);
 kdec = exp(-1 / (0.012 * srate));
@@ -356,6 +434,20 @@ while (midirecv(mofs, m1, m2, m3)) (
   midisend(mofs, m1, m2, m3);
 );
 ins_drift_block(drift, samplesblock);
+// soundboard glides to new SIZE / DENSITY / model settings (rebuilt a little each block)
+(abs(bsz - bsz_s) > 0.0005 || abs(bdn - bdn_s) > 0.0005 || model != last_model) ? (
+  model != last_model ? ( bsz_s = bsz; bdn_s = bdn; last_model = model; );
+  bsz_s += (bsz - bsz_s) * 0.15; bdn_s += (bdn - bdn_s) * 0.15;
+  body_setup(model, bsz_s, bdn_s);
+);
+// lid targets: brightness, the lid's reflections, the boxed-in sound of a closed lid
+lid == 0 ? ( lt_lp = 20000; lt_hs = 0.26; lt_bx = 0;    lt_r0 = 0.35; lt_r1 = 0;    lt_r2 = 0; ) :
+lid == 1 ? ( lt_lp = 11000; lt_hs = 0;    lt_bx = 0.06; lt_r0 = 0;    lt_r1 = 0.22; lt_r2 = 0; ) :
+           ( lt_lp = 3200;  lt_hs = -0.3; lt_bx = 0.26; lt_r0 = 0;    lt_r1 = 0;    lt_r2 = 0.12; );
+// mic: close .. far (air absorption, level, width, room)
+mic_s += (mic - mic_s) * 0.1;
+mic_air = 1 - exp(-TP * min(srate * 0.45, 20000 * 2 ^ (-1.6 * mic_s)) / srate);
+mic_dg = 1 - 0.45 * mic_s; mic_ws = 1 - 0.55 * mic_s; mic_rm = 0.25 + 1.2 * mic_s; mic_k = 1.6 - mic_s;
 
 @sample
 sL = sR = 0; bsum = 0; bsy = 0; nj = 0;
@@ -384,12 +476,15 @@ loop(NV,
         cpw = cmp ^ pw;
       ) : cpw = 0;
       hfc = max(0, h_K[i] * (cpw + h_al[i] * (cpw - h_cp[i]))); h_cp[i] = cpw;
+      h_typ[i] == 2 && hfc > h_fx[i] ? ( hfc = 0; h_on[i] = 0; );        // the plectrum slips off the string
+      hfc > 0 ? h_ct[i] = 1;
       h_ys[i] += vin + hfc / (2 * ns);
       h_y[i] += h_v[i];
       h_v[i] -= hfc * h_im[i];
       dvh = hfc * 0.5 / ns;                  // the force launches a velocity wave both ways on each string
       hfc > 0 ? h_fr[i] = 0 : h_fr[i] += 1;
-      (h_fr[i] > 64 && h_v[i] < 0) || v_t[i] > h_tmax ? h_on[i] = 0;
+      // after the first blow a low BOUNCE lets the backcheck catch the hammer; a high one lets it strike again
+      (h_fr[i] > 64 && h_v[i] < 0) || (h_ct[i] && h_fr[i] > 2 && bounce < 0.35) || v_t[i] > h_tmax ? h_on[i] = 0;
     );
     v_dv[i] = dvh;
     vo = 0;
@@ -414,7 +509,8 @@ loop(NV,
     );
     // action knock
     v_ka[i] > 0.0000001 ? ( v_kl[i] += ((rand(2) - 1) * v_ka[i] - v_kl[i]) * klc; v_ka[i] *= kdec; ) : v_kl[i] = 0;
-    vx = (vo + v_kl[i]) * v_gn[i];
+    v_tk[i] > 0.0000001 ? ( nz = rand(2) - 1; v_tl[i] = nz - v_tl[i] * 0.2; v_tk[i] *= tkdec; vx = v_tk[i] * (nz - v_tl[i]) * 0.5; ) : vx = 0;
+    vx = (vo + v_kl[i] * mic_k) * v_gn[i] + vx;
     bsum += vx;
     sL += vx * v_pl[i]; sR += vx * v_pr[i];
     v_env[i] += (abs(vo) - v_env[i]) * envc;
@@ -477,15 +573,33 @@ loop(8,
 );
 xL = (sL + 0.5 * ysum * 0.7) * OUTG * (1 - 0.4 * body) + body * 1.6 * (bo + 0.5 * be);
 xR = (sR + 0.5 * ysum * 0.7) * OUTG * (1 - 0.4 * body) + body * 1.6 * (be + 0.5 * bo);
+// ---------- lid (smoothed: no zipper noise) ----------
+lsm = 0.0005;
+lid_lp += (lt_lp - lid_lp) * lsm; lid_hs += (lt_hs - lid_hs) * lsm; lid_bx += (lt_bx - lid_bx) * lsm;
+lid_r0 += (lt_r0 - lid_r0) * lsm; lid_r1 += (lt_r1 - lid_r1) * lsm; lid_r2 += (lt_r2 - lid_r2) * lsm;
+lpc_ = 1 - exp(-TP * min(lid_lp, srate * 0.45) / srate);
+LD[ld_w] = xL; LD[2048 + ld_w] = xR;
+xL += lid_r0 * LD[(ld_w - lr0) & 2047] + lid_r1 * LD[(ld_w - lr1) & 2047] + lid_r2 * LD[(ld_w - lr2) & 2047];
+xR += lid_r0 * LD[2048 + ((ld_w - lr0 - 7) & 2047)] + lid_r1 * LD[2048 + ((ld_w - lr1 - 5) & 2047)] + lid_r2 * LD[2048 + ((ld_w - lr2 - 3) & 2047)];
+ld_w = (ld_w + 1) & 2047;
+hzL += (xL - hzL) * hsc; xL += lid_hs * (xL - hzL);  hzR += (xR - hzR) * hsc; xR += lid_hs * (xR - hzR);
+bzL += (xL - bzL) * bxc; bwL += (bzL - bwL) * bxc; xL += lid_bx * (bzL - bwL) * 4;
+bzR += (xR - bzR) * bxc; bwR += (bzR - bwR) * bxc; xR += lid_bx * (bzR - bwR) * 4;
+lzL += (xL - lzL) * lpc_; xL = lzL;  lzR += (xR - lzR) * lpc_; xR = lzR;
+// ---------- mic distance: air absorption, level, width ----------
+azL += (xL - azL) * mic_air; azR += (xR - azR) * mic_air;
+mid_ = 0.5 * (azL + azR); sid_ = 0.5 * (azL - azR) * mic_ws;
+xL = (mid_ + sid_) * mic_dg; xR = (mid_ - sid_) * mic_dg;
 // ---------- tone (tilt about 900 Hz) ----------
 tzL += (xL - tzL) * tlc; xL += tilt * (xL - 2 * tzL);
 tzR += (xR - tzR) * tlc; xR += tilt * (xR - 2 * tzR);
 // ---------- room (4-line feedback delay network) ----------
-mm = 0.5 * (xL + xR);
+PD[pd_w] = 0.5 * (xL + xR); pdo = PD[(pd_w - pdl) & 4095]; pd_w = (pd_w + 1) & 4095;
+mm = (1 - mic_s) * 0.5 * (xL + xR) + mic_s * pdo;             // the far mic hears the room a little later
 q0 = FRM[(f_wp - ml0) & FM]; q1 = FRM[FSZ + ((f_wp - ml1) & FM)];
 q2 = FRM[2 * FSZ + ((f_wp - ml2) & FM)]; q3 = FRM[3 * FSZ + ((f_wp - ml3) & FM)];
 qz0 += (q0 - qz0) * mlp; qz1 += (q1 - qz1) * mlp; qz2 += (q2 - qz2) * mlp; qz3 += (q3 - qz3) * mlp;
-qin = mm * room * 0.6;
+qin = mm * room * 0.6 * mic_rm;
 FRM[f_wp]           = qin + 0.5 * rm_g * (qz0 + qz1 + qz2 + qz3);
 FRM[FSZ + f_wp]     = qin + 0.5 * rm_g * (qz0 - qz1 + qz2 - qz3);
 FRM[2 * FSZ + f_wp] = qin + 0.5 * rm_g * (qz0 + qz1 - qz2 - qz3);
@@ -505,23 +619,27 @@ spl1 = ost_r;
 file_var(0, ui_sz);
 file_var(0, edited);
 
-@gfx 860 368
+@gfx 860 470
 ui_thm = 9; ui_hw = 1;
-ui_begin(860, 368);
+ui_begin(860, 470);
 // faceplate by model: GRAND in Ascot Grey, UPRIGHT in an aged Chiffon White
 grand = slider2 < 0.5;
 grand ? (
-  P_TOP = 0x8F9294; P_BOT = 0x75787B; INK = 0x1C1D1F; GOLD = 0x7E5E1A; TITC = 0xF4F2EC; FELT = 0x5A1418;
+  P_TOP = 0xC7CACB; P_BOT = 0xAEB1B3; INK = 0x1C1D1F; GOLD = 0x6E5216; TITC = 0x232426; FELT = 0x5A1418;
 ) : (
   P_TOP = 0xEDE5CC; P_BOT = 0xD9CBA8; INK = 0x3A2F22; GOLD = 0x87652A; TITC = 0x3A2F22; FELT = 0x6E2C27;
 );
 GOLDL = 0xE8C66A;                                         // amber of the display and LEDs
 // ---------- helpers ----------
 function lbl(x, y, s, a) ( gfx_setfont(4); ui_cola(INK, a); ui_text(x * sc, y * sc, s); );
-function stitle(cx, s) ( gfx_setfont(4); ui_col(GOLD); ui_text(cx * sc, 150 * sc, s); );
-function divider(x) (
-  ui_cola(0x000000, 0.28); gfx_line(x * sc, 150 * sc, x * sc, 296 * sc);
-  ui_cola(0xFFFFFF, 0.35); gfx_line(x * sc + 1, 150 * sc, x * sc + 1, 296 * sc);
+function stitle(cx, y, s) ( gfx_setfont(4); ui_col(GOLD); ui_text(cx * sc, y * sc, s); );
+function divider(x, y1, y2) (
+  ui_cola(0x000000, 0.28); gfx_line(x * sc, y1 * sc, x * sc, y2 * sc);
+  ui_cola(0xFFFFFF, 0.35); gfx_line(x * sc + 1, y1 * sc, x * sc + 1, y2 * sc);
+);
+function hline(y) (
+  ui_cola(0x000000, 0.22); gfx_line(24 * sc, y * sc, 836 * sc, y * sc);
+  ui_cola(0xFFFFFF, 0.35); gfx_line(24 * sc, y * sc + 1, 836 * sc, y * sc + 1);
 );
 function hexf(c, k) ( ((c >> (16 - 8 * k)) & 255) / 255; );
 // brass-ringed LED key: returns 1 when clicked
@@ -540,7 +658,7 @@ function pbtn(x, y, w, h) local(hit, inb) (
 );
 
 // ---------- cabinet: painted steel faceplate with a felt strip and a brass pinstripe ----------
-fh = 352;
+fh = 454;
 ui_col(0x0B0B0C); gfx_rect(0, 0, gfx_w, gfx_h);
 ui_cola(0x000000, 0.6); ui_rrect(10 * sc, 12 * sc, 844 * sc, fh * sc, 7 * sc);
 ui_col(ui_mix(P_BOT, 0x000000, 0.45)); ui_rrect(8 * sc, 8 * sc, 844 * sc, fh * sc, 7 * sc);
@@ -576,7 +694,7 @@ ui_col(FELT); gfx_rect(16 * sc, 12 * sc, 828 * sc, 6 * sc);
 ui_cola(0x000000, 0.35); gfx_rect(16 * sc, 17 * sc, 828 * sc, 1 * sc);
 // brass pinstripe
 ui_col(GOLD); gfx_rect(20 * sc, 126 * sc, 820 * sc, 1 * sc);
-ui_cola(GOLD, 0.6); gfx_rect(20 * sc, 300 * sc, 820 * sc, 1 * sc);
+ui_cola(GOLD, 0.6); gfx_rect(20 * sc, 404 * sc, 820 * sc, 1 * sc);
 
 // ---------- brand ----------
 ui_col(0xB8923A); gfx_circle(50 * sc, 58 * sc, 18 * sc, 1, 1);
@@ -592,8 +710,15 @@ gfx_setfont(7, "Courier New", 15 * sc, 'b'); ui_col(GOLDL);
 sprintf(#l1, edited ? "P%02d*%s" : "P%02d %s", slider1 + 1, patch_name(slider1));
 gfx_x = 312 * sc; gfx_y = 45 * sc; gfx_drawstr(#l1);
 gfx_setfont(8, "Courier New", 11 * sc, 'b'); ui_cola(GOLDL, 0.75);
-drag_id >= 3 && drag_id <= 15 ? (
-  drag_id == 3  ? sprintf(#l2, "HAMMER     %3.0f%%", slider3) :
+(drag_id >= 3 && drag_id <= 15) || (drag_id >= 25 && drag_id <= 32) ? (
+  drag_id == 25 ? sprintf(#l2, "CONTACT    %3.0f%%", slider25) :
+  drag_id == 26 ? sprintf(#l2, "BOUNCE     %3.0f%%", slider26) :
+  drag_id == 27 ? sprintf(#l2, "WIRE AGE   %3.0f%%", slider27) :
+  drag_id == 28 ? sprintf(#l2, "TUNING     %3.0f%%", slider28) :
+  drag_id == 29 ? sprintf(#l2, "BOARD SIZE %3.0f%%", slider29) :
+  drag_id == 30 ? sprintf(#l2, "DENSITY    %3.0f%%", slider30) :
+  drag_id == 32 ? sprintf(#l2, "MIC DIST   %3.0f%%", slider32) :
+  drag_id == 3  ? sprintf(#l2, "HARDNESS   %3.0f%%", slider3) :
   drag_id == 4  ? sprintf(#l2, "DYNAMICS   %3.0f%%", slider4) :
   drag_id == 5  ? sprintf(#l2, "STIFFNESS  %3.0f%%", slider5) :
   drag_id == 6  ? sprintf(#l2, "UNISON %5.1f cent", (slider6 / 100) ^ 1.6 * 28) :
@@ -607,7 +732,7 @@ drag_id >= 3 && drag_id <= 15 ? (
   drag_id == 14 ? sprintf(#l2, "DRIFT      %3.0f%%", slider14) :
                   sprintf(#l2, "VOLUME  %5.1fdB", slider15);
 ) : (
-  sprintf(#l2, "%s  PED:%s", slider2 > 0.5 ? "UPRIGHT" : "GRAND  ", sus_pedal ? "ON " : "OFF");
+  sprintf(#l2, "%s %s PED:%s", slider2 > 0.5 ? "UPRT" : "GRND", slider24 < 0.5 ? "FELT  " : slider24 < 1.5 ? "TACK  " : slider24 < 2.5 ? "PLUCK " : "MALLET", sus_pedal ? "ON" : "--");
 );
 gfx_x = 312 * sc; gfx_y = 68 * sc; gfx_drawstr(#l2);
 pressed && drag_id == 0 && mouse_x >= 300 * sc && mouse_x < 510 * sc && mouse_y >= 34 * sc && mouse_y < 90 * sc ? (
@@ -623,12 +748,14 @@ pressed && drag_id == 0 && mouse_x >= 300 * sc && mouse_x < 510 * sc && mouse_y 
   slider1 == 8 ? strcat(#pm, "!"); strcat(#pm, "Bar Upright|");
   slider1 == 9 ? strcat(#pm, "!"); strcat(#pm, "Honky-Tonk|");
   slider1 == 10 ? strcat(#pm, "!"); strcat(#pm, "Parlour Upright|");
-  strcat(#pm, "<"); slider1 == 11 ? strcat(#pm, "!"); strcat(#pm, "Dark Lo-Fi");
+  strcat(#pm, "<"); slider1 == 11 ? strcat(#pm, "!"); strcat(#pm, "Dark Lo-Fi|");
+  strcat(#pm, ">Prepared|"); slider1 == 12 ? strcat(#pm, "!"); strcat(#pm, "Plucked Prepared|");
+  strcat(#pm, "<"); slider1 == 13 ? strcat(#pm, "!"); strcat(#pm, "Mallet Grand");
   gfx_x = 300 * sc; gfx_y = 90 * sc; gsel = gfx_showmenu(#pm); gsel > 0 ? load_patch(gsel - 1);
 );
 ui_col(GOLDL); gfx_triangle(494 * sc, 78 * sc, 502 * sc, 78 * sc, 498 * sc, 83 * sc);
-pbtn(518, 34, 34, 26) ? load_patch(slider1 >= 11 ? 0 : slider1 + 1);
-pbtn(518, 64, 34, 26) ? load_patch(slider1 <= 0 ? 11 : slider1 - 1);
+pbtn(518, 34, 34, 26) ? load_patch(slider1 >= 13 ? 0 : slider1 + 1);
+pbtn(518, 64, 34, 26) ? load_patch(slider1 <= 0 ? 13 : slider1 - 1);
 ui_col(0xE8E2D4);                                         // arrows on the dark patch keys
 gfx_line(529 * sc, 49 * sc, 535 * sc, 43 * sc, 1); gfx_line(535 * sc, 43 * sc, 541 * sc, 49 * sc, 1);
 gfx_line(529 * sc, 74 * sc, 535 * sc, 80 * sc, 1); gfx_line(535 * sc, 80 * sc, 541 * sc, 74 * sc, 1);
@@ -647,32 +774,48 @@ gfx_circle(780 * sc, 98 * sc, 2.8 * sc, 1, 1); lbl(812, 93, "PEDAL", 0.7);
 // ---------- knob sections ----------
 C_INK = INK; C_KA = GOLD;
 ui_section(2);
-stitle(95, "HAMMER");
-ui_knob(60 * sc, 196 * sc, 3, 0, 100, 50, 0, "HAMMER", "%.0f%%");
-ui_knob(130 * sc, 196 * sc, 4, 0, 100, 55, 0, "DYNAMICS", "%.0f%%");
-divider(170);
-stitle(320, "STRINGS");
-ui_knob(215 * sc, 196 * sc, 5, 0, 100, 40, 0, "STIFFNESS", "%.0f%%");
-ui_knob(285 * sc, 196 * sc, 6, 0, 100, 20, 0, "UNISON", "%.0f%%");
-ui_knob(355 * sc, 196 * sc, 7, 0, 100, 60, 0, "SUSTAIN", "%.0f%%");
-ui_knob(425 * sc, 196 * sc, 8, 0, 100, 45, 0, "DAMPER", "%.0f%%");
-divider(465);
-stitle(545, "BODY");
-ui_knob(510 * sc, 196 * sc, 9, 0, 100, 55, 0, "BODY", "%.0f%%");
-ui_knob(580 * sc, 196 * sc, 10, 0, 100, 50, 0, "TONE", "%.0f");
-divider(620);
-stitle(700, "SPACE");
-ui_knob(665 * sc, 196 * sc, 11, 0, 100, 35, 0, "RESONANCE", "%.0f%%");
-ui_knob(735 * sc, 196 * sc, 12, 0, 100, 25, 0, "ROOM", "%.0f%%");
-ui_knob(805 * sc, 196 * sc, 13, 0, 100, 60, 0, "SPREAD", "%.0f%%");
-drag_id >= 3 && drag_id <= 13 ? edited = 1;
+divider(428, 138, 398); hline(288);
+// HAMMER: striker keys + hardness, contact, bounce, dynamics
+stitle(222, 140, "HAMMER");
+lkey(30, 160, 38, 28, slider24 < 0.5, "FELT") ? ( slider24 = 0; ui_auto(24); edited = 1; );
+lkey(78, 160, 38, 28, slider24 >= 0.5 && slider24 < 1.5, "TACK") ? ( slider24 = 1; ui_auto(24); edited = 1; );
+lkey(30, 218, 38, 28, slider24 >= 1.5 && slider24 < 2.5, "PLUCK") ? ( slider24 = 2; ui_auto(24); edited = 1; );
+lkey(78, 218, 38, 28, slider24 >= 2.5, "MALLET") ? ( slider24 = 3; ui_auto(24); edited = 1; );
+ui_knob(165 * sc, 212 * sc, 3, 0, 100, 50, 0, "HARDNESS", "%.0f%%");
+ui_knob(232 * sc, 212 * sc, 25, 0, 100, 50, 0, "CONTACT", "%.0f%%");
+ui_knob(299 * sc, 212 * sc, 26, 0, 100, 40, 0, "BOUNCE", "%.0f%%");
+ui_knob(366 * sc, 212 * sc, 4, 0, 100, 55, 0, "DYNAMICS", "%.0f%%");
+// STRINGS
+stitle(636, 140, "STRINGS");
+ui_knob(469 * sc, 212 * sc, 5, 0, 100, 40, 0, "STIFFNESS", "%.0f%%");
+ui_knob(536 * sc, 212 * sc, 27, 0, 100, 0, 0, "WIRE AGE", "%.0f%%");
+ui_knob(603 * sc, 212 * sc, 6, 0, 100, 20, 0, "UNISON", "%.0f%%");
+ui_knob(670 * sc, 212 * sc, 28, 0, 100, 15, 0, "TUNING", "%.0f%%");
+ui_knob(737 * sc, 212 * sc, 7, 0, 100, 60, 0, "SUSTAIN", "%.0f%%");
+ui_knob(804 * sc, 212 * sc, 8, 0, 100, 45, 0, "DAMPER", "%.0f%%");
+// BOARD
+stitle(222, 298, "SOUNDBOARD");
+ui_knob(70 * sc, 350 * sc, 9, 0, 100, 55, 0, "BODY", "%.0f%%");
+ui_knob(140 * sc, 350 * sc, 29, 0, 100, 50, 0, "SIZE", "%.0f%%");
+ui_knob(210 * sc, 350 * sc, 30, 0, 100, 55, 0, "DENSITY", "%.0f%%");
+ui_knob(280 * sc, 350 * sc, 10, 0, 100, 50, 0, "TONE", "%.0f");
+ui_knob(360 * sc, 350 * sc, 11, 0, 100, 35, 0, "RESONANCE", "%.0f%%");
+// SPACE: lid + mic, room, spread
+stitle(636, 298, "LID & MIC");
+lkey(452, 326, 38, 28, slider31 < 0.5, "OPEN") ? ( slider31 = 0; ui_auto(31); edited = 1; );
+lkey(500, 326, 38, 28, slider31 >= 0.5 && slider31 < 1.5, "HALF") ? ( slider31 = 1; ui_auto(31); edited = 1; );
+lkey(548, 326, 38, 28, slider31 >= 1.5, "CLOSED") ? ( slider31 = 2; ui_auto(31); edited = 1; );
+ui_knob(650 * sc, 350 * sc, 32, 0, 100, 35, 0, "MIC DIST", "%.0f%%");
+ui_knob(725 * sc, 350 * sc, 12, 0, 100, 25, 0, "ROOM", "%.0f%%");
+ui_knob(800 * sc, 350 * sc, 13, 0, 100, 60, 0, "SPREAD", "%.0f%%");
+(drag_id >= 3 && drag_id <= 13) || (drag_id >= 25 && drag_id <= 32) ? edited = 1;
 
 // ---------- master + IN / OUT strip ----------
 C_INK = INK; ui_section(2);
-ui_kmini = 1; ui_knob(300 * sc, 320 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%"); ui_kmini = 0;
-lbl(300, 336, "DRIFT", 0.9);
-ui_kmini = 1; ui_knob(350 * sc, 320 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB"); ui_kmini = 0;
-lbl(350, 336, "VOLUME", 0.9);
-ins_io(390, 307, 16, INK);
-ins_stereo_mini(500, 307, 22, INK);
+ui_kmini = 1; ui_knob(300 * sc, 424 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%"); ui_kmini = 0;
+lbl(300, 440, "DRIFT", 0.9);
+ui_kmini = 1; ui_knob(350 * sc, 424 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB"); ui_kmini = 0;
+lbl(350, 440, "VOLUME", 0.9);
+ins_io(390, 411, 16, INK);
+ins_stereo_mini(500, 411, 22, INK);
 ui_end();
