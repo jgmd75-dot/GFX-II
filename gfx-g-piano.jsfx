@@ -1,0 +1,563 @@
+desc:GFX G Piano
+//tags: instrument piano grand upright physical-modeling waveguide
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
+//
+// A physical-model acoustic piano: no samples, every note is played on modelled strings.
+//   STRINGS  each key has one string in the low bass and two from there up (a unison pair, slightly detuned,
+//            so notes beat and fall away in two stages like the real thing). Each string is a tuned digital
+//            waveguide: a delay line with a fractional (Thiran) tuner, a two-stage dispersion all-pass for
+//            STIFFNESS (the partials run sharp, more so at the ends of the keyboard), and a loss filter that
+//            makes the top die away faster than the fundamental. The loop is re-tuned at note-on so the
+//            fundamental stays exactly in pitch whatever the stiffness.
+//   HAMMER   a felt strike: a raised-cosine force pulse whose length shortens with velocity and HAMMER, so
+//            loud notes are brighter as well as louder, applied at 1/8 (grand) or 1/9 (upright) of the
+//            string, which notches the matching partials. A low "knock" from the action rides on top.
+//   DAMPERS  key up drops the damper: DAMPER sets how fast it stops the string (the bass rings on longer).
+//            The top two octaves have no dampers, as on a real piano. Sustain pedal (CC64) lifts them all;
+//            soft pedal (CC67) moves the hammer to softer felt.
+//   BODY     a soundboard of six resonant modes (grand: broad and low; upright: higher and boxier) and TONE.
+//   PEDAL RES  with the sustain pedal down the open strings ring in sympathy: a long, dark resonance halo.
+//   ROOM     a short stereo room. SPREAD pans the keys across the stereo field (bass left, as the player hears it).
+//   GRAND / UPRIGHT  the model: string length (sustain and bass stiffness), strike point, hammer, body.
+// Drift: each note is tuned a few cents off, as on a piano a while after tuning.
+// MIDI: sustain (CC64), soft pedal (CC67), all notes off (CC123 / 120). Re-striking a ringing key hits the
+// same strings again, so repeated notes build up instead of restarting.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+slider1:0<0,11,1{Concert Grand,Studio Grand,Bright Pop Grand,Ballad Grand,Jazz Club Grand,Cinematic Halo,Felt Piano,Rock Upright,Bar Upright,Honky-Tonk,Parlour Upright,Dark Lo-Fi}>-Patch
+slider2:0<0,1,1{Grand,Upright}>-Model
+slider3:50<0,100,1>-Hammer (%)
+slider4:55<0,100,1>-Dynamics (%)
+slider5:40<0,100,1>-Stiffness (%)
+slider6:20<0,100,1>-Unison detune (%)
+slider7:60<0,100,1>-Sustain (%)
+slider8:45<0,100,1>-Damper (%)
+slider9:55<0,100,1>-Body (%)
+slider10:50<0,100,1>-Tone (%)
+slider11:35<0,100,1>-Pedal resonance (%)
+slider12:25<0,100,1>-Room (%)
+slider13:60<0,100,1>-Spread (%)
+slider14:15<0,100,1>-Drift (%)
+slider15:0<-24,6,0.1>-Volume (dB)
+slider16:0<0,100,1>-Band sat (%)
+slider17:30<0,100,1>-Bias (%)
+slider18:120<40,400,1>-Sat low band (Hz)
+slider19:6000<2000,16000,10>-Sat high band (Hz)
+slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:20<20,500,1>-Mono below (Hz, 20 = off)
+slider23:0<0,100,1>-Stereo width (%)
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-piano";                                   // the ? pop-up links to this manual
+
+NV = 16;                                  // voices (keys)
+NS = NV * 2;                              // strings
+// ---- voice arrays ----
+v_act = 1000; v_note = 1020; v_held = 1040; v_sus = 1060; v_age = 1080; v_ns = 1100;
+v_pl = 1120; v_pr = 1140; v_env = 1160; v_et = 1180; v_en = 1200; v_ea = 1220; v_eb = 1240;
+v_ka = 1260; v_kl = 1280; v_nd = 1300; v_live = 1320;
+memset(1000, 0, 340);
+// ---- string arrays ----
+s_wp = 2000; s_L = 2040; s_eta = 2080; s_tx = 2120; s_ty = 2160; s_a = 2200;
+s_ax = 2240; s_ay = 2280; s_bx = 2320; s_by = 2360; s_g = 2400; s_gh = 2440; s_gr = 2480;
+s_p = 2520; s_lp = 2560; s_w = 2600;
+memset(2000, 0, 640);
+SZ = 8192; BUF = 100000;                  // one delay line per string (A0 at 192 kHz needs ~7000)
+memset(BUF, 0, NS * SZ);
+// ---- reverbs: pedal resonance halo and room (4 lines each) ----
+FSZ = 8192; FRB = BUF + NS * SZ; FRM = FRB + 4 * FSZ;     // FRB..: resonance, FRM..: room
+memset(FRB, 0, 8 * FSZ);
+f_wp = 0;
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000..24095
+
+ins_drift_init();
+agec = 0; sus_pedal = 0; soft_pedal = 0;
+TP = 2 * $pi;
+
+// ---------- string tuning ----------
+// phase delay (samples) of a first-order all-pass (a + z^-1) / (1 + a z^-1) at w
+function ap_tau(a, w) ( -(atan2(-sin(w), a + cos(w)) - atan2(-a * sin(w), 1 + a * cos(w))) / w; );
+// phase delay of the loss filter y = (1 - p) x + p y1 at w
+function lp_tau(p, w) ( atan2(p * sin(w), 1 - p * cos(w)) / w; );
+// set string s to frequency f with dispersion coefficient a, loss pole p, sustain T60 t60 and release T60 trel
+function str_set(s, f, a, p, t60, trel) local(w, per, dl, li, fd, eta, err, mag, k) (
+  // (EEL names are case-insensitive: keep every local distinct from p / a / s / f)
+  w = TP * f / srate; per = srate / f;
+  dl = per - 2 * ap_tau(a, w) - lp_tau(p, w);
+  k = 0; loop(12, dl < 2.2 && a < -0.001 ? ( a *= 0.6; dl = per - 2 * ap_tau(a, w) - lp_tau(p, w); ); k += 1; );
+  li = max(1, floor(dl - 0.5)); fd = dl - li;
+  eta = (1 - fd) / (1 + fd);
+  err = ap_tau(eta, w) - fd;                // one correction pass for the Thiran tuner at this frequency
+  fd = fd - err; eta = (1 - fd) / (1 + fd);
+  s_L[s] = min(li, SZ - 4); s_eta[s] = eta; s_a[s] = a; s_p[s] = p;
+  mag = (1 - p) / sqrt(1 - 2 * p * cos(w) + p * p);
+  // loop gain: the fundamental decays in t60; capped below 1 so the loop (unity at DC) always dies away
+  s_gh[s] = min(0.99995, 10 ^ (-3 / (t60 * f)) / mag);
+  s_gr[s] = min(0.9995, 10 ^ (-3 / (trel * f)) / mag);
+);
+
+// dispersion coefficient that stretches the partials like a stiff string with inharmonicity B:
+// partial k should sit at k f0 sqrt(1 + B k^2) / sqrt(1 + B). Solved by bisection on the two all-passes.
+function disp_a(f, B) local(w, per, kk, tgt, lo, hi, mid, dv) (
+  w = TP * f / srate; per = srate / f;
+  kk = min(8, floor(0.42 * srate / f));
+  kk < 2 ? 0 : (
+    tgt = per * (1 - sqrt(1 + B) / sqrt(1 + B * kk * kk));
+    lo = -0.95; hi = 0;
+    loop(22,
+      mid = 0.5 * (lo + hi);
+      dv = 2 * (ap_tau(mid, w) - ap_tau(mid, kk * w));
+      dv > tgt ? lo = mid : hi = mid;
+    );
+    0.5 * (lo + hi);
+  );
+);
+
+// ---------- notes ----------
+function note_on(n, vel) local(i, best, ba, f, ns, k, a, p, t60, trel, det, ph, vA, hv, th, pan, s, x, jit, strike) (
+  best = -1;
+  i = 0; loop(NV, v_act[i] && v_note[i] == n && best < 0 ? best = i; i += 1; );            // re-strike: same strings
+  best < 0 ? ( i = 0; loop(NV, !v_act[i] && best < 0 ? best = i; i += 1; ); );               // free key
+  best < 0 ? ( ba = 10 ^ 12; i = 0; loop(NV, !v_held[i] && v_age[i] < ba ? ( ba = v_age[i]; best = i; ); i += 1; ); );   // oldest released
+  best < 0 ? ( ba = 10 ^ 12; i = 0; loop(NV, v_age[i] < ba ? ( ba = v_age[i]; best = i; ); i += 1; ); );                 // oldest
+  i = best;
+  restrike = v_act[i] && v_note[i] == n;
+  f = 440 * 2 ^ ((n - 69) / 12) * ins_note_detune();
+  ns = n <= 32 ? 1 : 2;
+  // stiffness: inharmonicity B rises towards both ends of the keyboard (lowest around the tenor break);
+  // the upright's short bass strings are much stiffer
+  k = n < 40 ? -4.3 + 0.042 * (40 - n) : -4.3 + 0.03 * (n - 40);
+  model ? k += n < 40 ? 0.45 : 0.15;
+  a = disp_a(f, 10 ^ k * (0.1 + 2.4 * stiff ^ 1.5));
+  // loss pole: how fast the top of each note dies against its fundamental
+  p = min(0.5, max(0.01, (model ? 0.26 : 0.16) * (0.4 + 1.2 * (1 - tone_s)) * 2 ^ (-(n - 60) / 24)));
+  t60 = max(0.35, sus_t * 17 * 2 ^ (-(n - 21) / 23) * (model ? 0.65 : 1));
+  trel = n >= 89 ? t60 : max(0.04, dmp_t * 0.55 * 2 ^ (-(n - 21) / 34));
+  det = uni_c * (0.6 + 0.8 * (n / 108));                      // unison spread in cents, wider up the keyboard
+  s = 2 * i;
+  ns == 1 ? (
+    str_set(s, f, a, p, t60, trel); s_w[s] = 1; s_w[s + 1] = 0;
+  ) : (
+    jit = (rand(2) - 1) * 0.15;
+    str_set(s,     f * 2 ^ (( det * 0.5 + jit) / 1200), a, p, t60, trel);
+    str_set(s + 1, f * 2 ^ ((-det * 0.5 + jit) / 1200), a, p, t60 * 1.15, trel);
+    s_w[s] = 0.5; s_w[s + 1] = 0.5;
+  );
+  !restrike ? (
+    k = 0; loop(2, memset(BUF + (s + k) * SZ, 0, SZ); s_wp[s + k] = 0; s_tx[s + k] = s_ty[s + k] = 0;
+      s_ax[s + k] = s_ay[s + k] = s_bx[s + k] = s_by[s + k] = s_lp[s + k] = 0; k += 1; );
+    v_env[i] = 0;
+  );
+  s_g[s] = s_gh[s]; s_g[s + 1] = s_gh[s + 1];
+  // hammer: velocity curve, pulse length, strike point
+  vel = vel / 127;
+  vA = vel ^ (0.55 + 1.7 * dyn);
+  hv = min(1.2, ham * 0.7 + vel * 0.65) * (soft_pedal ? 0.6 : 1);
+  th = min(4.5, max(0.12, (2.2 - 1.6 * hv) * 2 ^ (-(n - 21) / 34)));     // ms
+  v_en[i] = max(3, floor(th * 0.001 * srate));
+  strike = model ? 1 / 9 : 1 / 8;
+  v_eb[i] = max(1, floor(strike * srate / f + 0.5));
+  // force normalised so every key and pulse length sounds roughly as loud for the same velocity
+  v_ea[i] = vA * (soft_pedal ? 0.8 : 1) * 0.16 / sqrt(v_en[i] * f / srate + 0.02) * (0.25 + 0.75 * (f / 260) ^ 0.15) * 2 ^ ((n - 21) / 40);
+  v_et[i] = 0;
+  v_ka[i] = vA * 0.05 * (model ? 1.3 : 1); v_kl[i] = 0;
+  // pan: bass left, treble right
+  pan = min(1, max(-1, (n - 64) / 44 * spread));
+  v_pl[i] = cos((pan + 1) * $pi / 4); v_pr[i] = sin((pan + 1) * $pi / 4);
+  v_act[i] = 1; v_note[i] = n; v_held[i] = 1; v_sus[i] = 0; v_ns[i] = ns; v_live[i] = 0;
+  v_nd[i] = n >= 89;                         // no damper on the top keys
+  agec += 1; v_age[i] = agec;
+  ins_midi_hit();
+);
+function note_damp(i) local(s) ( s = 2 * i; s_g[s] = s_gr[s]; s_g[s + 1] = s_gr[s + 1]; );
+function note_off(n) local(i) (
+  i = 0;
+  loop(NV,
+    v_act[i] && v_held[i] && v_note[i] == n ? (
+      v_held[i] = 0;
+      sus_pedal ? v_sus[i] = 1 : !v_nd[i] ? note_damp(i);
+    );
+    i += 1;
+  );
+);
+function all_off() local(i) ( i = 0; loop(NV, v_held[i] = 0; v_sus[i] = 0; v_act[i] ? note_damp(i); i += 1; ); );
+
+// ---------- shared filters ----------
+// RBJ band-pass, 0 dB peak (coefficients into c[0..4])
+function bp_set(c, f, q) local(w, al, a0) (
+  w = TP * min(f, srate * 0.45) / srate; al = sin(w) / (2 * q); a0 = 1 + al;
+  c[0] = al / a0; c[1] = 0; c[2] = -al / a0; c[3] = -2 * cos(w) / a0; c[4] = (1 - al) / a0;
+);
+function bq(x, c, s) local(y) (
+  y = c[0] * x + c[1] * s[0] + c[2] * s[1] - c[3] * s[2] - c[4] * s[3];
+  s[1] = s[0]; s[0] = x; s[3] = s[2]; s[2] = y; y;
+);
+BM = 3000; memset(BM, 0, 6 * 9);          // six body modes: coefficients (5) + state (4)
+function body_setup(m) local(i, f, q) (
+  i = 0;
+  loop(6,
+    f = m ? (i == 0 ? 118 : i == 1 ? 186 : i == 2 ? 292 : i == 3 ? 455 : i == 4 ? 690 : 1080)
+          : (i == 0 ? 86 : i == 1 ? 138 : i == 2 ? 212 : i == 3 ? 330 : i == 4 ? 505 : 770);
+    q = m ? 4.5 : 3.2;
+    bp_set(BM + i * 9, f, q);
+    i += 1;
+  );
+);
+bmg0 = 1.0; bmg1 = 0.8; bmg2 = 0.65; bmg3 = 0.5; bmg4 = 0.38; bmg5 = 0.28;
+
+// ---------- patches (Drift and Volume stay as they are) ----------
+function setp(m, hm, dy, st, un, su, dm, bo, to, pr, ro, sp) (
+  slider2 = m; slider3 = hm; slider4 = dy; slider5 = st; slider6 = un; slider7 = su; slider8 = dm;
+  slider9 = bo; slider10 = to; slider11 = pr; slider12 = ro; slider13 = sp;
+);
+function load_patch(p) (
+  p == 0  ? setp(0, 50, 60, 40, 20, 60, 45, 55, 50, 35, 25, 60) :   // Concert Grand
+  p == 1  ? setp(0, 55, 55, 40, 15, 55, 40, 45, 55, 25, 10, 50) :   // Studio Grand
+  p == 2  ? setp(0, 75, 40, 45, 15, 50, 35, 40, 68, 20, 10, 45) :   // Bright Pop Grand
+  p == 3  ? setp(0, 35, 65, 40, 22, 75, 55, 60, 42, 55, 35, 65) :   // Ballad Grand
+  p == 4  ? setp(0, 45, 60, 45, 25, 55, 40, 55, 48, 30, 30, 50) :   // Jazz Club Grand
+  p == 5  ? setp(0, 30, 70, 40, 20, 85, 60, 55, 40, 90, 60, 80) :   // Cinematic Halo
+  p == 6  ? setp(1,  5, 50, 30, 20, 45, 30, 60, 32, 45, 15, 35) :   // Felt Piano
+  p == 7  ? setp(1, 70, 45, 55, 25, 40, 35, 55, 62, 20, 15, 35) :   // Rock Upright
+  p == 8  ? setp(1, 55, 50, 60, 45, 45, 40, 60, 50, 25, 25, 30) :   // Bar Upright
+  p == 9  ? setp(1, 65, 45, 60, 90, 45, 40, 60, 58, 20, 25, 30) :   // Honky-Tonk
+  p == 10 ? setp(1, 40, 55, 55, 35, 50, 45, 65, 45, 35, 20, 30) :   // Parlour Upright
+            setp(1, 25, 40, 50, 40, 40, 35, 60, 25, 30, 20, 30);    // Dark Lo-Fi
+  slider1 = p; last_patch = p; edited = 0;
+  slider_automate(8191);                   // sliders 1-13
+);
+function patch_name(p) (
+  p == 0 ? "CONCERT GRAND" : p == 1 ? "STUDIO GRAND" : p == 2 ? "BRIGHT POP" : p == 3 ? "BALLAD GRAND" :
+  p == 4 ? "JAZZ CLUB" : p == 5 ? "CINEMATIC HALO" : p == 6 ? "FELT PIANO" : p == 7 ? "ROCK UPRIGHT" :
+  p == 8 ? "BAR UPRIGHT" : p == 9 ? "HONKY-TONK" : p == 10 ? "PARLOUR" : "DARK LO-FI";
+);
+
+// ---------- parameters ----------
+function update() local(t) (
+  model = slider2 > 0.5;
+  model != last_model ? ( body_setup(model); last_model = model; );
+  ham = slider3 / 100; dyn = slider4 / 100; stiff = slider5 / 100;
+  uni_c = (slider6 / 100) ^ 1.6 * 28;                         // 0 .. 28 cents (honky-tonk at the top)
+  sus_t = 0.25 + 1.5 * (slider7 / 100) ^ 1.3;
+  dmp_t = 0.25 + 2.75 * (slider8 / 100) ^ 1.5;
+  body = (slider9 / 100) * 0.9;
+  tone_s = slider10 / 100; tilt = (tone_s - 0.5) * 1.1;
+  pres = slider11 / 100; room = slider12 / 100; spread = slider13 / 100;
+  drift = slider14 / 100;
+  vol_t = 10 ^ (slider15 / 20);
+  // room: T60 0.5 .. 1.3 s; resonance halo: long with the pedal down, short with it up
+  rm_g = 10 ^ (-3 * 0.015 / (0.5 + 0.8 * room));
+  ins_output_setup(16); ins_stereo_setup(22);
+);
+last_model = -1;
+tlc = 1 - exp(-TP * 900 / srate);
+klc = 1 - exp(-TP * 700 / srate);
+kdec = exp(-1 / (0.014 * srate));
+hpc = 1 - exp(-TP * 35 / srate);
+rlp = 1 - exp(-TP * 2600 / srate); mlp = 1 - exp(-TP * 6500 / srate);
+envc = 1 - exp(-1 / (0.02 * srate));
+sm = 1 - exp(-1 / (0.03 * srate));
+// reverb line lengths (ms) and their loop gains are set in @block from srate
+rl0 = floor(0.0137 * srate); rl1 = floor(0.0193 * srate); rl2 = floor(0.0239 * srate); rl3 = floor(0.0291 * srate);
+ml0 = floor(0.0073 * srate); ml1 = floor(0.0119 * srate); ml2 = floor(0.0171 * srate); ml3 = floor(0.0217 * srate);
+update();
+vol_s = vol_t; res_gs = 0;
+!ui_dflt ? ( ui_thm = 9; ui_hw = 1; );                     // fixed black-lacquer-and-brass faceplate
+last_patch = -1;
+ui_dflt = 1;
+
+@slider
+last_patch < 0 ? ( last_patch = slider1; ) : ( slider1 != last_patch ? load_patch(slider1); );
+update();
+
+@block
+update();
+while (midirecv(mofs, m1, m2, m3)) (
+  st = m1 & 0xF0;
+  st == 0x90 && m3 > 0 ? note_on(m2, m3) :
+  st == 0x80 || (st == 0x90 && m3 == 0) ? note_off(m2) :
+  st == 0xB0 && m2 == 64 ? (
+    sus_pedal = m3 >= 64;
+    !sus_pedal ? ( i = 0; loop(NV, v_act[i] && !v_held[i] && !v_nd[i] ? note_damp(i); v_sus[i] = 0; i += 1; ); );
+  ) :
+  st == 0xB0 && m2 == 67 ? soft_pedal = m3 >= 64 :
+  st == 0xB0 && (m2 == 123 || m2 == 120) ? ( all_off(); sus_pedal = 0; );
+  midisend(mofs, m1, m2, m3);
+);
+ins_drift_block(drift, samplesblock);
+// the resonance halo rings long only while the pedal is down
+res_gt = sus_pedal ? 10 ^ (-3 * 0.021 / 3.2) : 10 ^ (-3 * 0.021 / 0.35);
+
+@sample
+// ---------- strings ----------
+sL = sR = 0;
+i = 0;
+loop(NV,
+  v_act[i] ? (
+    // hammer force for this sample: pulse minus its reflection from the strike point (the comb)
+    t = v_et[i];
+    t < v_en[i] + v_eb[i] ? (
+      e1 = t < v_en[i] ? 0.5 - 0.5 * cos(TP * t / v_en[i]) : 0;
+      t2 = t - v_eb[i];
+      e2 = t2 >= 0 && t2 < v_en[i] ? 0.5 - 0.5 * cos(TP * t2 / v_en[i]) : 0;
+      exc = (e1 - e2) * v_ea[i];
+    ) : exc = 0;
+    v_et[i] = t + 1;
+    vo = 0;
+    s = 2 * i;
+    loop(v_ns[i],
+      bp = BUF + s * SZ;
+      wp = s_wp[s];
+      rp = wp - s_L[s]; rp < 0 ? rp += SZ;
+      x = bp[rp];
+      // Thiran fractional tuner
+      e = s_eta[s]; y = e * x + s_tx[s] - e * s_ty[s]; s_tx[s] = x; s_ty[s] = y;
+      // stiffness: two dispersion all-passes
+      a = s_a[s];
+      o = a * y + s_ax[s] - a * s_ay[s]; s_ax[s] = y; s_ay[s] = o;
+      y = a * o + s_bx[s] - a * s_by[s]; s_bx[s] = o; s_by[s] = y;
+      // losses
+      p = s_p[s]; lp = (1 - p) * y + p * s_lp[s]; s_lp[s] = lp;
+      w = s_g[s] * lp + exc;
+      bp[wp] = w;
+      wp += 1; wp >= SZ ? wp = 0; s_wp[s] = wp;
+      vo += w * s_w[s];
+      s += 1;
+    );
+    // action knock (low thump), decaying fast
+    v_ka[i] > 0.000001 ? ( v_kl[i] += ((rand(2) - 1) * v_ka[i] - v_kl[i]) * klc; v_ka[i] *= kdec; vo += v_kl[i]; );
+    sL += vo * v_pl[i]; sR += vo * v_pr[i];
+    // retire a key once it has died away (after the hammer has struck)
+    v_env[i] += (abs(vo) - v_env[i]) * envc;
+    v_et[i] > 2000 ? (
+      v_live[i] = 1;
+      (v_env[i] < 0.00002 && !v_held[i] && !v_sus[i]) || v_env[i] < 0.000002 ? v_act[i] = 0;
+    );
+  );
+  i += 1;
+);
+sL *= 0.35; sR *= 0.35;
+
+// ---------- soundboard ----------
+m = 0.5 * (sL + sR);
+hpz += (m - hpz) * hpc; mh = m - hpz;
+b0 = bq(mh, BM, BM + 5) * bmg0; b1 = bq(mh, BM + 9, BM + 14) * bmg1; b2 = bq(mh, BM + 18, BM + 23) * bmg2;
+b3 = bq(mh, BM + 27, BM + 32) * bmg3; b4 = bq(mh, BM + 36, BM + 41) * bmg4; b5 = bq(mh, BM + 45, BM + 50) * bmg5;
+xL = sL + body * (b0 + b2 + b4 + 0.6 * (b1 + b3 + b5));
+xR = sR + body * (b1 + b3 + b5 + 0.6 * (b0 + b2 + b4));
+// ---------- tone (tilt about 900 Hz) ----------
+tzL += (xL - tzL) * tlc; xL += tilt * (xL - 2 * tzL);
+tzR += (xR - tzR) * tlc; xR += tilt * (xR - 2 * tzR);
+mm = 0.5 * (xL + xR);
+
+// ---------- pedal resonance halo + room (4-line feedback delay networks) ----------
+res_gs += (res_gt - res_gs) * 0.0005;
+r0 = FRB[(f_wp - rl0) & (FSZ - 1)]; r1 = FRB[FSZ + ((f_wp - rl1) & (FSZ - 1))];
+r2 = FRB[2 * FSZ + ((f_wp - rl2) & (FSZ - 1))]; r3 = FRB[3 * FSZ + ((f_wp - rl3) & (FSZ - 1))];
+rz0 += (r0 - rz0) * rlp; rz1 += (r1 - rz1) * rlp; rz2 += (r2 - rz2) * rlp; rz3 += (r3 - rz3) * rlp;
+rin = mm * pres * (sus_pedal ? 0.35 : 0.04);
+FRB[f_wp]           = rin + 0.5 * res_gs * (rz0 + rz1 + rz2 + rz3);
+FRB[FSZ + f_wp]     = rin + 0.5 * res_gs * (rz0 - rz1 + rz2 - rz3);
+FRB[2 * FSZ + f_wp] = rin + 0.5 * res_gs * (rz0 + rz1 - rz2 - rz3);
+FRB[3 * FSZ + f_wp] = rin + 0.5 * res_gs * (rz0 - rz1 - rz2 + rz3);
+xL += pres * (rz0 - rz2) * 0.9; xR += pres * (rz1 - rz3) * 0.9;
+
+q0 = FRM[(f_wp - ml0) & (FSZ - 1)]; q1 = FRM[FSZ + ((f_wp - ml1) & (FSZ - 1))];
+q2 = FRM[2 * FSZ + ((f_wp - ml2) & (FSZ - 1))]; q3 = FRM[3 * FSZ + ((f_wp - ml3) & (FSZ - 1))];
+qz0 += (q0 - qz0) * mlp; qz1 += (q1 - qz1) * mlp; qz2 += (q2 - qz2) * mlp; qz3 += (q3 - qz3) * mlp;
+qin = mm * room * 0.6;
+FRM[f_wp]           = qin + 0.5 * rm_g * (qz0 + qz1 + qz2 + qz3);
+FRM[FSZ + f_wp]     = qin + 0.5 * rm_g * (qz0 - qz1 + qz2 - qz3);
+FRM[2 * FSZ + f_wp] = qin + 0.5 * rm_g * (qz0 + qz1 - qz2 - qz3);
+FRM[3 * FSZ + f_wp] = qin + 0.5 * rm_g * (qz0 - qz1 - qz2 + qz3);
+xL += room * (qz0 - qz2) * 0.7; xR += room * (qz1 - qz3) * 0.7;
+f_wp = (f_wp + 1) & (FSZ - 1);
+
+// ---------- volume + output stage ----------
+vol_s += (vol_t - vol_s) * sm;
+oL = ostL.ost_band(xL) * vol_s;
+oR = ostR.ost_band(xR) * vol_s;
+ins_stereo(oL, oR); ost_out(ins_sl, ins_sr);
+spl0 = ost_l;
+spl1 = ost_r;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, edited);
+
+@gfx 860 400
+ui_thm = 9; ui_hw = 1;
+ui_begin(860, 400);
+INK = 0xE8D9B4; GOLD = 0xC9A043; GOLDL = 0xE8C66A; FELT = 0x5A1418;
+// ---------- helpers ----------
+function lbl(x, y, s, a) ( gfx_setfont(4); ui_cola(INK, a); ui_text(x * sc, y * sc, s); );
+function stitle(cx, s) ( gfx_setfont(4); ui_col(GOLD); ui_text(cx * sc, 150 * sc, s); );
+function divider(x) (
+  ui_cola(0x000000, 0.55); gfx_line(x * sc, 150 * sc, x * sc, 296 * sc);
+  ui_cola(0xFFFFFF, 0.06); gfx_line(x * sc + 1, 150 * sc, x * sc + 1, 296 * sc);
+);
+// brass-ringed LED key: returns 1 when clicked
+function lkey(x, y, w, h, on, s) local(hit) (
+  hit = pk_ledbtn(x * sc, y * sc, w * sc, h * sc, on, GOLDL);
+  lbl(x + w * 0.5, y + h + 4, s, on ? 1 : 0.7);
+  hit;
+);
+function pbtn(x, y, w, h) local(hit, inb) (
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hit = pressed && drag_id == 0 && inb; hit ? drag_id = -1;
+  ui_keyshadow(x * sc, y * sc, w * sc, h * sc, 2 * sc);
+  ui_col(0x141214); ui_rrs(x * sc, y * sc, w * sc, h * sc, 2 * sc);
+  ui_col(mdown && inb ? 0x201C1E : 0x2A2527); ui_rrect((x + 2) * sc, (y + 2) * sc, (w - 4) * sc, (h - 5) * sc, 1.5 * sc);
+  hit;
+);
+
+// ---------- cabinet: piano-black lacquer with a felt strip and brass pinstripe ----------
+fh = 384;
+ui_col(0x070707); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_cola(0x000000, 0.6); ui_rrect(10 * sc, 12 * sc, 844 * sc, fh * sc, 7 * sc);
+ui_col(0x1A1718); ui_rrect(8 * sc, 8 * sc, 844 * sc, fh * sc, 7 * sc);
+gfx_gradrect(9 * sc, 9 * sc, 842 * sc, (fh - 2) * sc, 0.10, 0.09, 0.095, 1, 0, 0, 0, 0, -0.07 / ((fh - 2) * sc), -0.065 / ((fh - 2) * sc), -0.065 / ((fh - 2) * sc), 0);
+// lacquer sheen: a soft diagonal band
+ui_cola(0xFFFFFF, 0.035); gfx_triangle(140 * sc, 9 * sc, 330 * sc, 9 * sc, 150 * sc, (fh + 6) * sc, -40 * sc, (fh + 6) * sc);
+ui_cola(0xFFFFFF, 0.14); gfx_line(16 * sc, 9 * sc, 844 * sc, 9 * sc);
+// felt strip
+ui_col(FELT); gfx_rect(16 * sc, 12 * sc, 828 * sc, 6 * sc);
+ui_cola(0x000000, 0.35); gfx_rect(16 * sc, 17 * sc, 828 * sc, 1 * sc);
+// brass pinstripe
+ui_col(GOLD); gfx_rect(20 * sc, 126 * sc, 820 * sc, 1 * sc);
+ui_cola(GOLD, 0.45); gfx_rect(20 * sc, 300 * sc, 820 * sc, 1 * sc);
+
+// ---------- brand ----------
+ui_col(GOLD); gfx_circle(50 * sc, 58 * sc, 18 * sc, 1, 1);
+ui_cola(0xFFFFFF, 0.25); gfx_circle(45 * sc, 52 * sc, 8 * sc, 1, 1);
+gfx_setfont(2); ui_col(0x1A1408); ui_text(50 * sc, 51 * sc, "GFX");
+gfx_setfont(6, "Georgia", 30 * sc, 'b'); ui_col(GOLDL); gfx_x = 80 * sc; gfx_y = 36 * sc; gfx_drawstr("G Piano");
+gfx_setfont(4); ui_cola(INK, 0.7); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("PHYSICAL MODEL GRAND & UPRIGHT");
+
+// ---------- patch display ----------
+ui_col(0x050505); ui_rrect(300 * sc, 34 * sc, 210 * sc, 56 * sc, 4 * sc);
+gfx_gradrect(304 * sc, 38 * sc, 202 * sc, 48 * sc, 0.17, 0.11, 0.03, 1, 0, 0, 0, 0, -0.06 / (48 * sc), -0.04 / (48 * sc), -0.01 / (48 * sc), 0);
+gfx_setfont(7, "Courier New", 15 * sc, 'b'); ui_col(GOLDL);
+sprintf(#l1, edited ? "P%02d*%s" : "P%02d %s", slider1 + 1, patch_name(slider1));
+gfx_x = 312 * sc; gfx_y = 45 * sc; gfx_drawstr(#l1);
+gfx_setfont(8, "Courier New", 11 * sc, 'b'); ui_cola(GOLDL, 0.75);
+drag_id >= 3 && drag_id <= 15 ? (
+  drag_id == 3  ? sprintf(#l2, "HAMMER     %3.0f%%", slider3) :
+  drag_id == 4  ? sprintf(#l2, "DYNAMICS   %3.0f%%", slider4) :
+  drag_id == 5  ? sprintf(#l2, "STIFFNESS  %3.0f%%", slider5) :
+  drag_id == 6  ? sprintf(#l2, "UNISON %5.1f cent", (slider6 / 100) ^ 1.6 * 28) :
+  drag_id == 7  ? sprintf(#l2, "SUSTAIN    %3.0f%%", slider7) :
+  drag_id == 8  ? sprintf(#l2, "DAMPER     %3.0f%%", slider8) :
+  drag_id == 9  ? sprintf(#l2, "BODY       %3.0f%%", slider9) :
+  drag_id == 10 ? sprintf(#l2, "TONE      %+4.0f", slider10 - 50) :
+  drag_id == 11 ? sprintf(#l2, "PEDAL RES  %3.0f%%", slider11) :
+  drag_id == 12 ? sprintf(#l2, "ROOM       %3.0f%%", slider12) :
+  drag_id == 13 ? sprintf(#l2, "SPREAD     %3.0f%%", slider13) :
+  drag_id == 14 ? sprintf(#l2, "DRIFT      %3.0f%%", slider14) :
+                  sprintf(#l2, "VOLUME  %5.1fdB", slider15);
+) : (
+  sprintf(#l2, "%s  PED:%s", slider2 > 0.5 ? "UPRIGHT" : "GRAND  ", sus_pedal ? "ON " : "OFF");
+);
+gfx_x = 312 * sc; gfx_y = 68 * sc; gfx_drawstr(#l2);
+pressed && drag_id == 0 && mouse_x >= 300 * sc && mouse_x < 510 * sc && mouse_y >= 34 * sc && mouse_y < 90 * sc ? (
+  drag_id = -1; #pm = "";
+  strcat(#pm, ">Grand|"); slider1 == 0 ? strcat(#pm, "!"); strcat(#pm, "Concert Grand|");
+  slider1 == 1 ? strcat(#pm, "!"); strcat(#pm, "Studio Grand|");
+  slider1 == 2 ? strcat(#pm, "!"); strcat(#pm, "Bright Pop Grand|");
+  slider1 == 3 ? strcat(#pm, "!"); strcat(#pm, "Ballad Grand|");
+  slider1 == 4 ? strcat(#pm, "!"); strcat(#pm, "Jazz Club Grand|");
+  strcat(#pm, "<"); slider1 == 5 ? strcat(#pm, "!"); strcat(#pm, "Cinematic Halo|");
+  strcat(#pm, ">Upright|"); slider1 == 6 ? strcat(#pm, "!"); strcat(#pm, "Felt Piano|");
+  slider1 == 7 ? strcat(#pm, "!"); strcat(#pm, "Rock Upright|");
+  slider1 == 8 ? strcat(#pm, "!"); strcat(#pm, "Bar Upright|");
+  slider1 == 9 ? strcat(#pm, "!"); strcat(#pm, "Honky-Tonk|");
+  slider1 == 10 ? strcat(#pm, "!"); strcat(#pm, "Parlour Upright|");
+  strcat(#pm, "<"); slider1 == 11 ? strcat(#pm, "!"); strcat(#pm, "Dark Lo-Fi");
+  gfx_x = 300 * sc; gfx_y = 90 * sc; gsel = gfx_showmenu(#pm); gsel > 0 ? load_patch(gsel - 1);
+);
+ui_col(GOLDL); gfx_triangle(494 * sc, 78 * sc, 502 * sc, 78 * sc, 498 * sc, 83 * sc);
+pbtn(518, 34, 34, 26) ? load_patch(slider1 >= 11 ? 0 : slider1 + 1);
+pbtn(518, 64, 34, 26) ? load_patch(slider1 <= 0 ? 11 : slider1 - 1);
+ui_col(INK);
+gfx_line(529 * sc, 49 * sc, 535 * sc, 43 * sc, 1); gfx_line(535 * sc, 43 * sc, 541 * sc, 49 * sc, 1);
+gfx_line(529 * sc, 74 * sc, 535 * sc, 80 * sc, 1); gfx_line(535 * sc, 80 * sc, 541 * sc, 74 * sc, 1);
+lbl(535, 96, "PATCH", 0.6);
+
+// ---------- model ----------
+lkey(580, 40, 40, 38, slider2 < 0.5, "GRAND") ? ( slider2 = 0; ui_auto(2); edited = 1; );
+lkey(630, 40, 40, 38, slider2 > 0.5, "UPRIGHT") ? ( slider2 = 1; ui_auto(2); edited = 1; );
+ui_size_picker(770 * sc, 28 * sc);
+lit = ins_midi_lit();
+lit ? ( ui_cola(0x3ADF6A, 0.25); gfx_circle(780 * sc, 74 * sc, 5.5 * sc, 1, 1); ui_col(0x3ADF6A); ) : ui_col(0x123A1C);
+gfx_circle(780 * sc, 74 * sc, 2.8 * sc, 1, 1); lbl(808, 69, "MIDI", 0.7);
+sus_pedal ? ( ui_cola(GOLDL, 0.25); gfx_circle(780 * sc, 98 * sc, 5.5 * sc, 1, 1); ui_col(GOLDL); ) : ui_col(0x3A2E14);
+gfx_circle(780 * sc, 98 * sc, 2.8 * sc, 1, 1); lbl(812, 93, "PEDAL", 0.7);
+
+// ---------- knob sections ----------
+C_INK = INK; C_KA = GOLD;
+ui_section(2);
+stitle(95, "HAMMER");
+ui_knob(60 * sc, 196 * sc, 3, 0, 100, 50, 0, "HAMMER", "%.0f%%");
+ui_knob(130 * sc, 196 * sc, 4, 0, 100, 55, 0, "DYNAMICS", "%.0f%%");
+divider(170);
+stitle(320, "STRINGS");
+ui_knob(215 * sc, 196 * sc, 5, 0, 100, 40, 0, "STIFFNESS", "%.0f%%");
+ui_knob(285 * sc, 196 * sc, 6, 0, 100, 20, 0, "UNISON", "%.0f%%");
+ui_knob(355 * sc, 196 * sc, 7, 0, 100, 60, 0, "SUSTAIN", "%.0f%%");
+ui_knob(425 * sc, 196 * sc, 8, 0, 100, 45, 0, "DAMPER", "%.0f%%");
+divider(465);
+stitle(545, "BODY");
+ui_knob(510 * sc, 196 * sc, 9, 0, 100, 55, 0, "BODY", "%.0f%%");
+ui_knob(580 * sc, 196 * sc, 10, 0, 100, 50, 0, "TONE", "%.0f");
+divider(620);
+stitle(700, "SPACE");
+ui_knob(665 * sc, 196 * sc, 11, 0, 100, 35, 0, "PEDAL RES", "%.0f%%");
+ui_knob(735 * sc, 196 * sc, 12, 0, 100, 25, 0, "ROOM", "%.0f%%");
+ui_knob(805 * sc, 196 * sc, 13, 0, 100, 60, 0, "SPREAD", "%.0f%%");
+drag_id >= 3 && drag_id <= 13 ? edited = 1;
+
+// ---------- keyboard strip: the keys that are sounding ----------
+kx0 = 24; ky0 = 312; kw = 560 / 52;                       // 52 white keys, A0 .. C8
+ui_col(0x0A0A0A); gfx_rect((kx0 - 2) * sc, (ky0 - 2) * sc, (52 * kw + 4) * sc, 34 * sc);
+wk = 0; nn = 21;
+loop(88,
+  pc = nn % 12; blk = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+  !blk ? (
+    on = 0; j = 0; loop(NV, v_act[j] && v_note[j] == nn && (v_held[j] || v_sus[j]) ? on = 1; j += 1; );
+    ui_col(on ? GOLDL : 0xE9E4D6); gfx_rect((kx0 + wk * kw) * sc, ky0 * sc, (kw - 1) * sc, 30 * sc);
+    wk += 1;
+  );
+  nn += 1;
+);
+wk = 0; nn = 21;
+loop(88,
+  pc = nn % 12; blk = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
+  blk ? (
+    on = 0; j = 0; loop(NV, v_act[j] && v_note[j] == nn && (v_held[j] || v_sus[j]) ? on = 1; j += 1; );
+    ui_col(on ? GOLD : 0x151313); gfx_rect((kx0 + wk * kw - kw * 0.32) * sc, ky0 * sc, kw * 0.64 * sc, 18 * sc);
+  ) : wk += 1;
+  nn += 1;
+);
+ui_col(FELT); gfx_rect((kx0 - 2) * sc, (ky0 - 3) * sc, (52 * kw + 4) * sc, 2 * sc);
+
+// ---------- master + IN / OUT strip ----------
+C_INK = INK; ui_section(2);
+ui_kmini = 1; ui_knob(616 * sc, 324 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%"); ui_kmini = 0;
+lbl(616, 340, "DRIFT", 0.9);
+ui_kmini = 1; ui_knob(656 * sc, 324 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB"); ui_kmini = 0;
+lbl(656, 340, "VOLUME", 0.9);
+ins_io(684, 311, 16, INK);
+ins_stereo_mini(770, 311, 22, INK);
+ui_end();
