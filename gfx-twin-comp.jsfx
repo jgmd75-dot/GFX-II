@@ -281,7 +281,7 @@ lamp(66, 150, aLamp == 0, GRN); lamp(66, 186, aLamp == 1 && aKn > 0, AMB); lamp(
 gfx_setfont(8); ui_col(INKA); TX(82, 143, "BELOW"); TX(82, 179, "KNEE"); TX(82, 215, "ABOVE");
 sprintf(#vA1, "%.1f dB", slider3); knob(3, 270, 206, 40, -40, 0, -20, 0, 0xEFE6CF, INKA, 0, "THRESHOLD", #vA1);
 s_ = slider4/100; s_ < 0.795 ? sprintf(#vA2, "%.1f:1", 1/max(0.0001, 1 - s_/0.8)) : s_ <= 0.805 ? strcpy(#vA2, "INF:1") : sprintf(#vA2, "-%.1f:1", 1/max(0.0001, (s_ - 0.8)/0.2*0.5));
-knob(4, 420, 214, 32, 0, 100, 40, 0, 0xEFE6CF, INKA, 0, "COMPRESSION", #vA2);
+knob(4, 420, 206, 40, 0, 100, 40, 0, 0xEFE6CF, INKA, 0, "COMPRESSION", #vA2);
 sprintf(#vA3, "%+.1f dB", slider6); knob(6, 570, 214, 32, -20, 20, 0, 0, 0xEFE6CF, INKA, 0, "OUTPUT", #vA3);
 key(58, 256, 54, 40, slider5 > 0.5, AMB, "SOFT KNEE", INKA) ? ( tog(5); setmsg("KNEE", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
 vGa = max(mGrA, vGa*0.9); mGrA = 0;
