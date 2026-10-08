@@ -588,7 +588,9 @@ function synck(id, cx, base, vmin, vmax, vdef, ddef, nm, istime) local(md, v) (
   ) : ( cink(); TC(cx, 146, istime ? "TIME" : "RATE"); );
   cink(); gfx_setfont(4);
   kn_hot ? TC(cx, 166, md > 0 ? fsync(slider(base + 9), md) : istime ? fms(slider(base)) : fhz(slider(base)));   // value on hover / drag only
-  clicked(cx - 35, 147, 70, 17) ? (
+  // SYNC key: a visible switch for the same cycle (free -> sync -> dotted -> triplet)
+  btn(cx + 20, 62, 50, 20, "SYNC", md > 0, 5, 1) ? 0;
+  clicked(cx - 35, 147, 70, 17) || clicked(cx + 20, 62, 50, 20) ? (
     setk(base + 8, (md + 1) % 4);
     strcpy(#lcdn, nm);
     strcpy(#lcdv, md == 0 ? "SYNC STRAIGHT" : md == 1 ? "SYNC DOTTED" : md == 2 ? "SYNC TRIPLET" : istime ? "TIME IN MS" : "RATE IN HZ");
