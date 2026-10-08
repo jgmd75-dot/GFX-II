@@ -15,7 +15,8 @@ desc:GFX MK3
 //           FIZZ: the broadcast "cut-through" top. An exciter generates new harmonics from everything
 //           above 3 kHz, a peak shapes them round 8 kHz, and the result is pinned at a fixed level
 //           under the programme (the way a station's multiband processor holds its top band), so
-//           the air stays constant and the voice cuts through background noise. Works with EQ IN.
+//           the air stays constant and the voice cuts through background noise. It runs in parallel:
+//           only the new harmonics are added, about 26 dB under the programme. Works with EQ IN.
 // COMP    VCA compressor in the spirit of the Gain Brain II:
 //           peak-sensing feed-forward, fast VCA attack, small fixed knee, ratio up to infinity.
 //           Program-dependent release ("linear integration"): the detector watches the crest
@@ -146,7 +147,7 @@ cBP(cVb, 2000, 0.7);
 cFz1 = alloc(5); cFz2 = alloc(5); cFz3 = alloc(5);
 sFz1L = alloc(4); sFz1R = alloc(4); sFz2L = alloc(4); sFz2R = alloc(4); sFz3L = alloc(4); sFz3R = alloc(4);
 cHP(cFz1, 3000, 0.7071); cHP(cFz2, 5000, 0.7071); cPK(cFz3, 8000, 6, 0.9);
-fzA = cms(0.001); fzR = cms(0.04); fzW = cms(0.03); fzEnv = 0; fzPrg = 0;
+fzA = cms(0.001); fzR = cms(0.04); fzW = cms(0.03); fzEnv = 0; fzPrg = 0; fzH = 0;
 
 ironC = 1 - exp(-2*$pi*180/srate);
 prcC = 1 - exp(-2*$pi*150/srate);
@@ -159,16 +160,20 @@ mPL = mPR = 0; mGR = 0; mClip = 0;
 lastEq = -1;
 
 // EQ and the compressor work on the globals ch0 / ch1
-// FIZZ: excite the top, shape it round 8 kHz, then pin it about 18 dB under the programme
-function doFizz() local(h0, h1, e0, e1, ea, pa, g) (
+// FIZZ (parallel): only the NEW harmonics of the top are added to the untouched signal. The band above
+// 3 kHz is normalised to a steady drive so it really saturates at any level, the clean part is subtracted
+// (leaving just the distortion products), shaped round 8 kHz and held about 26 dB under the programme.
+function doFizz() local(h0, h1, ha, n_, u0, u1, e0, e1, ea, pa, g) (
   h0 = bqf(ch0, cFz1, sFz1L); h1 = bqf(ch1, cFz1, sFz1R);
-  e0 = tanh(4*h0); e0 += 0.3*e0*e0;                 // odd + even harmonics
-  e1 = tanh(4*h1); e1 += 0.3*e1*e1;
+  ha = max(abs(h0), abs(h1)); fzH += (ha - fzH)*(ha > fzH ? fzA : fzR);
+  n_ = 1/(fzH + 0.00001);
+  u0 = h0*n_; u1 = h1*n_;
+  e0 = (tanh(3*u0)/3 - u0 + 0.25*u0*u0)*fzH;        // odd + even products only, back at the band's level
+  e1 = (tanh(3*u1)/3 - u1 + 0.25*u1*u1)*fzH;
   e0 = bqf(bqf(e0, cFz2, sFz2L), cFz3, sFz3L); e1 = bqf(bqf(e1, cFz2, sFz2R), cFz3, sFz3R);
-  ea = max(abs(e0), abs(e1));
-  fzEnv += (ea - fzEnv)*(ea > fzEnv ? fzA : fzR);
+  ea = max(abs(e0), abs(e1)); fzEnv += (ea - fzEnv)*(ea > fzEnv ? fzA : fzR);
   pa = max(abs(ch0), abs(ch1)); fzPrg += (pa - fzPrg)*fzW;
-  g = min(16, 0.12*fzPrg/(fzEnv + 0.000001));        // up to +24 dB on quiet top, held on loud
+  g = max(0.25, min(2, 0.05*fzPrg/(fzEnv + 0.000001)));   // pinned, gently: +6 / -12 dB at most
   ch0 += g*e0; ch1 += g*e1;
 );
 function doEQ() (
