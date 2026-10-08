@@ -3,6 +3,8 @@ desc:GFX G Rainbow
 //tags: instrument synthesizer organ drone delay
 //author: JGWizrad / Garden FX (GFX)
 //
+// Requires gfx-ui (.jsfx-inc) in the same folder.
+//
 // A minimalist drone organ inspired by modified-organ / tape-loop workflows of the 1960s.
 //
 // VOICE (8-voice polyphonic, smooth stealing):
@@ -58,6 +60,8 @@ slider47:0<0,1,1{Sec,Bars}>-Deck 1 Sync
 slider48:2<0,7,1{1/2,1,2,3,4,6,8,12}>-Deck 1 Bars
 slider49:0<0,1,1{Sec,Bars}>-Deck 2 Sync
 slider50:3<0,7,1{1/2,1,2,3,4,6,8,12}>-Deck 2 Bars
+
+import gfx-ui.jsfx-inc
 
 @init
 // =====================================================================
@@ -186,8 +190,6 @@ rg = alloc(15); memset(rg, 0, 15);
 limEnv = 0; limRel = exp(-1/(0.15*srate));
 mOut = 0; midi_led = 0; vph = 0; wph = 0; fph = 0;
 ageLP = 0; ageHP = 0;
-drag_id = -1; pcap = 0; lastS = 0;
-gfx_ext_retina = 1;
 
 // =====================================================================
 // Presets
@@ -217,12 +219,9 @@ function apply_preset(n) (
              ( pr(2, 35, 75, 0, 6, 30, 40, 4); pf(1600, 15, 15, 1200, 6000, 25); pa(15, 20, 90, 25, 20, 65); );   // Frozen Choir
 );
 
-q_init == 0 ? (
-  lastPreset = slider1;
-  ui_sz = 2; ui_szinit = 1;
-  ui_hw = 1; ui_thm = 0;           // hardware look, copper scheme
-  q_init = 1;
-);
+#ui_man = "gfx-g-rainbow";                     // the ? pop-up links to this manual
+!ui_dflt ? ( ui_sz = 2; ui_hw = 1; ui_thm = 0; lastPreset = slider1; );   // hardware look, copper scheme, large
+ui_dflt = 1;
 
 @serialize
 file_var(0, ui_sz);
@@ -342,7 +341,7 @@ spl0 = max(-1, min(1, outL*lg));
 spl1 = max(-1, min(1, outR*lg));
 mOut = max(mOut*0.9997, max(abs(spl0), abs(spl1)));
 
-@gfx 1470 588
+@gfx 1050 420
 
 // =====================================================================
 // GUI - copper oxide & rust, 1400 x 560 design space, scaled to fill the window (proportions kept;
@@ -352,25 +351,19 @@ mOut = max(mOut*0.9997, max(abs(spl0), abs(spl1)));
 // Click a DECK label to switch its length between seconds and bars.
 // =====================================================================
 
-S  = min(gfx_w/1400, gfx_h/560);
-tf = ui_sz == 1 ? 0.9 : ui_sz == 2 ? 1.12 : 1.0;           // text size
+// house scaffolding: S / M / L / ? sizing (gfx-ui), mouse in design units, automation on every change
+ui_begin(1050, 420);
+S = sc*0.75; ox = 0; oy = 0; tf = 1;
 hw = ui_hw; thm = ui_thm;
-ox = floor((gfx_w - 1400*S)*0.5);
-oy = floor((gfx_h - 560*S)*0.5);
-mx = (mouse_x - ox)/S;
-my = (mouse_y - oy)/S;
-
-(S != lastS || tf != lastTf) ? (
-  gfx_setfont(1, "Copperplate Gothic Bold", max(12, 34*S));
-  gfx_setfont(2, "Arial Bold", max(10, 17*S*tf));
-  gfx_setfont(3, "Arial Bold", max(10, 15*S*tf));
-  gfx_setfont(4, "Arial Bold", max(10, 14*S*tf));
-  gfx_setfont(5, "Arial Bold", max(9, 13*S*tf));
-  gfx_setfont(6, "Courier New", max(11, 22*S), 'b');
-  gfx_setfont(7, "Courier New", max(10, 14*S*tf), 'b');
-  gfx_setfont(8, "Arial Bold", max(10, 15*S*tf));
-  lastS = S; lastTf = tf;
-);
+mx = mouse_x/S; my = mouse_y/S;
+gfx_setfont(9,  "Copperplate Gothic Bold", 34*S);
+gfx_setfont(10, "Arial Bold", 17*S);
+gfx_setfont(11, "Arial Bold", 15*S);
+gfx_setfont(12, "Arial Bold", 14*S);
+gfx_setfont(13, "Arial Bold", 13*S);
+gfx_setfont(14, "Courier New", 22*S, 'b');
+gfx_setfont(15, "Courier New", 14*S, 'b');
+gfx_setfont(16, "Arial Bold", 15*S);
 
 // ---- helpers ----
 function col(r, g, b) local(q) (
@@ -385,7 +378,8 @@ function TX(x, y, txt) ( gfx_x = ox + x*S; gfx_y = oy + y*S; gfx_drawstr(txt); )
 function TC(cx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + cx*S - w*0.5; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function TR(rx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + rx*S - w; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function CIRC(x, y, rr, fill) ( gfx_circle(ox + x*S, oy + y*S, rr*S, fill, 1); );
-function clicked(x, y, w, h) ( (mouse_cap & 1) && !(pcap & 1) && mx >= x && mx <= x+w && my >= y && my <= y+h; );
+function clicked(x, y, w, h) local(h_) ( h_ = pressed && drag_id == 0 && mx >= x && mx <= x+w && my >= y && my <= y+h; h_ ? drag_id = -1; h_; );
+function setk(idx, v) ( slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); ); );
 function hash(k) local(q) ( q = sin(k*12.9898)*43758.5453; q - floor(q); );
 
 function rivet(x, y) (
@@ -407,7 +401,7 @@ function plate(x, y, w, h, title, seed) local(k, px_, py_) (
   );
   rivet(x + 9, y + 9); rivet(x + w - 9, y + 9); rivet(x + 9, y + h - 9); rivet(x + w - 9, y + h - 9);
   title != 0 ? (
-    gfx_setfont(2);
+    gfx_setfont(10);
     col(0.82, 0.58, 0.38); TX(x + 21, y + 11, title);              // engraved highlight
     cink(); TX(x + 20, y + 10, title);
   );
@@ -430,15 +424,15 @@ function btn(x, y, w, h, lbl, on, fnt) local(sw, sh) (
 function knob(id, cx, cy, rad, v, vmin, vmax, lgt, bip, def) local(dx, dy, fr, nf, ang, a0, sx, sy, sr, k, t, ca, sa, ta) (
   fr = lgt ? log(v/vmin)/log(vmax/vmin) : (v - vmin)/(vmax - vmin);
   dx = mx - cx; dy = my - cy;
-  (mouse_cap & 1) && !(pcap & 1) && drag_id == -1 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
-    ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? ( v = def; kc_t = 0; k_rst = id; ) :
+  pressed && drag_id == 0 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
+    ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? ( v = def; kc_t = 0; k_rst = id; drag_id = -1; ) :
     ( drag_id = id; drag_sy = my; drag_sf = fr; kc_id = id; kc_t = time_precise(); );
   );
   drag_id == id ? (
     (mouse_cap & 1) ? (
       nf = max(0, min(1, drag_sf + (drag_sy - my)/((mouse_cap & 8) ? 720 : 180)));
       v = lgt ? vmin*(vmax/vmin)^nf : vmin + nf*(vmax - vmin);
-    ) : drag_id = -1;
+    );
   );
   fr = lgt ? log(v/vmin)/log(vmax/vmin) : (v - vmin)/(vmax - vmin);
   ang = (-0.75 + 1.5*fr)*$pi;
@@ -478,7 +472,7 @@ function knob(id, cx, cy, rad, v, vmin, vmax, lgt, bip, def) local(dx, dy, fr, n
 function touch(id, name, val) (
   (drag_id == id || k_rst == id) ? ( strcpy(#lcdn, name); strcpy(#lcdv, val); lcd_t = time_precise(); k_rst == id ? k_rst = -1; );
 );
-function klab(cx, y, lbl, val) ( cink(); gfx_setfont(3); TC(cx, y, lbl); gfx_setfont(4); TC(cx, y + 18, val); );
+function klab(cx, y, lbl, val) ( cink(); gfx_setfont(11); TC(cx, y, lbl); gfx_setfont(12); TC(cx, y + 18, val); );
 function fpct(v) ( sprintf(#vt, "%d%%", floor(v + 0.5)); #vt; );
 function fct(v) ( sprintf(#vt, v >= 0 ? "+%.1f ct" : "%.1f ct", v); #vt; );
 function fhz(v) ( v >= 1000 ? sprintf(#vt, "%.1f kHz", v/1000) : sprintf(#vt, "%d Hz", floor(v + 0.5)); #vt; );
@@ -496,7 +490,11 @@ function pname(n) (
   n == 8 ? "SUNRISE DRONE" : n == 9 ? "REED SWARM" : n == 10 ? "TAPE ECHOES" : n == 11 ? "MODAL FIFTHS" :
   n == 12 ? "GLASS HARMONICS" : n == 13 ? "MINOR THIRD MIST" : n == 14 ? "PULSE MACHINE" : "FROZEN CHOIR";
 );
-function step_preset(dir) ( slider1 = (slider1 + dir + 16) % 16; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; );
+function go_preset(n) (
+  slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0;
+  slider_automate(1125899906842623);                // sliders 1-50
+);
+function step_preset(dir) ( go_preset((slider1 + dir + 16) % 16); );
 
 // Rank plate: interval selector, wave scope, WAVE / LEVEL / DETUNE
 function rank(x, y, base, title, seed, kid) local(iv, k, px_, py_, w_, yv, py0) (
@@ -504,9 +502,9 @@ function rank(x, y, base, title, seed, kid) local(iv, k, px_, py_, w_, yv, py0) 
   // interval display with arrows
   col(0.06, 0.15, 0.14); R(x + 14, y + 36, 217, 32);
   iv = floor(slider(base) + 0.5);
-  btn(x + 14, y + 36, 30, 32, "◄", 0, 8) ? ( slider(base) = max(0, iv - 1); strcpy(#lcdn, title); strcpy(#lcdv, ivname(slider(base))); lcd_t = time_precise(); );
-  btn(x + 201, y + 36, 30, 32, "►", 0, 8) ? ( slider(base) = min(9, iv + 1); strcpy(#lcdn, title); strcpy(#lcdv, ivname(slider(base))); lcd_t = time_precise(); );
-  col(0.55, 0.95, 0.82); gfx_setfont(7); TC(x + 122, y + 45, ivname(floor(slider(base) + 0.5)));
+  btn(x + 14, y + 36, 30, 32, "◄", 0, 16) ? ( slider(base) = max(0, iv - 1); ui_auto(base); strcpy(#lcdn, title); strcpy(#lcdv, ivname(slider(base))); lcd_t = time_precise(); );
+  btn(x + 201, y + 36, 30, 32, "►", 0, 16) ? ( slider(base) = min(9, iv + 1); ui_auto(base); strcpy(#lcdn, title); strcpy(#lcdv, ivname(slider(base))); lcd_t = time_precise(); );
+  col(0.55, 0.95, 0.82); gfx_setfont(15); TC(x + 122, y + 45, ivname(floor(slider(base) + 0.5)));
   // wave scope: two cycles of the blend
   col(0.06, 0.15, 0.14); R(x + 14, y + 76, 217, 46);
   col(0.20, 0.36, 0.33); LN(x + 14, y + 99, x + 231, y + 99);
@@ -522,12 +520,12 @@ function rank(x, y, base, title, seed, kid) local(iv, k, px_, py_, w_, yv, py0) 
     k += 1;
   );
   // knobs
-  slider(base + 1) = knob(kid + 1, x + 45,  y + 162, 21, slider(base + 1), 0, 100, 0, 0, 55);
+  setk(base + 1, knob(kid + 1, x + 45,  y + 162, 21, slider(base + 1), 0, 100, 0, 0, 55));
   klab(x + 45, y + 190, "WAVE", w_ < 0.17 ? "SINE" : w_ < 0.5 ? "TRI" : w_ < 0.83 ? "SAW" : "PULSE");   // dominant wave
   touch(kid + 1, title, fpct(slider(base + 1)));
-  slider(base + 2) = knob(kid + 2, x + 122, y + 162, 21, slider(base + 2), 0, 100, 0, 0, 70);
+  setk(base + 2, knob(kid + 2, x + 122, y + 162, 21, slider(base + 2), 0, 100, 0, 0, 70));
   klab(x + 122, y + 190, "LEVEL", fpct(slider(base + 2))); touch(kid + 2, title, fpct(slider(base + 2)));
-  slider(base + 3) = knob(kid + 3, x + 199, y + 162, 21, slider(base + 3), -50, 50, 0, 1, 0);
+  setk(base + 3, knob(kid + 3, x + 199, y + 162, 21, slider(base + 3), -50, 50, 0, 1, 0));
   klab(x + 199, y + 190, "DETUNE", fct(slider(base + 3))); touch(kid + 3, title, fct(slider(base + 3)));
 );
 
@@ -555,8 +553,8 @@ function deck(x, y, label, len, synced, nbar, ph, spin) local(k, a, rx, rr) (
   col(0.35, 0.20, 0.10); LN(x + 78, y + 124, x + 232, y + 124);
   col(0.75, 0.75, 0.72); R(x + 145, y + 116, 20, 14);
   // labels
-  col(0.95, 0.80, 0.58); gfx_setfont(5); TX(x + 10, y + 8, label);
-  gfx_setfont(4); TR(x + 300, y + 8, synced ? fbars(nbar) : fsec(len));
+  col(0.95, 0.80, 0.58); gfx_setfont(13); TX(x + 10, y + 8, label);
+  gfx_setfont(12); TR(x + 300, y + 8, synced ? fbars(nbar) : fsec(len));
   // loop position
   col(0.25, 0.12, 0.05); R(x + 10, y + 142, 290, 8);
   col(0.40, 0.78, 0.68); R(x + 10, y + 142, 290*ph, 8);
@@ -578,37 +576,38 @@ loop(hw ? min(2500, floor(700*(gfx_w*gfx_h)/(1400*560*S*S))) : 0,
 gfx_a = 1;
 
 // ---- header ----
-col(0.95, 0.76, 0.52); gfx_setfont(1); TX(24, 14, "G-RAINBOW");
-col(0.40, 0.78, 0.68); gfx_setfont(5); TX(28, 60, "TIME-LAG ACCUMULATOR ORGAN   GARDEN FX");
+col(0.95, 0.76, 0.52); gfx_setfont(9); TX(24, 14, "G RAINBOW");
+col(0.40, 0.78, 0.68); gfx_setfont(13); TX(28, 60, "TIME-LAG ACCUMULATOR ORGAN");
 
 clicked(420, 16, 300, 62) ? (
   strcpy(#pm, ""); k = 0;
   loop(16, k == slider1 ? strcat(#pm, "!"); strcat(#pm, pname(k)); k < 15 ? strcat(#pm, "|"); k += 1; );
   gfx_x = mouse_x; gfx_y = mouse_y;
   psel = gfx_showmenu(#pm);
-  psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; );
+  psel > 0 ? go_preset(psel - 1);
 );
 col(0.12, 0.06, 0.02); R(416, 12, 308, 70);
 col(0.05, 0.14, 0.13); R(420, 16, 300, 62);
 col(0.55, 0.95, 0.82);
 time_precise() - lcd_t < 1.5 ? (
-  gfx_setfont(7); TX(432, 24, #lcdn); gfx_setfont(6); TX(432, 44, #lcdv);
+  gfx_setfont(15); TX(432, 24, #lcdn); gfx_setfont(14); TX(432, 44, #lcdv);
 ) : (
-  gfx_setfont(7); sprintf(#lcd1, "PRESET %02d/16", slider1 + 1); TX(432, 24, #lcd1);
-  gfx_setfont(6); TX(432, 44, pname(slider1));
+  gfx_setfont(15); sprintf(#lcd1, "PRESET %02d/16", slider1 + 1); TX(432, 24, #lcd1);
+  gfx_setfont(14); TX(432, 44, pname(slider1));
 );
-btn(376, 16, 36, 62, "◄", 0, 8) ? step_preset(-1);
-btn(728, 16, 36, 62, "►", 0, 8) ? step_preset(1);
+btn(376, 16, 36, 62, "◄", 0, 16) ? step_preset(-1);
+btn(728, 16, 36, 62, "►", 0, 16) ? step_preset(1);
 
-col(0.95, 0.80, 0.58); gfx_setfont(5); TX(800, 14, "TEXT");
-btn(800, 34, 40, 30, "S", ui_sz == 1, 8) ? ui_sz = 1;
-btn(846, 34, 40, 30, "M", ui_sz == 0, 8) ? ui_sz = 0;
-btn(892, 34, 40, 30, "L", ui_sz == 2, 8) ? ui_sz = 2;
-btn(960, 34, 80, 30, "PANIC", 0, 8) ? all_off();
+col(0.95, 0.80, 0.58); gfx_setfont(13); TX(800, 14, "SIZE");
+btn(800, 34, 40, 30, "S", ui_sz == 1, 16) ? ui_sz = 1;
+btn(846, 34, 40, 30, "M", ui_sz == 0, 16) ? ui_sz = 0;
+btn(892, 34, 40, 30, "L", ui_sz == 2, 16) ? ui_sz = 2;
+btn(938, 34, 18, 30, "?", ui_help_open, 16) ? ( ui_help_open = 1; ui_help_new = 1; );
+btn(960, 34, 80, 30, "PANIC", 0, 16) ? all_off();
 midi_led > 0.05 ? col(0.55, 1.0, 0.85) : col(0.15, 0.30, 0.27); CIRC(1062, 49, 7, 1);
-col(0.95, 0.80, 0.58); gfx_setfont(5); TX(1074, 43, "MIDI");
-btn(1140, 34, 56, 30, "HW", ui_hw, 8) ? ui_hw = !ui_hw;
-btn(1206, 34, 110, 30, "COBALT", ui_thm, 8) ? ui_thm = !ui_thm;
+col(0.95, 0.80, 0.58); gfx_setfont(13); TX(1074, 43, "MIDI");
+btn(1140, 34, 56, 30, "HW", ui_hw, 16) ? ui_hw = !ui_hw;
+btn(1206, 34, 110, 30, "COBALT", ui_thm, 16) ? ui_thm = !ui_thm;
 midi_led *= 0.85;
 
 // ---- ranks ----
@@ -617,9 +616,9 @@ rank(275, 100, 20, "RANK B", 37, 200);
 
 // ---- filter ----
 plate(20, 335, 245, 213, "LADDER FILTER", 61);
-slider30 = knob(301, 65, 400, 22, slider30, 40, 16000, 1, 0, 2400); klab(65, 430, "CUTOFF", fhz(slider30)); touch(301, "CUTOFF", fhz(slider30));
-slider31 = knob(302, 142, 400, 22, slider31, 0, 100, 0, 0, 20);     klab(142, 430, "RESO", fpct(slider31));   touch(302, "RESONANCE", fpct(slider31));
-slider32 = knob(303, 219, 400, 22, slider32, 0, 100, 0, 0, 25);     klab(219, 430, "DRIVE", fpct(slider32));  touch(303, "DRIVE", fpct(slider32));
+setk(30, knob(301, 65, 400, 22, slider30, 40, 16000, 1, 0, 2400)); klab(65, 430, "CUTOFF", fhz(slider30)); touch(301, "CUTOFF", fhz(slider30));
+setk(31, knob(302, 142, 400, 22, slider31, 0, 100, 0, 0, 20));     klab(142, 430, "RESO", fpct(slider31));   touch(302, "RESONANCE", fpct(slider31));
+setk(32, knob(303, 219, 400, 22, slider32, 0, 100, 0, 0, 25));     klab(219, 430, "DRIVE", fpct(slider32));  touch(303, "DRIVE", fpct(slider32));
 // response sketch of the 4-pole ladder
 col(0.06, 0.15, 0.14); R(34, 470, 217, 64);
 col(0.55, 0.95, 0.82);
@@ -640,9 +639,9 @@ loop(108,
 
 // ---- amp ----
 plate(275, 335, 245, 213, "AMP", 83);
-slider34 = knob(304, 320, 400, 22, slider34, 1, 3000, 1, 0, 30);    klab(320, 430, "ATTACK", fms(slider34));  touch(304, "ATTACK", fms(slider34));
-slider35 = knob(305, 397, 400, 22, slider35, 10, 8000, 1, 0, 600);  klab(397, 430, "RELEASE", fms(slider35)); touch(305, "RELEASE", fms(slider35));
-slider36 = knob(306, 474, 400, 22, slider36, 0, 100, 0, 0, 20);     klab(474, 430, "VIBRATO", fpct(slider36)); touch(306, "VIBRATO", fpct(slider36));
+setk(34, knob(304, 320, 400, 22, slider34, 1, 3000, 1, 0, 30));    klab(320, 430, "ATTACK", fms(slider34));  touch(304, "ATTACK", fms(slider34));
+setk(35, knob(305, 397, 400, 22, slider35, 10, 8000, 1, 0, 600));  klab(397, 430, "RELEASE", fms(slider35)); touch(305, "RELEASE", fms(slider35));
+setk(36, knob(306, 474, 400, 22, slider36, 0, 100, 0, 0, 20));     klab(474, 430, "VIBRATO", fpct(slider36)); touch(306, "VIBRATO", fpct(slider36));
 // envelope sketch
 col(0.06, 0.15, 0.14); R(289, 470, 217, 64);
 col(0.55, 0.95, 0.82);
@@ -663,46 +662,46 @@ deck(902, 136, "DECK 2  PLAYBACK", L2t, slider49 > 0.5, slider50, ph2, spin*0.8)
 col(0.95, 0.80, 0.58);
 LN(858, 216, 902, 216); LN(895, 211, 902, 216); LN(895, 221, 902, 216);
 LN(1057, 296, 1057, 312); LN(1057, 312, 703, 312); LN(703, 312, 703, 296); LN(698, 303, 703, 296); LN(708, 303, 703, 296);
-gfx_setfont(5); TC(880, 316, "FEEDBACK  -  DECK 2 PLAYBACK INTO DECK 1 RECORD");
+gfx_setfont(13); TC(880, 316, "FEEDBACK  -  DECK 2 PLAYBACK INTO DECK 1 RECORD");
 
 // knobs row
 kx = 0;
 loop(6,
   kxx = 590 + kx*105;
   kx == 0 ? (
-    slider47 > 0.5 ? ( v1 = knob(401, kxx, 392, 24, slider48, 0, 7, 0, 0, 2); slider48 = floor(v1 + 0.5); )
-                   : ( slider40 = knob(401, kxx, 392, 24, slider40, 0.5, 20, 1, 0, 4); );
-    cink(); gfx_setfont(3); TC(kxx, 424, "DECK 1");
-    gfx_setfont(4); TC(kxx, 442, slider47 > 0.5 ? fbars(slider48) : fsec(slider40));
-    clicked(kxx - 46, 420, 92, 20) ? ( slider47 = slider47 > 0.5 ? 0 : 1; strcpy(#lcdn, "DECK 1"); strcpy(#lcdv, slider47 > 0.5 ? "SYNC TO BARS" : "SECONDS"); lcd_t = time_precise(); );
+    slider47 > 0.5 ? ( v1 = knob(401, kxx, 392, 24, slider48, 0, 7, 0, 0, 2); setk(48, floor(v1 + 0.5)); )
+                   : ( setk(40, knob(401, kxx, 392, 24, slider40, 0.5, 20, 1, 0, 4)); );
+    cink(); gfx_setfont(11); TC(kxx, 424, "DECK 1");
+    gfx_setfont(12); TC(kxx, 442, slider47 > 0.5 ? fbars(slider48) : fsec(slider40));
+    clicked(kxx - 46, 420, 92, 20) ? ( slider47 = slider47 > 0.5 ? 0 : 1; ui_auto(47); strcpy(#lcdn, "DECK 1"); strcpy(#lcdv, slider47 > 0.5 ? "SYNC TO BARS" : "SECONDS"); lcd_t = time_precise(); );
     touch(401, "DECK 1", slider47 > 0.5 ? fbars(slider48) : fsec(slider40));
   ) : kx == 1 ? (
-    slider49 > 0.5 ? ( v1 = knob(402, kxx, 392, 24, slider50, 0, 7, 0, 0, 3); slider50 = floor(v1 + 0.5); )
-                   : ( slider41 = knob(402, kxx, 392, 24, slider41, 0.5, 20, 1, 0, 6); );
-    cink(); gfx_setfont(3); TC(kxx, 424, "DECK 2");
-    gfx_setfont(4); TC(kxx, 442, slider49 > 0.5 ? fbars(slider50) : fsec(slider41));
-    clicked(kxx - 46, 420, 92, 20) ? ( slider49 = slider49 > 0.5 ? 0 : 1; strcpy(#lcdn, "DECK 2"); strcpy(#lcdv, slider49 > 0.5 ? "SYNC TO BARS" : "SECONDS"); lcd_t = time_precise(); );
+    slider49 > 0.5 ? ( v1 = knob(402, kxx, 392, 24, slider50, 0, 7, 0, 0, 3); setk(50, floor(v1 + 0.5)); )
+                   : ( setk(41, knob(402, kxx, 392, 24, slider41, 0.5, 20, 1, 0, 6)); );
+    cink(); gfx_setfont(11); TC(kxx, 424, "DECK 2");
+    gfx_setfont(12); TC(kxx, 442, slider49 > 0.5 ? fbars(slider50) : fsec(slider41));
+    clicked(kxx - 46, 420, 92, 20) ? ( slider49 = slider49 > 0.5 ? 0 : 1; ui_auto(49); strcpy(#lcdn, "DECK 2"); strcpy(#lcdv, slider49 > 0.5 ? "SYNC TO BARS" : "SECONDS"); lcd_t = time_precise(); );
     touch(402, "DECK 2", slider49 > 0.5 ? fbars(slider50) : fsec(slider41));
   ) : kx == 2 ? (
-    slider42 = knob(403, kxx, 392, 24, slider42, 0, 100, 0, 0, 55); klab(kxx, 424, "FEEDBACK", fpct(slider42)); touch(403, "FEEDBACK", fpct(slider42));
+    setk(42, knob(403, kxx, 392, 24, slider42, 0, 100, 0, 0, 55)); klab(kxx, 424, "FEEDBACK", fpct(slider42)); touch(403, "FEEDBACK", fpct(slider42));
   ) : kx == 3 ? (
-    slider43 = knob(404, kxx, 392, 24, slider43, 0, 100, 0, 0, 30); klab(kxx, 424, "AGE", fpct(slider43)); touch(404, "TAPE AGE", fpct(slider43));
+    setk(43, knob(404, kxx, 392, 24, slider43, 0, 100, 0, 0, 30)); klab(kxx, 424, "AGE", fpct(slider43)); touch(404, "TAPE AGE", fpct(slider43));
   ) : kx == 4 ? (
-    slider44 = knob(405, kxx, 392, 24, slider44, 0, 100, 0, 0, 20); klab(kxx, 424, "WOW", fpct(slider44)); touch(405, "WOW & FLUTTER", fpct(slider44));
+    setk(44, knob(405, kxx, 392, 24, slider44, 0, 100, 0, 0, 20)); klab(kxx, 424, "WOW", fpct(slider44)); touch(405, "WOW & FLUTTER", fpct(slider44));
   ) : (
-    slider45 = knob(406, kxx, 392, 24, slider45, 0, 100, 0, 0, 45); klab(kxx, 424, "MIX", fpct(slider45)); touch(406, "LOOP MIX", fpct(slider45));
+    setk(45, knob(406, kxx, 392, 24, slider45, 0, 100, 0, 0, 45)); klab(kxx, 424, "MIX", fpct(slider45)); touch(406, "LOOP MIX", fpct(slider45));
   );
   kx += 1;
 );
 // HOLD
-btn(548, 480, 150, 44, "HOLD", slider46 > 0.5, 8) ? ( slider46 = slider46 > 0.5 ? 0 : 1; strcpy(#lcdn, "ACCUMULATOR"); strcpy(#lcdv, slider46 > 0.5 ? "HOLD - FROZEN" : "RECORDING"); lcd_t = time_precise(); );
-cink(); gfx_setfont(5); TX(712, 488, "FREEZE THE LOOP: STOP RECORDING,");
+btn(548, 480, 150, 44, "HOLD", slider46 > 0.5, 16) ? ( slider46 = slider46 > 0.5 ? 0 : 1; ui_auto(46); strcpy(#lcdn, "ACCUMULATOR"); strcpy(#lcdv, slider46 > 0.5 ? "HOLD - FROZEN" : "RECORDING"); lcd_t = time_precise(); );
+cink(); gfx_setfont(13); TX(712, 488, "FREEZE THE LOOP: STOP RECORDING,");
 TX(712, 502, "KEEP IT CIRCULATING. PLAY OVER IT.");
 
 // ---- master ----
 plate(1240, 100, 140, 448, "MASTER", 131);
-slider2 = knob(501, 1310, 176, 26, slider2, 0, 100, 0, 0, 30); klab(1310, 210, "DRIFT", fpct(slider2)); touch(501, "DRIFT", fpct(slider2));
-slider3 = knob(502, 1310, 286, 26, slider3, -24, 6, 0, 1, -6); klab(1310, 320, "OUTPUT", fdb(slider3)); touch(502, "OUTPUT", fdb(slider3));
+setk(2, knob(501, 1310, 176, 26, slider2, 0, 100, 0, 0, 30)); klab(1310, 210, "DRIFT", fpct(slider2)); touch(501, "DRIFT", fpct(slider2));
+setk(3, knob(502, 1310, 286, 26, slider3, -24, 6, 0, 1, -6)); klab(1310, 320, "OUTPUT", fdb(slider3)); touch(502, "OUTPUT", fdb(slider3));
 // output meter: verdigris LED ladder
 mdb = mOut > 0.0000001 ? 20*log10(mOut) : -100;
 mp = max(0, min(1, (mdb + 48)/51));
@@ -715,6 +714,6 @@ loop(14,
   R(1296, 360 + 170 - 4 - (k + 1)*11.8, 28, 9);
   k += 1;
 );
-cink(); gfx_setfont(5); TC(1310, 534, "OUT");
+cink(); gfx_setfont(13); TC(1310, 534, "OUT");
 
-pcap = mouse_cap;
+ui_end();
