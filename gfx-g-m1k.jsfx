@@ -1109,8 +1109,8 @@ spl1 = ost_r;
 
 @gfx 960 570
 // =====================================================================
-// GUI - the single-space rack unit along the top (black or cream faceplate), the patch browser or the
-// editor underneath, and the PLAY strip along the bottom. Design space 1280 x 760 at qs = 0.75 * sc.
+// GUI - the single-space rack unit along the top (black or cream faceplate); page 1 underneath lists every
+// patch (click a name to load it), EDIT opens page 2, the editor; and the PLAY strip along the bottom. Design space 1280 x 760 at qs = 0.75 * sc.
 // =====================================================================
 ui_begin(960, 570);
 qs = sc*0.75;
@@ -1232,23 +1232,24 @@ ui_col(FP2); R(0, 182, 1280, 578);
 ui_cola(0x000000, 0.25); R(0, 182, 1280, 3);
 
 !m1k_edit ? (
-  // ---- patch browser: a bank per tab, a tile per patch ----
-  c_ = 0;
-  loop(7,
-    key(40 + c_*172, 198, 160, 32, m1k_cat == c_, ACC, "") ? m1k_cat = c_;
-    gfx_setfont(13); ui_col(m1k_cat == c_ ? (m1k_face ? 0xFFFFFF : 0x0B0C0D) : INK); TC(120 + c_*172, 205, cat_name(c_));
-    c_ += 1;
-  );
-  p_ = cat_start(m1k_cat); n_ = cat_start(m1k_cat + 1) - p_; j = 0;
-  loop(n_,
-    tx_ = 40 + (j % 5)*242; ty_ = 256 + floor(j/5)*108;
-    on_ = p_ + j == slider1; hv_ = inbox(tx_, ty_, 230, 96);
-    ui_col(on_ ? ACC : hv_ ? FP : FP3); RR(tx_, ty_, 230, 96, 8);
-    ui_col(on_ ? ui_mix(ACC, 0x000000, 0.25) : FP2); RR(tx_ + 3, ty_ + 3, 224, 90, 6);
-    gfx_setfont(10); ui_col(on_ ? 0xFFFFFF : ACC); sprintf(#pe, "%03d", p_ + j); TX(tx_ + 14, ty_ + 14, #pe);
-    gfx_setfont(13); ui_col(on_ ? 0xFFFFFF : INK); TX(tx_ + 14, ty_ + 46, 100 + p_ + j);
-    hitbox(tx_, ty_, 230, 96) ? load_patch(p_ + j);
-    j += 1;
+  // ---- page 1: every patch, start to finish, under its bank heading - click a name to load it ----
+  e_ = 0; p_ = 0; c_ = 0;
+  loop(107,
+    col_ = floor(e_/22); row_ = e_ % 22;
+    tx_ = 30 + col_*246; ty_ = 194 + row_*22.4;
+    p_ == cat_start(c_) && c_ < 7 ? (
+      gfx_setfont(11); ui_col(ACC); TX(tx_ + 6, ty_ + 3, cat_name(c_));
+      ui_cola(ACC, 0.5); R(tx_ + 6, ty_ + 20, 228, 1);
+      c_ += 1;
+    ) : (
+      on_ = p_ == slider1; hv_ = inbox(tx_, ty_, 238, 21);
+      on_ ? ( ui_col(ACC); RR(tx_, ty_ + 1, 238, 20, 4); ) : hv_ ? ( ui_col(FP3); RR(tx_, ty_ + 1, 238, 20, 4); );
+      gfx_setfont(10); ui_col(on_ ? (m1k_face ? 0xFFFFFF : 0x0B0C0D) : INK2); sprintf(#pe, "%03d", p_); TX(tx_ + 8, ty_ + 4, #pe);
+      gfx_setfont(11); ui_col(on_ ? (m1k_face ? 0xFFFFFF : 0x0B0C0D) : INK); TX(tx_ + 52, ty_ + 3, 100 + p_);
+      hitbox(tx_, ty_, 238, 21) ? ( load_patch(p_); m1k_cat = cat_of(p_); );
+      p_ += 1;
+    );
+    e_ += 1;
   );
 ) : (
   // ---- editor ----
