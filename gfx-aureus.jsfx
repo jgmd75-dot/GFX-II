@@ -283,6 +283,8 @@ q_init == 0 ? (
 file_var(0, ui_sz);
 file_var(0, ui_szinit);
 file_var(0, lastPreset);
+// added later: older projects end here, so they keep the defaults (yellow, flat)
+file_avail(0) != 0 ? ( file_var(0, ui_hw); file_var(0, au_thm); );
 
 @slider
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
@@ -434,6 +436,10 @@ oy = floor((gfx_h - 480*S)*0.5);
 mx = (mouse_x - ox)/S;
 my = (mouse_y - oy)/S;
 
+// the ? pop-up is modal: while it is open the panel underneath takes no clicks
+hlp ? ( (mouse_cap & 1) && !(pcap & 1) && !hlp_new ? hlp = 0; pcap = mouse_cap; );
+hlp_new = 0;
+
 S != lastS ? (
   gfx_setfont(1, "Arial Black", max(10, 44*S));           // AUREUS
   gfx_setfont(2, "Arial Bold", max(9, 18*S));             // band titles
@@ -447,9 +453,17 @@ S != lastS ? (
   lastS = S;
 );
 
-// ---- palette ----
-Y_R = 0.98; Y_G = 0.80; Y_B = 0.10;          // faceplate yellow
-K_R = 0.07; K_G = 0.07; K_B = 0.07;          // black ink
+// ---- palette: YELLOW (black print) or PETROL TEAL (cream print); HW adds the hardware finish ----
+hw = ui_hw;
+!au_thm ? (
+  Y_R = 0.98; Y_G = 0.80; Y_B = 0.10;          // faceplate yellow
+  K_R = 0.07; K_G = 0.07; K_B = 0.07;          // black ink
+  A_R = 0.62; A_G = 0.42; A_B = 0.02;          // knob value arc
+) : (
+  Y_R = 0.184; Y_G = 0.369; Y_B = 0.353;       // faceplate petrol teal
+  K_R = 0.95; K_G = 0.91; K_B = 0.82;          // cream ink
+  A_R = 0.98; A_G = 0.72; A_B = 0.24;          // knob value arc (amber)
+);
 
 // ---- helpers (design-space coordinates) ----
 function col(r, g, b) ( gfx_r = r; gfx_g = g; gfx_b = b; );
@@ -466,6 +480,13 @@ function TC(cx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + cx
 function TR(rx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + rx*S - w; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function CIRC(x, y, rr, fill) ( gfx_circle(ox + x*S, oy + y*S, rr*S, fill, 1); );
 function clicked(x, y, w, h) ( (mouse_cap & 1) && !(pcap & 1) && mx >= x && mx <= x+w && my >= y && my <= y+h; );
+function cnear() ( col(0.07, 0.07, 0.07); );   // stays black in every theme (meters, wells)
+function setk(idx, v) ( slider(idx) != v ? ( slider(idx) = v; slider_automate(2^(idx - 1)); ); );
+// HW: a raised bevel (light top-left, dark bottom-right); inset = 1 for a recess
+function bev(x, y, w, h, inset) (
+  gfx_a = 0.30; inset ? col(0, 0, 0) : col(1, 1, 1); R(x, y, w, 1.5); R(x, y, 1.5, h);
+  inset ? col(1, 1, 1) : col(0, 0, 0); R(x, y + h - 1.5, w, 1.5); R(x + w - 1.5, y, 1.5, h); gfx_a = 1;
+);
 
 function screw(x, y) (
   col(0.55, 0.55, 0.57); CIRC(x, y, 7, 1);
@@ -475,8 +496,10 @@ function screw(x, y) (
 
 // Button: on = black with yellow text; off = yellow with black outline. red = 1 for MUTE (on = red)
 function btn(x, y, w, h, lbl, on, fnt, red) local(sw, sh) (
+  hw ? ( gfx_a = 0.35; col(0, 0, 0); R(x + 1, y + 2.5, w, h); gfx_a = 1; );
   on ? ( red ? col(0.86, 0.14, 0.10) : cblk(); ) : cyel();
   R(x, y, w, h);
+  hw ? ( gfx_a = on ? 0.10 : 0.22; col(1, 1, 1); R(x + 2, y + 2, w - 4, h*0.42); gfx_a = 1; bev(x, y, w, h, on); );
   cblk(); RO(x, y, w, h);
   on ? ( red ? col(1, 1, 1) : cyel(); ) : cblk();
   gfx_setfont(fnt);
@@ -528,11 +551,12 @@ function knob(id, cx, cy, rad, v, vmin, vmax, bip, def) local(dx, dy, fr, nf, an
     k += 1;
   );
   // value marker: small yellow-on-black dot track of the travelled arc
-  col(0.62, 0.42, 0.02);
+  col(A_R, A_G, A_B);
   k = 0; loop(max(2, floor(3*S + 0.5)),
     gfx_arc(sx, sy, sr + 2*S + k, bip ? min(0, ang) : -0.75*$pi, bip ? max(0, ang) : ang, 1); k += 1; );
 
-  // body: skirt, knurled edge, cap, highlight
+  // body: skirt, knurled edge, cap, highlight (HW: a drop shadow and a domed cap)
+  hw ? ( gfx_a = 0.45; col(0, 0, 0); gfx_circle(sx + 2*S, sy + 4*S, sr, 1, 1); gfx_a = 1; );
   col(0.03, 0.03, 0.03); gfx_circle(sx, sy, sr, 1, 1);
   col(0.20, 0.20, 0.21); k = 0;
   loop(28,
@@ -578,12 +602,13 @@ function step_preset(dir) (
   slider1 = (slider1 + dir + 8) % 8;
   apply_preset(slider1); lastPreset = slider1;
   lcd_t = 0;
+  slider_automate(281474976710655);             // sliders 1-48
 );
 
 // VU meter: face at (x, y), 230 x 112; v = mean-square level; nd = needle state slot
 function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cyv) (
   // bezel + face
-  cblk(); R(x - 4, y - 4, 238, 120);
+  cnear(); R(x - 4, y - 4, 238, 120);
   col(0.99, 0.93, 0.62); R(x, y, 230, 112);
   col(1.0, 0.97, 0.78); R(x + 6, y + 6, 218, 40);
   cxv = x + 115; cyv = y + 150; rr = 122;
@@ -593,7 +618,7 @@ function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cy
     tv = k == 0 ? -20 : k == 1 ? -10 : k == 2 ? -7 : k == 3 ? -5 : k == 4 ? -3 : k == 5 ? -1 : k == 6 ? 0 : k == 7 ? 1 : k == 8 ? 2 : 3;
     tp = (10^(tv/20) - 0.1)/(10^(3/20) - 0.1);
     a = (-48 + 96*tp)*$pi/180;
-    tv >= 0 ? col(0.80, 0.10, 0.08) : cblk();
+    tv >= 0 ? col(0.80, 0.10, 0.08) : cnear();
     gfx_line(ox + (cxv + sin(a)*rr)*S, oy + (cyv - cos(a)*rr)*S, ox + (cxv + sin(a)*(rr - 9))*S, oy + (cyv - cos(a)*(rr - 9))*S, 1);
     gfx_setfont(9);
     sprintf(#vut, tv > 0 ? "+%d" : "%d", tv);
@@ -604,18 +629,19 @@ function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cy
   col(0.80, 0.10, 0.08);
   k = 0; loop(max(2, floor(3*S + 0.5)),
     gfx_arc(ox + cxv*S, oy + cyv*S, (rr - 4)*S + k, (-48 + 96*(1 - 0.1)/(10^(3/20) - 0.1))*$pi/180, 48*$pi/180, 1); k += 1; );
-  cblk(); gfx_setfont(3); TC(cxv, y + 76, "VU");
+  cnear(); gfx_setfont(3); TC(cxv, y + 76, "VU");
   gfx_setfont(5); TX(x + 8, y + 94, lbl);
   // needle (0 VU = -18 dBFS RMS), simple ballistics per frame
   db = v > 0.000000001 ? 10*log10(v) + 18 : -40;
   pos = max(-0.04, min(1.06, (10^(max(-30, db)/20) - 0.1)/(10^(3/20) - 0.1)));
   np[0] += 0.35*(pos - np[0]);
   a = (-48 + 96*np[0])*$pi/180;
-  cblk();
+  cnear();
   gfx_line(ox + cxv*S, oy + (y + 110)*S, ox + (cxv + sin(a)*(rr - 2))*S, oy + (cyv - cos(a)*(rr - 2))*S, 1);
   gfx_line(ox + cxv*S + 1, oy + (y + 110)*S, ox + (cxv + sin(a)*(rr - 2))*S + 1, oy + (cyv - cos(a)*(rr - 2))*S, 1);
-  // pivot cover
-  cblk(); R(x, y + 104, 230, 8);
+  // pivot cover, then (HW) glass
+  cnear(); R(x, y + 104, 230, 8);
+  hw ? ( gfx_a = 0.10; col(1, 1, 1); gfx_triangle(ox + x*S, oy + y*S, ox + (x + 150)*S, oy + y*S, ox + x*S, oy + (y + 80)*S); gfx_a = 1; );
 );
 
 // =====================================================================
@@ -623,6 +649,15 @@ function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cy
 // =====================================================================
 col(0.10, 0.10, 0.10); gfx_rect(0, 0, gfx_w, gfx_h);       // chassis around the faceplate
 cyel(); R(0, 0, 1600, 480);
+hw ? (
+  // brushed enamel: fine streaks and a soft top light
+  k = 0; loop(240, hv = sin(k*12.9898)*43758.5453; hv -= floor(hv);
+    gfx_a = 0.025 + 0.035*hv; hv > 0.5 ? col(1, 1, 1) : col(0, 0, 0); R(44, k*2, 1512, 1); k += 1; );
+  gfx_a = 1;
+  gfx_gradrect(ox, oy, 1600*S, 200*S, 1, 1, 1, 0.10, 0, 0, 0, 0, 0, 0, 0, -0.10/(200*S));
+  gfx_gradrect(ox, oy + 330*S, 1600*S, 150*S, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.16/(150*S));
+  bev(0, 0, 1600, 480, 0);
+);
 
 // rack ears: yellow with black border, slots and a tube icon
 ex = 0;
@@ -645,8 +680,9 @@ cblk(); R(44, 0, 1512, 3); R(44, 477, 1512, 3);
 cblk(); gfx_setfont(1); TX(60, 18, "AUREUS");
 gfx_setfont(5); TX(64, 76, "DECADIC  φ  PROCESSOR");
 
-cblk(); R(60, 104, 266, 92);
+cnear(); R(60, 104, 266, 92);
 col(0.07, 0.05, 0.02); R(64, 108, 258, 84);
+hw ? ( bev(58, 102, 270, 96, 1); gfx_a = 0.07; col(1, 1, 1); R(64, 108, 258, 30); gfx_a = 1; );
 col(1.0, 0.68, 0.15);
 time_precise() - lcd_t < 1.5 ? (
   gfx_setfont(8); TX(76, 118, #lcdn);
@@ -667,7 +703,7 @@ clicked(60, 104, 266, 92) ? (
   );
   gfx_x = mouse_x; gfx_y = mouse_y;
   psel = gfx_showmenu(#pmenu);
-  psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; );
+  psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; slider_automate(281474976710655); );
 );
 
 btn(60, 210, 60, 36, "◄", 0, 6, 0) ? step_preset(-1);
@@ -678,9 +714,10 @@ cblk(); gfx_setfont(5); TX(60, 270, "SIZE");
 btn(60, 286, 48, 30, "S", ui_sz == 1, 6, 0) ? ui_sz = 1;
 btn(114, 286, 48, 30, "M", ui_sz == 0, 6, 0) ? ui_sz = 0;
 btn(168, 286, 48, 30, "L", ui_sz == 2, 6, 0) ? ui_sz = 2;
+btn(222, 286, 30, 30, "?", hlp, 6, 0) ? ( hlp = 1; hlp_new = 1; );
 
 // INPUT trim beside the size picker
-slider4 = knob(94, 284, 300, 16, slider4, -24, 24, 1, 0);
+setk(4, knob(94, 284, 300, 16, slider4, -24, 24, 1, 0));
 cblk(); gfx_setfont(5); TC(284, 258, "INPUT");
 gfx_setfont(4); TC(284, 330, fdb(slider4)); touch(94, "INPUT", fdb(slider4));
 
@@ -689,7 +726,7 @@ cblk(); gfx_setfont(5); TX(60, 352, "CROSSOVER  F1   x10   x100");
 k = 0;
 loop(5,
   btn(60 + k*54, 368, 48, 30, k == 0 ? "34" : k == 1 ? "55" : k == 2 ? "70" : k == 3 ? "89" : "144", slider6 == k, 4, 0) ? (
-    slider6 = k;
+    setk(6, k);
     strcpy(#lcdn, "CROSSOVERS");
     xv = k == 0 ? 34 : k == 1 ? 55 : k == 2 ? 70 : k == 3 ? 89 : 144;
     sprintf(#lcdv, "%s/%s/%s", fq(xv, #fa), fq(xv*10, #fb), fq(xf3(xv), #fc));
@@ -697,9 +734,11 @@ loop(5,
   );
   k += 1;
 );
-cblk(); gfx_setfont(3); TX(60, 410, "φ = 1.618034");
-gfx_setfont(5); TX(60, 432, "FIBONACCI SPLITS  LR4");
+cblk(); gfx_setfont(3); TX(60, 404, "φ = 1.618034");
+gfx_setfont(5); TX(60, 422, "FIBONACCI SPLITS  LR4");
 screw(312, 452);
+btn(60, 440, 48, 26, "HW", hw, 4, 0) ? ui_hw = !ui_hw;
+btn(114, 440, 74, 26, au_thm ? "TEAL" : "GOLD", 0, 4, 0) ? au_thm = !au_thm;
 
 // ---- Four bands ----
 bb = 0;
@@ -709,6 +748,7 @@ loop(4,
   bq_ = bp + bb*40;
 
   // frame + header tab
+  hw ? ( gfx_a = 0.12; col(0, 0, 0); R(bx, 20, 230, 440); gfx_a = 1; bev(bx - 2, 18, 234, 444, 1); );
   cblk(); RO(bx, 20, 230, 440);
   R(bx, 20, 230, 34);
   cyel(); gfx_setfont(2);
@@ -738,7 +778,7 @@ loop(4,
       btn(bx + 12 + k*38, y0 + 26, 34, 26,
           rw == 0 ? (k == 0 ? "P" : k == 1 ? "S" : "D") : rw == 1 ? (k == 0 ? "T" : k == 1 ? "S" : "X") : (k == 0 ? "O" : k == 1 ? "V" : "R"),
           tsel == k, 6, 0) ? (
-        slider(ti) = k;
+        setk(ti, k);
         strcpy(#lcdn, rw == 0 ? "EQ TYPE" : rw == 1 ? "DRIVE TYPE" : "COMP TYPE");
         strcpy(#lcdv, rw == 0 ? (k == 0 ? "PASSIVE" : k == 1 ? "CONSOLE" : "DYNAMIC") :
                       rw == 1 ? (k == 0 ? "TRANSISTOR" : k == 1 ? "TAPE" : "TRANSFORMER") :
@@ -754,11 +794,11 @@ loop(4,
                                    (tsel == 0 ? "OPTO" : tsel == 1 ? "VCA" : "SUPER NICE"));
     // knob
     rw == 0 ? (
-      slider(vi) = knob(bb*10 + 1, bx + 162, y0 + 40, 25, slider(vi), -12, 12, 1, 0);
+      setk(vi, knob(bb*10 + 1, bx + 162, y0 + 40, 25, slider(vi), -12, 12, 1, 0));
       cblk(); gfx_setfont(4); TC(bx + 162, y0 + 70, fdb(slider(vi)));
       touch(bb*10 + 1, bb == 0 ? "SUB EQ" : bb == 1 ? "LOW-MID EQ" : bb == 2 ? "HIGH-MID EQ" : "AIR EQ", fdb(slider(vi)));
     ) : (
-      slider(vi) = knob(bb*10 + 1 + rw, bx + 162, y0 + 40, 25, slider(vi), 0, 100, 0, 0);
+      setk(vi, knob(bb*10 + 1 + rw, bx + 162, y0 + 40, 25, slider(vi), 0, 100, 0, 0));
       cblk(); gfx_setfont(4); TC(bx + 162, y0 + 70, fpct(slider(vi)));
       touch(bb*10 + 1 + rw, rw == 1 ? (bb == 0 ? "SUB DRIVE" : bb == 1 ? "LOW-MID DRIVE" : bb == 2 ? "HIGH-MID DRIVE" : "AIR DRIVE")
                                     : (bb == 0 ? "SUB COMP" : bb == 1 ? "LOW-MID COMP" : bb == 2 ? "HIGH-MID COMP" : "AIR COMP"), fpct(slider(vi)));
@@ -768,7 +808,7 @@ loop(4,
 
   // GR ladder (0 .. -20 dB, top to bottom)
   grv = bq_[21];
-  cblk(); R(bx + 208, 62, 14, 266);
+  cnear(); R(bx + 208, 62, 14, 266);
   k = 0;
   loop(14,
     ly = 66 + k*18.6;
@@ -780,13 +820,13 @@ loop(4,
 
   // bottom row: band GAIN, SOLO, MUTE
   cblk(); R(bx + 10, 336, 196, 2);
-  slider(base + 6) = knob(bb*10 + 4, bx + 54, 386, 24, slider(base + 6), -12, 12, 1, 0);
+  setk(base + 6, knob(bb*10 + 4, bx + 54, 386, 24, slider(base + 6), -12, 12, 1, 0));
   cblk(); gfx_setfont(3); TC(bx + 54, 420, "GAIN");
   gfx_setfont(4); TC(bx + 54, 438, fdb(slider(base + 6)));
   touch(bb*10 + 4, bb == 0 ? "SUB GAIN" : bb == 1 ? "LOW-MID GAIN" : bb == 2 ? "HIGH-MID GAIN" : "AIR GAIN", fdb(slider(base + 6)));
   so = slider(base + 7) > 0.5; mu = slider(base + 8) > 0.5;
-  btn(bx + 106, 366, 52, 34, "SOLO", so, 4, 0) ? slider(base + 7) = !so;
-  btn(bx + 164, 366, 52, 34, "MUTE", mu, 4, 1) ? slider(base + 8) = !mu;
+  btn(bx + 106, 366, 52, 34, "SOLO", so, 4, 0) ? setk(base + 7, !so);
+  btn(bx + 164, 366, 52, 34, "MUTE", mu, 4, 1) ? setk(base + 8, !mu);
 
   bb += 1;
 );
@@ -797,14 +837,24 @@ vu(1312, 34, vuL, "LEFT", vnd);
 vu(1312, 160, vuR, "RIGHT", vnd + 1);
 
 frame(1305, 300, 245, 160, "MASTER");
-slider2 = knob(91, 1352, 352, 24, slider2, 0, 100, 0, 25);
+setk(2, knob(91, 1352, 352, 24, slider2, 0, 100, 0, 25));
 cblk(); gfx_setfont(3); TC(1352, 386, "DRIFT"); gfx_setfont(4); TC(1352, 404, fpct(slider2)); touch(91, "DRIFT (PHI)", fpct(slider2));
-slider5 = knob(92, 1428, 352, 24, slider5, 0, 100, 0, 100);
+setk(5, knob(92, 1428, 352, 24, slider5, 0, 100, 0, 100));
 cblk(); gfx_setfont(3); TC(1428, 386, "MIX"); gfx_setfont(4); TC(1428, 404, fpct(slider5)); touch(92, "MIX", fpct(slider5));
-slider3 = knob(93, 1504, 352, 24, slider3, -24, 12, 1, 0);
+setk(3, knob(93, 1504, 352, 24, slider3, -24, 12, 1, 0));
 cblk(); gfx_setfont(3); TC(1504, 386, "OUTPUT"); gfx_setfont(4); TC(1504, 404, fdb(slider3)); touch(93, "OUTPUT", fdb(slider3));
 mLim > 0.5 ? col(1.0, 0.18, 0.10) : col(0.35, 0.08, 0.05); CIRC(1328, 438, 6, 1);
 cblk(); gfx_setfont(5); TX(1340, 432, "LIMIT");
 screw(1530, 440);
 
+// ? pop-up: design credit and the manual
+hlp ? (
+  gfx_a = 0.62; col(0, 0, 0); gfx_rect(0, 0, gfx_w, gfx_h); gfx_a = 1;
+  col(0.11, 0.11, 0.13); R(560, 150, 480, 170);
+  col(0.88, 0.38, 0.23); R(580, 194, 440, 1);
+  gfx_setfont(2); col(0.95, 0.95, 0.93); TX(580, 166, "Design by JGWizrad.  © John Garden 2026");
+  gfx_setfont(3); col(0.91, 0.70, 0.23); TX(580, 210, "https://gardenfx.jgmd75.workers.dev/");
+  col(0.85, 0.84, 0.82); TX(580, 236, "Manual - https://gardenfx.jgmd75.workers.dev/manual/gfx-aureus.html");
+  col(0.52, 0.51, 0.49); TX(580, 284, "Click anywhere to close.");
+);
 pcap = mouse_cap;
