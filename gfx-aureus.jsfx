@@ -445,7 +445,7 @@ S != lastS ? (
   gfx_setfont(2, "Arial Bold", max(9, 18*S));             // band titles
   gfx_setfont(3, "Arial Bold", max(7, 13*S));             // labels
   gfx_setfont(4, "Arial Bold", max(7, 12*S));             // values
-  gfx_setfont(5, "Arial Bold", max(6, 10*S));             // small print
+  gfx_setfont(5, "Arial Bold", max(7, 12*S));             // small print
   gfx_setfont(6, "Arial Bold", max(8, 15*S));             // selector letters / buttons
   gfx_setfont(7, "Courier New", max(9, 24*S), 'b');       // LCD line 2
   gfx_setfont(8, "Courier New", max(7, 13*S), 'b');       // LCD line 1
@@ -784,25 +784,18 @@ loop(4,
     vi = ti + 1;                           // amount slider index
     tsel = floor(slider(ti) + 0.5);
     cblk(); gfx_setfont(3); TX(bx + 12, y0 + 6, rw == 0 ? "EQ" : rw == 1 ? "DRIVE" : "COMP");
-    k = 0;
-    loop(3,
-      btn(bx + 12 + k*38, y0 + 26, 34, 26,
-          rw == 0 ? (k == 0 ? "P" : k == 1 ? "S" : "D") : rw == 1 ? (k == 0 ? "T" : k == 1 ? "S" : "X") : (k == 0 ? "O" : k == 1 ? "V" : "R"),
-          tsel == k, 6, 0) ? (
-        setk(ti, k);
-        strcpy(#lcdn, rw == 0 ? "EQ TYPE" : rw == 1 ? "DRIVE TYPE" : "COMP TYPE");
-        strcpy(#lcdv, rw == 0 ? (k == 0 ? "PASSIVE" : k == 1 ? "CONSOLE" : "DYNAMIC") :
-                      rw == 1 ? (k == 0 ? "TRANSISTOR" : k == 1 ? "TAPE" : "TRANSFORMER") :
-                                (k == 0 ? "OPTO" : k == 1 ? "VCA" : "SUPER NICE"));
-        lcd_t = time_precise();
-      );
-      k += 1;
+    // one key per row: click to step through the three types; it shows the one in use
+    btn(bx + 12, y0 + 26, 112, 28, rw == 0 ? (tsel == 0 ? "PASSIVE" : tsel == 1 ? "CONSOLE" : "DYNAMIC") :
+                                   rw == 1 ? (tsel == 0 ? "TRANSISTOR" : tsel == 1 ? "TAPE" : "TRANSFORMER") :
+                                             (tsel == 0 ? "OPTO" : tsel == 1 ? "VCA" : "SUPER NICE"), 1, 3, 0) ? (
+      k = (tsel + 1) % 3;
+      setk(ti, k);
+      strcpy(#lcdn, rw == 0 ? "EQ TYPE" : rw == 1 ? "DRIVE TYPE" : "COMP TYPE");
+      strcpy(#lcdv, rw == 0 ? (k == 0 ? "PASSIVE" : k == 1 ? "CONSOLE" : "DYNAMIC") :
+                    rw == 1 ? (k == 0 ? "TRANSISTOR" : k == 1 ? "TAPE" : "TRANSFORMER") :
+                              (k == 0 ? "OPTO" : k == 1 ? "VCA" : "SUPER NICE"));
+      lcd_t = time_precise();
     );
-    tsel = floor(slider(ti) + 0.5);
-    cblk(); gfx_setfont(5);
-    TX(bx + 12, y0 + 58, rw == 0 ? (tsel == 0 ? "PASSIVE" : tsel == 1 ? "CONSOLE" : "DYNAMIC") :
-                         rw == 1 ? (tsel == 0 ? "TRANSISTOR" : tsel == 1 ? "TAPE" : "TRANSFORMER") :
-                                   (tsel == 0 ? "OPTO" : tsel == 1 ? "VCA" : "SUPER NICE"));
     // knob
     rw == 0 ? (
       setk(vi, knob(bb*10 + 1, bx + 162, y0 + 40, 25, slider(vi), -12, 12, 1, 0));
