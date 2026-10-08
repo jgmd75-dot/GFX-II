@@ -1,0 +1,664 @@
+desc:GFX MasterSuite
+//tags: mastering channel strip saturation eq mid-side compressor limiter clipper
+//author: JGWizrad / Garden FX (GFX)
+//
+// A modular mastering strip (personal use; designed from scratch), in seven stages:
+//   1 INPUT      - trim, and the oversampling wrapper (linear-phase half-band FIR, 2x / 4x) for the non-linear stages
+//   2 TUBE + TONE - asymmetric valve saturation (BIAS low / mid / high), then a broad 4-band EQ and a tape roll-off
+//   3 STEREO     - mid / side: MONO MAKER (a 24 dB/oct high-pass on the side only: the lows go mono) and side WIDTH
+//   4 VARI-MU    - stereo-linked RMS compressor in the log domain, soft knee; like a valve vari-mu the ratio grows a
+//                  little as it works harder. RECTIFIER sets the timing: GERMANIUM slow and smooth, SILICON medium,
+//                  LED fast; the release slows after long gain reduction (program-dependent). MIX = parallel blend.
+//   5 HF LIMITER - a fast peak limiter keyed from above 6 kHz that turns down only the top band, for harshness and
+//                  sibilance. The split is a Linkwitz-Riley crossover (both bands stay in phase, so turning the top
+//                  down is a true cut and at rest the response is flat)
+//   6 CLIPPER    - DRIVE into a SOFT (polynomial) or HARD clipper at 0 dBFS, oversampled with the same setting
+//   7 LIMITER    - true-peak brickwall: inter-sample peaks are found by 4x interpolation, 1.5 ms lookahead, and
+//                  the gain is shaped so it never overshoots the CEILING; RELEASE sets the recovery
+// Every stage has its own bypass switch (each crossfades over 10 ms, so switching never clicks).
+// Latency (oversampling + lookahead) is reported to the host.
+//
+// OUTPUT gain feeds the limiter, so the CEILING always has the final say.
+// IN / OUT (top left): the input TRIM, the GFX output stage's SAT (band saturation) and its OUT stage
+// (OFF / CLIP / LIM), which sits just before the true-peak limiter.
+// DRIFT (in TUBE): the valve's bias and drive wander a little. The dial scales the drift amount
+// (50% = the Drift amount setting, 100% = twice, 0 = none) and speeds the wander up with it.
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+slider1:0<-12,12,0.1>-Input trim (dB)
+slider2:1<0,2,1{Off,2x,4x}>-Oversampling
+slider3:1<0,1,1{Bypass,On}>-Tube stage
+slider4:-3<-12,12,0.1>-Tube drive (dB)
+slider5:1<0,2,1{Low,Mid,High}>-Tube bias
+slider6:1<0,1,1{Bypass,On}>-Tone stage
+slider7:0<-6,6,0.1>-Bass (dB, 90 Hz shelf)
+slider8:0<-6,6,0.1>-Low-mid (dB, 350 Hz)
+slider9:0<-6,6,0.1>-High-mid (dB, 2.8 kHz)
+slider10:0<-6,6,0.1>-Presence (dB, 7 kHz shelf)
+slider11:0<0,1,1{Off,On}>-Tape roll-off (18 kHz)
+slider12:1<0,1,1{Bypass,On}>-Stereo stage
+slider13:20<20,200,1>-Mono maker (Hz, 20 = off)
+slider14:100<0,200,1>-Side width (%)
+slider15:0<0,1,1{Bypass,On}>-Compressor
+slider16:-18<-40,0,0.1>-Comp threshold (dB)
+slider17:2<1,10,0.1>-Comp ratio
+slider18:6<0,12,0.1>-Comp knee (dB)
+slider19:1<0,2,1{Germanium,Silicon,LED}>-Comp rectifier
+slider20:0<0,12,0.1>-Comp makeup (dB)
+slider21:100<0,100,1>-Comp mix (%)
+slider22:0<0,1,1{Bypass,On}>-HF limiter
+slider23:-12<-30,0,0.1>-HF limiter threshold (dB)
+slider24:0<0,2,1{Bypass,Soft,Hard}>-Clipper
+slider25:0<0,12,0.1>-Clipper drive (dB)
+slider26:1<0,1,1{Bypass,On}>-True-peak limiter
+slider27:-0.3<-1,-0.1,0.01>-Limiter ceiling (dB)
+slider28:80<10,500,1>-Limiter release (ms)
+slider29:0<-12,12,0.1>-Output (dB, into the limiter)
+slider30:10<0,50,1>-Drift amount (%)
+slider31:0.2<0.02,2,0.01>-Drift speed (Hz)
+slider32:0<0,100,1>-Band sat (%)
+slider33:30<0,100,1>-Bias (%)
+slider34:120<40,400,1>-Sat low band (Hz)
+slider35:6000<2000,16000,10>-Sat high band (Hz)
+slider36:-0.3<-24,0,0.1>-Output stage ceiling / threshold (dB)
+slider37:0<0,2,1{Off,Clip,Limit}>-Output stage
+slider38:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-mastersuite";                                  // the ? pop-up links to this manual
+
+// ======================================================================
+//  CORE MATH HELPERS
+// ======================================================================
+function db2g(d) ( 10 ^ (d / 20); );
+function g2db(g) ( 20 * log10(max(g, 0.0000000001)); );
+function tanh(x) local(e) ( x = min(max(x, -20), 20); e = exp(2 * x); (e - 1) / (e + 1); );
+function coef(ms) ( 1 - exp(-1 / (max(ms, 0.001) * 0.001 * srate)); );        // one-pole smoothing coefficient
+
+// ---------- RBJ biquad (transposed direct form II) ----------
+// type 0 low-pass, 1 high-pass, 2 bell, 3 high shelf, 4 low shelf; q = Q (shelves: slope)
+function bq_set(type, f, q, gdb, fs) instance(b0, b1, b2, a1, a2) local(w, cw, sw, al, A, sa, n) (
+  f = min(max(f, 5), fs * 0.45);
+  w = 2 * $pi * f / fs; cw = cos(w); sw = sin(w); A = 10 ^ (gdb / 40);
+  type <= 2 ? al = sw / (2 * q) : al = sw / 2 * sqrt((A + 1 / A) * (1 / q - 1) + 2);
+  type == 0 ? ( n = 1 + al; b0 = (1 - cw) * 0.5 / n; b1 = (1 - cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n; ) :
+  type == 1 ? ( n = 1 + al; b0 = (1 + cw) * 0.5 / n; b1 = -(1 + cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n; ) :
+  type == 2 ? ( n = 1 + al / A; b0 = (1 + al * A) / n; b1 = -2 * cw / n; b2 = (1 - al * A) / n; a1 = b1; a2 = (1 - al / A) / n; ) :
+  type == 3 ? (
+    sa = 2 * sqrt(A) * al; n = (A + 1) - (A - 1) * cw + sa;
+    b0 = A * ((A + 1) + (A - 1) * cw + sa) / n; b1 = -2 * A * ((A - 1) + (A + 1) * cw) / n;
+    b2 = A * ((A + 1) + (A - 1) * cw - sa) / n; a1 = 2 * ((A - 1) - (A + 1) * cw) / n; a2 = ((A + 1) - (A - 1) * cw - sa) / n;
+  ) : (
+    sa = 2 * sqrt(A) * al; n = (A + 1) + (A - 1) * cw + sa;
+    b0 = A * ((A + 1) - (A - 1) * cw + sa) / n; b1 = 2 * A * ((A - 1) - (A + 1) * cw) / n;
+    b2 = A * ((A + 1) - (A - 1) * cw - sa) / n; a1 = -2 * ((A - 1) + (A + 1) * cw) / n; a2 = ((A + 1) + (A - 1) * cw - sa) / n;
+  );
+);
+function bq(x) instance(b0, b1, b2, a1, a2, z1, z2) local(y) (
+  y = b0 * x + z1; z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y; y;
+);
+
+// ---------- half-band FIR (linear phase), polyphase ----------
+// K taps per side on the odd offsets (the centre tap is 0.5, the even offsets are zero).
+// Up by 2: input x -> two output samples (returned even, the odd one in .o).  Down by 2: two in -> one out.
+// Delay: K samples at the lower rate for each direction.
+function i0(x) local(s, t, k) ( s = 1; t = 1; k = 1; loop(30, t *= (x / (2 * k)) ^ 2; s += t; k += 1; ); s; );
+function hb_taps(h, K, beta) local(j, o, w, sum) (
+  sum = 0; j = 0;
+  loop(K,
+    o = 2 * j + 1;
+    w = i0(beta * sqrt(max(1 - (o / (2 * K)) ^ 2, 0))) / i0(beta);                  // Kaiser window
+    h[j] = 0.5 * sin($pi * o / 2) / ($pi * o / 2) * w;
+    sum += h[j]; j += 1;
+  );
+  j = 0; loop(K, h[j] *= 0.25 / sum; j += 1; );                                     // unity gain at DC
+);
+function hb_init(K, h, mem) instance(kk, hh, xb, eb, pos, L) (
+  kk = K; hh = h; L = 2 * K + 1; xb = mem; eb = mem + 2 * L; pos = 0;
+  memset(mem, 0, 4 * L);
+);
+function hb_up(x) instance(kk, hh, xb, pos, L, o) local(j, n, s) (
+  xb[pos] = x; xb[pos + L] = x; pos += 1; pos >= L ? pos = 0;                         // newest at xb[pos + L - 1]
+  n = pos + L - 1; s = 0; j = 0;
+  loop(kk, s += hh[j] * (xb[n - kk - j] + xb[n - kk + 1 + j]); j += 1; );
+  o = 2 * s;                                                                         // the in-between sample
+  xb[n - kk];                                                                        // the original sample, delayed
+);
+function hb_down(e, od) instance(kk, hh, xb, eb, pos, L) local(j, n, s) (
+  xb[pos] = od; xb[pos + L] = od; eb[pos] = e; eb[pos + L] = e; pos += 1; pos >= L ? pos = 0;
+  n = pos + L - 1; s = 0; j = 0;
+  loop(kk, s += hh[j] * (xb[n - kk - j - 1] + xb[n - kk + j]); j += 1; );
+  0.5 * eb[n - kk] + s;
+);
+
+// ---------- valve stage: asymmetric tanh, unity gain for small signals ----------
+// y = (tanh(k x + b) - tanh(b)) / (k (1 - tanh(b)^2))
+function tube(x, k, b, tb) ( (tanh(k * x + b) - tb) / (k * (1 - tb * tb)) * tmk; );
+// (tmk: make-up as DRIVE rises above 0 dB, so turning it up adds saturation rather than losing level)
+
+// ---------- one channel's oversampled tube block ----------
+// os 0: straight through; 1: 2x; 2: 4x. mix = the stage's on / bypass crossfade (inside, so timing never changes).
+function tube_run(x) instance(u1, u2, d1, d2) local(e, o, a0, a1, a2, a3, de, dn) (
+  os_n == 0 ? (
+    x + (tube(x, tk, tb, ttb) - x) * tmix;
+  ) : os_n == 1 ? (
+    e = u1.hb_up(x); o = u1.o;
+    e += (tube(e, tk, tb, ttb) - e) * tmix; o += (tube(o, tk, tb, ttb) - o) * tmix;
+    d1.hb_down(e, o);
+  ) : (
+    e = u1.hb_up(x); o = u1.o;
+    a0 = u2.hb_up(e); a1 = u2.o; a2 = u2.hb_up(o); a3 = u2.o;
+    a0 += (tube(a0, tk, tb, ttb) - a0) * tmix; a1 += (tube(a1, tk, tb, ttb) - a1) * tmix;
+    a2 += (tube(a2, tk, tb, ttb) - a2) * tmix; a3 += (tube(a3, tk, tb, ttb) - a3) * tmix;
+    de = d2.hb_down(a0, a1); dn = d2.hb_down(a2, a3);
+    d1.hb_down(de, dn);
+  );
+);
+
+// ---------- soft-knee gain computer (dB in -> gain reduction in dB, <= 0) ----------
+function knee_gr(lv, thr, ratio, knee) local(o, sl) (
+  o = lv - thr; sl = 1 / ratio - 1;
+  2 * o < -knee ? 0 : 2 * abs(o) <= knee ? sl * sqr(o + knee * 0.5) / (2 * knee) : sl * o;
+);
+
+// ---------- clipper: soft = cubic that lands flat at 1 (from 1.5), hard = clamp ----------
+function clip_s(u) ( abs(u) >= 1.5 ? sign(u) : u - 0.148148148 * u * u * u; );
+function clip_x(u) ( clip_mode == 1 ? clip_s(u) : min(max(u, -1), 1); );
+// one channel's oversampled clipper (same structure as the tube block)
+function clip_run(x) instance(u1, u2, d1, d2) local(e, o, a0, a1, a2, a3, de, dn) (
+  x *= cdrv;
+  os_n == 0 ? (
+    x + (clip_x(x) - x) * cmix;
+  ) : os_n == 1 ? (
+    e = u1.hb_up(x); o = u1.o;
+    e += (clip_x(e) - e) * cmix; o += (clip_x(o) - o) * cmix;
+    d1.hb_down(e, o);
+  ) : (
+    e = u1.hb_up(x); o = u1.o;
+    a0 = u2.hb_up(e); a1 = u2.o; a2 = u2.hb_up(o); a3 = u2.o;
+    a0 += (clip_x(a0) - a0) * cmix; a1 += (clip_x(a1) - a1) * cmix;
+    a2 += (clip_x(a2) - a2) * cmix; a3 += (clip_x(a3) - a3) * cmix;
+    de = d2.hb_down(a0, a1); dn = d2.hb_down(a2, a3);
+    d1.hb_down(de, dn);
+  );
+);
+
+// ---------- true-peak: 4x interpolation of the last 8 samples (inter-sample peaks), 4 samples late ----------
+TPH = 1300;                                       // 3 phases x 8 taps
+function tp_taps() local(ph, k, t, w) (
+  ph = 1;
+  loop(3,
+    k = 0;
+    loop(8,
+      t = (k - 3) - ph / 4;                       // tap position relative to the point between x[3] and x[4]
+      w = 0.5 + 0.5 * cos($pi * t / 4.5);         // Hann
+      TPH[(ph - 1) * 8 + k] = (abs(t) < 0.000001 ? 1 : sin($pi * t) / ($pi * t)) * w;
+      k += 1;
+    );
+    ph += 1;
+  );
+);
+function tp_peak(x) instance(buf, pos) local(n, m, ph, k, v) (
+  buf[pos] = x; buf[pos + 8] = x; pos = (pos + 1) & 7;     // oldest at buf[pos], newest at buf[pos + 7]
+  n = buf + pos;
+  m = abs(n[3]);
+  ph = 0;
+  loop(3,
+    v = 0; k = 0; loop(8, v += TPH[ph * 8 + k] * n[k]; k += 1; );
+    m = max(m, abs(v)); ph += 1;
+  );
+  m;
+);
+
+// ======================================================================
+//  MEMORY + STATE
+// ======================================================================
+K1 = 16; K2 = 8;                        // 2x stage: 63-tap half-band; the 4x stage (already band-limited): 31 taps
+H1 = 1000; H2 = 1100;
+hb_taps(H1, K1, 8); hb_taps(H2, K2, 7);
+// oversampler ring buffers (4 * (2K + 1) each)
+tL.u1.hb_init(K1, H1, 2000); tL.d1.hb_init(K1, H1, 2200); tL.u2.hb_init(K2, H2, 2400); tL.d2.hb_init(K2, H2, 2500);
+tR.u1.hb_init(K1, H1, 2600); tR.d1.hb_init(K1, H1, 2800); tR.u2.hb_init(K2, H2, 3000); tR.d2.hb_init(K2, H2, 3100);
+
+// clipper oversamplers
+cL.u1.hb_init(K1, H1, 3200); cL.d1.hb_init(K1, H1, 3400); cL.u2.hb_init(K2, H2, 3600); cL.d2.hb_init(K2, H2, 3700);
+cR.u1.hb_init(K1, H1, 3800); cR.d1.hb_init(K1, H1, 4000); cR.u2.hb_init(K2, H2, 4200); cR.d2.hb_init(K2, H2, 4300);
+// true-peak limiter: detector rings, audio delay lines, gain ring for the lookahead minimum and average
+tp_taps();
+tpL.buf = 4400; tpR.buf = 4420; memset(4400, 0, 40);
+LA = max(1, floor(0.0015 * srate));      // lookahead
+LDEL = LA + 3;                           // the audio waits for the lookahead and the detector (4 late, held over LA)
+DLL = 10000; DLR = 12100; GRB = 14200;       // 2048 each, kept apart
+memset(DLL, 0, 2048); memset(DLR, 0, 2048); memset(GRB, 0, 2048);
+gi = 0; loop(2048, GRB[gi] = 1; gi += 1; );
+lw = 0; l_sum = LA; l_g = 1; l_gm = 1;
+
+sm10 = coef(10);                        // 10 ms: bypass crossfades, gain changes
+sm30 = coef(30);
+hf_att = coef(0.3); hf_rel = coef(60);
+dw = 0;
+ost_init(30000); ostL.ost_ch_init(); ostR.ost_ch_init();
+dA.drift_init(0.8 + rand(0.5)); dB.drift_init(0.8 + rand(0.5));
+dcL.bq_set(1, 5, 0.707, 0, srate); dcR.bq_set(1, 5, 0.707, 0, srate);     // the bias leaves a little DC: 5 Hz high-pass
+
+// smoothed state (start at their targets)
+function targets() (
+  in_t = db2g(slider1);
+  os_n = slider2;
+  tmix_t = slider3;
+  bias_b = slider5 == 0 ? 0.05 : slider5 == 1 ? 0.15 : 0.3;                       // asymmetry: more even harmonics
+  bias_k = slider5 == 0 ? 0.85 : slider5 == 1 ? 1 : 1.2;                           // and how hard it bites
+  tk_t = db2g(slider4) * bias_k;
+  tmk_t = max(db2g(slider4), 1) ^ 0.55;
+  eq_t = slider6;
+  out_t = db2g(slider29);
+  st_t = slider12;
+  wid_t = slider14 / 100;
+  cmp_t = slider15;
+  c_thr = slider16; c_ratio = slider17; c_knee = max(slider18, 0.01);
+  // rectifier timing: RMS window, attack, release (fast part), release (slow part)
+  slider19 == 0 ? ( c_rms = 30; c_att = 30; c_rel = 350; c_rel2 = 1500; ) :     // germanium: slow, smooth
+  slider19 == 1 ? ( c_rms = 15; c_att = 10; c_rel = 180; c_rel2 = 900; ) :      // silicon: medium
+                  ( c_rms = 5;  c_att = 2;  c_rel = 70;  c_rel2 = 400; );       // LED: fast
+  c_rmsc = coef(c_rms); c_attc = coef(c_att); c_relc = coef(c_rel); c_rel2c = coef(c_rel2);
+  c_mk_t = db2g(slider20);
+  c_mix_t = slider21 / 100;
+  hf_t = slider22; hf_thr = db2g(slider23);
+  cmix_t = slider24 > 0; clip_mode = slider24 > 0 ? slider24 : clip_mode; cdrv_t = db2g(slider25);
+  slider24 > 0 ? clip_last = slider24;
+  lim_t = slider26; l_ceil = db2g(slider27); l_relc = coef(slider28);
+);
+
+
+// ---------- presets (the seven stages; drift and the output stage are left alone - Reset also sets the DRIFT dial) ----------
+function p_in(trim, os) ( slider1 = trim; slider2 = os; );
+function p_tube(on, drv, bias) ( slider3 = on; slider4 = drv; slider5 = bias; );
+function p_tone(on, b, lm, hm, pr, tape) ( slider6 = on; slider7 = b; slider8 = lm; slider9 = hm; slider10 = pr; slider11 = tape; );
+function p_st(on, mono, wid) ( slider12 = on; slider13 = mono; slider14 = wid; );
+function p_cmp(on, thr, ratio, knee, rect, mk, mix) ( slider15 = on; slider16 = thr; slider17 = ratio; slider18 = knee; slider19 = rect; slider20 = mk; slider21 = mix; );
+function p_hf(on, thr) ( slider22 = on; slider23 = thr; );
+function p_clip(mode, drv) ( slider24 = mode; slider25 = drv; mode > 0 ? clip_last = mode; );
+function p_lim(on, ceil, rel, out) ( slider26 = on; slider27 = ceil; slider28 = rel; slider29 = out; );
+function pname(p) (
+  p == 1 ? "Transparent" :
+  p == 2 ? "Warm Glue" :
+  p == 3 ? "Loud & Punchy" :
+  p == 4 ? "Vintage Tape" :
+  p == 5 ? "Bright Pop" :
+  p == 6 ? "Bass Heavy" :
+  p == 7 ? "Acoustic / Classical" :
+  p == 8 ? "Podcast / Voice" :
+  p == 9 ? "Parallel Punch" :
+  p == 10 ? "Streaming Safe (-1 dBTP)" :
+  "Reset to defaults";
+);
+function load_preset(p) (
+  p == 1 ? (        // TRANSPARENT: gentle glue and a safe ceiling, nothing coloured
+    p_in(0, 1); p_tube(0, -3, 1); p_tone(1, 0, 0, 0, 0, 0); p_st(1, 30, 100); p_cmp(1, -16, 1.5, 8, 1, 1, 100);
+    p_hf(0, -12); p_clip(0, 0); p_lim(1, -1, 120, 2);
+  ) : p == 2 ? (    // WARM GLUE
+    p_in(0, 1); p_tube(1, -3, 1); p_tone(1, 1, 0, -0.5, 0.5, 1); p_st(1, 80, 100); p_cmp(1, -18, 2, 6, 0, 2, 100);
+    p_hf(1, -14); p_clip(1, 2); p_lim(1, -0.5, 100, 4);
+  ) : p == 3 ? (    // LOUD & PUNCHY: parallel compression, clipper into the limiter
+    p_in(0, 2); p_tube(1, 0, 1); p_tone(1, 1.5, 0, 0.5, 1, 0); p_st(1, 100, 110); p_cmp(1, -20, 3, 4, 2, 3, 70);
+    p_hf(1, -12); p_clip(1, 4); p_lim(1, -0.3, 60, 3);
+  ) : p == 4 ? (    // VINTAGE TAPE
+    p_in(0, 1); p_tube(1, 3, 0); p_tone(1, 1.5, 0, 0, -1, 1); p_st(1, 120, 90); p_cmp(1, -18, 2.5, 8, 0, 2, 100);
+    p_hf(1, -10); p_clip(1, 1); p_lim(1, -1, 150, 6);
+  ) : p == 5 ? (    // BRIGHT POP
+    p_in(0, 1); p_tube(1, -3, 2); p_tone(1, 0, -1, 1, 2, 0); p_st(1, 100, 120); p_cmp(1, -18, 2, 6, 1, 2, 100);
+    p_hf(1, -15); p_clip(1, 3); p_lim(1, -0.3, 80, 3);
+  ) : p == 6 ? (    // BASS HEAVY: wide mono lows, fast compression, hard clip
+    p_in(0, 2); p_tube(1, 0, 1); p_tone(1, 2, -1, 0, 0.5, 0); p_st(1, 150, 110); p_cmp(1, -16, 2.5, 6, 2, 2, 80);
+    p_hf(1, -14); p_clip(2, 3); p_lim(1, -0.3, 50, 3);
+  ) : p == 7 ? (    // ACOUSTIC / CLASSICAL: almost nothing, slow and wide open
+    p_in(0, 1); p_tube(0, -6, 1); p_tone(1, 0.5, 0, 0, 0.5, 0); p_st(1, 20, 100); p_cmp(1, -24, 1.3, 12, 0, 1, 100);
+    p_hf(0, -12); p_clip(0, 0); p_lim(1, -1, 300, 2);
+  ) : p == 8 ? (    // PODCAST / VOICE: mono, forward, de-essed, steady
+    p_in(0, 1); p_tube(1, -6, 1); p_tone(1, -2, -1, 1.5, 1, 0); p_st(1, 200, 0); p_cmp(1, -24, 3, 6, 1, 4, 100);
+    p_hf(1, -16); p_clip(1, 2); p_lim(1, -1, 100, 6);
+  ) : p == 9 ? (    // PARALLEL PUNCH: heavy fast compression blended under the dry mix
+    p_in(0, 1); p_tube(1, 0, 1); p_tone(1, 0, 0, 0, 0, 0); p_st(1, 60, 100); p_cmp(1, -30, 6, 3, 2, 6, 40);
+    p_hf(0, -12); p_clip(1, 2); p_lim(1, -0.3, 80, 2);
+  ) : p == 10 ? (   // STREAMING SAFE: controlled, -1 dB true-peak ceiling, no clipper
+    p_in(0, 2); p_tube(0, -3, 1); p_tone(1, 0, 0, 0, 0.5, 0); p_st(1, 40, 100); p_cmp(1, -18, 1.8, 8, 1, 1.5, 100);
+    p_hf(1, -14); p_clip(0, 0); p_lim(1, -1, 150, 3);
+  ) : p == 11 ? (   // RESET: the defaults
+    p_in(0, 1); p_tube(1, -3, 1); p_tone(1, 0, 0, 0, 0, 0); p_st(1, 20, 100); p_cmp(0, -18, 2, 6, 1, 0, 100);
+    p_hf(0, -12); p_clip(0, 0); p_lim(1, -0.3, 80, 0);
+    slider38 = 50; slider_automate(2 ^ 37);
+  );
+  p > 0 ? slider_automate(536870911);       // sliders 1-29
+);
+
+// ======================================================================
+//  @slider work, kept in functions so @block can refresh after automation
+// ======================================================================
+function update() (
+  targets();
+  // tone stack: broad bands (low Q), at the host rate
+  eqB_L.bq_set(4, 90,   0.6, slider7,  srate); eqB_R.bq_set(4, 90,   0.6, slider7,  srate);
+  eqM_L.bq_set(2, 350,  0.6, slider8,  srate); eqM_R.bq_set(2, 350,  0.6, slider8,  srate);
+  eqH_L.bq_set(2, 2800, 0.6, slider9,  srate); eqH_R.bq_set(2, 2800, 0.6, slider9,  srate);
+  eqP_L.bq_set(3, 7000, 0.6, slider10, srate); eqP_R.bq_set(3, 7000, 0.6, slider10, srate);
+  tape_on = slider11;
+  tapeL.bq_set(0, 18000, 0.707, 0, srate); tapeR.bq_set(0, 18000, 0.707, 0, srate);
+  // mono maker: 4th-order Butterworth high-pass on the side
+  mm_on = slider13 > 20.5;
+  mmA.bq_set(1, slider13, 0.5412, 0, srate); mmB.bq_set(1, slider13, 1.3066, 0, srate);
+  // HF limiter: a 4th-order Linkwitz-Riley split at 6 kHz (two Butterworth sections each side)
+  hfA_L.bq_set(1, 6000, 0.7071, 0, srate); hfB_L.bq_set(1, 6000, 0.7071, 0, srate);
+  hfA_R.bq_set(1, 6000, 0.7071, 0, srate); hfB_R.bq_set(1, 6000, 0.7071, 0, srate);
+  lfA_L.bq_set(0, 6000, 0.7071, 0, srate); lfB_L.bq_set(0, 6000, 0.7071, 0, srate);
+  lfA_R.bq_set(0, 6000, 0.7071, 0, srate); lfB_R.bq_set(0, 6000, 0.7071, 0, srate);
+  // latency: the oversampler (more stages add their own later)
+  os_lat = os_n == 0 ? 0 : os_n == 1 ? 2 * K1 : 2 * K1 + K2;
+  ins_output_setup(32);                    // (it writes pdc_delay: put ours back straight away)
+  lat_t = 2 * os_lat + LDEL + (slider37 == 2 ? ost_N : 0);                   // oversamplers, limiters
+  pdc_delay = lat_t; pdc_bot_ch = 0; pdc_top_ch = 2;
+  // (kept constant whatever is bypassed, so switching a stage never shifts the timing)
+);
+
+clip_last = 1;
+cur_preset = 1;
+!ui_dflt ? ui_thm = 1; !ui_dflt ? ui_hw = 0;                  // defaults for new instances: Ice, flat
+update();
+in_s = in_t; tmix = tmix_t; tk = tk_t; tmk = tmk_t; tb = bias_b; ttb = tanh(tb); eq_s = eq_t; out_s = out_t;
+st_s = st_t; wid_s = wid_t; cmp_s = cmp_t; c_mk = c_mk_t; c_mix = c_mix_t;
+c_ms = 0; c_gr = 0; c_slow = 0; c_grm = 0;
+hf_s = hf_t; hf_g = 1; hf_grm = 1; cmix = cmix_t; cdrv = cdrv_t; lim_s = lim_t; clip_mode = max(clip_mode, 1);
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();                                 // knobs and keys on the faceplate do not run @slider, so read them here
+// drift: the valve's bias and drive wander a little
+drift_macro(slider38);
+dinc = slider31 * dm_s * samplesblock / srate;
+drv_d = min(slider30 / 100 * dm_a, 1);
+bias_b += 0.05 * drv_d * dA.drift_tick(dinc);
+tk_t *= 1 + 0.06 * drv_d * dB.drift_tick(dinc);
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+file_var(0, clip_last);
+
+@sample
+// ======================================================================
+//  STAGE 1: INPUT TRIM
+// ======================================================================
+in_s += (in_t - in_s) * sm10;
+xL = spl0 * in_s;
+xR = spl1 * in_s;
+ipL = max(ipL, abs(xL)); ipR = max(ipR, abs(xR));
+
+// ======================================================================
+//  STAGE 2: TUBE SATURATION (oversampled) + TONE STACK
+// ======================================================================
+tmix += (tmix_t - tmix) * sm10;
+tk   += (tk_t - tk) * sm30; tmk += (tmk_t - tmk) * sm30;
+tb   += (bias_b - tb) * sm30; ttb = tanh(tb);
+xL = tL.tube_run(xL);
+xR = tR.tube_run(xR);
+xL = dcL.bq(xL); xR = dcR.bq(xR);                        // DC from the bias
+
+eq_s += (eq_t - eq_s) * sm10;
+eq_s > 0.0001 ? (
+  yL = eqP_L.bq(eqH_L.bq(eqM_L.bq(eqB_L.bq(xL))));
+  yR = eqP_R.bq(eqH_R.bq(eqM_R.bq(eqB_R.bq(xR))));
+  tape_on ? ( yL = tapeL.bq(yL); yR = tapeR.bq(yR); );
+  xL += (yL - xL) * eq_s;
+  xR += (yR - xR) * eq_s;
+);
+
+// ======================================================================
+//  STAGE 3: STEREO (mid / side): mono maker on the side, then side width
+// ======================================================================
+st_s += (st_t - st_s) * sm10; wid_s += (wid_t - wid_s) * sm30;
+st_s > 0.0001 ? (
+  mid = (xL + xR) * 0.5; sid = (xL - xR) * 0.5;
+  mm_on ? sid = mmB.bq(mmA.bq(sid));
+  sid *= wid_s;
+  xL += (mid + sid - xL) * st_s;
+  xR += (mid - sid - xR) * st_s;
+);
+
+// ======================================================================
+//  STAGE 4: VARI-MU COMPRESSOR
+// ======================================================================
+cmp_s += (cmp_t - cmp_s) * sm10;
+c_mk += (c_mk_t - c_mk) * sm10; c_mix += (c_mix_t - c_mix) * sm10;
+cmp_s > 0.0001 ? (
+  // stereo-linked RMS, in dB
+  c_ms += ((xL * xL + xR * xR) * 0.5 - c_ms) * c_rmsc;
+  c_lv = 10 * log10(max(c_ms, 0.0000000001)) + 3.01;                       // + 3 dB: a sine reads its peak level
+  // vari-mu: the ratio rises a little as the gain reduction deepens
+  c_tg = knee_gr(c_lv, c_thr, c_ratio * (1 + 0.25 * min(-c_gr / 12, 1)), c_knee);
+  // attack / release in the dB domain; the release slows the longer it has been working (program-dependent)
+  c_slow += ((c_gr < -1 ? 1 : 0) - c_slow) * c_rel2c * 0.5;
+  c_gr += (c_tg - c_gr) * (c_tg < c_gr ? c_attc : c_relc + (c_rel2c - c_relc) * c_slow);
+  c_g = db2g(c_gr) * c_mk;
+  c_mx = c_mix * cmp_s;                                                      // parallel blend, and the bypass
+  xL += (xL * c_g - xL) * c_mx;
+  xR += (xR * c_g - xR) * c_mx;
+  c_grm = min(c_grm, c_gr);                                                  // for a meter (reset by the display)
+);
+
+// ======================================================================
+//  STAGE 5: HF LIMITER (keyed from above 6 kHz, turns down only that band)
+// ======================================================================
+hf_s += (hf_t - hf_s) * sm10;
+hf_s > 0.0001 ? (
+  hL = hfB_L.bq(hfA_L.bq(xL)); hR = hfB_R.bq(hfA_R.bq(xR));
+  lL = lfB_L.bq(lfA_L.bq(xL)); lR = lfB_R.bq(lfA_R.bq(xR));
+  hf_pk = max(abs(hL), abs(hR));
+  hf_tg = hf_pk > hf_thr ? hf_thr / hf_pk : 1;
+  hf_g += (hf_tg - hf_g) * (hf_tg < hf_g ? hf_att : hf_rel);       // fast: 0.3 ms attack, 60 ms release
+  xL += (lL + hL * hf_g - xL) * hf_s;                              // low band + top band x gain
+  xR += (lR + hR * hf_g - xR) * hf_s;
+  hf_grm = min(hf_grm, hf_g);
+);
+
+// ======================================================================
+//  STAGE 6: CLIPPER (oversampled)
+// ======================================================================
+cmix += (cmix_t - cmix) * sm10; cdrv += ((slider24 > 0 ? cdrv_t : 1) - cdrv) * sm10;
+xL = cL.clip_run(xL);
+xR = cR.clip_run(xR);
+
+// output gain, then the GFX output stage (band saturation, Off / Clip / Limit), into the limiter
+out_s += (out_t - out_s) * sm10;
+xL = ostL.ost_band(xL * out_s); xR = ostR.ost_band(xR * out_s);
+ost_out(xL, xR); xL = ost_l; xR = ost_r;
+
+// ======================================================================
+//  STAGE 7: TRUE-PEAK LOOKAHEAD LIMITER
+// ======================================================================
+lim_s += (lim_t - lim_s) * sm10;
+l_pk = max(tpL.tp_peak(xL), tpR.tp_peak(xR));                   // inter-sample peak of the sample 4 back
+l_tg = l_pk > l_ceil ? l_ceil / l_pk : 1;
+// hold the lowest gain needed across the lookahead, then average across it: the gain is fully down by the
+// time the peak arrives, with a smooth (box-shaped) fall and no overshoot
+GRB[lw] = l_tg;
+l_mn = 1; l_i = 0; loop(LA, l_k = lw - l_i; l_k < 0 ? l_k += 1024; l_mn = min(l_mn, GRB[l_k]); l_i += 1; );   // (own names: @gfx runs alongside)
+GRB[1024 + lw] = l_mn;                                            // the held gains, for the average
+l_k = lw - LA; l_k < 0 ? l_k += 1024;
+l_sum += l_mn - GRB[1024 + l_k];
+lw += 1; lw >= 1024 ? lw = 0;
+l_av = l_sum / LA;
+l_g = l_av < l_g ? l_av : l_g + (l_av - l_g) * l_relc;            // release
+// the audio, delayed to meet its gain
+DLL[dw] = xL; DLR[dw] = xR;
+dr = dw - LDEL; dr < 0 ? dr += 2048; dw += 1; dw >= 2048 ? dw = 0;   // (EEL2 & does not wrap negatives)
+yL = DLL[dr]; yR = DLR[dr];
+gL = yL * l_g; gR = yR * l_g;
+gL = min(max(gL, -l_ceil), l_ceil); gR = min(max(gR, -l_ceil), l_ceil);    // last-sample safety
+xL = yL + (gL - yL) * lim_s;
+xR = yR + (gR - yR) * lim_s;
+l_gm = min(l_gm, l_g);
+
+spl0 = xL;
+spl1 = xR;
+opL = max(opL, abs(spl0)); opR = max(opR, abs(spl1));
+
+@gfx 1120 422
+ui_begin(1120, 422);
+ui_header("MASTERSUITE");
+ui_noled = 1;
+ui_button(380 * sc, 10 * sc, 26 * sc, 24 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(408 * sc, 10 * sc, 26 * sc, 24 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(442 * sc, 10 * sc, 76 * sc, 24 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 442 * sc; gfx_y = 34 * sc;
+  cur_preset = gfx_showmenu("Transparent|Warm Glue|Loud & Punchy|Vintage Tape|Bright Pop|Bass Heavy|Acoustic / Classical|Podcast / Voice|Parallel Punch|Streaming Safe (-1 dBTP)|Reset to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_noled = 0;
+ui_theme_picker(176 * sc, 15 * sc);
+ui_size_picker(280 * sc, 13 * sc);
+pk_lcd(524 * sc, 7 * sc, 180 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 530 * sc; gfx_y = 10 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 530 * sc; gfx_y = 24 * sc; gfx_drawstr(pname(cur_preset));
+
+ui_hw_toggle(340 * sc, 13 * sc);
+gfx_setfont(4); ui_col(C_INK);
+sprintf(#lat, "LATENCY %d SMP  (%.1f ms)", lat_t, lat_t / srate * 1000);
+gfx_x = 820 * sc; gfx_y = 20 * sc; gfx_drawstr(#lat);
+
+// ---------- helpers ----------
+// the IN / OUT strip: TRIM, SAT and the OUT stage dial (OFF / CLIP / LIM round it), knob centres at y + 30
+function ms_io(x, y) (
+  ui_kcap = 0x3A3B40; ui_knob((x + 20) * sc, (y + 30) * sc, 1, -12, 12, 0, 0, "TRIM", "%+.1f dB");
+  ui_kcap = 0xD8B040; ui_knob((x + 78) * sc, (y + 30) * sc, 32, 0, 100, 0, 0, "SAT", "%.0f%%");
+  ui_outkeys(x + 114, y + 6, 54, 14, 3, 37);
+  gfx_setfont(4); ui_cola(C_INK, 0.85); ui_text((x + 141) * sc, (y + 59) * sc, "OUT");
+);
+// a stage's ON key, top right of its group
+function st_on(x, y, idx) (
+  ui_keycap(x * sc, y * sc, 36 * sc, 18 * sc, "ON", slider(idx) > 0, 1) ? ( slider(idx) = slider(idx) > 0 ? 0 : 1; slider_automate(2 ^ (idx - 1)); );
+);
+// a row of small selector keys
+function st_sel(x, y, w, idx, n, labels) local(i, k0, k, len) (
+  i = 0; k0 = 0; len = strlen(labels);
+  loop(n,
+    k = k0; while (k < len && str_getchar(labels, k) != '|') ( k += 1; );
+    strcpy_substr(#st_l, labels, k0, k - k0);
+    ui_keycap((x + i * (w + 4)) * sc, y * sc, w * sc, 18 * sc, #st_l, slider(idx) == i, 1) ? ( slider(idx) = i; slider_automate(2 ^ (idx - 1)); );
+    k0 = k + 1; i += 1;
+  );
+);
+// gain-reduction meter: a bar that grows down from the top, 0 to -20 dB, with the reading below
+function gr_meter(x, y, h, grdb, title) local(f, i) (
+  ui_col(0x0A0B0C); gfx_rect(x * sc, y * sc, 12 * sc, h * sc);
+  f = min(-grdb / 20, 1);
+  ui_col(0xFFB030); gfx_rect((x + 2) * sc, (y + 2) * sc, 8 * sc, (h - 4) * f * sc);
+  i = 1; loop(3, ui_cola(0xFFFFFF, 0.25); gfx_line(x * sc, (y + h * i / 4) * sc, (x + 11) * sc, (y + h * i / 4) * sc); i += 1; );
+  gfx_setfont(4); ui_col(C_INK); ui_text((x + 6) * sc, (y + h + 3) * sc, title);
+  sprintf(#grs, "%.1f", grdb); ui_text((x + 6) * sc, (y - 13) * sc, #grs);
+);
+// meter readings: peaks fall back smoothly, gain reductions recover
+mIL = max(ipL, mIL * 0.85); mIR = max(ipR, mIR * 0.85); ipL = 0; ipR = 0;
+mOL = max(opL, mOL * 0.85); mOR = max(opR, mOR * 0.85); opL = 0; opR = 0;
+dC = min(c_grm, dC * 0.85); c_grm = 0;
+dH = min(g2db(hf_grm), dH * 0.85); hf_grm = 1;
+dL = min(g2db(l_gm), dL * 0.85); l_gm = 1;
+
+// ================= row 1: INPUT > TUBE > TONE > STEREO =================
+Y = 54; GH = 172;
+ui_group(16 * sc, Y * sc, 260 * sc, GH * sc, 0, "IN / OUT");
+ms_io(56, Y + 36);
+gfx_setfont(4); ui_col(C_INK); ui_text(134 * sc, (Y + 118) * sc, "OVERSAMPLING");
+st_sel(72, Y + 134, 38, 2, 3, "OFF|2X|4X");
+iL.ui_ledm(236 * sc, (Y + 30) * sc, 8 * sc, 90 * sc, mIL); iR.ui_ledm(247 * sc, (Y + 30) * sc, 8 * sc, 90 * sc, mIR);
+gfx_setfont(4); ui_col(C_INK); ui_text(246 * sc, (Y + 126) * sc, "IN");
+
+ui_group(288 * sc, Y * sc, 190 * sc, GH * sc, 0, "TUBE");
+st_on(434, Y + 8, 3);
+ui_knob(354 * sc, (Y + 80) * sc, 4, -12, 12, -3, 0, "DRIVE", "%+.1f dB");
+ui_knob(428 * sc, (Y + 80) * sc, 38, 0, 100, 50, 0, "DRIFT", "%.0f%%");
+gfx_setfont(4); ui_col(C_INK); ui_text(396 * sc, (Y + 128) * sc, "BIAS");
+gi = 0; loop(3,
+  ui_keycap((322 + gi * 50) * sc, (Y + 142) * sc, 46 * sc, 18 * sc, gi == 0 ? "LOW" : gi == 1 ? "MID" : "HIGH", slider5 == gi, 1) ? ( slider5 = gi; slider_automate(2 ^ 4); );
+  gi += 1; );
+
+ui_group(490 * sc, Y * sc, 360 * sc, GH * sc, 0, "TONE");
+ui_keycap(762 * sc, (Y + 8) * sc, 40 * sc, 18 * sc, "TAPE", slider11, 1) ? ( slider11 = 1 - slider11; slider_automate(2 ^ 10); );
+st_on(806, Y + 8, 6);
+ui_knob(562 * sc, (Y + 96) * sc, 7,  -6, 6, 0, 0, "BASS",     "%+.1f dB");
+ui_knob(638 * sc, (Y + 96) * sc, 8,  -6, 6, 0, 0, "LO-MID",   "%+.1f dB");
+ui_knob(714 * sc, (Y + 96) * sc, 9,  -6, 6, 0, 0, "HI-MID",   "%+.1f dB");
+ui_knob(790 * sc, (Y + 96) * sc, 10, -6, 6, 0, 0, "PRESENCE", "%+.1f dB");
+
+ui_group(862 * sc, Y * sc, 242 * sc, GH * sc, 0, "STEREO");
+st_on(1060, Y + 8, 12);
+ui_knob(946 * sc,  (Y + 96) * sc, 13, 20, 200, 20, 1, "MONO", slider13 < 20.5 ? "OFF" : "%.0f Hz");
+ui_knob(1036 * sc, (Y + 96) * sc, 14, 0, 200, 100, 0, "WIDTH", "%.0f%%");
+
+// ================= row 2: VARI-MU > HF LIMIT > CLIPPER > LIMITER > OUTPUT =================
+Y = 238;
+ui_group(16 * sc, Y * sc, 400 * sc, GH * sc, 0, "VARI-MU");
+st_on(372, Y + 8, 15);
+ui_knob(76 * sc,  (Y + 72) * sc, 16, -40, 0, -18, 0, "THRESH", "%.1f dB");
+ui_knob(140 * sc, (Y + 72) * sc, 17, 1, 10, 2, 0, "RATIO", "%.1f:1");
+ui_knob(204 * sc, (Y + 72) * sc, 18, 0, 12, 6, 0, "KNEE", "%.1f dB");
+ui_knob(268 * sc, (Y + 72) * sc, 20, 0, 12, 0, 0, "MAKEUP", "%+.1f dB");
+ui_knob(332 * sc, (Y + 72) * sc, 21, 0, 100, 100, 0, "MIX", "%.0f%%");
+gfx_setfont(4); ui_col(C_INK); ui_text(98 * sc, (Y + 142) * sc, "RECTIFIER");
+st_sel(140, Y + 138, 58, 19, 3, "GERM|SILICON|LED");
+gr_meter(388, Y + 56, 96, dC, "GR");
+
+ui_group(428 * sc, Y * sc, 160 * sc, GH * sc, 0, "HF LIMIT");
+st_on(544, Y + 8, 22);
+ui_knob(496 * sc, (Y + 92) * sc, 23, -30, 0, -12, 0, "THRESH", "%.1f dB");
+gfx_setfont(4); ui_col(C_INK); ui_text(496 * sc, (Y + 150) * sc, "ABOVE 6 kHz");
+gr_meter(560, Y + 56, 96, dH, "GR");
+
+ui_group(600 * sc, Y * sc, 130 * sc, GH * sc, 0, "CLIPPER");
+// ON switches the clipper in with the last mode chosen; SOFT / HARD pick the mode (on or off)
+ui_keycap(686 * sc, (Y + 8) * sc, 36 * sc, 18 * sc, "ON", slider24 > 0, 1) ? ( slider24 = slider24 > 0 ? 0 : clip_last; slider_automate(2 ^ 23); );
+ui_knob(670 * sc, (Y + 82) * sc, 25, 0, 12, 0, 0, "DRIVE", "%+.1f dB");
+gi = 1; loop(2,
+  ui_keycap((622 + (gi - 1) * 50) * sc, (Y + 138) * sc, 46 * sc, 18 * sc, gi == 1 ? "SOFT" : "HARD", clip_last == gi, 1) ? (
+    clip_last = gi; slider24 > 0 ? ( slider24 = gi; slider_automate(2 ^ 23); );
+  );
+  gi += 1; );
+
+ui_group(742 * sc, Y * sc, 200 * sc, GH * sc, 0, "LIMITER");
+st_on(898, Y + 8, 26);
+ui_knob(800 * sc, (Y + 88) * sc, 27, -1, -0.1, -0.3, 0, "CEILING", "%.2f dB");
+ui_knob(870 * sc, (Y + 88) * sc, 28, 10, 500, 80, 1, "RELEASE", "%.0f ms");
+gfx_setfont(4); ui_col(C_INK); ui_text(835 * sc, (Y + 150) * sc, "TRUE PEAK");
+gr_meter(914, Y + 56, 96, dL, "GR");
+
+ui_group(954 * sc, Y * sc, 150 * sc, GH * sc, 0, "");
+ui_knob(1012 * sc, (Y + 92) * sc, 29, -12, 12, 0, 0, "OUTPUT", "%+.1f dB");
+oL.ui_ledm(1066 * sc, (Y + 24) * sc, 9 * sc, 112 * sc, mOL); oR.ui_ledm(1078 * sc, (Y + 24) * sc, 9 * sc, 112 * sc, mOR);
+gfx_setfont(4); ui_col(C_INK); ui_text(1076 * sc, (Y + 142) * sc, "OUT");
+
+pk_end();
+ui_end();

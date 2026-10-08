@@ -1,0 +1,712 @@
+desc:GFX Palette
+//tags: instrument synth workstation fm epiano clavinet glockenspiel pad bass strings
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
+//
+// GFX Palette: the sound palette for the GFX workstation.
+//   FM E-PIANO   - 4-operator FM (tine "ding" pair + body pair), velocity sets the bark
+//   CLAVINET     - plucked string (Karplus-Strong) + pickup comb + bite filter, quick damper
+//   GLOCK        - struck metal bar: inharmonic partials, mallet click, rings on
+//   SYNTH PAD    - detuned saws, 4-pole filter with slow envelope, chorus
+//   WARM PAD     - saw + sub, low filter with slow movement, wide chorus
+//   BASS SYNTH   - mono with glide: saw + sub, punchy filter envelope
+//   STRINGS      - detuned saws, slow attack, delayed vibrato
+//   STR ENSEMBLE - bright saws into a three-phase ensemble
+// Layered sounds (a short attack layer over a synth body, late-80s style):
+//   BELL PAD, STACCATO CHOIR, PIZZ BELLS, GLASS CHOIR, NYLON HAZE, SYNTH BRASS, CRYSTAL HARP
+// Basses: SUB, ACID, ROUND, PLUCK, HOLLOW, REESE (most are mono with glide).
+// Mallets (struck bars and tines): GLOCKENSPIEL, MARIMBA, XYLOPHONE, VIBRAPHONE (motor tremolo), KALIMBA, STEEL PAN, MUSIC BOX.
+// Changing sound puts FILTER, RESO, TONE, ATTACK, RELEASE and CHORUS back to neutral for the new sound.
+// REVERB: the GFX Space engine (ROOM / HALL / PLATE), added as a send on top of the sound.
+// FILTER / RESONANCE: analogue sounds move each note's own 4-pole filter (RESONANCE up to self-oscillation);
+//   FM e-piano, clavinet and glock go through a resonant low-pass (FILTER 0 = wide open).
+// Macros: TONE, ATTACK, RELEASE, CHORUS, VELOCITY, TUNE.  Sustain pedal (CC64) and mod wheel (vibrato).
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+
+slider1:0<0,26,1{FM E-Piano,Clavinet,Glockenspiel,Synth Pad,Warm Pad,Bass Synth,Strings,String Ensemble,Bell Pad,Staccato Choir,Pizz Bells,Glass Choir,Nylon Haze,Synth Brass,Crystal Harp,Sub Bass,Acid Bass,Round Bass,Pluck Bass,Hollow Bass,Reese Bass,Marimba,Xylophone,Vibraphone,Kalimba,Steel Pan,Music Box}>-Sound
+slider2:50<0,100,1>-Tone (%)
+slider3:100<10,400,1>-Attack (%)
+slider4:100<10,400,1>-Release (%)
+slider5:100<0,200,1>-Chorus (%)
+slider6:70<0,100,1>-Velocity (%)
+slider7:0<-50,50,1>-Tune (cents)
+slider8:20<0,100,1>-Analogue drift (%)
+slider9:0<0,16,1>-MIDI channel (0 = omni)
+slider10:0<-24,12,0.1>-Output (dB)
+slider11:0<0,100,1>-Band sat (%)
+slider12:30<0,100,1>-Bias (%)
+slider13:120<40,400,1>-Sat low band (Hz)
+slider14:6000<2000,16000,10>-Sat high band (Hz)
+slider15:-0.3<-6,0,0.1>-Ceiling (dB)
+slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider17:0<-6,3,0.01>-Filter (octaves)
+slider18:0<0,100,1>-Resonance (%)
+slider19:1<0,2,1{Room,Hall,Plate}>-Reverb type
+slider20:15<0,150,1>-Reverb pre-delay (ms)
+slider21:2.2<0.2,10,0.01>-Reverb decay (s)
+slider22:50<0,100,1>-Reverb damping (%)
+slider23:25<0,100,1>-Reverb mix (%)
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+
+NV = 12; VS = 72;
+VB = 1000;                       // voice blocks: VB + v * 64
+// field offsets
+F_N = 0; F_G = 1; F_S = 2; F_ACT = 3; F_AGE = 4; F_VEL = 5; F_F0 = 6; F_AE = 7; F_AST = 8; F_FE = 9; F_FST = 10;
+F_P1 = 11; F_P2 = 12; F_P3 = 13; F_S1 = 14; F_S2 = 15; F_S3 = 16; F_S4 = 17;
+F_O1 = 18; F_O2 = 19; F_O3 = 20; F_O4 = 21; F_E1 = 22; F_E2 = 23; F_E3 = 24; F_E4 = 25; F_VT = 26;
+F_MS = 27; F_MC = 31; F_MA = 35; F_MD = 39; F_MWS = 43; F_MWC = 47; F_CLK = 51;
+F_DCO = 64; F_DCF = 65; F_PY = 66; F_ATK = 67; F_PY2 = 68;   // de-click: offset, flag, last two outputs, fade-in
+F_KW = 55; F_KL = 56; F_KLP = 57; F_KAP = 58; F_KG = 59; F_KPO = 60; F_KHP = 61; F_KX = 62; F_DT = 63;
+KSB = 30000; KSL = 4096;         // clavinet string delay lines, one per voice
+evq = 4000;                      // MIDI event queue
+cbuf = 8192; cmask = 8191;       // chorus delay line
+memset(VB, 0, NV * VS); memset(KSB, 0, NV * KSL); memset(cbuf, 0, 8192);
+age = 0; pedal = 0; modw = 0; cwp = 0; cps = 0; cpf = 0; mono_n = -1; mono_f = 0;
+
+function svf_set(f, q) instance(a1, a2, a3, k) local(g) (
+  g = tan($pi * min(f, srate * 0.45) / srate); k = 1 / q;
+  a1 = 1 / (1 + g * (g + k)); a2 = g * a1; a3 = g * a2;
+);
+function svf_bp(x) instance(a1, a2, a3, k, ic1, ic2) local(v1, v2, v3) (
+  v3 = x - ic2; v1 = a1 * ic1 + a2 * v3; v2 = ic2 + a2 * ic1 + a3 * v3;
+  ic1 = 2 * v1 - ic1; ic2 = 2 * v2 - ic2;
+  v1;
+);
+function tanh_(x) local(e) ( x = min(max(x, -20), 20); e = exp(2 * x); (e - 1) / (e + 1) );
+function blep(t, dt) (
+  t < dt ? ( t /= dt; t + t - t * t - 1; ) : t > 1 - dt ? ( t = (t - 1) / dt; t * t + t + t + 1; ) : 0;
+);
+function saw(p, dt) ( 2 * p - 1 - blep(p, dt) );
+function sqw(p, dt) local(q) ( q = p + 0.5; q >= 1 ? q -= 1; (p < 0.5 ? 1 : -1) + blep(p, dt) - blep(q, dt) );
+function tc(t) ( exp(-1 / (max(t, 0.0005) * srate)) );
+
+// ---------- the sounds: settings used when a key is struck ----------
+function patch_set(s) (
+  snd = s;
+  eng = s == 0 ? 1 : s == 1 ? 2 : (s == 2 || s >= 21) ? 3 : 0;      // 0 analogue, 1 FM, 2 plucked string, 3 struck bar
+  // analogue defaults
+  o2w = 0; det = 0.006; subl = 0; o2l = 1; fbase = 1200; famt = 1.5; fres = 0.2; ktrk = 0.5;
+  aA = 0.01; aD = 0.5; aS = 0.8; aR = 0.4; fA = 0.01; fD = 0.6; fS = 0.3; vib = 0; vibd = 0.4; mono = 0; glide = 0;
+  chor = 0.3; three = 0; flfo = 0; lvl = 0.5;
+  // layers (off by default): bell partials, plucked string, breath + chiff, osc 1 sine, formant "aah"
+  bl_lvl = 0; bR0 = 1; bR1 = 2; bR2 = 3; bR3 = 4; bA0 = 1; bA1 = 0.5; bA2 = 0.3; bA3 = 0.15; bD0 = 1; bD1 = 0.5; bD2 = 0.25; bD3 = 0.12;
+  ks_lvl = 0; ks_T = 1; ks_br = 0.4; ks_pick = 0; br_lvl = 0; chf = 0; o1w = 0; vamix = 1; form = 0;
+  trem_r = 5.5; trem_d = 0;
+  // struck bars: partial ratios, base level, extra with mallet hardness, decay (fraction of T), T at C5 (s), damper, click
+  mr0 = 1; mr1 = 2.756; mr2 = 5.404; mr3 = 8.933; ma0 = 1; ma1 = 0.22; ma2 = 0.08; ma3 = 0.04; mh1 = 0.25; mh2 = 0.15; mh3 = 0.08;
+  md0 = 1; md1 = 0.35; md2 = 0.14; md3 = 0.07; mT = 3.2; mrel = 1.5; mck = 0.1; mckh = 0.15;
+  s == 21 ? ( mr1 = 3.99; mr2 = 9.86; mr3 = 2; ma1 = 0.12; ma2 = 0.03; ma3 = 0; mh1 = 0.35; mh2 = 0.12; mh3 = 0;      // MARIMBA
+              md1 = 0.28; md2 = 0.1; md3 = 0.5; mT = 0.9; mrel = 0.5; mck = 0.12; mckh = 0.2; lvl = 1.0; ) :
+  s == 22 ? ( mr1 = 3.01; mr2 = 6.06; mr3 = 9.3; ma1 = 0.3; ma2 = 0.1; ma3 = 0.04; mh1 = 0.35; mh2 = 0.2; mh3 = 0.1;    // XYLOPHONE
+              md1 = 0.3; md2 = 0.12; md3 = 0.06; mT = 0.45; mrel = 0.3; mck = 0.2; mckh = 0.3; lvl = 1.1; ) :
+  s == 23 ? ( mr1 = 3.98; mr2 = 9.9; mr3 = 2; ma1 = 0.15; ma2 = 0.05; ma3 = 0; mh1 = 0.3; mh2 = 0.15; mh3 = 0;         // VIBRAPHONE
+              md1 = 0.35; md2 = 0.12; md3 = 0.5; mT = 4.5; mrel = 0.25; mck = 0.06; mckh = 0.12; trem_d = 0.35; chor = 0.2; lvl = 0.5; ) :
+  s == 24 ? ( mr1 = 5.4; mr2 = 15.6; mr3 = 2; ma1 = 0.1; ma2 = 0.04; ma3 = 0; mh1 = 0.35; mh2 = 0.2; mh3 = 0;          // KALIMBA
+              md1 = 0.08; md2 = 0.02; md3 = 0.5; mT = 1.6; mrel = 0.4; mck = 0.08; mckh = 0.1; lvl = 0.6; ) :
+  s == 25 ? ( mr1 = 2.005; mr2 = 2.99; mr3 = 4.02; ma1 = 0.45; ma2 = 0.25; ma3 = 0.1; mh1 = 0.3; mh2 = 0.2; mh3 = 0.1;  // STEEL PAN
+              md1 = 0.7; md2 = 0.45; md3 = 0.3; mT = 1.8; mrel = 0.5; mck = 0.05; mckh = 0.08; chor = 0.3; lvl = 0.42; ) :
+  s == 26 ? ( mr1 = 5.3; mr2 = 12.1; mr3 = 2; ma1 = 0.18; ma2 = 0.06; ma3 = 0.05; mh1 = 0.3; mh2 = 0.15; mh3 = 0.05;   // MUSIC BOX
+              md1 = 0.15; md2 = 0.05; md3 = 0.6; mT = 2.6; mrel = 1.2; mck = 0.05; mckh = 0.1; chor = 0.3; lvl = 0.5; );
+  s == 3 ? ( det = 0.009; fbase = 700; famt = 1.6; fres = 0.25; aA = 0.6; aD = 1; aS = 0.85; aR = 1.6; fA = 1.2; fD = 2; fS = 0.5; chor = 0.6; lvl = 0.3; ) :
+  s == 4 ? ( det = 0.004; subl = 0.6; o2l = 0.5; fbase = 420; famt = 0.8; fres = 0.12; aA = 0.9; aD = 1; aS = 0.9; aR = 2.2; fA = 1.5; fD = 2; fS = 0.6; chor = 0.9; flfo = 0.35; lvl = 0.32; ) :
+  s == 5 ? ( det = 0.003; o2w = 1; o2l = 0.5; subl = 0.8; fbase = 140; famt = 3.2; fres = 0.45; ktrk = 0.3; aA = 0.002; aD = 0.5; aS = 0.75; aR = 0.12; fA = 0.001; fD = 0.28; fS = 0.15; mono = 1; glide = 0.04; chor = 0; lvl = 0.55; ) :
+  s == 6 ? ( det = 0.005; fbase = 2200; famt = 0.6; fres = 0.1; ktrk = 0.8; aA = 0.35; aD = 1; aS = 0.9; aR = 0.8; fA = 0.4; fD = 1; fS = 0.7; vib = 5.3; vibd = 0.5; chor = 0.4; lvl = 0.3; ) :
+  s == 7 ? ( det = 0.002; fbase = 4500; famt = 0.3; fres = 0.05; ktrk = 0.6; aA = 0.06; aD = 1; aS = 1; aR = 0.9; fA = 0.05; fD = 1; fS = 0.8; chor = 0.55; three = 1; lvl = 0.28; ) :
+  s == 8 ? (   // BELL PAD
+    det = 0.008; fbase = 800; famt = 1; fres = 0.15; aA = 0.8; aD = 1; aS = 0.85; aR = 2.2; fA = 1; fD = 2; fS = 0.5; chor = 0.9; lvl = 0.3;
+    bl_lvl = 0.5; bR0 = 1; bR1 = 3.52; bR2 = 6.01; bR3 = 8.93; bA0 = 1; bA1 = 0.5; bA2 = 0.3; bA3 = 0.15; bD0 = 2.4; bD1 = 1; bD2 = 0.5; bD3 = 0.25;
+  ) : s == 9 ? (   // STACCATO CHOIR
+    det = 0.006; fbase = 1600; famt = 0.5; fres = 0.1; aA = 0.015; aD = 0.35; aS = 0.45; aR = 0.45; fA = 0.02; fD = 0.4; fS = 0.5; form = 1; chor = 0.8; lvl = 0.12;
+    bl_lvl = 0.35; bR0 = 2; bR1 = 4.1; bR2 = 6.8; bR3 = 9.6; bA0 = 1; bA1 = 0.5; bA2 = 0.3; bA3 = 0.15; bD0 = 0.5; bD1 = 0.3; bD2 = 0.2; bD3 = 0.12;
+  ) : s == 10 ? (  // PIZZ BELLS
+    vamix = 0; aA = 0.001; aD = 0.2; aS = 0; aR = 0.1; chor = 0.5; lvl = 0.6;
+    ks_lvl = 1; ks_T = 0.35; ks_br = 0.5; ks_pick = 0;
+    bl_lvl = 0.4; bR0 = 1; bR1 = 4; bR2 = 7.2; bR3 = 10.1; bA0 = 1; bA1 = 0.4; bA2 = 0.2; bA3 = 0.1; bD0 = 0.9; bD1 = 0.4; bD2 = 0.2; bD3 = 0.1;
+  ) : s == 11 ? (  // GLASS CHOIR
+    det = 0.007; fbase = 1300; famt = 0.4; fres = 0.08; aA = 0.7; aD = 1; aS = 0.9; aR = 1.8; fA = 0.8; fD = 1; fS = 0.8; form = 1; br_lvl = 0.12;
+    vib = 4.8; vibd = 0.45; chor = 1; lvl = 0.1;
+  ) : s == 12 ? (  // NYLON HAZE
+    vamix = 0.55; det = 0.007; fbase = 600; famt = 0.6; fres = 0.1; aA = 1.4; aD = 1; aS = 0.9; aR = 2; fA = 1.5; fD = 2; fS = 0.7; chor = 0.8; lvl = 0.34;
+    ks_lvl = 1.6; ks_T = 2.2; ks_br = 0.35; ks_pick = 0;
+  ) : s == 13 ? (  // SYNTH BRASS
+    det = 0.004; fbase = 280; famt = 2.8; fres = 0.15; aA = 0.03; aD = 0.3; aS = 0.85; aR = 0.25; fA = 0.09; fD = 0.55; fS = 0.45; chor = 0.35; lvl = 0.38;
+  ) : s == 14 ? (  // CRYSTAL HARP
+    vamix = 0.35; det = 0.006; fbase = 4000; famt = 0.2; fres = 0.05; aA = 0.5; aD = 1; aS = 0.8; aR = 1.8; fA = 0.5; fD = 1; fS = 0.8; chor = 1; lvl = 0.32;
+    bl_lvl = 0.55; bR0 = 1; bR1 = 2.005; bR2 = 4.02; bR3 = 7.13; bA0 = 1; bA1 = 0.45; bA2 = 0.3; bA3 = 0.12; bD0 = 3; bD1 = 1.6; bD2 = 0.8; bD3 = 0.3;
+  ) : s == 15 ? (  // SUB BASS: pure sine
+    o1w = 1; o2l = 0; det = 0; fbase = 400; famt = 0.3; fres = 0; ktrk = 0.5; aA = 0.003; aD = 0.5; aS = 0.9; aR = 0.12; fA = 0.001; fD = 0.3; fS = 0.5;
+    mono = 1; glide = 0.03; chor = 0; lvl = 0.9;
+  ) : s == 16 ? (  // ACID BASS: resonant saw, snappy envelope, slides
+    o2l = 0; det = 0; fbase = 180; famt = 3.6; fres = 0.82; ktrk = 0.4; fA = 0.001; fD = 0.18; fS = 0.05; aA = 0.002; aD = 0.4; aS = 0.8; aR = 0.08;
+    mono = 1; glide = 0.06; chor = 0; lvl = 0.6;
+  ) : s == 17 ? (  // ROUND BASS: saw + square + sub
+    det = 0.004; o2w = 1; o2l = 0.7; subl = 0.6; fbase = 220; famt = 1.8; fres = 0.3; fA = 0.001; fD = 0.35; fS = 0.25; aA = 0.002; aD = 0.6; aS = 0.85; aR = 0.1;
+    mono = 1; glide = 0.02; chor = 0; lvl = 0.5;
+  ) : s == 18 ? (  // PLUCK BASS: short and punchy, polyphonic
+    det = 0.003; o2l = 0.6; subl = 0.5; fbase = 160; famt = 3; fres = 0.25; fA = 0.001; fD = 0.12; fS = 0; aA = 0.001; aD = 0.35; aS = 0; aR = 0.1;
+    chor = 0; lvl = 0.6;
+  ) : s == 19 ? (  // HOLLOW BASS: sine + square
+    o1w = 1; o2w = 1; o2l = 1; det = 0; fbase = 600; famt = 0.8; fres = 0.1; fA = 0.001; fD = 0.4; fS = 0.4; aA = 0.002; aD = 0.5; aS = 0.8; aR = 0.1;
+    mono = 1; glide = 0.03; chor = 0; lvl = 0.55;
+  ) : s == 20 ? (  // REESE BASS: wide detuned saws
+    det = 0.018; o2l = 1; subl = 0.4; fbase = 350; famt = 0.5; fres = 0.2; fA = 0.01; fD = 1; fS = 0.8; aA = 0.005; aD = 1; aS = 0.95; aR = 0.15;
+    mono = 1; glide = 0.03; chor = 0.2; lvl = 0.5;
+  );
+);
+
+// ---------- plucked string: set up and run (clavinet and the pluck layers) ----------
+function ks_setup(v, b, f0, vg, h, Ts, bright, pick) local(L, x, j, rr, x2_) (
+  L = srate / f0;
+  b[F_KL] = L; b[F_KW] = floor(L); b[F_KLP] = 0; b[F_KAP] = 0; b[F_KHP] = 0; b[F_KX] = 0; b[F_O3] = 1;
+  b[F_KG] = 10 ^ (-3 / (Ts * f0));
+  b[F_KPO] = pick ? max(floor(L * 0.13), 1) : 0;
+  x = 0; x2_ = 0; j = 0;
+  loop(min(ceil(L) + 2, KSL),
+    rr = rand(2) - 1; x += (rr - x) * (bright * (0.3 + 0.7 * h));   // softer pluck when played gently
+    x2_ += (x - x2_) * 0.6;
+    KSB[v * KSL + j] = x2_ * vg * 0.45 * sin($pi * min(j / L, 1)) * (j < L * 0.5 ? 1 : 0.7);
+    j += 1;
+  );
+);
+function ks_tick(av, b, pick, bite) local(lc_, L, Li, fr, w_, ofs, rp, sv, ac, ap, lpv, gk, pq, y) (
+  lc_ = 0.72 + 0.26 * tone;                                   // loop brightness
+  L = b[F_KL] / pdrift - (1 - lc_) / lc_;                     // minus the loop filter delay
+  Li = floor(L); fr = L - Li; fr < 0.1 ? ( Li -= 1; fr += 1; );
+  w_ = b[F_KW]; ofs = av * KSL;
+  rp = w_ - Li; rp < 0 ? rp += KSL;
+  sv = KSB[ofs + rp];
+  ac = (1 - fr) / (1 + fr);                                   // fractional delay (first-order allpass)
+  ap = ac * sv + b[F_KX] - ac * b[F_KAP];
+  b[F_KX] = sv; b[F_KAP] = ap;
+  lpv = b[F_KLP] + (ap - b[F_KLP]) * lc_;
+  b[F_KLP] = lpv;
+  gk = held ? b[F_KG] : b[F_KG] * 0.8;                       // the damper: a fast stop when the key lifts
+  KSB[ofs + w_] = lpv * gk;
+  b[F_KW] = (w_ + 1) % KSL;
+  pick ? ( pq = w_ - b[F_KPO]; pq < 0 ? pq += KSL; y = sv - KSB[ofs + pq]; ) : y = sv;
+  b[F_KHP] += (y - b[F_KHP]) * 0.02; y -= b[F_KHP];
+  y = bite ? tanh_(y * 1.5) * 3.5 : y * 2.2;
+  b[F_O3] = b[F_O3] * 0.9995 + abs(y) * 0.0005;              // level tracker
+  y;
+);
+// bell partials (glockenspiel and the bell layers)
+function bell_set(b, f0, vg, h, ratio, amp, dk, k) local(w) (
+  w = 2 * $pi * min(f0 * ratio, srate * 0.45) / srate;
+  b[F_MS + k] = 0; b[F_MC + k] = 1; b[F_MWS + k] = sin(w); b[F_MWC + k] = cos(w);
+  b[F_MA + k] = f0 * ratio < srate * 0.45 ? amp : 0; b[F_MD + k] = tc(dk);
+);
+function bell_tick(b, rel) local(k, s_, y) (
+  k = 0; y = 0; bell_amp = 0;
+  loop(4,
+    s_ = b[F_MS + k] * b[F_MWC + k] + b[F_MC + k] * b[F_MWS + k];
+    b[F_MC + k] = b[F_MC + k] * b[F_MWC + k] - b[F_MS + k] * b[F_MWS + k];
+    b[F_MS + k] = s_;
+    b[F_MA + k] *= b[F_MD + k] * rel;
+    y += s_ * b[F_MA + k]; bell_amp += b[F_MA + k];
+    k += 1;
+  );
+  y;
+);
+
+// ---------- voices ----------
+function vfree() local(v, best, ba) (
+  best = -1; v = 0;
+  loop(NV, best < 0 && !VB[v * VS + F_ACT] ? best = v; v += 1; );
+  best < 0 ? ( ba = 1000000000; v = 0; loop(NV, (VB[v * VS + F_AGE] + (VB[v * VS + F_G] ? 100000000 : 0)) < ba ? ( ba = VB[v * VS + F_AGE] + (VB[v * VS + F_G] ? 100000000 : 0); best = v; ); v += 1; ); );
+  best;
+);
+
+function note_on(n, vel) local(v, b, f0, vg, h, Tn, j, k, L, x, rr, ratio, amp, dk, w, was) (
+  f0 = 440 * 2 ^ ((n - 69) / 12) * tune;
+  vg = (1 - sens) + sens * (vel / 127) ^ 1.3;
+  h = vel / 127;
+  mono && eng == 0 ? (
+    v = 0;                                   // mono: always voice 0, glide from the last note
+    b = VB;
+    b[F_DCF] = 1; !b[F_ACT] ? ( b[F_PY] = 0; b[F_PY2] = 0; b[F_DCO] = 0; ); b[F_ATK] = 1;
+    mono_n >= 0 && b[F_ACT] && b[F_AE] > 0.01 ? ( b[F_F0] = f0; b[F_G] = 1; b[F_N] = n; b[F_VEL] = vg; mono_n = n; ) : (
+      was = b[F_ACT];                        // still ringing: rise from where it is
+      b[F_N] = n; b[F_G] = 1; b[F_S] = 0; b[F_ACT] = 1; b[F_VEL] = vg; b[F_F0] = f0; mono_f = f0;
+      b[F_DT] = 1; b[F_VT] = 0; !was ? ( b[F_AE] = 0; b[F_FE] = 0; );
+      b[F_AST] = 0; b[F_FST] = 0; mono_n = n;
+    );
+  ) : (
+  // re-strike the same key on the same voice, else a free / old one
+  v = -1; k = 0; loop(NV, VB[k * VS + F_N] == n && VB[k * VS + F_ACT] ? v = k; k += 1; );
+  v < 0 ? v = vfree();
+  b = VB + v * VS;
+  age += 1; b[F_AGE] = age;
+  was = b[F_ACT];                                          // re-struck / reused while still sounding?
+  b[F_DCF] = 1; !was ? ( b[F_PY] = 0; b[F_PY2] = 0; b[F_DCO] = 0; );
+  b[F_ATK] = eng == 0 && ks_lvl == 0 && bl_lvl == 0 ? 1 : 0;   // struck / plucked sounds get a short fade-in
+  b[F_N] = n; b[F_G] = 1; b[F_S] = 0; b[F_ACT] = 1; b[F_VEL] = vg; b[F_F0] = f0;
+  b[F_DT] = 1 + (rand(2) - 1) * drift * 0.006;             // analogue: each note slightly out (up to ~10 cents)
+  b[F_E1] = (rand(2) - 1) * drift * 0.35;                   // ... and slightly brighter / darker
+  b[F_AST] = 0; b[F_FST] = 0; b[F_VT] = 0; !was ? b[F_FE] = 0;
+  eng == 0 ? (
+    // a sounding voice keeps its oscillators and rises from where it is; a fresh one starts clean
+    !was ? ( b[F_P1] = rand(1); b[F_P2] = rand(1); b[F_P3] = rand(1); b[F_AE] = 0; b[F_O1] = 0; b[F_O2] = 0; b[F_O3] = 0; );
+    // attack / extra layers
+    Tn = 2 ^ (-(n - 72) / 24) * dec_k;
+    k = 0; loop(4, b[F_MA + k] = 0; k += 1; );
+    bl_lvl > 0 ? (
+      bell_set(b, f0, vg, h, bR0, vg * bl_lvl * bA0,              bD0 * Tn, 0);
+      bell_set(b, f0, vg, h, bR1, vg * bl_lvl * bA1 * (0.5 + h), bD1 * Tn, 1);
+      bell_set(b, f0, vg, h, bR2, vg * bl_lvl * bA2 * (0.4 + h), bD2 * Tn, 2);
+      bell_set(b, f0, vg, h, bR3, vg * bl_lvl * bA3 * (0.3 + h), bD3 * Tn, 3);
+    );
+    ks_lvl > 0 ? ks_setup(v, b, f0, vg * ks_lvl, h, ks_T * 2 ^ (-(n - 60) / 24) * dec_k, ks_br, ks_pick);
+    b[F_CLK] = chf * vg;
+  ) :
+  eng == 1 ? (
+    // FM e-piano: carriers C1 (body) and C3 (tine), modulators M2 (ratio 1) and M4 (ratio 14)
+    !was ? ( b[F_O1] = 0; b[F_O2] = 0; b[F_O3] = 0; b[F_O4] = 0; );
+    Tn = 4.5 * 2 ^ (-(n - 48) / 20);
+    b[F_E1] = vg; b[F_E2] = 0.9 + 1.6 * h; b[F_E3] = vg * 0.55; b[F_E4] = 0.6 + 2.2 * h * h;
+    b[F_MD] = tc(Tn * dec_k); b[F_MD + 1] = tc(Tn * 0.35 * dec_k); b[F_MD + 2] = tc(Tn * 0.4 * dec_k); b[F_MD + 3] = tc(0.09 + 0.05 * (1 - h));
+    b[F_AE] = 1;
+  ) : eng == 2 ? (
+    // clavinet: a bright pluck, pickup near the string's end
+    ks_setup(v, b, f0, vg, h, 4 * 2 ^ (-(n - 48) / 24) * dec_k, 0.4, 1);
+    b[F_AE] = 1;
+  ) : (
+    // struck bar: 4 partials from the sound's table
+    Tn = mT * 2 ^ (-(n - 72) / 24) * dec_k;
+    bell_set(b, f0, vg, h, mr0, vg * ma0,                Tn * md0, 0);
+    bell_set(b, f0, vg, h, mr1, vg * (ma1 + mh1 * h),    Tn * md1, 1);
+    bell_set(b, f0, vg, h, mr2, vg * (ma2 + mh2 * h),    Tn * md2, 2);
+    bell_set(b, f0, vg, h, mr3, vg * (ma3 + mh3 * h),    Tn * md3, 3);
+    b[F_CLK] = vg * (mck + mckh * h);                      // mallet click
+    b[F_AE] = 1;
+  );
+  );
+);
+function note_off(n) local(v, b) (
+  v = 0; loop(NV, b = VB + v * VS; b[F_N] == n && b[F_G] ? ( b[F_G] = 0; b[F_S] = pedal; ); v += 1; );
+  mono && n == mono_n ? mono_n = -1;
+);
+function pedal_set(on) local(v) ( pedal = on; !on ? ( v = 0; loop(NV, VB[v * VS + F_S] = 0; v += 1; ); ); );
+function all_off() local(v) ( v = 0; loop(NV, VB[v * VS + F_G] = 0; VB[v * VS + F_S] = 0; v += 1; ); pedal = 0; );
+function kill_all() ( memset(VB, 0, NV * VS); memset(KSB, 0, NV * KSL); pedal = 0; mono_n = -1; );
+
+// ---------- reverb (GFX Space engine) ----------
+rv_a = 96000;                                 // small arrays: 8 per field
+rlw = rv_a; rlz = rv_a + 10; rlph = rv_a + 20; rlrt = rv_a + 30; rllen = rv_a + 40; rlga = rv_a + 50; rlgb = rv_a + 60;
+rapw = rv_a + 70; rapl = rv_a + 80; rbl = rv_a + 90; rtmp = rv_a + 100; rmix = rv_a + 110;
+memset(rv_a, 0, 120);
+rbl[0] = 31.7; rbl[1] = 37.1; rbl[2] = 41.3; rbl[3] = 47.9; rbl[4] = 53.3; rbl[5] = 61.1; rbl[6] = 70.7; rbl[7] = 79.3;
+rapl[0] = 142; rapl[1] = 107; rapl[2] = 379; rapl[3] = 277;
+i = 0; loop(8, rlrt[i] = 0.31 + 0.11 * i; rlph[i] = rand(1); i += 1; );
+RBLK = ceil(0.16 * srate) + 16;
+rpre_b = 100000; rpre_len = ceil(0.16 * srate) + 8;
+rap_b = rpre_b + rpre_len;                    // 4 diffusers, rings of 4096
+rln_b = rap_b + 4 * 4096;                     // 8 lines
+memset(rpre_b, 0, rln_b + 8 * RBLK - rpre_b);
+rpre_w = 0; rv_on = 0;
+function rv_update() local(i, sz, L, gl, gh, a, t60) (
+  rtyp = slider19;
+  sz = rtyp == 0 ? 0.42 : rtyp == 1 ? 1 : 0.55;
+  rdiff = rtyp == 2 ? 0.95 : 0.75;
+  rpre = slider20 * 0.001 * srate;
+  t60 = slider21 * 1.11;
+  rmod = rtyp == 2 ? 0.0004 : 0.0008;
+  i = 0;
+  loop(8,
+    L = min(rbl[i] * sz * 0.001 * srate, RBLK - 64);
+    rllen[i] = L;
+    gl = 10 ^ (-3 * L / (t60 * srate));
+    gh = 10 ^ (-3 * L / (t60 * (1 - 0.9 * slider22 / 100) * srate * (rtyp == 2 ? 1.4 : 1)));
+    a = (gl - gh) / (gl + gh); rlga[i] = a; rlgb[i] = gl * (1 - a);
+    i += 1;
+  );
+  rv_wet = slider23 / 100;
+  rv_on = rv_wet > 0.001;
+);
+
+function update() (
+  slider1 != snd ? (
+    snd >= 0 ? (
+      // a new sound starts from its own settings: the sound-shaping knobs go back to neutral
+      slider17 = 0; slider18 = 0; slider2 = 50; slider3 = 100; slider4 = 100; slider5 = 100;
+      sliderchange(slider2); sliderchange(slider3); sliderchange(slider4); sliderchange(slider5);
+      sliderchange(slider17); sliderchange(slider18);
+    );
+    kill_all(); patch_set(slider1);
+  );
+  tone = slider2 / 100;
+  atk_k = slider3 / 100; rel_k = slider4 / 100; dec_k = 1;
+  chor_k = slider5 / 100;
+  sens = slider6 / 100;
+  tune = 2 ^ (slider7 / 1200);
+  drift = slider8 / 100;
+  chan = slider9;
+  out_t = 10 ^ (slider10 / 20);
+  ost_setup(slider11 / 100, slider12 / 100, slider13, slider14, slider15, slider16);
+  filt_oct = slider17; reso = slider18 / 100;
+  rv_update();
+);
+
+// ---------- sound names + menu order (grouped) ----------
+function sname(i) (
+  i == 0 ? "FM E-PIANO" : i == 1 ? "CLAVINET" : i == 2 ? "GLOCKENSPIEL" : i == 3 ? "SYNTH PAD" :
+  i == 4 ? "WARM PAD" : i == 5 ? "BASS SYNTH" : i == 6 ? "STRINGS" : i == 7 ? "STRING ENSEMBLE" :
+  i == 8 ? "BELL PAD" : i == 9 ? "STACCATO CHOIR" : i == 10 ? "PIZZ BELLS" : i == 11 ? "GLASS CHOIR" :
+  i == 12 ? "NYLON HAZE" : i == 13 ? "SYNTH BRASS" : i == 14 ? "CRYSTAL HARP" : i == 15 ? "SUB BASS" :
+  i == 16 ? "ACID BASS" : i == 17 ? "ROUND BASS" : i == 18 ? "PLUCK BASS" : i == 19 ? "HOLLOW BASS" : i == 20 ? "REESE BASS" :
+  i == 21 ? "MARIMBA" : i == 22 ? "XYLOPHONE" : i == 23 ? "VIBRAPHONE" : i == 24 ? "KALIMBA" : i == 25 ? "STEEL PAN" : "MUSIC BOX";
+);
+mord = 900;   // keys & mallets | pads & choirs | bass & brass | strings & winds
+NSND = 27;   // keys | mallets | pads & choirs | bass & brass | strings
+mord[0] = 0; mord[1] = 1;
+mord[2] = 2; mord[3] = 21; mord[4] = 22; mord[5] = 23; mord[6] = 24; mord[7] = 25; mord[8] = 26; mord[9] = 14; mord[10] = 10;
+mord[11] = 3; mord[12] = 4; mord[13] = 8; mord[14] = 11; mord[15] = 9; mord[16] = 12;
+mord[17] = 5; mord[18] = 15; mord[19] = 16; mord[20] = 17; mord[21] = 18; mord[22] = 19; mord[23] = 20; mord[24] = 13;
+mord[25] = 6; mord[26] = 7;
+
+// ---------- state ----------
+drP.drift_init(0.8 + rand(0.5));
+ost_init(90000); ostL.ost_ch_init(); ostR.ost_ch_init();
+
+
+fA1.svf_set(730, 5); fA2.svf_set(1090, 7); fA3.svf_set(2440, 9);
+sm = 1 - exp(-1 / (0.03 * srate));
+pkL = 0; pkR = 0; midi_led = 0; nact = 0; vph = 0; flph = 0;
+ui_thm = 12; ui_hw = 1;  // defaults for new instances: Olive, hardware
+ui_kstyle = 1;
+snd = -1;
+update();
+out_s = out_t;
+
+@slider
+update();
+
+@block
+evn = 0;
+while (midirecv(mofs, m1, m2, m3)) (
+  stt = m1 & 0xF0; mch = (m1 & 0x0F) + 1;
+  (chan == 0 || mch == chan) && evn < 512 ? (
+    evq[evn * 4] = mofs; evq[evn * 4 + 1] = stt; evq[evn * 4 + 2] = m2; evq[evn * 4 + 3] = m3; evn += 1;
+  );
+  midisend(mofs, m1, m2, m3);
+);
+evi = 0; spos = 0;
+panic_req ? ( all_off(); panic_req = 0; );
+update();
+vD = drP.drift_tick(0.35 * samplesblock / srate);
+pdrift = 1 + drift * 0.004 * vD;                 // the whole instrument wanders a few cents
+// envelope coefficients (with the ATTACK / RELEASE macros)
+a_inc = 1 / max(max(aA * atk_k, 0.003) * srate, 1);      // never faster than 3 ms (no click)
+fi_step = 1 / ((eng == 1 ? 0.003 : 0.002) * srate); dc_k = exp(-1 / (0.002 * srate));
+f_inc = 1 / max(max(fA * atk_k, 0.002) * srate, 1);
+a_dec = tc(aD); a_rel = tc(aR * rel_k);
+f_dec = tc(fD);
+gl_c = glide > 0 ? 1 - exp(-1 / (glide * srate)) : 1;
+fm_rel = tc(0.28 * rel_k); ks_damp = 0.6; gl_rel = tc((eng == 3 ? mrel : 1.5) * rel_k); chf_d = tc(0.03);
+tone_oct = (tone - 0.5) * 3;                     // TONE: +/- 1.5 octaves on filters / brightness
+// output filter for the FM / string / bar sounds (FILTER 0 and no RESONANCE = bypassed)
+gf_on = eng != 0 && (filt_oct < -0.01 || reso > 0.005);
+gf_g = tan($pi * min(18000 * 2 ^ filt_oct, srate * 0.45) / srate); gf_k = 2 - 1.9 * reso;
+gf_a1 = 1 / (1 + gf_g * (gf_g + gf_k)); gf_a2 = gf_g * gf_a1; gf_a3 = gf_g * gf_a2;
+// analogue sounds: the knobs move each note's filter
+va_res = fres + reso * (1.02 - fres);
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+
+@sample
+while (evi < evn && evq[evi * 4] <= spos) (
+  e1 = evq[evi * 4 + 1]; e2 = evq[evi * 4 + 2]; e3 = evq[evi * 4 + 3];
+  e1 == 0x90 && e3 > 0 ? ( note_on(e2, e3); midi_led = 1; ) :
+  e1 == 0x80 || e1 == 0x90 ? note_off(e2) :
+  e1 == 0xB0 ? (
+    e2 == 64 ? pedal_set(e3 >= 64);
+    e2 == 1 ? modw = e3 / 127;
+    e2 == 120 || e2 == 123 ? all_off();
+  );
+  evi += 1;
+);
+spos += 1;
+
+nz = rand(2) - 1;
+vph += (vib > 0 ? vib : 5.5) / srate; vph >= 1 ? vph -= 1;
+flph += 0.13 / srate; flph >= 1 ? flph -= 1;
+mix = 0; nact = 0;
+av = 0;
+loop(NV,
+  b = VB + av * VS;
+  b[F_ACT] ? (
+    nact += 1;
+    held = b[F_G] || b[F_S];
+    y = 0;
+    eng == 0 ? (
+      // ---------- analogue voice ----------
+      mono ? ( mono_f += (b[F_F0] - mono_f) * gl_c; f = mono_f; ) : f = b[F_F0];
+      b[F_VT] = min(b[F_VT] + 1 / (0.6 * srate), 1);                         // delayed vibrato
+      f *= b[F_DT] * pdrift * (1 + (vibd * 0.006 * b[F_VT] * (vib > 0) + modw * 0.008) * sin(2 * $pi * vph));
+      dt = f / srate;
+      b[F_P1] += dt * (1 + det); b[F_P1] >= 1 ? b[F_P1] -= 1;
+      b[F_P2] += dt * (1 - det); b[F_P2] >= 1 ? b[F_P2] -= 1;
+      b[F_P3] += dt * 0.5;       b[F_P3] >= 1 ? b[F_P3] -= 1;
+      x = (o1w ? 1.2 * sin(2 * $pi * b[F_P1]) : saw(b[F_P1], dt * (1 + det))) + o2l * (o2w ? sqw(b[F_P2], dt) : saw(b[F_P2], dt * (1 - det))) + subl * sqw(b[F_P3], dt * 0.5);
+      // envelopes
+      held ? (
+        b[F_AST] == 0 ? ( b[F_AE] += a_inc; b[F_AE] >= 1 ? ( b[F_AE] = 1; b[F_AST] = 1; ); ) : b[F_AE] = aS + (b[F_AE] - aS) * a_dec;
+        b[F_FST] == 0 ? ( b[F_FE] += f_inc; b[F_FE] >= 1 ? ( b[F_FE] = 1; b[F_FST] = 1; ); ) : b[F_FE] = fS + (b[F_FE] - fS) * f_dec;
+      ) : ( b[F_AE] *= a_rel; b[F_FE] *= a_rel; );
+      // 4-pole filter
+      fc = fbase * 2 ^ (famt * b[F_FE] * (0.6 + 0.4 * b[F_VEL]) + tone_oct + filt_oct + b[F_E1] + ktrk * log(f / 261.6) / log(2) + flfo * sin(2 * $pi * flph));
+      g = tan($pi * min(fc, srate * 0.42) / srate); gG = g / (1 + g);
+      u = tanh_(x * 0.5 - va_res * 3.9 * b[F_S4]);
+      v_ = (u - b[F_S1]) * gG; y1 = v_ + b[F_S1]; b[F_S1] = y1 + v_;
+      v_ = (y1 - b[F_S2]) * gG; y2 = v_ + b[F_S2]; b[F_S2] = y2 + v_;
+      v_ = (y2 - b[F_S3]) * gG; y3 = v_ + b[F_S3]; b[F_S3] = y3 + v_;
+      v_ = (y3 - b[F_S4]) * gG; y4 = v_ + b[F_S4]; b[F_S4] = y4 + v_;
+      y = y4 * b[F_AE] * b[F_VEL] * 2 * (1 + 0.8 * va_res) * vamix;
+      // attack / extra layers
+      bl_lvl > 0 ? y += 0.6 * bell_tick(b, held ? 1 : gl_rel) : bell_amp = 0;
+      ks_lvl > 0 ? y += ks_tick(av, b, ks_pick, 0) : b[F_O3] = 0;
+      br_lvl > 0 || b[F_CLK] > 0.0005 ? (
+        b[F_O1] += (nz - b[F_O1]) * 0.35; b[F_O2] += (b[F_O1] - b[F_O2]) * 0.03;      // breath band
+        y += (b[F_O1] - b[F_O2]) * (br_lvl * b[F_AE] * b[F_VEL] + b[F_CLK]);
+        b[F_CLK] *= chf_d;
+      );
+      !held && b[F_AE] < 0.0003 && bell_amp < 0.0003 && b[F_O3] < 0.0002 ? (
+        b[F_ACT] = 0; ks_lvl > 0 ? memset(KSB + av * KSL, 0, KSL);
+      );
+    ) : eng == 1 ? (
+      // ---------- FM e-piano ----------
+      f = b[F_F0] * pdrift * (1 + modw * 0.008 * sin(2 * $pi * vph));
+      b[F_O1] += f / srate;          b[F_O1] -= floor(b[F_O1]);
+      b[F_O2] += f / srate;          b[F_O2] -= floor(b[F_O2]);
+      b[F_O3] += f * 1.0017 / srate; b[F_O3] -= floor(b[F_O3]);
+      b[F_O4] += f * 14 / srate;     b[F_O4] -= floor(b[F_O4]);
+      br = 2 ^ (tone_oct * 0.5);
+      m2 = sin(2 * $pi * b[F_O2]) * b[F_E2] * br;
+      m4 = sin(2 * $pi * b[F_O4]) * b[F_E4] * br;
+      y = (0.62 * sin(2 * $pi * b[F_O1] + m2) * b[F_E1] + 0.42 * sin(2 * $pi * b[F_O3] + m4) * b[F_E3]);
+      rm = held ? 1 : fm_rel;
+      b[F_E1] *= b[F_MD] * rm; b[F_E2] *= b[F_MD + 1]; b[F_E3] *= b[F_MD + 2] * rm; b[F_E4] *= b[F_MD + 3];
+      y *= 0.6;
+      b[F_E1] + b[F_E3] < 0.0003 ? b[F_ACT] = 0;
+    ) : eng == 2 ? (
+      // ---------- clavinet string ----------
+      y = ks_tick(av, b, 1, 1);
+      !held && b[F_O3] < 0.0002 ? ( b[F_ACT] = 0; memset(KSB + av * KSL, 0, KSL); );
+    ) : (
+      // ---------- glockenspiel bar ----------
+      y = bell_tick(b, held ? 1 : gl_rel); amp = bell_amp;
+      b[F_CLK] > 0.0005 ? ( b[F_KHP] += (nz - b[F_KHP]) * 0.45; y += (nz - b[F_KHP]) * b[F_CLK]; b[F_CLK] *= 0.993; );
+      y *= 0.6;
+      amp < 0.0003 && b[F_CLK] < 0.0005 ? b[F_ACT] = 0;
+    );
+    // de-click: fade-in for struck sounds, and any jump at a (re)start is smoothed over ~2 ms
+    b[F_ATK] < 1 ? ( b[F_ATK] = min(b[F_ATK] + fi_step, 1); y *= b[F_ATK]; );
+    b[F_DCF] ? ( b[F_DCO] = 2 * b[F_PY] - b[F_PY2] - y; b[F_DCF] = 0; );   // continue the waveform's own slope
+    y += b[F_DCO]; b[F_DCO] *= dc_k;
+    b[F_PY2] = b[F_PY]; b[F_PY] = y;
+    mix += y;
+  );
+  av += 1;
+);
+mix *= lvl;
+trem_d > 0 ? (                                    // vibraphone motor
+  tph += trem_r / srate; tph >= 1 ? tph -= 1;
+  mix *= 1 - trem_d * (0.5 + 0.5 * sin(2 * $pi * tph));
+);
+form ? (
+  // "aah": three vocal formants
+  fo1 = fA1.svf_bp(mix); fo2 = fA2.svf_bp(mix); fo3 = fA3.svf_bp(mix);
+  mix = 0.25 * mix + 1.6 * fo1 + 1.1 * fo2 + 0.7 * fo3;
+);
+gf_on ? (
+  gv3 = mix - gf2; gv1 = gf_a1 * gf1 + gf_a2 * gv3; gv2 = gf2 + gf_a2 * gf1 + gf_a3 * gv3;
+  gf1 = 2 * gv1 - gf1; gf2 = 2 * gv2 - gf2;
+  mix = gv2;
+) : ( gf1 = 0; gf2 = 0; );
+
+// chorus / three-phase ensemble
+cbuf[cwp] = mix;
+ca = chor * chor_k;
+ca > 0.001 ? (
+  cps += 0.6 / srate; cps >= 1 ? cps -= 1;
+  cpf += 5.5 / srate; cpf >= 1 ? cpf -= 1;
+  aj = 0; t0 = 0; t1 = 0; t2 = 0;
+  loop(3,
+    d_ = (0.007 + (0.0017 * sin(2 * $pi * cps + aj * 2.0944) + (three ? 0.0004 * sin(2 * $pi * cpf + aj * 2.0944) : 0)) * min(ca, 1.5)) * srate;
+    rp2 = cwp - d_; ri = floor(rp2); rf = rp2 - ri;
+    tv = cbuf[ri & cmask] * (1 - rf) + cbuf[(ri + 1) & cmask] * rf;
+    aj == 0 ? t0 = tv : aj == 1 ? t1 = tv : t2 = tv;
+    aj += 1;
+  );
+  wet = min(ca, 1);
+  oL = mix * (1 - 0.5 * wet) + wet * (t0 + 0.5 * t1) * 0.7;
+  oR = mix * (1 - 0.5 * wet) + wet * (t2 + 0.5 * t1) * 0.7;
+) : ( oL = mix; oR = mix; );
+cwp = (cwp + 1) & cmask;
+
+// ---------- reverb send ----------
+rv_on || rv_tail > 0.00001 ? (
+  rin = 0.5 * (oL + oR) * (rv_on ? 1 : 0);
+  rpre_b[rpre_w] = rin;
+  rq = rpre_w - floor(rpre); rq < 0 ? rq += rpre_len;
+  rd = rpre_b[rq];
+  rpre_w += 1; rpre_w >= rpre_len ? rpre_w = 0;
+  ak = 0;
+  loop(4,
+    rn = floor(rapl[ak] * srate / 48000 * (0.6 + 0.4 * rdiff));
+    ro = rap_b + ak * 4096; rw = rapw[ak];
+    rr = rw - rn; rr < 0 ? rr += 4096;
+    rbv = ro[rr]; ryv = -rdiff * 0.75 * rd + rbv; ro[rw] = rd + rdiff * 0.75 * ryv; rd = ryv;
+    rapw[ak] = (rw + 1) % 4096;
+    ak += 1;
+  );
+  ak = 0;
+  loop(8,
+    rlph[ak] += rlrt[ak] / srate; rlph[ak] >= 1 ? rlph[ak] -= 1;
+    rm = rmod * srate * sin(2 * $pi * rlph[ak]);
+    rp3 = rlw[ak] - rllen[ak] - rm; rp3 < 0 ? rp3 += RBLK;
+    ri3 = floor(rp3); rf3 = rp3 - ri3; ro = rln_b + ak * RBLK;
+    rv3 = ro[ri3 % RBLK] * (1 - rf3) + ro[(ri3 + 1) % RBLK] * rf3;
+    rlz[ak] = rlgb[ak] * rv3 + rlga[ak] * rlz[ak];
+    rtmp[ak] = rlz[ak];
+    ak += 1;
+  );
+  ra0 = rtmp[0]; ra1 = rtmp[1]; ra2 = rtmp[2]; ra3 = rtmp[3]; ra4 = rtmp[4]; ra5 = rtmp[5]; ra6 = rtmp[6]; ra7 = rtmp[7];
+  rb0 = ra0 + ra1; rb1 = ra0 - ra1; rb2 = ra2 + ra3; rb3 = ra2 - ra3; rb4 = ra4 + ra5; rb5 = ra4 - ra5; rb6 = ra6 + ra7; rb7 = ra6 - ra7;
+  rc0 = rb0 + rb2; rc1 = rb1 + rb3; rc2 = rb0 - rb2; rc3 = rb1 - rb3; rc4 = rb4 + rb6; rc5 = rb5 + rb7; rc6 = rb4 - rb6; rc7 = rb5 - rb7;
+  rmix[0] = (rc0 + rc4) * 0.35355339; rmix[1] = (rc1 + rc5) * 0.35355339; rmix[2] = (rc2 + rc6) * 0.35355339; rmix[3] = (rc3 + rc7) * 0.35355339;
+  rmix[4] = (rc0 - rc4) * 0.35355339; rmix[5] = (rc1 - rc5) * 0.35355339; rmix[6] = (rc2 - rc6) * 0.35355339; rmix[7] = (rc3 - rc7) * 0.35355339;
+  ak = 0;
+  loop(8,
+    ro = rln_b + ak * RBLK;
+    ro[rlw[ak]] = rmix[ak] + rd * (ak & 1 ? -0.5 : 0.5);
+    rlw[ak] += 1; rlw[ak] >= RBLK ? rlw[ak] = 0;
+    ak += 1;
+  );
+  rvL = (ra0 - ra2 + ra4 - ra6 + 0.5 * (ra1 + ra5)) * 0.5;
+  rvR = (ra1 - ra3 + ra5 - ra7 + 0.5 * (ra2 - ra6)) * 0.5;
+  rv_tail = max(abs(rvL), abs(rvR)) * 0.001 + rv_tail * 0.999;
+  oL += rvL * rv_wet * 0.6; oR += rvR * rv_wet * 0.6;
+);
+
+out_s += (out_t - out_s) * sm;
+oL = ostL.ost_band(oL) * out_s;
+oR = ostR.ost_band(oR) * out_s;
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 640 520
+ui_begin(640, 520);
+ui_header("PALETTE");
+
+ui_theme_picker(200 * sc, 15 * sc);
+ui_size_picker(304 * sc, 13 * sc);
+ui_hw_toggle(364 * sc, 13 * sc);
+ui_noled = 1;
+ui_button(554 * sc, 10 * sc, 70 * sc, 24 * sc, "PANIC", 0, 1) ? panic_req = 1;
+
+// ---------- SOUND: grouped drop-down + previous / next (in menu order) ----------
+ui_group(16 * sc, 52 * sc, 608 * sc, 44 * sc, 0, "");
+ui_noled = 1; ui_button(44 * sc, 60 * sc, 34 * sc, 28 * sc, "<", 0, 1) ? (
+  i = 0; pos_ = 0; loop(NSND, mord[i] == slider1 ? pos_ = i; i += 1; );
+  slider1 = mord[(pos_ + NSND - 1) % NSND]; slider_automate(slider1);
+);
+ui_noled = 1;
+ui_button(82 * sc, 60 * sc, 220 * sc, 28 * sc, sname(slider1), 0, 1) ? (
+  gfx_x = 82 * sc; gfx_y = 88 * sc;
+  #sm = "";
+  i = 0;
+  loop(NSND,
+    i == 0 ? strcat(#sm, ">Keys|") : i == 2 ? strcat(#sm, ">Mallets|") : i == 11 ? strcat(#sm, ">Pads & Choirs|") :
+    i == 17 ? strcat(#sm, ">Bass & Brass|") : i == 25 ? strcat(#sm, ">Strings|");
+    (i == 1 || i == 10 || i == 16 || i == 24 || i == 26) ? strcat(#sm, "<");
+    slider1 == mord[i] ? strcat(#sm, "!");
+    strcat(#sm, sname(mord[i]));
+    i < NSND - 1 ? strcat(#sm, "|");
+    i += 1;
+  );
+  sel_ = gfx_showmenu(#sm);
+  sel_ > 0 ? ( slider1 = mord[sel_ - 1]; slider_automate(slider1); );
+);
+ui_noled = 1; ui_button(306 * sc, 60 * sc, 34 * sc, 28 * sc, ">", 0, 1) ? (
+  i = 0; pos_ = 0; loop(NSND, mord[i] == slider1 ? pos_ = i; i += 1; );
+  slider1 = mord[(pos_ + 1) % NSND]; slider_automate(slider1);
+);
+gfx_setfont(4); ui_col(C_INK);
+sprintf(#ks, "%d sounding%s", nact, pedal ? "   SUSTAIN" : ""); gfx_x = 500 * sc; gfx_y = 70 * sc; gfx_drawstr(#ks);
+
+// ---------- MACROS ----------
+ui_group(16 * sc, 104 * sc, 608 * sc, 96 * sc, 0, "MACROS");
+ui_knob(70 * sc,  150 * sc, 17, -6, 3, 0, 0, "FILTER", slider17 > -0.005 && slider17 < 0.005 ? "OPEN" : "%+.2f oct");
+ui_knob(144 * sc, 150 * sc, 18, 0, 100, 0, 0, "RESO", "%.0f%%");
+ui_knob(218 * sc, 150 * sc, 2, 0, 100, 50, 0, "TONE", "%.0f%%");
+ui_knob(292 * sc, 150 * sc, 3, 10, 400, 100, 1, "ATTACK", "%.0f%%");
+ui_knob(366 * sc, 150 * sc, 4, 10, 400, 100, 1, "RELEASE", "%.0f%%");
+ui_knob(440 * sc, 150 * sc, 5, 0, 200, 100, 0, "CHORUS", "%.0f%%");
+ui_knob(514 * sc, 150 * sc, 6, 0, 100, 70, 0, "VELOCITY", "%.0f%%");
+ui_knob(588 * sc, 150 * sc, 7, -50, 50, 0, 0, "TUNE", "%+.0f cents");
+
+// ---------- REVERB (row 3) ----------
+ui_group(16 * sc, 208 * sc, 608 * sc, 96 * sc, 0, "REVERB");
+i = 0;
+loop(3,
+  ui_noled = 1;
+  ui_button(42 * sc, (214 + i * 28) * sc, 74 * sc, 24 * sc, i == 0 ? "ROOM" : i == 1 ? "HALL" : "PLATE", slider19 == i, 1) ?
+    ( slider19 = i; slider_automate(slider19); );
+  i += 1;
+);
+ui_knob(190 * sc, 254 * sc, 20, 0, 150, 15, 0, "PRE-DELAY", "%.0f ms");
+ui_knob(300 * sc, 254 * sc, 21, 0.2, 10, 2.2, 1, "DECAY", "%.2f s");
+ui_knob(410 * sc, 254 * sc, 22, 0, 100, 50, 0, "DAMPING", "%.0f%%");
+ui_knob(540 * sc, 254 * sc, 23, 0, 100, 25, 0, "MIX", "%.0f%%");
+
+// ---------- DRIFT (row 4, left) ----------
+ui_group(16 * sc, 312 * sc, 178 * sc, 96 * sc, 1, "DRIFT");
+ui_knob(105 * sc, 358 * sc, 8, 0, 100, 20, 0, "ANALOGUE", "%.0f%%");
+
+// ---------- OUTPUT STAGE (row 4, right) ----------
+ui_group(202 * sc, 312 * sc, 422 * sc, 96 * sc, 4, "OUTPUT");
+ui_knob(254 * sc, 358 * sc, 11, 0,    100,   0,    0, "SAT",     "%.0f%%");
+ui_knob(322 * sc, 358 * sc, 12, 0,    100,   30,   0, "BIAS",    "%.0f%%");
+ui_knob(390 * sc, 358 * sc, 13, 40,   400,   120,  1, "LO BAND", "%.0f Hz");
+ui_knob(458 * sc, 358 * sc, 14, 2000, 16000, 6000, 1, "HI BAND", "%.0f Hz");
+ui_knob(526 * sc, 358 * sc, 15, -6,   0,     -0.3, 0, "CEILING", "%.1f dB");
+ui_button(566 * sc, 318 * sc, 52 * sc, 20 * sc, "OFF",   slider16 == 0, 1) ? ( slider16 = 0; slider_automate(slider16); );
+ui_button(566 * sc, 342 * sc, 52 * sc, 20 * sc, "CLIP",  slider16 == 1, 1) ? ( slider16 = 1; slider_automate(slider16); );
+ui_button(566 * sc, 366 * sc, 52 * sc, 20 * sc, "LIMIT", slider16 == 2, 1) ? ( slider16 = 2; slider_automate(slider16); );
+ost_clipped = 0;
+
+// ---------- MIDI (row 5, left) ----------
+ui_group(16 * sc, 416 * sc, 236 * sc, 96 * sc, 3, "MIDI");
+knob_step = 1;
+ui_knob(76 * sc, 462 * sc, 9, 0, 16, 0, 0, "CHANNEL", slider9 == 0 ? "OMNI" : "CH %.0f");
+midi_d = max(midi_led, midi_d * 0.85); midi_led = 0;
+ui_cola(0x000000, 0.4); gfx_circle(140 * sc, 442 * sc, 5 * sc, 1, 1);
+ui_col(ui_mix(0x3A1010, 0xFF4A3A, min(midi_d + (nact > 0) * 0.6, 1))); gfx_circle(140 * sc, 442 * sc, 4 * sc, 1, 1);
+gfx_setfont(4); ui_col(C_INK);
+gfx_x = 150 * sc; gfx_y = 438 * sc; gfx_drawstr("MIDI IN");
+gfx_x = 132 * sc; gfx_y = 458 * sc; gfx_drawstr("CC64 sustain");
+gfx_x = 132 * sc; gfx_y = 472 * sc; gfx_drawstr("CC1 vibrato");
+
+// ---------- MASTER (row 5, right) ----------
+ui_group(260 * sc, 416 * sc, 364 * sc, 96 * sc, 2, "MASTER");
+ui_knob(400 * sc, 462 * sc, 10, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
+mL.ui_ledm(560 * sc, 428 * sc, 14 * sc, 70 * sc, pkL);
+mR.ui_ledm(580 * sc, 428 * sc, 14 * sc, 70 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+gfx_setfont(4); ui_col(C_INK); ui_text(577 * sc, 500 * sc, "OUT");
+
+ui_end();

@@ -1,0 +1,169 @@
+desc:GFX Baxendale
+//tags: equaliser eq tone control baxandall bass treble hifi
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-headsmooth (.jsfx-inc)
+// in the same folder.
+//
+// Baxendale - a simple two-knob tone control for single tracks (personal use; designed from scratch).
+//   BASS / TREBLE - +/-12 dB in 0.5 dB detents (Shift = free). Baxandall-style curves: broad 6 dB / octave
+//                   shelves that keep rising gently towards the extremes rather than flattening off, so a
+//                   little goes a long way and the middle is left alone.
+//   TURNOVER      - where each control is half-way to its full effect: bass 75 / 150 / 300 Hz,
+//                   treble 1.5 / 3 / 6 kHz.
+//   OUTPUT        - level. IN switches the tone controls out.
+// DRIFT: the turnover points and gains wander very slightly. The DRIFT dial scales the drift amount
+// (50% = the amount / speed settings, 100% = twice, 0 = none) and speeds the wander up with it.
+// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIM) along the bottom of the faceplate.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-headsmooth.jsfx-inc
+
+slider1:0<-12,12,0.5>-Bass (dB)
+slider2:0<-12,12,0.5>-Treble (dB)
+slider3:1<0,2,1{75 Hz,150 Hz,300 Hz}>-Bass turnover
+slider4:1<0,2,1{1.5 kHz,3 kHz,6 kHz}>-Treble turnover
+slider5:0<-12,12,0.1>-Output (dB)
+slider6:1<0,1,1{Out,In}>-Tone in
+slider7:0<-24,12,0.1>-Input trim (dB)
+slider8:1<0,1,1{Off,On}>-Input guard
+slider9:25<0,100,1>-Drift amount (%)
+slider10:0.25<0.02,2,0.01>-Drift speed (Hz)
+slider11:0<0,100,1>-Band sat (%)
+slider12:30<0,100,1>-Bias (%)
+slider13:120<40,400,1>-Sat low band (Hz)
+slider14:6000<2000,16000,10>-Sat high band (Hz)
+slider15:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider17:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-baxendale";                                  // the ? pop-up links to this manual
+
+// ---------- first-order shelves (bilinear, prewarped): the broad Baxandall slopes ----------
+// low shelf  H(s) = (s + w*sqrt(G)) / (s + w/sqrt(G))        DC gain G, HF 1, half-way (in dB) at w
+// high shelf H(s) = G (s + w/sqrt(G)) / (s + w*sqrt(G))      DC 1, HF gain G, half-way at w
+function sh_set(hi, f, gdb) instance(b0, b1, a1) local(k, g, r, n) (
+  k = tan($pi * min(f, srate * 0.45) / srate); g = 10 ^ (gdb / 20); r = sqrt(g);
+  hi ? (
+    n = 1 / k + r; b0 = g * (1 / k + 1 / r) / n; b1 = g * (-1 / k + 1 / r) / n; a1 = (-1 / k + r) / n;
+  ) : (
+    n = 1 / k + 1 / r; b0 = (1 / k + r) / n; b1 = (-1 / k + r) / n; a1 = (-1 / k + 1 / r) / n;
+  );
+);
+function sh_run(x) instance(b0, b1, a1, x1, y1) local(y) (
+  y = b0 * x + b1 * x1 - a1 * y1; x1 = x; y1 = y; y;
+);
+function tone_set(fm, gm) instance(lo, hi) (
+  lo.sh_set(0, bass_f * fm, tone_on * bass_g * gm);
+  hi.sh_set(1, treb_f * fm, tone_on * treb_g * gm);
+);
+function tone_run(x) instance(lo, hi) ( hi.sh_run(lo.sh_run(x)); );
+
+function update() (
+  bass_f = slider3 == 0 ? 75 : slider3 == 1 ? 150 : 300;
+  treb_f = slider4 == 0 ? 1500 : slider4 == 1 ? 3000 : 6000;
+  out_t = 10 ^ (slider5 / 20);
+  drift_macro(slider17);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
+  drift = slider9 / 100 * dm_a; dspd = slider10 * dm_s;
+  in_setup(slider7, slider8);
+  ins_output_setup(11);
+);
+
+dFL.drift_init(0.8 + rand(0.5)); dFR.drift_init(0.8 + rand(0.5));
+dGL.drift_init(0.8 + rand(0.5)); dGR.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+sm = 1 - exp(-1 / (0.03 * srate));
+mpk = 0;
+!ui_dflt ? ui_hw = 1; !ui_dflt ? ui_kstyle = 0;
+BX_PNL = 0xB4B8BE; BX_INK = 0x1E1F22; BX_DIM = 0x55585E; BX_KS = 4;   // ivory bakelite knobs
+update();
+bass_g = slider1; treb_g = slider2; tone_on = slider6; out_s = out_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+bs = 1 - exp(-samplesblock / (0.03 * srate));
+bass_g += (slider1 - bass_g) * bs; treb_g += (slider2 - treb_g) * bs; tone_on += (slider6 - tone_on) * bs;
+dinc = dspd * samplesblock / srate;
+vfL = dFL.drift_tick(dinc); vfR = dFR.drift_tick(dinc);
+vgL = dGL.drift_tick(dinc); vgR = dGR.drift_tick(dinc);
+tL.tone_set(1 + 0.015 * drift * vfL, 1 + 0.03 * drift * vgL);
+tR.tone_set(1 + 0.015 * drift * vfR, 1 + 0.03 * drift * vgR);
+
+@serialize
+file_var(0, ui_sz);
+
+@sample
+in_process(spl0, spl1);
+out_s += (out_t - out_s) * sm;
+oL = tL.tone_run(in_l) * out_s; oR = tR.tone_run(in_r) * out_s;
+oL = ostL.ost_band(oL); oR = ostR.ost_band(oR);
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+mpk = max(mpk, max(abs(spl0), abs(spl1)));
+
+@gfx 780 322
+ui_begin(780, 322);
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+
+// ---------- the unit: a brushed-aluminium hi-fi faceplate ----------
+T = 8; TH = 306;
+ui_theme(5);
+hs_unit(T, TH, BX_PNL);
+gi = 0; loop(floor((TH - 6) / 2), ui_cola(gi % 3 ? 0xFFFFFF : 0x000000, gi % 3 ? 0.05 : 0.03);
+  gfx_line(10 * sc, (T + 3 + gi * 2) * sc, 769 * sc, (T + 3 + gi * 2) * sc); gi += 1; );        // brushed grain
+// engraved name
+gfx_setfont(6, "Trebuchet MS", 18 * sc, 'b');
+ui_cola(0xFFFFFF, 0.5); gfx_x = 41 * sc; gfx_y = (T + 13) * sc; gfx_drawstr("BAXENDALE");
+ui_col(BX_INK); gfx_x = 40 * sc; gfx_y = (T + 12) * sc; gfx_drawstr("BAXENDALE");
+gfx_setfont(4); ui_col(BX_DIM); gfx_x += 10 * sc; gfx_y = (T + 18) * sc; gfx_drawstr("TONE CONTROL");
+gfx_x += 10 * sc; gfx_drawstr("·  GFX");
+ui_size_picker(560 * sc, (T + 11) * sc);
+ui_keycap(622 * sc, (T + 8) * sc, 50 * sc, 24 * sc, "IN", slider6, 1) ? ( slider6 = 1 - slider6; slider_automate(2 ^ 5); );
+
+pk_ink = BX_INK; pk_bg = BX_PNL; pk_bkfs = 13; pk_nonum = 1; pk_bkstep = 0.5; pk_ptr = 0xEDE3C8; pk_kstyle = BX_KS;
+// BASS: turnover, knob
+pk_step(112, T + 112, 3, 3, "75|150|300", "TURNOVER");
+pk_bigknob(250 * sc, (T + 112) * sc, 32 * sc, 1, -12, 12, 0, 3, 0, 1, "BASS", "%+.1f dB");
+// TREBLE: knob, turnover
+pk_bigknob(430 * sc, (T + 112) * sc, 32 * sc, 2, -12, 12, 0, 3, 0, 1, "TREBLE", "%+.1f dB");
+pk_step(568, T + 112, 4, 3, "1.5k|3k|6k", "TURNOVER");
+pk_bkstep = 0; pk_nonum = 0; pk_bkfs = 15; pk_ptr = -1; pk_kstyle = 0;
+!slider6 ? ( ui_cola(0x000000, 0.18); gfx_rect(20 * sc, (T + 46) * sc, 610 * sc, 154 * sc); );
+// OUTPUT + meter
+ui_cola(BX_INK, 0.25); gfx_rect(640 * sc, (T + 56) * sc, 1 * sc, 120 * sc);
+ui_section(2); C_INK = BX_INK; ui_knonum = 2;
+ui_knob(704 * sc, (T + 100) * sc, 5, -12, 12, 0, 0, "OUTPUT", "%+.1f dB");
+ui_knonum = 0;
+bx_lv = max(mpk, bx_lv * 0.8); mpk = 0;
+hs_leds(704, T + 160, bx_lv, BX_INK);
+
+// ---------- DRIFT + IN / OUT (bottom row) ----------
+ui_cola(BX_INK, 0.25); gfx_rect(40 * sc, (T + 204) * sc, 700 * sc, 1 * sc);
+dy_ink = BX_INK; dy_bg = BX_PNL;
+rd_sub(112, T + 212, "DRIFT", BX_INK, 0.7);
+dy_kst = 0; sprintf(#v, "%.0f%%", slider17); dy_knob(150, T + 250, 15, 17, 0, 100, 50, 0, 0xEDE3C8, "DRIFT", #v); dy_kst = 7;
+rd_sub(430, T + 212, "IN / OUT", BX_INK, 0.7);
+rd_iok = 0; rd_ioc1 = 0xEDE3C8; rd_ioc2 = 0xEDE3C8; rd_ioc3 = 0xEDE3C8;
+rd_io(445, T + 228, 7, 8, 11, 16);
+
+pk_end();
+ui_end();

@@ -1,0 +1,338 @@
+desc:GFX Autopan
+//tags: pan autopan tremolo lfo modulation
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-lfo, gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
+//
+// PAN  - moves the sound across the stereo field
+// TREM - both sides move together (tremolo)
+// Sync locks the LFO to the project timeline; Flow keeps tempo but runs freely through loops.
+// DRIFT: rate, depth and centre wander slowly and randomly. The DRIFT dial scales the three drift amounts
+// (50% = the settings below, 100% = twice, 0 = none) and speeds the wander up with them.
+// The OUTPUT button in MASTER folds the input and output stages out below the panel.
+
+import gfx-drift.jsfx-inc
+import gfx-lfo.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+slider1:0<0,1,1{Pan,Trem}>-Mode
+slider2:0<0,3,1{Sine,Triangle,Square,Random}>-Shape
+slider3:60<0,100,1>-Smooth (%)
+slider4:0<0,2,1{Free,Sync,Flow}>-Rate mode
+slider5:0.12<0.05,20,0.01>-Free rate (Hz)
+slider6:6<0,15,1{4 bars,2 bars,1 bar,1/2,1/2 D,1/2 T,1/4,1/4 D,1/4 T,1/8,1/8 D,1/8 T,1/16,1/16 D,1/16 T,1/32}>-Sync rate
+slider7:0<0,360,1>-Phase offset (deg)
+slider8:30<0,100,1>-Depth (%)
+slider9:0<-100,100,1>-Centre (%)
+slider10:5<0,50,1>-Rate drift (%)
+slider11:10<0,50,1>-Depth drift (%)
+slider12:0<0,50,1>-Centre drift (%)
+slider13:0.25<0.02,2,0.01>-Drift speed (Hz)
+slider14:0<0,1,1{Mono sum,Stereo}>-Input
+slider15:0<-24,12,0.1>-Output (dB)
+slider16:100<0,100,1>-Mix (%)
+slider17:0<0,100,1>-Band sat (%)
+slider18:30<0,100,1>-Bias (%)
+slider19:120<40,400,1>-Sat low band (Hz)
+slider20:6000<2000,16000,10>-Sat high band (Hz)
+slider21:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider22:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider23:0<-24,12,0.1>-Input trim (dB)
+slider24:1<0,1,1{Off,On}>-Input guard
+slider25:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-autopan";                                  // the ? pop-up links to this manual
+
+function update() (
+  mode = slider1;
+  shape = slider2;
+  smooth = slider3 / 100;
+  syncmode = slider4;
+  frate = slider5;
+  div = floor(slider6 + 0.5);
+  phoff = slider7 / 360;
+  depth_t = slider8 / 100;
+  cent_t = slider9 / 100;
+  drift_macro(slider25);
+  rd = slider10 / 100 * dm_a;
+  dd = min(slider11 / 100 * dm_a, 1);
+  cd = slider12 / 100 * dm_a;
+  dspd = slider13 * dm_s;
+  inmode = slider14;
+  out_t = 10 ^ (slider15 / 20);
+  mix_t = slider16 / 100;
+  in_setup(slider23, slider24);
+  ost_setup(slider17 / 100, slider18 / 100, slider19, slider20, slider21, slider22);
+  lfo1.lfo_setup(shape, smooth);
+);
+
+// ---------- presets (leave Phase, Input, Output, Mix, Drift speed alone) ----------
+function setp(m, s, sm_, sy, fr, dv, dp, ct, r_, d_, c_) (
+  slider1 = m; slider2 = s; slider3 = sm_; slider4 = sy; slider5 = fr; slider6 = dv;
+  slider8 = dp; slider9 = ct; slider10 = r_; slider11 = d_; slider12 = c_;
+);
+function pname(p) (
+  p == 1 ? "Gentle Sway" :
+  p == 2 ? "Classic Auto-Pan" :
+  p == 3 ? "Hard Ping-Pong" :
+  p == 4 ? "Wandering" :
+  p == 5 ? "Slow Swirl" :
+  p == 6 ? "Amp Trem" :
+  p == 7 ? "Choppy Trem" :
+  p == 8 ? "Warble Trem" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1 ? setp(0, 0, 30, 1, 1,   2,  50, 0, 10, 15, 5 ) :   // Gentle Sway
+  p == 2 ? setp(0, 0, 30, 1, 1,   6, 100, 0,  3,  5, 0 ) :   // Classic Auto-Pan
+  p == 3 ? setp(0, 2, 10, 1, 1,   9, 100, 0,  0,  0, 0 ) :   // Hard Ping-Pong
+  p == 4 ? setp(0, 3, 100, 1, 1,  1,  70, 0, 20, 20, 15) :   // Wandering
+  p == 5 ? setp(0, 0, 30, 0, 0.8, 6,  60, 0, 25, 15, 5 ) :   // Slow Swirl
+  p == 6 ? setp(1, 0, 30, 0, 5,   6,  60, 0,  3,  5, 0 ) :   // Amp Trem
+  p == 7 ? setp(1, 2, 15, 1, 1,  12, 100, 0,  0,  0, 0 ) :   // Choppy Trem
+  p == 8 ? setp(1, 1, 30, 1, 1,  11,  50, 0, 15, 10, 0 );    // Warble Trem
+  p >= 1 && p <= 8 ? slider_automate(4031);   // sliders 1-6, 8-12
+  p == 9 ? (                                   // Reset all to defaults
+    slider1 = 0; slider2 = 0; slider3 = 60; slider4 = 0; slider5 = 0.12; slider6 = 6;
+    slider7 = 0; slider8 = 30; slider9 = 0; slider10 = 5; slider11 = 10; slider12 = 0;
+    slider13 = 0.25; slider14 = 0; slider15 = 0; slider16 = 100;
+    slider17 = 0; slider18 = 30; slider19 = 120; slider20 = 6000; slider21 = -0.3; slider22 = 1;
+    slider23 = 0; slider24 = 1; slider25 = 50;
+    slider_automate(33554431);
+  );
+);
+
+// ---------- state ----------
+hist = 0; hidx = 0;            // random-shape scope history (100 slots)
+memset(hist, 0, 100);
+
+sm  = 1 - exp(-1 / (0.03 * srate));
+sm2 = 1 - exp(-1 / (0.001 * srate));
+
+drR.drift_init(0.8 + rand(0.5));
+drD.drift_init(0.8 + rand(0.5));
+drC.drift_init(0.8 + rand(0.5));
+
+lfo1.lfo_init();
+gL = 1; gR = 1;
+pkL = 0; pkR = 0;
+
+ost_init(1000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+vuc = 1 - exp(-1 / (0.01 * srate)); vu_ms = 0;
+cur_preset = 1;
+!ui_dflt ? ui_thm = 0; !ui_dflt ? ui_hw = 0;   // defaults for new instances: Amber, flat (saved projects keep their own)
+update();
+depth_s = depth_t; cent_s = cent_t; mix_s = mix_t; out_s = out_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+lfo1.lfo_block(syncmode, div, frate);
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+
+@sample
+// input stage: DC block, trim, guard
+in_process(spl0, spl1);
+inL = in_l; inR = in_r;
+vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
+
+// drift
+dinc = dspd / srate;
+vR = drR.drift_tick(dinc);
+vD = drD.drift_tick(dinc);
+vC = drC.drift_tick(dinc);
+
+// smoothing
+depth_s += (depth_t - depth_s) * sm;
+cent_s  += (cent_t  - cent_s)  * sm;
+mix_s   += (mix_t   - mix_s)   * sm;
+out_s   += (out_t   - out_s)   * sm;
+
+// LFO (shared GFX LFO: free mode drifts the rate, sync mode wobbles the phase)
+lv = lfo1.lfo_tick(phoff, rd, vR);
+p = lfo1.p;
+
+// effective depth / centre with drift
+de = depth_s * (1 - dd * (0.5 + 0.5 * vD));
+ce = cent_s + cd * vC;
+
+mode == 1 ? (
+  // tremolo
+  g = 1 - de * (0.5 - 0.5 * lv);
+  srcL = inL; srcR = inR; gtL = g; gtR = g;
+) : (
+  pos = min(max(ce + de * lv, -1), 1);
+  inmode == 0 ? (
+    // true pan, equal power, unity at centre
+    srcL = 0.5 * (inL + inR); srcR = srcL;
+    ang = (pos + 1) * 0.25 * $pi;
+    gtL = 1.41421356 * cos(ang); gtR = 1.41421356 * sin(ang);
+  ) : (
+    // balance, keeps stereo image
+    srcL = inL; srcR = inR;
+    gtL = pos > 0 ? cos(pos * 0.5 * $pi) : 1;
+    gtR = pos < 0 ? cos(-pos * 0.5 * $pi) : 1;
+  );
+);
+
+gL += (gtL - gL) * sm2;
+gR += (gtR - gR) * sm2;
+
+// output stage: band saturation -> output gain -> clipper / limiter
+oL = ostL.ost_band(inL * (1 - mix_s) + srcL * gL * mix_s) * in_comp * out_s;
+oR = ostR.ost_band(inR * (1 - mix_s) + srcR * gR * mix_s) * in_comp * out_s;
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+// for display
+dispPos = pos; dispG = g; dispPh = p; dispMod = lv; dispCe = ce; dispDe = de;
+
+@gfx 640 348
+ui_begin(640, 348);
+ui_header("AUTOPAN");
+
+// ---------- header controls ----------
+ui_noled = 1;
+ui_button(88 * sc, 10 * sc, 20 * sc, 24 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 9 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(110 * sc, 10 * sc, 20 * sc, 24 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 9 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(136 * sc, 10 * sc, 56 * sc, 24 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 136 * sc; gfx_y = 34 * sc;
+  cur_preset = gfx_showmenu("Gentle Sway|Classic Auto-Pan|Hard Ping-Pong|Wandering|Slow Swirl|Amp Trem|Choppy Trem|Warble Trem|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_theme_picker(200 * sc, 17 * sc);
+ui_size_picker(312 * sc, 13 * sc);
+pk_lcd(372 * sc, 7 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 378 * sc; gfx_y = 10 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 378 * sc; gfx_y = 24 * sc; gfx_drawstr(pname(cur_preset));
+
+ui_hw_toggle(372 * sc, 13 * sc);
+
+ui_button(484 * sc, 10 * sc, 68 * sc, 24 * sc, "PAN",  slider1 == 0, 1) ? ( slider1 = 0; slider_automate(slider1); );
+ui_button(556 * sc, 10 * sc, 68 * sc, 24 * sc, "TREM", slider1 == 1, 1) ? ( slider1 = 1; slider_automate(slider1); );
+
+
+// ---------- display window: pan field / trem gain + LFO ----------
+ui_screen(16 * sc, 52 * sc, 454 * sc, 80 * sc);
+lx = 44 * sc; lw = 242 * sc; my = 92 * sc;
+slider1 == 0 ? (
+  ui_col(C_SG);
+  gfx_line(lx, my, lx + lw, my);
+  gfx_line(lx, my - 6 * sc, lx, my + 6 * sc);
+  gfx_line(lx + lw * 0.5, my - 4 * sc, lx + lw * 0.5, my + 4 * sc);
+  gfx_line(lx + lw, my - 6 * sc, lx + lw, my + 6 * sc);
+  gfx_setfont(2); ui_col(C_ST);
+  gfx_x = 28 * sc; gfx_y = my - 6 * sc; gfx_drawstr("L");
+  gfx_x = lx + lw + 6 * sc; gfx_y = my - 6 * sc; gfx_drawstr("R");
+  x1 = lx + (max(dispCe - dispDe, -1) + 1) * 0.5 * lw;
+  x2 = lx + (min(dispCe + dispDe,  1) + 1) * 0.5 * lw;
+  ui_cola(C_VA, 0.3); gfx_rect(x1, my - 3 * sc, max(x2 - x1, 1), 6 * sc);
+  ui_col(C_VB); gfx_circle(lx + (dispPos + 1) * 0.5 * lw, my, 6 * sc, 1, 1);
+) : (
+  ui_col(C_SG); gfx_rect(lx, my - 6 * sc, lw, 12 * sc);
+  ui_col(C_VB); gfx_rect(lx, my - 6 * sc, lw * min(max(dispG, 0), 1), 12 * sc);
+  gfx_setfont(4); ui_col(C_ST); gfx_x = lx; gfx_y = 62 * sc; gfx_drawstr("TREM GAIN");
+);
+sx0 = 304 * sc; sw0 = 154 * sc; sa = 24 * sc;
+ui_col(C_SG); gfx_line(sx0, my, sx0 + sw0, my);
+slider2 < 3 ? (
+  ui_col(C_VA);
+  i = 0;
+  loop(65,
+    pp = i / 64;
+    qx = sx0 + pp * sw0; qy = my - lfo_shape_d(pp, slider2, lfo1.k, lfo1.tk) * sa;
+    i > 0 ? gfx_line(px, py, qx, qy, 1);
+    px = qx; py = qy; i += 1;
+  );
+  ui_col(C_VB); mx = sx0 + dispPh * sw0;
+  gfx_line(mx, my - sa - 2 * sc, mx, my + sa + 2 * sc);
+  gfx_circle(mx, my - dispMod * sa, 3 * sc, 1, 1);
+) : (
+  hist[hidx] = dispMod; hidx = (hidx + 1) % 100;
+  ui_col(C_VA);
+  i = 0;
+  loop(100,
+    j = (hidx + i) % 100;
+    qx = sx0 + i / 99 * sw0; qy = my - hist[j] * sa;
+    i > 0 ? gfx_line(px, py, qx, qy, 1);
+    px = qx; py = qy; i += 1;
+  );
+);
+
+// ---------- input VU ----------
+vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18;   // 0 VU = -18 dBFS RMS
+vuIn.ui_vu(478 * sc, 52 * sc, 146 * sc, 80 * sc, vdb, "INPUT");
+
+// ---------- AUTOPAN group ----------
+ui_group(16 * sc, 140 * sc, 608 * sc, 96 * sc, 0, "AUTOPAN");
+ui_button(42 * sc,  148 * sc, 54 * sc, 22 * sc, "SINE", slider2 == 0, 1) ? ( slider2 = 0; slider_automate(slider2); );
+ui_button(100 * sc, 148 * sc, 54 * sc, 22 * sc, "TRI",  slider2 == 1, 1) ? ( slider2 = 1; slider_automate(slider2); );
+ui_button(42 * sc,  174 * sc, 54 * sc, 22 * sc, "SQR",  slider2 == 2, 1) ? ( slider2 = 2; slider_automate(slider2); );
+ui_button(100 * sc, 174 * sc, 54 * sc, 22 * sc, "RND",  slider2 == 3, 1) ? ( slider2 = 3; slider_automate(slider2); );
+ui_noled = 1;
+ui_button(42 * sc,  200 * sc, 54 * sc, 22 * sc, "MONO",   slider14 == 0, slider1 == 0) ? ( slider14 = 0; slider_automate(slider14); );
+ui_noled = 1;
+ui_button(100 * sc, 200 * sc, 54 * sc, 22 * sc, "STEREO", slider14 == 1, slider1 == 0) ? ( slider14 = 1; slider_automate(slider14); );
+ui_button(160 * sc, 148 * sc, 56 * sc, 22 * sc, "FREE", slider4 == 0, 1) ? ( slider4 = 0; slider_automate(slider4); );
+ui_button(160 * sc, 174 * sc, 56 * sc, 22 * sc, "SYNC", slider4 == 1, 1) ? ( slider4 = 1; slider_automate(slider4); );
+ui_button(160 * sc, 200 * sc, 56 * sc, 22 * sc, "FLOW", slider4 == 2, 1) ? ( slider4 = 2; slider_automate(slider4); );
+slider4 ? (
+  knob_step = 1;
+  ui_knob(262 * sc, 186 * sc, 6, 0, 15, 6, 0, "RATE", lfo_div_name(floor(slider6 + 0.5)));
+) : (
+  ui_knob(262 * sc, 186 * sc, 5, 0.05, 20, 1, 1, "RATE", "%.2f Hz");
+);
+ui_knob(336 * sc, 186 * sc, 3, 0,    100, 30,  0, "SMOOTH", "%.0f%%");
+ui_knob(410 * sc, 186 * sc, 7, 0,    360, 0,   0, "PHASE",  "%.0f deg");
+ui_knob(484 * sc, 186 * sc, 8, 0,    100, 100, 0, "DEPTH",  "%.0f%%");
+ui_knob(558 * sc, 186 * sc, 9, -100, 100, 0,   0, "CENTRE", "%.0f%%");
+
+// ---------- DRIFT (row 4, left) ----------
+ui_group(16 * sc, 244 * sc, 92 * sc, 96 * sc, 1, "DRIFT");
+ui_knob(62 * sc, 290 * sc, 25, 0, 100, 50, 0, "DRIFT", "%.0f%%");
+
+// ---------- IN / OUT (row 4, middle) ----------
+ui_group(116 * sc, 244 * sc, 236 * sc, 96 * sc, 3, "IN / OUT");
+ui_io(146, 262, 23, 24, 17, 22);
+
+// ---------- MASTER group (row 4, right) ----------
+ui_group(360 * sc, 244 * sc, 264 * sc, 96 * sc, 2, "MASTER");
+ui_knob(414 * sc, 290 * sc, 16, 0,   100, 100, 0, "MIX",    "%.0f%%");
+ui_knob(488 * sc, 290 * sc, 15, -24, 12,  0,   0, "OUTPUT", "%.1f dB");
+mL.ui_ledm(564 * sc, 256 * sc, 14 * sc, 70 * sc, pkL);
+mR.ui_ledm(584 * sc, 256 * sc, 14 * sc, 70 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+gfx_setfont(4); ui_col(C_INK); ui_text(581 * sc, 328 * sc, "OUT");
+
+ui_end();

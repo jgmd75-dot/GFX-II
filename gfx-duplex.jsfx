@@ -1,0 +1,356 @@
+desc:GFX Duplex
+//tags: compressor de-esser limiter dual-channel mid-side broadcast
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-dyn (.jsfx-inc) in the same folder.
+//
+// A dual-channel compressor / de-esser / peak limiter in the spirit of the classic 80s British two-channel
+// dynamics processors (personal use; the sound is designed from scratch). Each channel:
+//   THRESHOLD, RATIO (1:1 - INF:1), ATTACK, RELEASE, GAIN - a clean VCA compressor with a gentle 6 dB knee.
+//   AUTO      - program-dependent timing: the attack follows how far over the signal is, the release
+//               lets go quickly after short peaks and slowly after long passages of compression.
+//   DE-ESS    - the compressor listens only above DE-ESS FREQ (frequency-conscious side-chain), so it
+//               reacts to sibilance. SPLIT: the gain reduction is applied only above that frequency, so the
+//               esses come down and the body of the voice is untouched (the split sits at 3/4 of the frequency); off: wideband, as on the originals.
+//   LIMIT     - a separate fast peak limiter after the compressor (fully left = OFF); its light shows it working.
+//   IN        - the channel in or out.
+// MASTER:
+//   MODE      - STEREO: channel A runs both sides (channel B rests). DUAL: A = left, B = right.
+//               M-S: A = mid, B = side (compress the centre and the edges separately).
+//   LINK      - in DUAL and M-S the two detectors share the louder level, so the image stays put, and the two
+//               channels' controls are ganged: turning one moves the other by the same amount (offsets are kept).
+//   MIX       - parallel compression: the dry signal blended back in.
+// PRESETS.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-dyn.jsfx-inc
+
+slider1:1<0,1,1{Out,In}>-A in
+slider2:-20<-40,0,0.1>-A threshold (dB)
+slider3:3<1,20,0.1>-A ratio (20 = inf)
+slider4:5<0.1,50,0.1>-A attack (ms)
+slider5:200<20,2000,1>-A release (ms)
+slider6:0<0,1,1{Off,On}>-A auto
+slider7:0<-10,20,0.1>-A gain (dB)
+slider8:0<0,1,1{Off,On}>-A de-ess
+slider9:6000<2000,12000,10>-A de-ess frequency (Hz)
+slider10:1<0,1,1{Wide,Split}>-A de-ess split
+slider11:0<-24,0,0.1>-A limit (dB, 0 = off)
+slider12:1<0,1,1{Out,In}>-B in
+slider13:-20<-40,0,0.1>-B threshold (dB)
+slider14:3<1,20,0.1>-B ratio (20 = inf)
+slider15:5<0.1,50,0.1>-B attack (ms)
+slider16:200<20,2000,1>-B release (ms)
+slider17:0<0,1,1{Off,On}>-B auto
+slider18:0<-10,20,0.1>-B gain (dB)
+slider19:0<0,1,1{Off,On}>-B de-ess
+slider20:6000<2000,12000,10>-B de-ess frequency (Hz)
+slider21:1<0,1,1{Wide,Split}>-B de-ess split
+slider22:0<-24,0,0.1>-B limit (dB, 0 = off)
+slider23:0<0,2,1{Stereo,Dual,M-S}>-Mode
+slider24:1<0,1,1{Off,On}>-Link
+slider25:100<0,100,1>-Mix (%)
+slider26:0<-24,12,0.1>-Input trim (dB)
+slider27:1<0,1,1{Off,On}>-Input guard
+slider28:0<0,100,1>-Band sat (%)
+slider29:30<0,100,1>-Bias (%)
+slider30:120<40,400,1>-Sat low band (Hz)
+slider31:6000<2000,16000,10>-Sat high band (Hz)
+slider32:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider33:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-duplex";                                  // the ? pop-up links to this manual
+
+// ---------- one channel's settings (parameter set) ----------
+function cs_set(base) instance(on, thr, sl, ac, rc, aut, mk, de, dfc, spl, lon, ltg) (
+  on = slider(base); thr = slider(base + 1);
+  sl = slider(base + 2) >= 19.95 ? 0 : 1 / slider(base + 2);
+  ac = dy_ms(slider(base + 3)); rc = dy_ms(slider(base + 4)); aut = slider(base + 5);
+  mk = 10 ^ (slider(base + 6) / 20); de = slider(base + 7);
+  dfc = 1 - exp(-2 * $pi * slider(base + 8) / srate); spl = slider(base + 9);
+  lon = slider(base + 10) < -0.05; ltg = 10 ^ (slider(base + 10) / 20);
+);
+
+// ---------- one signal path (state); the settings come in as arguments ----------
+// detector: RMS over ~3 ms (+3 dB so a sine reads its peak); DE-ESS = only what lies above the frequency
+function p_det(x, de) instance(hs, ms) local(s) (
+  s = de ? 2 * hs.bq_run(x) : x;
+  ms += (s * s - ms) * det_c;
+  10 * log10(ms + 0.0000000001) + 3;
+);
+// gain computer + timing (dB domain)
+function p_gain(lv, on, thr, sl, ac, rc, aut) instance(e, sust) local(t, d, c) (
+  on ? (
+    t = -(1 - sl) * dy_curve(lv - thr, 6);
+    t < e ? (
+      d = e - t; c = aut ? min(1, max(d, 5) / (0.15 * srate)) : ac;
+      e += (t - e) * c;
+    ) : (
+      c = aut ? dy_ms(80 + 900 * sust / 1.5) : rc;
+      e += (t - e) * c;
+    );
+    sust = min(max(sust + (e < -1 ? 1 : -2) / srate, 0), 1.5);
+  ) : e = 0;
+  e;
+);
+// apply: wideband, or only above the de-ess frequency (SPLIT)
+// SPLIT uses a 24 dB/oct Linkwitz-Riley crossover at the de-ess frequency (the two bands sum back flat)
+function p_xo(f) instance(hs, la, lb, ha, hb) (
+  hs.bq_set(1, f, 0.70710678, 0);                     // detector: only what lies above the frequency (+6 dB)
+  f *= 0.75;                                          // the split sits a little lower, so the whole ess band is caught
+  la.bq_set(0, f, 0.70710678, 0); lb.bq_set(0, f, 0.70710678, 0);
+  ha.bq_set(1, f, 0.70710678, 0); hb.bq_set(1, f, 0.70710678, 0);
+);
+function p_apply(x, on, mk, de, spl) instance(e, la, lb, ha, hb) local(g) (
+  g = 10 ^ (e / 20);
+  on ? (
+    de && spl ? ( (lb.bq_run(la.bq_run(x)) + hb.bq_run(ha.bq_run(x)) * g) * mk; ) : x * g * mk;
+  ) : x;
+);
+// fast peak limiter: instant attack, 50 ms release; returns the gain
+function p_limt(x, lon, ltg) instance(lg) local(t) (
+  t = lon && abs(x) > ltg ? ltg / abs(x) : 1;
+  lg = t < lg ? t : lg + (1 - lg) * lim_r;
+  lg;
+);
+
+function update() (
+  cA.cs_set(1); cB.cs_set(12);
+  mode = slider23;
+  P1.p_xo(slider9); P2.p_xo(mode == 0 ? slider9 : slider20);
+  linked = mode == 0 || slider24;
+  mix_t = slider25 / 100;
+  in_setup(0, slider27);
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+);
+
+// ---------- presets (leave INPUT and OUTPUT alone) ----------
+// one channel: threshold, ratio, attack, release, auto, gain, de-ess, freq, split, limit
+function pc(base, t, r, a, rl, au, g, de, f, sp, lm) (
+  slider(base) = 1; slider(base + 1) = t; slider(base + 2) = r; slider(base + 3) = a; slider(base + 4) = rl;
+  slider(base + 5) = au; slider(base + 6) = g; slider(base + 7) = de; slider(base + 8) = f; slider(base + 9) = sp; slider(base + 10) = lm;
+);
+function pm(md, lk, mx) ( slider23 = md; slider24 = lk; slider25 = mx; );
+function pname(p) (
+  p == 1 ? "Gentle Stereo Bus" :
+  p == 2 ? "Vocal Compressor" :
+  p == 3 ? "De-esser (split)" :
+  p == 4 ? "Broadcast Voice" :
+  p == 5 ? "Dual Mono Pair" :
+  p == 6 ? "M-S Glue" :
+  p == 7 ? "M-S Widen + Tame Sides" :
+  p == 8 ? "Brickwall Safety" :
+  p == 9 ? "Parallel Drums" :
+  p == 10 ? "Bass Leveller" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1  ? ( pm(0, 1, 100); pc(1, -24, 2, 10, 300, 1, 3, 0, 6000, 1, 0);  pc(12, -24, 2, 10, 300, 1, 3, 0, 6000, 1, 0); ) :      // Gentle Stereo Bus
+  p == 2  ? ( pm(0, 1, 100); pc(1, -28, 3, 5, 180, 0, 5, 0, 6000, 1, -3);  pc(12, -28, 3, 5, 180, 0, 5, 0, 6000, 1, -3); ) :      // Vocal Compressor
+  p == 3  ? ( pm(0, 1, 100); pc(1, -30, 6, 0.5, 80, 0, 0, 1, 6500, 1, 0);  pc(12, -30, 6, 0.5, 80, 0, 0, 1, 6500, 1, 0); ) :      // De-esser (split)
+  p == 4  ? ( pm(0, 1, 100); pc(1, -26, 4, 3, 150, 0, 4, 1, 5000, 0, -2);  pc(12, -26, 4, 3, 150, 0, 4, 1, 5000, 0, -2); ) :      // Broadcast Voice (wide de-ess)
+  p == 5  ? ( pm(1, 0, 100); pc(1, -22, 3, 8, 200, 1, 3, 0, 6000, 1, -1);  pc(12, -22, 3, 8, 200, 1, 3, 0, 6000, 1, -1); ) :      // Dual Mono Pair
+  p == 6  ? ( pm(2, 0, 100); pc(1, -20, 2.5, 15, 250, 0, 2, 0, 6000, 1, 0); pc(12, -30, 4, 5, 150, 0, 3, 0, 6000, 1, 0); ) :     // M-S Glue (sides held)
+  p == 7  ? ( pm(2, 0, 100); pc(1, -22, 2, 20, 300, 1, 1, 0, 6000, 1, 0);  pc(12, -40, 1, 5, 200, 0, 3, 1, 7000, 1, 0); ) :      // M-S Widen + Tame Sides
+  p == 8  ? ( pm(0, 1, 100); pc(1, -12, 20, 0.3, 60, 0, 0, 0, 6000, 1, -1); pc(12, -12, 20, 0.3, 60, 0, 0, 0, 6000, 1, -1); ) :   // Brickwall Safety
+  p == 9  ? ( pm(0, 1, 40);  pc(1, -36, 10, 0.5, 100, 0, 12, 0, 6000, 1, -2); pc(12, -36, 10, 0.5, 100, 0, 12, 0, 6000, 1, -2); ) : // Parallel Drums
+  p == 10 ? ( pm(0, 1, 100); pc(1, -24, 4, 20, 400, 1, 4, 0, 6000, 1, -2); pc(12, -24, 4, 20, 400, 1, 4, 0, 6000, 1, -2); );       // Bass Leveller
+  p >= 1 && p <= 10 ? slider_automate(33554431);    // sliders 1-25
+  p == 11 ? (                                       // Reset all to defaults
+    pm(0, 1, 100); pc(1, -20, 3, 5, 200, 0, 0, 0, 6000, 1, 0); pc(12, -20, 3, 5, 200, 0, 0, 0, 6000, 1, 0);
+    slider26 = 0; slider27 = 1; slider28 = 0; slider29 = 30; slider30 = 120; slider31 = 6000; slider32 = -0.3; slider33 = 1;
+    slider_automate(8589934591);                    // sliders 1-33
+  );
+);
+
+in_init();
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+det_c = 1 - exp(-1 / (0.003 * srate));
+lim_r = 1 - exp(-1 / (0.05 * srate));
+sm = 1 - exp(-1 / (0.03 * srate));
+P1.lg = 1; P2.lg = 1;
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
+PNL = 0xA9ACA7; INKD = 0x1C201E; GRN = 0x2E7A4C; GRND = 0x1E5A36;          // grey panel, black print, green
+CAP_C = 0xF2F2EE; CAP_G = 0xF2F2EE; CAP_D = 0x2FC46A; CAP_L = 0xE8402E;   // pointer colours: compressor, gain, de-ess, limit
+cur_preset = 1;
+update();
+mix_s = mix_t;
+GANG = 60000;   // LINK ganging: last seen values of the two channels
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+
+@serialize
+file_var(0, ui_sz);
+
+@sample
+in_process(spl0, spl1);
+dl = in_l; dr = in_r;
+mode == 2 ? ( x1 = 0.5 * (dl + dr); x2 = 0.5 * (dl - dr); ) : ( x1 = dl; x2 = dr; );
+// path 1 runs on channel A; path 2 on channel B (or A again in STEREO)
+mode == 0 ? (
+  v1 = P1.p_det(x1, cA.de); v2 = P2.p_det(x2, cA.de);
+) : (
+  v1 = P1.p_det(x1, cA.de); v2 = P2.p_det(x2, cB.de);
+);
+linked ? ( v1 = v2 = max(v1, v2); );
+P1.p_gain(v1, cA.on, cA.thr, cA.sl, cA.ac, cA.rc, cA.aut);
+y1 = P1.p_apply(x1, cA.on, cA.mk, cA.de, cA.spl);
+mode == 0 ? (
+  P2.p_gain(v2, cA.on, cA.thr, cA.sl, cA.ac, cA.rc, cA.aut);
+  y2 = P2.p_apply(x2, cA.on, cA.mk, cA.de, cA.spl);
+  g1 = P1.p_limt(y1, cA.lon && cA.on, cA.ltg); g2 = P2.p_limt(y2, cA.lon && cA.on, cA.ltg);
+) : (
+  P2.p_gain(v2, cB.on, cB.thr, cB.sl, cB.ac, cB.rc, cB.aut);
+  y2 = P2.p_apply(x2, cB.on, cB.mk, cB.de, cB.spl);
+  g1 = P1.p_limt(y1, cA.lon && cA.on, cA.ltg); g2 = P2.p_limt(y2, cB.lon && cB.on, cB.ltg);
+);
+linked ? ( g1 = g2 = min(g1, g2); );
+y1 *= g1; y2 *= g2;
+mode == 2 ? ( wl = y1 + y2; wr = y1 - y2; ) : ( wl = y1; wr = y2; );
+gm1 = min(gm1, P1.e + 20 * log10(g1)); gm2 = min(gm2, P2.e + 20 * log10(g2));
+lm1 = max(lm1, g1 < 0.999); lm2 = max(lm2, g2 < 0.999);
+// parallel mix + output stage
+mix_s += (mix_t - mix_s) * sm;
+oL = dl + (wl - dl) * mix_s; oR = dr + (wr - dr) * mix_s;
+oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
+ost_out(oL, oR);
+spl0 = ost_l; spl1 = ost_r;
+pkI = max(pkI, max(abs(dl), abs(dr)));
+pkO = max(pkO, max(abs(spl0), abs(spl1)));
+
+@gfx 900 352
+ui_begin(900, ins_show_out ? 476 : 352);
+dy_ink = INKD; dy_bg = PNL; dy_kst = 3;
+
+function hz_txt(dst, f) ( f >= 1000 ? sprintf(dst, "%.1f kHz", f / 1000) : sprintf(dst, "%.0f Hz", f); );
+
+// one channel (unscaled x = the section's left edge)
+function chan(x, base, k, name, role) local(r, gr) (
+  pk_box((x - 2) * sc, 72 * sc, 328 * sc, 252 * sc, GRND, ""); ui_col(GRN); gfx_rect((x - 2) * sc, 72 * sc, 328 * sc, 22 * sc);
+  gfx_setfont(6, "Trebuchet MS", 14 * sc, 'b'); ui_col(0xF2F2EE); gfx_x = (x + 6) * sc; gfx_y = 75 * sc; gfx_drawstr(name);
+  gfx_setfont(4); ui_cola(0xF2F2EE, 0.8); gfx_x = (x + 120) * sc; gfx_y = 79 * sc; gfx_drawstr(role);
+  pk_ledbtn((x + 282) * sc, 98 * sc, 30 * sc, 22 * sc, slider(base), dy_grn) ? ( slider(base) = 1 - slider(base); ui_auto(base); );
+  dy_lbl(x + 266, 104, "IN", 0.8);
+  // compressor row
+  sprintf(#v, "%.1f dB", slider(base + 1)); dy_knob(x + 32, 150, 18, base + 1, -40, 0, -20, 0, CAP_C, "THRESH", #v);
+  r = slider(base + 2); r >= 19.95 ? strcpy(#v, "INF:1") : sprintf(#v, "%.1f:1", r);
+  dy_knob(x + 96, 150, 18, base + 2, 1, 20, 3, 1, CAP_C, "RATIO", #v);
+  slider(base + 5) ? strcpy(#v, "AUTO") : sprintf(#v, "%.1f ms", slider(base + 3));
+  dy_knob(x + 160, 150, 18, base + 3, 0.1, 50, 5, 1, CAP_C, "ATTACK", #v);
+  slider(base + 5) ? strcpy(#v, "AUTO") : sprintf(#v, "%.0f ms", slider(base + 4));
+  dy_knob(x + 224, 150, 18, base + 4, 20, 2000, 200, 1, CAP_C, "RELEASE", #v);
+  sprintf(#v, "%+.1f dB", slider(base + 6)); dy_knob(x + 288, 150, 18, base + 6, -10, 20, 0, 0, CAP_G, "GAIN", #v);
+  // de-ess + limit row
+  hz_txt(#v, slider(base + 8)); dy_knob(x + 32, 240, 18, base + 8, 2000, 12000, 6000, 1, CAP_D, "DE-ESS", #v);
+  slider(base + 10) < -0.05 ? sprintf(#v, "%.1f dB", slider(base + 10)) : strcpy(#v, "OFF");
+  dy_knob(x + 96, 240, 18, base + 10, -24, 0, 0, 0, CAP_L, "LIMIT", #v);
+  pk_led((x + 124) * sc, 220 * sc, 3.5 * sc, k == 0 ? lmd1 : lmd2, dy_red);
+  dy_btn(x + 150, 220, slider(base + 5), dy_amb, "AUTO") ? ( slider(base + 5) = 1 - slider(base + 5); ui_auto(base + 5); );
+  dy_btn(x + 200, 220, slider(base + 7), CAP_D, "DE-ESS") ? ( slider(base + 7) = 1 - slider(base + 7); ui_auto(base + 7); );
+  dy_btn(x + 250, 220, slider(base + 9), dy_grn, "SPLIT") ? ( slider(base + 9) = 1 - slider(base + 9); ui_auto(base + 9); );
+);
+
+// ---------- panel ----------
+fh = ins_show_out ? 468 : 344;
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
+ui_col(dy_ink); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
+gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(dy_ink); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("DUPLEX");
+gfx_setfont(4); ui_cola(dy_ink, 0.6); gfx_x = 176 * sc; gfx_y = 30 * sc; gfx_drawstr("DUAL COMPRESSOR  -  DE-ESSER  -  PEAK LIMITER");
+ui_button(528 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(556 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 590 * sc; gfx_y = 48 * sc;
+  cur_preset = gfx_showmenu("Gentle Stereo Bus|Vocal Compressor|De-esser (split)|Broadcast Voice|Dual Mono Pair|M-S Glue|M-S Widen + Tame Sides|Brickwall Safety|Parallel Drums|Bass Leveller|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_size_picker(700 * sc, 22 * sc);
+pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+
+ui_col(GRN); gfx_rect(14 * sc, 60 * sc, 872 * sc, 4 * sc);
+ui_col(INKD); gfx_rect(14 * sc, 64 * sc, 872 * sc, 1 * sc);
+
+lmd1 = lm1; lmd2 = lm2; lm1 = 0; lm2 = 0;
+gd1 = min(gm1, gd1 * 0.82); gd2 = min(gm2, gd2 * 0.82); gm1 = 0; gm2 = 0;
+chan(20, 1, 0, "CHANNEL A", slider23 == 0 ? "BOTH SIDES" : slider23 == 1 ? "LEFT" : "MID");
+dy_grrow(54, 300, gd1);
+slider23 == 0 ? (
+  pk_box(352 * sc, 72 * sc, 328 * sc, 252 * sc, GRND, ""); ui_col(GRN); gfx_rect(352 * sc, 72 * sc, 328 * sc, 22 * sc);
+  gfx_setfont(6, "Trebuchet MS", 14 * sc, 'b'); ui_col(0xF2F2EE); gfx_x = 360 * sc; gfx_y = 75 * sc; gfx_drawstr("CHANNEL B");
+  dy_lbl(516, 170, "STEREO MODE", 0.8);
+  dy_lbl(516, 186, "CHANNEL A RUNS BOTH SIDES", 0.5);
+  dy_lbl(516, 202, "(switch MODE to DUAL or M-S to use B)", 0.4);
+  pk_led(500 * sc, 230 * sc, 3.5 * sc, lmd2, dy_red);
+) : (
+  chan(354, 12, 1, "CHANNEL B", slider23 == 1 ? "RIGHT" : "SIDE");
+);
+dy_grrow(388, 300, gd2);
+
+// ---------- MASTER ----------
+pk_box(686 * sc, 72 * sc, 196 * sc, 252 * sc, GRND, ""); ui_col(GRN); gfx_rect(686 * sc, 72 * sc, 196 * sc, 22 * sc);
+gfx_setfont(6, "Trebuchet MS", 14 * sc, 'b'); ui_col(0xF2F2EE); gfx_x = 694 * sc; gfx_y = 75 * sc; gfx_drawstr("MASTER");
+pk_ink = dy_ink; pk_bg = PNL; pk_nut = 1; pk_rsc = 0.85;
+pk_rotsel(786 * sc, 162 * sc, 23, "STEREO", "DUAL", "M-S");
+dy_lbl(786, 196, "MODE", 0.9);
+// LINK: always on in STEREO (one detector runs both sides), so it stays lit there and only switches in DUAL / M-S
+dy_btn(706, 216, slider23 == 0 || slider24, dy_grn, "LINK") && slider23 != 0 ? ( slider24 = 1 - slider24; ui_auto(24); );
+sprintf(#v, "WET %.0f", slider25); dy_knob(836, 234, 18, 25, 0, 100, 100, 0, CAP_G, "MIX", #v);
+mI.ui_ledm(712 * sc, 296 * sc, 120 * sc, 9 * sc, pkI);
+mO.ui_ledm(712 * sc, 309 * sc, 120 * sc, 9 * sc, pkO);
+dy_lbl(700, 295, "IN", 0.7); dy_lbl(700, 308, "OUT", 0.7);
+pkI *= 0.85; pkO *= 0.85;
+
+// LINK (DUAL / M-S): the two channels' controls are ganged - turning one moves the other by the same amount
+// (dB controls by the same dB, times by the same factor), switches copy across; offsets set while unlinked stay.
+function gang_val(k, v) ( k == 1 ? min(max(v, -40), 0) : k == 2 ? min(max(v, 1), 20) : k == 3 ? min(max(v, 0.1), 50) :
+  k == 4 ? min(max(v, 20), 2000) : k == 6 ? min(max(v, -10), 20) : k == 8 ? min(max(v, 2000), 12000) : min(max(v, -24), 0); );
+function gang() local(k, a, b, pa, pb, mul, nv) (
+  slider24 && slider23 != 0 && gang_ok ? (
+    k = 0;
+    loop(11,
+      a = slider(1 + k); b = slider(12 + k); pa = GANG[k]; pb = GANG[16 + k];
+      mul = k == 3 || k == 4 || k == 8;
+      a != pa && b == pb ? (
+        nv = k == 0 || k == 5 || k == 7 || k == 9 ? a : gang_val(k, mul ? b * a / max(pa, 0.0001) : b + a - pa);
+        slider(12 + k) = nv; slider_automate(2 ^ (11 + k));
+      ) : b != pb && a == pa ? (
+        nv = k == 0 || k == 5 || k == 7 || k == 9 ? b : gang_val(k, mul ? a * b / max(pb, 0.0001) : a + b - pb);
+        slider(1 + k) = nv; slider_automate(2 ^ k);
+      );
+      k += 1;
+    );
+  );
+  k = 0; loop(11, GANG[k] = slider(1 + k); GANG[16 + k] = slider(12 + k); k += 1; );
+  gang_ok = 1;
+);
+gang();
+
+pk_end();
+ui_end();

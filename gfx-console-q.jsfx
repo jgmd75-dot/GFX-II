@@ -1,0 +1,450 @@
+desc:GFX Console Q
+//tags: compressor limiter gate expander vca broadcast console transformer
+//author: JGWizrad / Garden FX (GFX)
+//
+// Console Q: GFX Console with a four-band console channel EQ (the Board EQ engine) added below.
+// ORDER puts the EQ after the dynamics or in front of them. EQ: HPF / LPF, LF and HF (shelf or BELL), LMF and HMF with Q,
+// BROWN / BLACK voicing, IN.
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-dyn (.jsfx-inc) in the same folder.
+//
+// Centre-section dynamics from an 80s British broadcast console, in the spirit of the classic desk VCA
+// compressor and its companion compressor / gate module (personal use; the sound is designed from scratch).
+// Fast, clean and transparent, with the console's output transformer for a little weight.
+//   GATE / EXPANDER - THRESHOLD (fully left = off), RANGE (how far it closes), RELEASE. GATE: shuts by RANGE
+//                     below the threshold. EXP: a gentle 1:2 expander that only takes down what falls below.
+//                     The OPEN light shows it letting the signal through.
+//   COMPRESSOR      - THRESHOLD, RATIO (1:1 - INF:1), ATTACK, RELEASE, GAIN. A fast VCA with a 3 dB knee and a
+//                     quick RMS detector: it holds the level without dulling the transients.
+//   LIMIT           - a fast peak limiter after the compressor (fully left = off).
+//   XFMR            - the output transformer: the lows thicken and saturate gently as the level rises, the
+//                     extreme top softens. Off = straight wire.
+//   LINK            - both sides share one gain (the stereo image stays put); off = two mono channels.
+//   MIX             - parallel compression: the dry signal blended back in.
+// Order: gate > compressor > limiter > transformer. PRESETS.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-dyn.jsfx-inc
+
+slider1:1<0,1,1{Out,In}>-Compressor in
+slider2:-18<-40,0,0.1>-Threshold (dB)
+slider3:3<1,20,0.1>-Ratio (20 = inf)
+slider4:3<0.1,30,0.1>-Attack (ms)
+slider5:250<30,3000,1>-Release (ms)
+slider6:0<-10,20,0.1>-Gain (dB)
+slider7:0<-20,0,0.1>-Limit (dB, 0 = off)
+slider8:0<0,1,1{Out,In}>-Gate in
+slider9:-50<-80,0,0.1>-Gate threshold (dB)
+slider10:20<0,60,0.1>-Gate range (dB)
+slider11:200<20,2000,1>-Gate release (ms)
+slider12:1<0,1,1{Gate,Expander}>-Gate mode
+slider13:1<0,1,1{Off,On}>-Transformer
+slider14:1<0,1,1{Off,On}>-Link
+slider15:100<0,100,1>-Mix (%)
+slider16:0<-24,12,0.1>-Input trim (dB)
+slider17:1<0,1,1{Off,On}>-Input guard
+slider18:0<0,100,1>-Band sat (%)
+slider19:30<0,100,1>-Bias (%)
+slider20:120<40,400,1>-Sat low band (Hz)
+slider21:6000<2000,16000,10>-Sat high band (Hz)
+slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider24:20<20,400,1>-EQ: HPF (Hz, 20 = off)
+slider25:22000<3000,22000,10>-EQ: LPF (Hz, 22000 = off)
+slider26:0<-15,15,0.1>-EQ: LF gain (dB)
+slider27:100<30,450,1>-EQ: LF freq (Hz)
+slider28:0<0,1,1{Shelf,Bell}>-EQ: LF bell
+slider29:0<-15,15,0.1>-EQ: LMF gain (dB)
+slider30:600<200,2500,1>-EQ: LMF freq (Hz)
+slider31:1<0.4,3,0.01>-EQ: LMF Q
+slider32:0<-15,15,0.1>-EQ: HMF gain (dB)
+slider33:2500<600,7000,1>-EQ: HMF freq (Hz)
+slider34:1<0.4,3,0.01>-EQ: HMF Q
+slider35:0<-15,15,0.1>-EQ: HF gain (dB)
+slider36:8000<1500,16000,10>-EQ: HF freq (Hz)
+slider37:0<0,1,1{Shelf,Bell}>-EQ: HF bell
+slider38:1<0,1,1{Out,In}>-EQ: EQ in
+slider39:1<0,1,1{Brown,Black}>-EQ: Voicing
+slider40:0<0,100,1>-EQ: Line amp drive (%)
+slider41:0<-12,12,0.1>-EQ: Output (dB)
+slider42:0<0,1,1{Dynamics then EQ,EQ then Dynamics}>-Order
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-console-q";                                  // the ? pop-up links to this manual
+
+// one channel's detectors + gains (dB domain)
+function ch_det(x) instance(ms, gms) (
+  ms += (x * x - ms) * det_c;                       // compressor: quick RMS (~2 ms)
+  gms += (x * x - gms) * gdet_c;                    // gate: a little slower, so it does not chatter
+  10 * log10(ms + 0.0000000001) + 3;
+);
+function ch_glv() instance(gms) ( 10 * log10(gms + 0.0000000001) + 3 );
+function ch_gate(lv) instance(ge) local(t, o) (
+  g_on && gthr > -79.9 ? (
+    o = lv - gthr;
+    t = gmode ? max(min(o, 0), -grange) : (o < 0 ? -grange : 0);
+    ge += (t - ge) * (t > ge ? gatt_c : grel_c);
+  ) : ge = 0;
+  ge;
+);
+function ch_comp(lv) instance(e) local(t) (
+  c_on ? (
+    t = -(1 - sl) * dy_curve(lv - thr, 3);
+    e += (t - e) * (t < e ? ac : rc);
+  ) : e = 0;
+  e;
+);
+function ch_lim(x) instance(lg) local(t) (
+  t = l_on && abs(x) > ltg ? ltg / abs(x) : 1;
+  lg = t < lg ? t : lg + (1 - lg) * lim_r;
+  lg;
+);
+// output transformer: the lows saturate gently with level, the extreme top softens
+function xf(x) instance(lo, hi) local(s) (
+  lo += (x - lo) * xf_lc;
+  s = lo * 1.6; s = s / (1 + abs(s) * 0.22) / 1.6;  // soft, level-dependent squash of the lows
+  x = x - lo + s * 1.03;
+  hi += (x - hi) * xf_hc;
+  hi;
+);
+
+function update() (
+  c_on = slider1; thr = slider2; sl = slider3 >= 19.95 ? 0 : 1 / slider3;
+  ac = dy_ms(slider4); rc = dy_ms(slider5); mk = 10 ^ (slider6 / 20);
+  l_on = slider7 < -0.05; ltg = 10 ^ (slider7 / 20);
+  g_on = slider8; gthr = slider9; grange = slider10; grel_c = dy_ms(slider11); gmode = slider12;
+  xfm = slider13; lnk = slider14; mix_t = slider15 / 100;
+  in_setup(0, slider17);
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+);
+
+// ---------- presets (leave INPUT and OUTPUT alone) ----------
+// gate: in, threshold, range, release, mode; compressor: in, threshold, ratio, attack, release, gain; limit; xfmr; link; mix
+function pg(on, t, r, rl, md) ( slider8 = on; slider9 = t; slider10 = r; slider11 = rl; slider12 = md; );
+function pc(on, t, r, a, rl, g, lm, xm, lk, mx) (
+  slider1 = on; slider2 = t; slider3 = r; slider4 = a; slider5 = rl; slider6 = g; slider7 = lm;
+  slider13 = xm; slider14 = lk; slider15 = mx;
+);
+function pname(p) (
+  p == 1 ? "Desk Glue" :
+  p == 2 ? "Presenter Voice" :
+  p == 3 ? "Tight Drums (gated)" :
+  p == 4 ? "Kick / Snare Gate" :
+  p == 5 ? "Parallel Squash" :
+  p == 6 ? "Transmitter Limit" :
+  p == 7 ? "Acoustic Clean-up" :
+  p == 8 ? "Bass DI" :
+  p == 9 ? "Transformer Only" :
+  p == 10 ? "Gentle Programme Bus" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1  ? ( pg(0, -50, 20, 200, 1); pc(1, -20, 2.5, 5, 300, 3, 0, 1, 1, 100); ) :      // Desk Glue
+  p == 2  ? ( pg(1, -55, 12, 250, 1); pc(1, -26, 4, 2, 150, 6, -2, 1, 1, 100); ) :      // Presenter Voice
+  p == 3  ? ( pg(1, -45, 40, 120, 0); pc(1, -22, 5, 1, 120, 5, -1, 1, 1, 100); ) :      // Tight Drums (gated)
+  p == 4  ? ( pg(1, -40, 60, 80, 0);  pc(1, -24, 4, 0.5, 100, 4, 0, 1, 0, 100); ) :     // Kick / Snare Gate
+  p == 5  ? ( pg(0, -50, 20, 200, 1); pc(1, -30, 8, 0.3, 80, 10, -3, 1, 1, 45); ) :     // Parallel Squash
+  p == 6  ? ( pg(0, -50, 20, 200, 1); pc(1, -14, 20, 0.1, 50, 2, -1, 1, 1, 100); ) :    // Transmitter Limit
+  p == 7  ? ( pg(1, -60, 10, 400, 1); pc(1, -20, 3, 10, 400, 3, 0, 1, 1, 100); ) :      // Acoustic Clean-up
+  p == 8  ? ( pg(0, -50, 20, 200, 1); pc(1, -24, 4, 8, 250, 4, 0, 1, 1, 100); ) :       // Bass DI
+  p == 9  ? ( pg(0, -50, 20, 200, 1); pc(0, -18, 3, 3, 250, 0, 0, 1, 1, 100); ) :       // Transformer Only
+  p == 10 ? ( pg(1, -50, 15, 300, 1); pc(1, -16, 2, 20, 600, 2, -1, 1, 1, 100); );      // Gentle Programme Bus
+  p >= 1 && p <= 10 ? slider_automate(32767);       // sliders 1-15
+  p == 11 ? (                                       // Reset all to defaults
+    pg(0, -50, 20, 200, 1); pc(1, -18, 3, 3, 250, 0, 0, 1, 1, 100);
+    slider16 = 0; slider17 = 1; slider18 = 0; slider19 = 30; slider20 = 120; slider21 = 6000; slider22 = -0.3; slider23 = 1;
+    slider_automate(8388607);                       // sliders 1-23
+  );
+);
+
+in_init();
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+det_c = 1 - exp(-1 / (0.002 * srate));
+gdet_c = 1 - exp(-1 / (0.006 * srate));
+gatt_c = 1 - exp(-1 / (0.0005 * srate));           // gate opens in 0.5 ms
+lim_r = 1 - exp(-1 / (0.05 * srate));
+xf_lc = 1 - exp(-2 * $pi * 120 / srate);
+xf_hc = 1 - exp(-2 * $pi * min(24000, srate * 0.45) / srate);
+sm = 1 - exp(-1 / (0.03 * srate));
+L.lg = 1; R.lg = 1;
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
+PNL = 0x2C2C2E; INKC = 0xEDE6D8; BRN = 0x5C3A22; BRNL = 0x7A4E2E; ORG = 0xE8782A; YEL = 0xF0C030;
+cur_preset = 1;
+update();
+mix_s = mix_t;
+
+
+// ================= EQ (the Board EQ engine, names q_..., sliders 24 - 41) =================
+// a preset mask of the EQ unit, one slider at a time
+function cb_auto(m, off) local(k) ( k = 1; loop(63, m - 2 * floor(m / 2) ? ui_auto(k + off); m = floor(m / 2); k += 1; ); );
+#ui_man = "gfx-board-q";                                  // the ? pop-up links to this manual
+
+function th(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
+// one-pole high-pass (the third pole of the 18 dB HPF)
+function q_hp1(x) instance(x1, y1) ( y1 = q_hp1_a * (x - x1) + q_hp1_b * y1; x1 = x; y1; );
+function q_hp1set(f) local(k) ( k = tan($pi * min(f, srate * 0.45) / srate); q_hp1_a = 1 / (1 + k); q_hp1_b = (1 - k) / (1 + k); );
+function q_hp1db(f) local(w, q_wc) ( q_wc = slider24; w = f / q_wc; 10 * log10(w * w / (1 + w * w)); );
+
+// one channel's chain
+function q_chain(x) instance() (
+  q_hp_on ? x = this.h1.q_hp1(this.h2.bq_run(x));
+  q_eq_on ? (
+    x = this.lf.bq_run(x); q_lfx ? x = this.lx.bq_run(x);
+    x = this.lm.bq_run(x); x = this.hm.bq_run(x);
+    x = this.hf.bq_run(x); q_hfx ? x = this.hx.bq_run(x);
+  );
+  q_lp_on ? x = this.lp.bq_run(x);
+  x;
+);
+
+function q_setch() instance() local(q) (
+  q_hp_on ? this.h2.bq_set(1, slider24, 1, 0);
+  q_lp_on ? this.lp.bq_set(0, slider25, 0.707, 0);
+  // proportional Q on the black card
+  this.lf.bq_set(slider28 ? 2 : 4, slider27, slider28 ? (q_blk ? 0.6 + abs(slider26) / 15 * 0.9 : 0.55) : (q_blk ? 1.15 : 0.6), slider26);
+  this.lm.bq_set(2, slider30, slider31 * (q_blk ? 0.6 + abs(slider29) / 15 * 1.2 : 0.7), slider29);
+  this.hm.bq_set(2, slider33, slider34 * (q_blk ? 0.6 + abs(slider32) / 15 * 1.2 : 0.7), slider32);
+  this.hf.bq_set(slider37 ? 2 : 3, slider36, slider37 ? (q_blk ? 0.6 + abs(slider35) / 15 * 0.9 : 0.55) : (q_blk ? 1.15 : 0.6), slider35);
+  // the black card's shelves: a small opposite dip just inside the corner
+  q_lfx ? this.lx.bq_set(2, slider27 * 2.2, 1.2, -slider26 * 0.12);
+  q_hfx ? this.hx.bq_set(2, slider36 * 0.45, 1.2, -slider35 * 0.12);
+);
+
+function q_update() local(b, q_cs) (
+  q_cs = 0; b = 1; loop(18, q_cs += slider((b) + 23) * (b * 7.31 + 1); b += 1; );
+  q_cs != q_last_cs ? ( q_redraw = 1; q_last_cs = q_cs; );
+  q_hp_on = slider24 > 20.5; q_lp_on = slider25 < 21990; q_eq_on = slider38; q_blk = slider39;
+  q_lfx = q_blk && !slider28; q_hfx = q_blk && !slider37;
+  q_hp1set(slider24);
+  q_CL.q_setch(); q_CR.q_setch();
+  q_drv = slider40 / 100; q_dk = 1 + q_drv * 3; q_dbias = q_drv * 0.15; q_dtb = th(q_dbias);
+  q_og = 10 ^ (slider41 / 20);
+  
+     // no GFX output stage on this unit: its own character does that job
+);
+
+// ---------- presets (leave INPUT and OUTPUT alone) ----------
+function q_pq(hp, lp, lg, lf, q_lb, q_mg, q_mf, q_mq, q_hg, q_hf_, q_hq, q_fg, q_ff, fb, q_vo, q_dr) (
+  slider24 = hp; slider25 = lp; slider26 = lg; slider27 = lf; slider28 = q_lb; slider29 = q_mg; slider30 = q_mf; slider31 = q_mq;
+  slider32 = q_hg; slider33 = q_hf_; slider34 = q_hq; slider35 = q_fg; slider36 = q_ff; slider37 = fb; slider38 = 1; slider39 = q_vo; slider40 = q_dr; slider41 = 0;
+);
+function q_load_preset(p) (
+  p == 1  ? q_pq(90, 22000, -2, 200, 1, -3, 350, 1.2, 4, 3500, 1.2, 3, 12000, 0, 1, 10) :      // Vocal Presence
+  p == 2  ? q_pq(30, 22000, 5, 60, 1, -5, 380, 1.5, 3, 3000, 1.5, 0, 8000, 0, 1, 15) :         // Kick Punch
+  p == 3  ? q_pq(80, 22000, 2, 200, 1, -2, 500, 1.2, 4, 5000, 1.4, 3, 10000, 0, 1, 20) :       // Snare Crack
+  p == 4  ? q_pq(30, 9000, 4, 80, 0, -3, 250, 1.2, 2, 1200, 1.0, 0, 8000, 0, 0, 25) :          // Bass Weight
+  p == 5  ? q_pq(70, 22000, -2, 150, 0, -2, 300, 1.0, 2, 4000, 0.8, 4, 12000, 0, 0, 0) :       // Acoustic Sparkle
+  p == 6  ? q_pq(25, 22000, 1.5, 60, 0, 0, 600, 1, -1, 3000, 0.8, 2, 14000, 0, 0, 10) :        // Mix Bus Air
+  p == 7  ? q_pq(400, 3500, 0, 100, 0, 6, 1500, 1.5, 0, 2500, 1, 0, 8000, 0, 1, 60) :          // Telephone
+  p == 8  ? q_pq(60, 22000, 0, 100, 0, -5, 300, 1.0, 0, 2500, 1, 1, 10000, 0, 1, 0) :          // De-mud
+  p == 9  ? q_pq(40, 16000, 3, 120, 0, 1, 800, 0.7, 1, 3000, 0.7, 2, 9000, 0, 0, 40) :         // Brown Warmth
+  p == 10 ? q_pq(100, 22000, 0, 100, 0, 0, 600, 1, -4, 6500, 2.5, 2, 15000, 0, 1, 0);          // De-harsh
+  p >= 1 && p <= 10 ? cb_auto(262143, 23);     // sliders 1-18
+  p == 11 ? (                                       // Reset all to defaults
+    q_pq(20, 22000, 0, 100, 0, 0, 600, 1, 0, 2500, 1, 0, 8000, 0, 1, 0);
+    slider16 = 0; slider17 = 1; slider18 = 0; slider19 = 30; slider20 = 120; slider21 = 6000; slider22 = -0.3; slider23 = 1;
+    cb_auto(67108863, 23);
+  );
+);
+
+
+  
+ q_RSP = 30000;
+q_PNL = 0xB4B8BA; q_PRT = 0x1C1E21; q_SCR = 0x121517; q_CRED = 0xC8322A; q_CGRN = 0x2E8A4A; q_CBLU = 0x2C5FA8; q_CBRN = 0x6A4A32; q_CGRY = 0xE4E4E0; q_CBLK = 0x26272A; q_SLB = 0x3BA9E0; SDB = 0x34349A; q_SRD = 0xE0262B;
+q_update();
+
+
+function q_proc(cb_inl, cb_inr) (
+  q_xl = q_CL.q_chain(cb_inl); q_xr = q_CR.q_chain(cb_inr);
+  q_drv > 0.001 ? (
+    q_xl = (th(q_dk * q_xl + q_dbias) - q_dtb) / (q_dk * (1 - q_dtb * q_dtb));
+    q_xr = (th(q_dk * q_xr + q_dbias) - q_dtb) / (q_dk * (1 - q_dtb * q_dtb));
+  );
+  q_xl *= q_og; q_xr *= q_og;
+  q_oL = (q_xl); q_oR = (q_xr);
+  q_pkO = max(q_pkO, max(abs(q_oL), abs(q_oR)));
+  q_out_l = q_oL; q_out_r = q_oR;
+);
+q_ord = slider42;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+q_update();
+q_ord = slider42;
+update();
+
+@block
+q_update();
+q_ord = slider42;
+update();
+
+@serialize
+file_var(0, ui_sz);
+
+@sample
+in_process(spl0, spl1);
+!q_ord ? ( q_proc(in_l, in_r); in_l = q_out_l; in_r = q_out_r; );   // EQ first
+dl = in_l; dr = in_r;
+// gate (on the input)
+gvL = (L.ch_det(dl); L.ch_glv()); gvR = (R.ch_det(dr); R.ch_glv());
+lnk ? ( gvL = gvR = max(gvL, gvR); );
+gL = L.ch_gate(gvL); gR = R.ch_gate(gvR);
+xl = dl * 10 ^ (gL / 20); xr = dr * 10 ^ (gR / 20);
+// compressor (its detector hears the gated signal)
+cvL = 10 * log10(L.ms * 10 ^ (gL / 10) + 0.0000000001) + 3; cvR = 10 * log10(R.ms * 10 ^ (gR / 10) + 0.0000000001) + 3;
+lnk ? ( cvL = cvR = max(cvL, cvR); );
+eL = L.ch_comp(cvL); eR = R.ch_comp(cvR);
+yl = xl * 10 ^ (eL / 20) * (c_on ? mk : 1); yr = xr * 10 ^ (eR / 20) * (c_on ? mk : 1);
+// limiter
+lL = L.ch_lim(yl); lR = R.ch_lim(yr);
+lnk ? ( lL = lR = min(lL, lR); );
+yl *= lL; yr *= lR;
+// transformer
+xfm ? ( yl = TL.xf(yl); yr = TR.xf(yr); );
+grm = min(grm, min(eL, eR) + 20 * log10(min(lL, lR)));
+gtm = min(gtm, min(gL, gR));
+limm = max(limm, min(lL, lR) < 0.999);
+// mix + output stage
+mix_s += (mix_t - mix_s) * sm;
+oL = dl + (yl - dl) * mix_s; oR = dr + (yr - dr) * mix_s;
+q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
+oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
+ost_out(oL, oR);
+spl0 = ost_l; spl1 = ost_r;
+pkI = max(pkI, max(abs(dl), abs(dr)));
+pkO = max(pkO, max(abs(spl0), abs(spl1)));
+
+@gfx 900 500
+ui_begin(900, 500);
+ui_swb();   // drawn off-screen, then shown with the units in signal order (ORDER)
+dy_ink = INKC; dy_bg = PNL; dy_kst = 20; dy_ntick = 6;   // half the usual tick marks
+
+// a section: brown title strip, outline
+function sect(x, w, t, col) (
+  ui_col(0x232325); gfx_rect(x * sc, 72 * sc, w * sc, 254 * sc);
+  ui_col(BRN); gfx_rect(x * sc, 72 * sc, w * sc, 22 * sc);
+  ui_col(col); gfx_rect(x * sc, 94 * sc, w * sc, 2 * sc);
+  gfx_setfont(6, "Trebuchet MS", 13 * sc, 'b'); ui_col(col); gfx_x = (x + 8) * sc; gfx_y = 76 * sc; gfx_drawstr(t);
+  ui_cola(0x000000, 0.5); gfx_rect(x * sc, 326 * sc, w * sc, 1 * sc);
+);
+
+// ---------- panel ----------
+fh = 492;
+ui_col(0x0B0B0C); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
+ui_col(ORG); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
+gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKC); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("CONSOLE Q");
+gfx_setfont(4); ui_col(YEL); gfx_x = 238 * sc; gfx_y = 30 * sc; gfx_drawstr("BROADCAST DESK DYNAMICS");
+ui_button(536 * sc, 20 * sc, 22 * sc, 28 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(560 * sc, 20 * sc, 22 * sc, 28 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 590 * sc; gfx_y = 48 * sc;
+  cur_preset = gfx_showmenu("Desk Glue|Presenter Voice|Tight Drums (gated)|Kick / Snare Gate|Parallel Squash|Transmitter Limit|Acoustic Clean-up|Bass DI|Transformer Only|Gentle Programme Bus|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_size_picker(700 * sc, 22 * sc);
+pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+
+// ORDER: centred in the top bar; the unit the signal meets first is shown on top
+ui_orderkey(382 * sc, 20 * sc, 150 * sc, 26 * sc, 42, "DYNAMICS > EQ", "EQ > DYNAMICS", 4);
+ui_col(ORG); gfx_rect(14 * sc, 60 * sc, 580 * sc, 4 * sc);
+ui_col(YEL); gfx_rect(594 * sc, 60 * sc, 292 * sc, 4 * sc);
+
+// ---------- GATE / EXPANDER ----------
+ui_swu(slider42 ? 480 - 327 : 0);
+sect(18, 232, "GATE / EXPANDER", YEL);
+slider9 <= -79.9 ? strcpy(#v, "OFF") : sprintf(#v, "%.0f dB", slider9);
+dy_knob(56, 150, 14, 9, -80, 0, -50, 0, YEL, "THRESH", #v);
+sprintf(#v, "%.0f dB", slider10); dy_knob(134, 150, 14, 10, 0, 60, 20, 0, YEL, "RANGE", #v);
+sprintf(#v, "%.0f ms", slider11); dy_knob(212, 150, 14, 11, 20, 2000, 200, 1, BRNL, "RELEASE", #v);
+dy_btn(36, 228, slider8, dy_grn, "IN") ? ( slider8 = 1 - slider8; ui_auto(8); );
+dy_btn(96, 228, slider12 == 0, YEL, "GATE") ? ( slider12 = 0; ui_auto(12); );
+dy_btn(146, 228, slider12 == 1, YEL, "EXP") ? ( slider12 = 1; ui_auto(12); );
+gtd = min(gtm, gtd * 0.8); gtm = 0;
+pk_led(212 * sc, 236 * sc, 4 * sc, slider8 && gtd > -1, dy_grn); dy_lbl(212, 246, "OPEN", 0.7);
+sprintf(#v, "GATE %.0f dB", gtd); dy_lbl(134, 300, slider8 ? #v : "GATE OUT", 0.6);
+
+// ---------- COMPRESSOR ----------
+sect(262, 360, "COMPRESSOR", ORG);
+sprintf(#v, "%.1f dB", slider2); dy_knob(298, 150, 14, 2, -40, 0, -18, 0, ORG, "THRESH", #v);
+slider3 >= 19.95 ? strcpy(#v, "INF:1") : sprintf(#v, "%.1f:1", slider3);
+dy_knob(370, 150, 14, 3, 1, 20, 3, 1, ORG, "RATIO", #v);
+sprintf(#v, "%.1f ms", slider4); dy_knob(442, 150, 14, 4, 0.1, 30, 3, 1, BRNL, "ATTACK", #v);
+sprintf(#v, "%.0f ms", slider5); dy_knob(514, 150, 14, 5, 30, 3000, 250, 1, BRNL, "RELEASE", #v);
+sprintf(#v, "%+.1f dB", slider6); dy_knob(586, 150, 14, 6, -10, 20, 0, 0, YEL, "GAIN", #v);
+dy_btn(282, 228, slider1, dy_grn, "IN") ? ( slider1 = 1 - slider1; ui_auto(1); );
+grd = min(grm, grd * 0.82); grm = 0;
+dy_grrow(350, 236, grd);
+
+// ---------- OUTPUT (limit, transformer, link, mix) ----------
+sect(634, 248, "LIMIT / OUTPUT", YEL);
+slider7 < -0.05 ? sprintf(#v, "%.1f dB", slider7) : strcpy(#v, "OFF");
+dy_knob(672, 150, 14, 7, -20, 0, 0, 0, ORG, "LIMIT", #v);
+limd = limm; limm = 0;
+pk_led(696 * sc, 128 * sc, 3.5 * sc, limd, dy_red);
+sprintf(#v, "WET %.0f", slider15); dy_knob(846, 150, 14, 15, 0, 100, 100, 0, YEL, "MIX", #v);
+dy_btn(726, 132, slider13, ORG, "XFMR") ? ( slider13 = 1 - slider13; ui_auto(13); );
+dy_btn(776, 132, slider14, YEL, "LINK") ? ( slider14 = 1 - slider14; ui_auto(14); );
+mI.ui_ledm(672 * sc, 270 * sc, 160 * sc, 9 * sc, pkI);
+mO.ui_ledm(672 * sc, 286 * sc, 160 * sc, 9 * sc, pkO);
+dy_lbl(656, 269, "IN", 0.7); dy_lbl(656, 285, "OUT", 0.7);
+pkI *= 0.85; pkO *= 0.85;
+sprintf(#v, "GR %.1f", grd); dy_lbl(858, 278, #v, 0.8);
+
+// ================= the EQ strip =================
+ui_swu(slider42 ? 72 - 348 : 0);
+// (Console's colours) a section box with a brown title strip, the four bands and filters of the Board EQ
+ui_col(0x232325); gfx_rect(18 * sc, 348 * sc, 864 * sc, 132 * sc);
+ui_col(BRN); gfx_rect(18 * sc, 348 * sc, 864 * sc, 24 * sc);
+ui_col(YEL); gfx_rect(18 * sc, 372 * sc, 864 * sc, 2 * sc);
+gfx_setfont(6, "Trebuchet MS", 13 * sc, 'b'); ui_col(YEL); gfx_x = 26 * sc; gfx_y = 353 * sc; gfx_drawstr("EQ");
+gfx_setfont(4); ui_cola(INKC, 0.75); gfx_x = 54 * sc; gfx_y = 355 * sc; gfx_drawstr("4-BAND CHANNEL EQ");
+pk_ledbtn(520 * sc, 351 * sc, 24 * sc, 18 * sc, slider38, dy_grn) ? ( slider38 = 1 - slider38; ui_auto(38); );
+gfx_setfont(4); ui_col(INKC); gfx_x = 549 * sc; gfx_y = 355 * sc; gfx_drawstr("IN");
+pk_ledbtn(578 * sc, 351 * sc, 24 * sc, 18 * sc, slider39, dy_amb) ? ( slider39 = 1 - slider39; ui_auto(39); );
+gfx_setfont(4); ui_col(INKC); gfx_x = 607 * sc; gfx_y = 355 * sc; gfx_drawstr(slider39 ? "BLACK" : "BROWN");
+dy_kst = 20; dy_ink = INKC;
+function qhz(f) ( f >= 1000 ? sprintf(#qv, "%.1fk", f / 1000) : sprintf(#qv, "%.0f", f); #qv; );
+slider24 <= 20.5 ? strcpy(#v, "OFF") : strcpy(#v, qhz(slider24)); dy_kf = 1; dy_knob(52, 410, 13, 24, 20, 400, 20, 1, 0xA8A8AC, "HPF", #v);
+slider25 >= 21990 ? strcpy(#v, "OFF") : strcpy(#v, qhz(slider25)); dy_kf = 2; dy_knob(110, 410, 13, 25, 3000, 22000, 22000, 1, 0xA8A8AC, "LPF", #v);
+ui_cola(INKC, 0.2); gfx_rect(144 * sc, 384 * sc, 1 * sc, 84 * sc);
+sprintf(#v, "%+.1f", slider26); dy_knob(180, 410, 13, 26, -15, 15, 0, 0, BRNL, "LF", #v);
+dy_knob(234, 410, 13, 27, 30, 450, 100, 1, BRNL, "FREQ", qhz(slider27));
+dy_btn(264, 392, slider28, dy_amb, "BELL") ? ( slider28 = 1 - slider28; ui_auto(28); );
+ui_cola(INKC, 0.2); gfx_rect(316 * sc, 384 * sc, 1 * sc, 84 * sc);
+sprintf(#v, "%+.1f", slider29); dy_knob(352, 410, 13, 29, -15, 15, 0, 0, ORG, "LMF", #v);
+dy_knob(406, 410, 13, 30, 200, 2500, 600, 1, ORG, "FREQ", qhz(slider30));
+sprintf(#v, "%.2f", slider31); dy_knob(460, 410, 13, 31, 0.4, 3, 1, 1, ORG, "Q", #v);
+ui_cola(INKC, 0.2); gfx_rect(494 * sc, 384 * sc, 1 * sc, 84 * sc);
+sprintf(#v, "%+.1f", slider32); dy_knob(530, 410, 13, 32, -15, 15, 0, 0, YEL, "HMF", #v);
+dy_knob(584, 410, 13, 33, 600, 7000, 2500, 1, YEL, "FREQ", qhz(slider33));
+sprintf(#v, "%.2f", slider34); dy_knob(638, 410, 13, 34, 0.4, 3, 1, 1, YEL, "Q", #v);
+ui_cola(INKC, 0.2); gfx_rect(672 * sc, 384 * sc, 1 * sc, 84 * sc);
+sprintf(#v, "%+.1f", slider35); dy_knob(708, 410, 13, 35, -15, 15, 0, 0, 0xE8502A, "HF", #v);
+dy_knob(762, 410, 13, 36, 1500, 16000, 8000, 1, 0xE8502A, "FREQ", qhz(slider36));
+dy_btn(792, 392, slider37, dy_amb, "BELL") ? ( slider37 = 1 - slider37; ui_auto(37); );
+
+ui_swe(14, 886, 72, 327, 348, 480, slider42);
+pk_end();
+ui_end();

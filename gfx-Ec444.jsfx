@@ -1,0 +1,214 @@
+desc:GFX EC-444
+//tags: delay bbd analog maplin realistic chorus saturation
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-lfo.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,1,1{Long (MN3005),Short (MN3207)}>-Mode
+slider2:250<50,550,1>-Time (ms)
+slider3:40<0,110,1>-Repeats (%)
+slider4:30<0,100,1>-JRC4558 Drive (%)
+slider5:3500<1000,8000,10>-BBD Clock LPF (Hz)
+slider6:15<0,100,1>-BBD Clock Noise (%)
+slider7:0<0,1,1{Off,On}>-Dual Chip Mode
+slider8:1<0,1,1{Off,On}>-Oscillation Limit
+slider9:35<0,100,1>-Mix (%)
+slider10:0<-24,12,0.1>-Output (dB)
+slider11:0<-24,12,0.1>-Input Trim (dB)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-echorder";
+
+// Delay memory (MN3005 / MN3207 buffers)
+dlen = ceil(1.0 * srate) + 8;
+bufL = 100000; bufR = bufL + dlen;
+memset(bufL, 0, dlen * 2);
+wp = 0;
+
+// JRC4558 Op-Amp Asymmetrical Saturation
+function jrc4558_sat(x, drv) local(s) (
+  s = x * drv;
+  s > 0 ? (
+    s = s / (1 + s);
+  ) : (
+    s = -abs(s) / (1 + abs(s) * 1.2);
+  );
+  s / drv;
+);
+
+// Interpolated delay read
+function rdl(buf, d) local(p, i, f, x0, x1, x2, x3) (
+  p = wp - d; p < 0 ? p += dlen; i = floor(p); f = p - i;
+  x0 = buf[(i - 1 + dlen) % dlen]; x1 = buf[i % dlen]; x2 = buf[(i + 1) % dlen]; x3 = buf[(i + 2) % dlen];
+  (((0.5 * (x3 - x0) + 1.5 * (x1 - x2)) * f + (x0 - 2.5 * x1 + 2 * x2 - 0.5 * x3)) * f + 0.5 * (x2 - x0)) * f + x1;
+);
+
+// Helper function: returns text ONLY when mouse is hovering over the knob area
+function hover_txt(cx, cy, r, txt) (
+  mouse_x >= (cx - r) * sc && mouse_x <= (cx + r) * sc &&
+  mouse_y >= (cy - r) * sc && mouse_y <= (cy + r) * sc ? txt : "";
+);
+
+function update() (
+  mode = slider1;
+  t_ms = mode ? min(max(slider2, 50), 110) : slider2;
+  repeats = slider3 / 100;
+  drv = 1 + 4 * (slider4 / 100);
+  lpf_cutoff = min(slider5, srate * 0.45);
+  bbd_alpha = 1 - exp(-2 * $pi * lpf_cutoff / srate);
+  noise_lvl = (slider6 / 100) * 0.002;
+  dual_chip = slider7;
+  osc_lim = slider8;
+  mix_t = slider9 / 100;
+  out_t = 10 ^ (slider10 / 20);
+  in_trim = 10 ^ (slider11 / 20);
+  t_s = t_ms * 0.001 * srate;
+);
+
+!ui_dflt ? ui_thm = 0;
+update();
+ui_dflt = 1;
+
+@slider
+update();
+
+@block
+update();
+
+@sample
+// Input trimming
+inL = spl0 * in_trim;
+inR = spl1 * in_trim;
+
+// JRC4558 Preamp Input Stage
+inL = jrc4558_sat(inL, drv);
+inR = jrc4558_sat(inR, drv);
+
+// Delay times with optional dual-chip clock offset
+dL = min(max(t_s, 3), dlen - 4);
+dR = dual_chip ? min(max(t_s * 1.03 + 2, 3), dlen - 4) : dL;
+
+// BBD Read
+eL = rdl(bufL, dL);
+eR = rdl(bufR, dR);
+
+// BBD Anti-Aliasing LPF & Clock Noise Integration
+lpf_stateL += (eL - lpf_stateL) * bbd_alpha; eL = lpf_stateL;
+lpf_stateR += (eR - lpf_stateR) * bbd_alpha; eR = lpf_stateR;
+
+noise = (rand(2.0) - 1.0) * noise_lvl;
+eL += noise; eR += noise;
+
+// Feedback Processing (JRC4558 Drive in Feedback Loop)
+fL = jrc4558_sat(eL * repeats, drv);
+fR = jrc4558_sat(eR * repeats, drv);
+
+osc_lim ? (
+  fL = min(max(fL, -1.2), 1.2);
+  fR = min(max(fR, -1.2), 1.2);
+);
+
+bufL[wp] = inL + fL;
+bufR[wp] = inR + fR;
+
+wp += 1; wp >= dlen ? wp = 0;
+
+// Dry / Wet Mix
+dry_g = min(2 * (1 - mix_t), 1);
+wet_g = min(2 * mix_t, 1);
+
+oL = (inL * dry_g + eL * wet_g) * out_t;
+oR = (inR * dry_g + eR * wet_g) * out_t;
+
+spl0 = oL;
+spl1 = oR;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 1060 300
+ui_begin(1060, 300);
+
+FACE = 0x49796B; INK = 0xF3EBD3; BLU = 0xF3EBD3; DIM = 0xA2B5AC; RED = 0xFF3A22;
+dy_ink = INK; dy_bg = FACE; dy_nov = 1;
+
+function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(FACE); gfx_rect(26 * sc, 0, 1008 * sc, 300 * sc);
+rd_rack(0, 0, 1060, 300, 0xA8ACB2);
+ui_cola(0x000000, 0.35); gfx_rect(26 * sc, 0, 1008 * sc, 2 * sc); gfx_rect(26 * sc, 298 * sc, 1008 * sc, 2 * sc);
+ui_col(BLU); gfx_rect(26 * sc, 62 * sc, 1008 * sc, 3 * sc);
+
+// ---------- HEADER ----------
+rd_badge(60, 34, 15, INK, FACE);
+rd_title(84, 18, "ECHORDER EC-444", 24, INK);
+rd_sub(280, 30, "ANALOG BBD DELAY LINE", DIM, 1);
+
+rd_sq(720, 20, 80, 24, slider1 == 0, BLU, "LONG")  ? setv(1, 0);
+rd_sq(810, 20, 80, 24, slider1 == 1, BLU, "SHORT") ? setv(1, 1);
+ui_size_picker(930 * sc, 22 * sc);
+
+// ---------- INPUT / PREAMP SECTION ----------
+rd_sub(60, 74, "PREAMP", BLU, 1);
+sprintf(#v, "%+.1f dB", slider11);
+dy_knob(80, 132, 20, 11, -24, 12, 0, 0, 0x2A2D33, "TRIM", hover_txt(80, 132, 20, #v));
+
+sprintf(#v, "%.0f%%", slider4);
+dy_knob(150, 132, 22, 4, 0, 100, 30, 0, 0xC4C6C3, "DRIVE", hover_txt(150, 132, 22, #v));
+
+ui_cola(INK, 0.15); gfx_rect(220 * sc, 78 * sc, 1 * sc, 208 * sc);
+
+// ---------- BBD ENGINE SECTION ----------
+rd_sub(240, 74, "BBD ENGINE", BLU, 1);
+
+sprintf(#v, "%.0f ms", slider2);
+dy_knob(280, 132, 28, 2, 50, slider1 ? 110 : 550, 250, 1, 0xC4C6C3, "TIME", hover_txt(280, 132, 28, #v));
+
+sprintf(#v, "%.0f%%", slider3);
+dy_knob(370, 132, 22, 3, 0, 110, 40, 0, 0xC4C6C3, "REPEATS", hover_txt(370, 132, 22, #v));
+
+ui_cola(INK, 0.15); gfx_rect(440 * sc, 78 * sc, 1 * sc, 208 * sc);
+
+// ---------- TONE & ALIAS SECTION ----------
+rd_sub(460, 74, "TONE & ALIAS", BLU, 1);
+
+sprintf(#v, "%.0f Hz", slider5);
+dy_knob(500, 132, 20, 5, 1000, 8000, 3500, 1, 0x2A2D33, "CLOCK LPF", hover_txt(500, 132, 20, #v));
+
+sprintf(#v, "%.0f%%", slider6);
+dy_knob(580, 132, 18, 6, 0, 100, 15, 0, 0x2A2D33, "NOISE", hover_txt(580, 132, 18, #v));
+
+// Toggles (Bottom of Tone section)
+rd_sq(460, 210, 80, 22, slider7, BLU, "DUAL CHIP") ? setv(7, 1 - slider7);
+rd_sq(550, 210, 80, 22, slider8, BLU, "OSC LIMIT") ? setv(8, 1 - slider8);
+
+ui_cola(INK, 0.15); gfx_rect(660 * sc, 78 * sc, 1 * sc, 208 * sc);
+
+// ---------- MASTER SECTION ----------
+rd_sub(680, 74, "MASTER", BLU, 1);
+
+sprintf(#v, "%.0f%%", slider9);
+dy_knob(720, 132, 22, 9, 0, 100, 35, 0, 0xF3EBD3, "MIX", hover_txt(720, 132, 22, #v));
+
+sprintf(#v, "%+.1f dB", slider10);
+dy_knob(810, 132, 22, 10, -24, 12, 0, 0, 0xC4C6C3, "OUTPUT", hover_txt(810, 132, 22, #v));
+
+mL.ui_ledm(900 * sc, 100 * sc, 9 * sc, 120 * sc, pkL); mR.ui_ledm(918 * sc, 100 * sc, 9 * sc, 120 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+rd_lbl(909, 235, "OUT", DIM, 1);
+
+pk_end();
+ui_end();

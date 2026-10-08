@@ -1,0 +1,318 @@
+desc:Cat22 Companded - Dolby A-Style 4-Band Compander / Saturator / EQ
+//tags: dynamics multiband saturation eq
+//author: Emergent (inspired by the Dolby Model 361 + Cat. No. 22 card)
+//
+// A modern rebuild of the Dolby A "Cat 22" idea as a 4-band channel strip.
+// Splits audio at 80 Hz / 3 kHz / 9 kHz with phase-coherent Linkwitz-Riley (LR4)
+// crossovers, then runs each band through Saturation -> EQ -> Compander -> Gain,
+// and sums it all back with a master trim + ceiling limiter.
+//
+// Global MODE:
+//   0 = Process  (each band uses its own compander mode)
+//   1 = Encode   (force upward compression on every band -> the "air" explosion)
+//   2 = Decode   (force upward expansion on every band)
+
+slider1:0<0,2,1{Process,Encode,Decode}>Global Mode
+slider2:0<-24,24,0.1>Master Trim (dB)
+slider3:-0.3<-12,0,0.1>Ceiling (dB)
+
+slider10:1<0,3,1{Off,Tape,Tube,Fuzz}>B1 Sat Type
+slider11:0<0,100,1>B1 Drive
+slider12:0<0,2,1{Tilt,Low Shelf,High Shelf}>B1 EQ Mode
+slider13:0<-12,12,0.1>B1 EQ Gain (dB)
+slider14:0<0,2,1{Off,Compress,Expand}>B1 Comp Mode
+slider15:-24<-48,0,0.1>B1 Threshold (dB)
+slider16:8<0,24,0.1>B1 Amount (dB)
+slider17:0<-24,24,0.1>B1 Gain (dB)
+slider18:0<0,1,1{Off,On}>B1 Solo
+slider19:0<0,1,1{Off,On}>B1 Bypass
+
+slider20:2<0,3,1{Off,Tape,Tube,Fuzz}>B2 Sat Type
+slider21:0<0,100,1>B2 Drive
+slider22:0<0,2,1{Tilt,Low Shelf,High Shelf}>B2 EQ Mode
+slider23:0<-12,12,0.1>B2 EQ Gain (dB)
+slider24:0<0,2,1{Off,Compress,Expand}>B2 Comp Mode
+slider25:-24<-48,0,0.1>B2 Threshold (dB)
+slider26:10<0,24,0.1>B2 Amount (dB)
+slider27:0<-24,24,0.1>B2 Gain (dB)
+slider28:0<0,1,1{Off,On}>B2 Solo
+slider29:0<0,1,1{Off,On}>B2 Bypass
+
+slider30:1<0,3,1{Off,Tape,Tube,Fuzz}>B3 Sat Type
+slider31:0<0,100,1>B3 Drive
+slider32:0<0,2,1{Tilt,Low Shelf,High Shelf}>B3 EQ Mode
+slider33:0<-12,12,0.1>B3 EQ Gain (dB)
+slider34:1<0,2,1{Off,Compress,Expand}>B3 Comp Mode
+slider35:-30<-48,0,0.1>B3 Threshold (dB)
+slider36:12<0,24,0.1>B3 Amount (dB)
+slider37:0<-24,24,0.1>B3 Gain (dB)
+slider38:0<0,1,1{Off,On}>B3 Solo
+slider39:0<0,1,1{Off,On}>B3 Bypass
+
+slider40:0<0,3,1{Off,Tape,Tube,Fuzz}>B4 Sat Type
+slider41:0<0,100,1>B4 Drive
+slider42:2<0,2,1{Tilt,Low Shelf,High Shelf}>B4 EQ Mode
+slider43:0<-12,12,0.1>B4 EQ Gain (dB)
+slider44:1<0,2,1{Off,Compress,Expand}>B4 Comp Mode
+slider45:-30<-48,0,0.1>B4 Threshold (dB)
+slider46:14<0,24,0.1>B4 Amount (dB)
+slider47:0<-24,24,0.1>B4 Gain (dB)
+slider48:0<0,1,1{Off,On}>B4 Solo
+slider49:0<0,1,1{Off,On}>B4 Bypass
+
+@init
+nextmem = 0;
+function alloc(n) ( this.p = nextmem; nextmem += n; this.p; );
+
+// Standard Butterworth Q parameter replacement value
+compass_q = 0.70710678;
+
+// ---- biquad (coeffs in p[0..4], state in p[5..8]) ----
+function bq(x, p) local(y) (
+  y = p[0]*x + p[1]*p[5] + p[2]*p[6] - p[3]*p[7] - p[4]*p[8];
+  p[6] = p[5]; p[5] = x; p[8] = p[7]; p[7] = y;
+  y;
+);
+
+function setLP(p, f) local(w,c,s,al,a0) (
+  w = 2*$pi*f/srate; c = cos(w); s = sin(w); al = s/(2*compass_q); a0 = 1+al;
+  p[0] = ((1-c)*0.5)/a0; p[1] = (1-c)/a0; p[2] = ((1-c)*0.5)/a0;
+  p[3] = (-2*c)/a0; p[4] = (1-al)/a0;
+  p[5]=0; p[6]=0; p[7]=0; p[8]=0;
+);
+
+function setHP(p, f) local(w,c,s,al,a0) (
+  w = 2*$pi*f/srate; c = cos(w); s = sin(w); al = s/(2*compass_q); a0 = 1+al;
+  p[0] = ((1+c)*0.5)/a0; p[1] = -(1+c)/a0; p[2] = ((1+c)*0.5)/a0;
+  p[3] = (-2*c)/a0; p[4] = (1-al)/a0;
+  p[5]=0; p[6]=0; p[7]=0; p[8]=0;
+);
+
+// ---- All-Pass Filter Coefficient Calculator (2nd Order) ----
+function setAP(p, f) local(w,c,s,al,a0) (
+  w = 2*$pi*f/srate; c = cos(w); s = sin(w); al = s/(2*compass_q); a0 = 1+al;
+  p[0] = (1 - al) / a0;
+  p[1] = (-2 * c) / a0;
+  p[2] = (1 + al) / a0;
+  p[3] = (-2 * c) / a0;
+  p[4] = (1 - al) / a0;
+  p[5]=0; p[6]=0; p[7]=0; p[8]=0;
+);
+
+// allocate 18 slots each (9 per channel). access with +co where co = ch*9.
+lp80a = alloc(18); lp80b = alloc(18); hp80a = alloc(18); hp80b = alloc(18);
+lp3a  = alloc(18); lp3b  = alloc(18); hp3a  = alloc(18); hp3b  = alloc(18);
+lp9a  = alloc(18); lp9b  = alloc(18); hp9a  = alloc(18); hp9b  = alloc(18);
+
+// allpass alignment pairs for lower bands summing correction
+a13la = alloc(18); a13lb = alloc(18); a13ha = alloc(18); a13hb = alloc(18); // band1 @3k
+a19la = alloc(18); a19lb = alloc(18); a19ha = alloc(18); a19hb = alloc(18); // band1 @9k
+a29la = alloc(18); a29lb = alloc(18); a29ha = alloc(18); a29hb = alloc(18); // band2 @9k
+
+F1 = 80; F2 = 3000; F3 = 9000;
+function setupCh(co) (
+  setLP(lp80a+co,F1); setLP(lp80b+co,F1); setHP(hp80a+co,F1); setHP(hp80b+co,F1);
+  setLP(lp3a+co,F2);  setLP(lp3b+co,F2);  setHP(hp3a+co,F2);  setHP(hp3b+co,F2);
+  setLP(lp9a+co,F3);  setLP(lp9b+co,F3);  setHP(hp9a+co,F3);  setHP(hp9b+co,F3);
+  
+  // Populate all-pass alignment filters
+  setAP(a13la+co, F2); setAP(a13lb+co, F2); setAP(a13ha+co, F2); setAP(a13hb+co, F2);
+  setAP(a19la+co, F3); setAP(a19lb+co, F3); setAP(a19ha+co, F3); setAP(a19hb+co, F3);
+  setAP(a29la+co, F3); setAP(a29lb+co, F3); setAP(a29ha+co, F3); setAP(a29hb+co, F3);
+);
+setupCh(0); setupCh(9);
+
+// EQ one-pole coefficients per band
+function opc(fc) ( 1 - exp(-2*$pi*fc/srate); );
+eqc1 = opc(50); eqc2 = opc(800); eqc3 = opc(5000); eqc4 = opc(12000);
+
+// compander envelope coefficients
+atkC = 1 - exp(-1/(0.005*srate));
+relC = 1 - exp(-1/(0.060*srate));
+
+// per-band EQ + compander state
+eqS  = alloc(8);   
+cmpS = alloc(8);   
+
+// meters
+mtr = alloc(4);
+drag_id = -1;
+pcap = 0;
+
+LN10 = log(10);
+function db2g(d) ( exp(d*LN10/20); );
+
+// ---- splits input x into globals b1..b4 for channel offset co ----
+function splitBands(x, co) local(low1,rest,rest2,b2_,a13) (
+  low1  = bq(bq(x, hp80a+co), hp80b+co);     
+  rest  = low1;
+  low1  = bq(bq(x, lp80a+co), lp80b+co);     // band1 raw (low)
+  b2_   = bq(bq(rest, lp3a+co), lp3b+co);    // band2 raw
+  rest2 = bq(bq(rest, hp3a+co), hp3b+co);
+  b3    = bq(bq(rest2, lp9a+co), lp9b+co);   // band3
+  b4    = bq(bq(rest2, hp9a+co), hp9b+co);   // band4
+  // align band1 through AP@3k then AP@9k
+  a13 = bq(bq(low1, a13la+co), a13lb+co) + bq(bq(low1, a13ha+co), a13hb+co);
+  b1  = bq(bq(a13, a19la+co), a19lb+co) + bq(bq(a13, a19ha+co), a19hb+co);
+  // align band2 through AP@9k
+  b2  = bq(bq(b2_, a29la+co), a29lb+co) + bq(bq(b2_, a29ha+co), a29hb+co);
+);
+
+function sat(x, t, drv) local(d,y) (
+  (t == 0 || drv <= 0) ? x : (
+    d = 1 + drv*0.09;
+    t == 1 ? y = tanh(x*d) / tanh(d) :                     // tape
+    t == 2 ? y = (x*d + 0.15*x*x*d*d) / (1 + abs(x*d)) : // tube (asym)
+           y = (x>=0 ? 1 : -1) * (1 - exp(-abs(x*d))); // fuzz
+    y / (0.6 + 0.4*d) + x*0.0;
+  );
+);
+
+function eqBand(x, mode, gdb, c, sp) local(lp,hp,g) (
+  sp[0] = sp[0] + c*(x - sp[0]); lp = sp[0]; hp = x - lp; g = db2g(gdb);
+  mode == 0 ? lp*g + hp/g :      // tilt
+  mode == 1 ? lp*g + hp :        // low shelf
+  lp + hp*g;                     // high shelf
+);
+
+function compander(x, mode, thr, amt, sp) local(ax,co,env,envdb,f) (
+  mode == 0 ? x : (
+    ax = abs(x);
+    co = ax > sp[0] ? atkC : relC;
+    sp[0] = sp[0] + co*(ax - sp[0]);
+    env = sp[0];
+    envdb = env > 0.0000001 ? 20*log(env)/LN10 : -140;
+    f = (thr - envdb) / 24; f = max(0, min(1, f));   // 1 = quiet, 0 = loud
+    mode == 1 ? x * db2g(amt*f) : x * db2g(-amt*f);  // compress(boost quiet) / expand(cut quiet)
+  );
+);
+
+function limiter(x, ceil) ( ceil*tanh(x/ceil); );
+
+@sample
+spl0 != spl0 ? spl0 = 0;
+spl1 != spl1 ? spl1 = 0;
+
+anySolo = slider18 || slider28 || slider38 || slider48;
+gm = slider1;
+ceilL = db2g(slider3);
+trim = db2g(slider2);
+
+function bandproc(x, bidx, co, stype, drv, eqm, eqg, eqc, cmode, thr, amt, gdb, byp, solo) local(y, em) (
+  byp ? y = x : (
+    y = sat(x, stype, drv);
+    y = eqBand(y, eqm, eqg, eqc, eqS + bidx + co*4);
+    em = gm == 1 ? 1 : gm == 2 ? 2 : cmode;
+    y = compander(y, em, thr, amt, cmpS + bidx + co*4);
+    y = y * db2g(gdb);
+  );
+  (anySolo && !solo) ? 0 : y;
+);
+
+// ---- Left ----
+splitBands(spl0, 0);
+L1 = bandproc(b1, 0, 0, slider10,slider11,slider12,slider13,eqc1,slider14,slider15,slider16,slider17,slider19,slider18);
+L2 = bandproc(b2, 1, 0, slider20,slider21,slider22,slider23,eqc2,slider24,slider25,slider26,slider27,slider29,slider28);
+L3 = bandproc(b3, 2, 0, slider30,slider31,slider32,slider33,eqc3,slider34,slider35,slider36,slider37,slider39,slider38);
+L4 = bandproc(b4, 3, 0, slider40,slider41,slider42,slider43,eqc4,slider44,slider45,slider46,slider47,slider49,slider48);
+
+// ---- Right ----
+splitBands(spl1, 9);
+R1 = bandproc(b1, 0, 1, slider10,slider11,slider12,slider13,eqc1,slider14,slider15,slider16,slider17,slider19,slider18);
+R2 = bandproc(b2, 1, 1, slider20,slider21,slider22,slider23,eqc2,slider24,slider25,slider26,slider27,slider29,slider28);
+R3 = bandproc(b3, 2, 1, slider30,slider31,slider32,slider33,eqc3,slider34,slider35,slider36,slider37,slider39,slider38);
+R4 = bandproc(b4, 3, 1, slider40,slider41,slider42,slider43,eqc4,slider44,slider45,slider46,slider47,slider49,slider48);
+
+// meters
+mtr[0] = max(mtr[0]*0.9, max(abs(L1),abs(R1)));
+mtr[1] = max(mtr[1]*0.9, max(abs(L2),abs(R2)));
+mtr[2] = max(mtr[2]*0.9, max(abs(L3),abs(R3)));
+mtr[3] = max(mtr[3]*0.9, max(abs(L4),abs(R4)));
+
+outL = (L1+L2+L3+L4) * trim;
+outR = (R1+R2+R3+R4) * trim;
+spl0 = limiter(outL, ceilL);
+spl1 = limiter(outR, ceilL);
+
+@gfx 760 460
+gfx_setfont(1, "Arial", 15);
+gfx_r=0.14; gfx_g=0.14; gfx_b=0.16; gfx_rect(0,0,gfx_w,gfx_h);
+i=0; loop(gfx_h/2,
+  gfx_r=0.16+0.02*(sin(i*0.7)*0.5); gfx_g=gfx_r; gfx_b=gfx_r+0.01;
+  gfx_line(0,i*2,gfx_w,i*2); i+=1;
+);
+gfx_r=0.0; gfx_g=0.0; gfx_b=0.0; gfx_a=0.35; gfx_rect(0,0,gfx_w,40); gfx_a=1;
+gfx_r=0.92; gfx_g=0.6; gfx_b=0.18; gfx_x=16; gfx_y=12;
+gfx_setfont(1,"Arial",20); gfx_drawstr("CAT 22  COMPANDED");
+gfx_setfont(2,"Arial",12); gfx_r=0.6;gfx_g=0.6;gfx_b=0.62;
+gfx_x=250; gfx_y=16; gfx_drawstr("Dolby A-style 4-band compander");
+
+function clicked(x,y,w,h) ( (mouse_cap&1) && !(pcap&1) && mouse_x>=x && mouse_x<=x+w && mouse_y>=y && mouse_y<=y+h; );
+
+function knob(id,cx,cy,rad,v,vmin,vmax,lbl) local(dxp,dyp,inside,frac,ang,px,py) (
+  dxp=mouse_x-cx; dyp=mouse_y-cy; inside=(dxp*dxp+dyp*dyp)<rad*rad*1.4;
+  (mouse_cap&1)&&drag_id==-1&&inside ? ( drag_id=id; drag_sy=mouse_y; drag_sv=v; );
+  drag_id==id ? (
+    (mouse_cap&1) ? ( v = drag_sv + (drag_sy-mouse_y)*(vmax-vmin)/200; v=max(vmin,min(vmax,v)); )
+    : drag_id=-1;
+  );
+  gfx_r=0.08;gfx_g=0.08;gfx_b=0.09; gfx_circle(cx,cy,rad,1,1);
+  gfx_r=0.35;gfx_g=0.35;gfx_b=0.38; gfx_circle(cx,cy,rad,0,1);
+  frac=(v-vmin)/(vmax-vmin); ang=(-0.75+frac*1.5)*$pi;
+  px=cx+sin(ang)*rad; py=cy-cos(ang)*rad;
+  gfx_r=0.95;gfx_g=0.62;gfx_b=0.2; gfx_line(cx,cy,px,py); gfx_line(cx+1,cy,px+1,py);
+  gfx_setfont(2,"Arial",11); gfx_r=0.62;gfx_g=0.62;gfx_b=0.64;
+  gfx_measurestr(lbl,sw,sh); gfx_x=cx-sw/2; gfx_y=cy+rad+3; gfx_drawstr(lbl);
+  v;
+);
+
+function cell(x,y,w,h,v,nmax,lbl,on) (
+  on ? (gfx_r=0.9;gfx_g=0.55;gfx_b=0.15) : (gfx_r=0.2;gfx_g=0.2;gfx_b=0.22);
+  gfx_rect(x,y,w,h); gfx_r=0.05;gfx_g=0.05;gfx_b=0.05; gfx_rect(x,y,w,1); gfx_rect(x,y,1,h);
+  on ? (gfx_r=0.05;gfx_g=0.05;gfx_b=0.05) : (gfx_r=0.75;gfx_g=0.75;gfx_b=0.78);
+  gfx_setfont(2,"Arial",11); gfx_measurestr(lbl,sw,sh); gfx_x=x+w/2-sw/2; gfx_y=y+h/2-sh/2; gfx_drawstr(lbl);
+  clicked(x,y,w,h) ? (v+1)%(nmax+1) : v;
+);
+
+gfx_setfont(2,"Arial",12); gfx_r=0.6;gfx_g=0.6;gfx_b=0.62; gfx_x=16;gfx_y=52; gfx_drawstr("MODE");
+slider1 = cell(60,48,80,20, slider1, 2, slider1==0?"PROCESS":slider1==1?"ENCODE":"DECODE", slider1>0);
+slider2 = knob(900,170,55,18,slider2,-24,24,"TRIM");
+slider3 = knob(901,710,55,18,slider3,-12,0,"CEIL");
+gfx_setfont(2,"Arial",12);gfx_r=0.6;gfx_g=0.6;gfx_b=0.62;gfx_x=660;gfx_y=52;gfx_drawstr("MASTER");
+
+bx=16; bw=175; i=0;
+loop(4,
+  base = 10 + i*10;
+  cx = bx + i*(bw+4);
+  gfx_r=0.1;gfx_g=0.1;gfx_b=0.12; gfx_rect(cx,80,bw,360);
+  gfx_r=0.3;gfx_g=0.3;gfx_b=0.33; gfx_rect(cx,80,bw,1);
+  gfx_r=0.92;gfx_g=0.6;gfx_b=0.18; gfx_setfont(2,"Arial",13);
+  gfx_x=cx+10;gfx_y=88;
+  lbl = i==0?"BAND 1  <80Hz" : i==1?"BAND 2  80-3k" : i==2?"BAND 3  3k-9k" : "BAND 4  >9k";
+  gfx_drawstr(lbl);
+
+  st = slider(base);   stn = st==0?"OFF":st==1?"TAPE":st==2?"TUBE":"FUZZ";
+  slider(base) = cell(cx+10,108,75,20, st, 3, stn, st>0);
+  em = slider(base+2);   emn = em==0?"TILT":em==1?"L-SHLF":"H-SHLF";
+  slider(base+2) = cell(cx+90,108,75,20, em, 2, emn, 1);
+  cmv = slider(base+4);  cmn = cmv==0?"COMP OFF":cmv==1?"COMPRESS":"EXPAND";
+  slider(base+4) = cell(cx+10,290,155,20, cmv, 2, cmn, cmv>0);
+
+  slider(base+1) = knob(base*10+1, cx+46, 165, 22, slider(base+1), 0,100, "DRIVE");
+  slider(base+3) = knob(base*10+3, cx+128,165, 22, slider(base+3), -12,12, "EQ");
+  slider(base+5) = knob(base*10+5, cx+40, 350, 20, slider(base+5), -48,0, "THRES");
+  slider(base+6) = knob(base*10+6, cx+90, 350, 20, slider(base+6), 0,24, "AMT");
+  slider(base+7) = knob(base*10+7, cx+140,350, 20, slider(base+7), -24,24, "GAIN");
+
+  so = slider(base+8); by = slider(base+9);
+  slider(base+8) = cell(cx+10,408,75,20, so, 1, "SOLO", so>0);
+  slider(base+9) = cell(cx+90,408,75,20, by, 1, "BYPASS", by>0);
+
+  mv = min(1, mtr[i]); mh = mv*120;
+  gfx_r=0.05;gfx_g=0.05;gfx_b=0.06; gfx_rect(cx+bw-10,230,6,120);
+  gfx_r=0.3+mv*0.6; gfx_g=0.8-mv*0.5; gfx_b=0.2; gfx_rect(cx+bw-10,350-mh,6,mh);
+
+  i+=1;
+);
+
+pcap = mouse_cap;

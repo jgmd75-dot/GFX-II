@@ -1,0 +1,421 @@
+desc:GFX Echomax
+//tags: delay echo tape bucket brigade analog digital ping-pong bbd
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-lfo.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,3,1{Tape,Bucket,Digital,Echorder}>-Echo type
+slider2:1<0,1,1{Off,On}>-Sync to tempo
+slider3:375<20,2000,1>-Time (ms)
+slider4:10<0,15,1{4 bars,2 bars,1 bar,1/2,1/2 D,1/2 T,1/4,1/4 D,1/4 T,1/8,1/8 D,1/8 T,1/16,1/16 D,1/16 T,1/32}>-Time (sync)
+slider5:40<0,110,1>-Feedback (%)
+slider6:45<0,100,1>-Drive (%)
+slider7:120<20,1000,1>-Lo cut (Hz)
+slider8:6000<1000,20000,10>-Hi cut (Hz)
+slider9:0<0,100,1>-Duck (%)
+slider10:0<0,1,1{Off,On}>-Ping-pong
+slider11:0<0,1,1{Off,On}>-Freeze
+slider12:35<0,100,1>-Wow (%)
+slider13:25<0,100,1>-Flutter (%)
+slider14:0.3<0.05,2,0.01>-Drift speed (Hz)
+slider15:35<0,100,1>-Mix (%)
+slider16:100<0,100,1>-Width (%)
+slider17:0<-24,12,0.1>-Output (dB)
+slider18:0<0,100,1>-Band sat (%)
+slider19:30<0,100,1>-Bias (%)
+slider20:120<40,400,1>-Sat low band (Hz)
+slider21:6000<2000,16000,10>-Sat high band (Hz)
+slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider24:0<-24,12,0.1>-Input trim (dB)
+slider25:0<0,1,1{Off,On}>-Input guard
+slider26:0<0,3,1{Off,-3 dB,-6 dB,-9 dB}>-Vintage EQ (500 Hz cut)
+slider27:60<0,100,1>-Drift (%)
+slider28:0<0,1,1{Off,On}>-Dual chip (Echorder: detuned clock, wider & wobblier)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-echo";
+
+dlen = ceil(4.2 * srate) + 8;
+bufL = 100000; bufR = bufL + dlen;
+memset(bufL, 0, dlen * 2);
+wp = 0;
+
+function tanh_(x) local(e) ( x = min(max(x, -20), 20); e = exp(2 * x); (e - 1) / (e + 1) );
+
+// Heavy JRC4558 Asymmetrical Saturation for EC-444 mode
+function jrc4558_sat(x, drv) local(s) (
+  s = x * drv;
+  s > 0 ? ( s = s / (1 + s * 0.8); ) : ( s = -abs(s) / (1 + abs(s) * 1.6); );
+  s / drv;
+);
+
+function rdl(buf, d) local(p, i, f, x0, x1, x2, x3) (
+  p = wp - d; p < 0 ? p += dlen; i = floor(p); f = p - i;
+  x0 = buf[(i - 1 + dlen) % dlen]; x1 = buf[i % dlen]; x2 = buf[(i + 1) % dlen]; x3 = buf[(i + 2) % dlen];
+  (((0.5 * (x3 - x0) + 1.5 * (x1 - x2)) * f + (x0 - 2.5 * x1 + 2 * x2 - 0.5 * x3)) * f + 0.5 * (x2 - x0)) * f + x1;
+);
+
+// Distinct Model-Specific Feedback Processing
+function loopproc(x) instance(hz, lz, lz2, bz) (
+  hz += (x - hz) * lo_c; x -= hz;                           // Global Lo Cut
+  lz += (x - lz) * hi_c; x = lz;                            // Global Hi Cut
+  
+  etype == 0 ? (                                            // 1. TAPE: Warm tape saturation + progressive HF roll-off
+    lz2 += (x - lz2) * tape_c; x = lz2;
+    x = tanh_(x * drv_g * 1.4) / (drv_g * 0.9);
+  ) : etype == 1 ? (                                        // 2. BUCKET: Very dark 2-pole BBD filter + gritty VCA clipping
+    lz2 += (x - lz2) * bbd_c; bz += (lz2 - bz) * bbd_c; x = bz;
+    x = x / (1 + abs(x) * drv_g * 1.5 + 0.12 * x * x);
+  ) : etype == 2 ? (                                        // 3. DIGITAL: Clean, uncoloured pass-through
+    x = abs(x) > 1.5 ? tanh_(x / 1.5) * 1.5 : x;
+  ) : (                                                     // 4. ECHORDER: Overdriven JRC4558 op-amp + MN3005 BBD LPF
+    lz2 += (x - lz2) * ech_c; x = lz2;
+    x = jrc4558_sat(x, drv_g * 1.8);
+  );
+  x;
+);
+
+function vt_bq(t, f, q, gdb) local(w, cw, al, A, a0) (
+  w = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w); al = sin(w) / (2 * q);
+  t == 0 ? (
+    a0 = 1 + al; vtp[0] = (1 + cw) * 0.5 / a0; vtp[1] = -(1 + cw) / a0; vtp[2] = vtp[0];
+  ) : t == 1 ? (
+    a0 = 1 + al; vtp[0] = (1 - cw) * 0.5 / a0; vtp[1] = (1 - cw) / a0; vtp[2] = vtp[0];
+  ) : (
+    A = 10 ^ (gdb / 40); a0 = 1 + al / A;
+    vtp[0] = (1 + al * A) / a0; vtp[1] = -2 * cw / a0; vtp[2] = (1 - al * A) / a0;
+  );
+  vtp[3] = -2 * cw / a0; vtp[4] = (1 - (t == 2 ? al / A : al)) / a0;
+);
+
+VTC = 30000;
+function vt_set(m) (
+  vt_on = m > 0;
+  vtp = VTC;      vt_bq(0, 140, 0.7071, 0);
+  vtp = VTC + 5;  vt_bq(2, 500, 0.9, -3 * m);
+  vtp = VTC + 10; vt_bq(1, 5000, 0.7071, 0);
+);
+
+function vt_proc(x) instance(a1, a2, b1, b2, c1, c2) local(y) (
+  y = VTC[0] * x + a1; a1 = VTC[1] * x - VTC[3] * y + a2; a2 = VTC[2] * x - VTC[4] * y; x = y;
+  y = VTC[5] * x + b1; b1 = VTC[6] * x - VTC[8] * y + b2; b2 = VTC[7] * x - VTC[9] * y; x = y;
+  y = VTC[10] * x + c1; c1 = VTC[11] * x - VTC[13] * y + c2; c2 = VTC[12] * x - VTC[14] * y;
+  y;
+);
+
+function hover_txt(cx, cy, r, txt) (
+  mouse_x >= (cx - r) * sc && mouse_x <= (cx + r) * sc &&
+  mouse_y >= (cy - r) * sc && mouse_y <= (cy + r) * sc ? txt : "";
+);
+
+function update() local(q) (
+  etype = slider1;
+  sync = slider2;
+  q = lfo_div_q(slider4);
+  t_ms = sync ? q * 60000 / max(tempo, 20) : slider3;
+  t_ms = min(max(t_ms, 1), 4000);
+  fb = min(slider5 / 100, 1.15);
+  drv_g = 1 + 4.5 * (slider6 / 100);
+  lo_c = 1 - exp(-2 * $pi * slider7 / srate);
+  hi_c = 1 - exp(-2 * $pi * min(slider8, srate * 0.45) / srate);
+  tape_c = 1 - exp(-2 * $pi * 5500 / srate);  // Darker tape roll-off (~5.5 kHz)
+  bbd_c  = 1 - exp(-2 * $pi * 2800 / srate);  // Steep dark BBD roll-off (~2.8 kHz)
+  ech_c  = 1 - exp(-2 * $pi * 3200 / srate);  // Maplin EC-444 LPF (~3.2 kHz)
+  duck = slider9 / 100;
+  ping = slider10; frz = slider11;
+  drift_macro(slider27);
+  dual_chip = slider28;
+  wow = slider12 / 100 * dm_a; flt = slider13 / 100 * dm_a; dspd = slider14 * dm_s;
+  mix_t = slider15 / 100; wid = slider16 / 100;
+  out_t = 10 ^ (slider17 / 20);
+  t_glide = 1 - exp(-1 / ((etype == 0 ? 0.35 : etype == 1 ? 0.12 : etype == 3 ? 0.18 : 0.03) * srate));
+  in_setup(slider24, slider25);
+  slider26 != vt_m ? ( vt_m = slider26; vt_set(vt_m); );
+  ost_setup(slider18 / 100, slider19 / 100, slider20, slider21, slider22, slider23);
+);
+
+// Preset Manager with Showcase Presets
+function setp(m, sy, tm, dv, f, drp, lc, hc, dk, pp, w, flp, mx, drf) (
+  slider1 = m; slider2 = sy; slider3 = tm; slider4 = dv; slider5 = f; slider6 = drp; slider7 = lc; slider8 = hc;
+  slider9 = dk; slider10 = pp; slider12 = w; slider13 = flp; slider15 = mx; slider27 = drf; slider11 = 0;
+);
+function pname(p) (
+  p == 1 ? "1. Tape: Worn Space Echo" :
+  p == 2 ? "2. Tape: Slapback Saturation" :
+  p == 3 ? "3. Tape: Dub Siren Oscillation" :
+  p == 4 ? "4. Bucket: Memory Lane Ping-Pong" :
+  p == 5 ? "5. Bucket: Dark Analog Crunch" :
+  p == 6 ? "6. Echorder: Maplin EC-444 Drive" :
+  p == 7 ? "7. Echorder: Realistic Slap & Crunch" :
+  p == 8 ? "8. Digital: Clean Ducked Vocal" :
+  p == 9 ? "9. Digital: Crystal Stereo Triplet" :
+  p == 10 ? "10. Tape: Ambient Flutter Wash" :
+  p == 11 ? "11. Echorder: Self-Oscillating Synth" :
+  p == 12 ? "12. Echorder: Deep Dub Echo" :
+  p == 13 ? "13. Echorder: Modern Dub Wash" :
+  p == 14 ? "14. Echorder: Chaos Dub Grit" :
+  p == 15 ? "15. Echorder: Heavyweight Dub Bass" :
+  "Reset Defaults";
+);
+function load_preset(p) (
+  p == 1  ? setp(0, 1, 375, 10, 50, 50, 120, 6000, 0,  0, 45, 30, 40, 70) :  // 1. TAPE: Worn Space Echo
+  p == 2  ? setp(0, 0, 110, 10, 30, 60, 150, 5000, 0,  0, 25, 20, 35, 50) :  // 2. TAPE: Slapback Saturation
+  p == 3  ? setp(0, 1, 500, 6,  85, 75, 200, 3500, 0,  0, 60, 40, 45, 85) :  // 3. TAPE: Dub Siren Oscillation
+  p == 4  ? setp(1, 1, 375, 9,  55, 40, 100, 3000, 20, 1, 20, 15, 35, 40) :  // 4. BUCKET: Memory Lane Ping-Pong
+  p == 5  ? setp(1, 0, 180, 10, 65, 70, 120, 2500, 0,  0, 35, 25, 45, 60) :  // 5. BUCKET: Dark Analog Crunch
+  p == 6  ? setp(3, 0, 280, 10, 70, 80, 140, 3200, 0,  0, 25, 15, 45, 50) :  // 6. ECHORDER: Maplin EC-444 Drive
+  p == 7  ? setp(3, 0, 85,  10, 80, 95, 180, 2800, 0,  0, 10, 10, 50, 30) :  // 7. ECHORDER: Realistic Slap & Crunch
+  p == 8  ? setp(2, 1, 375, 6,  35, 0,  80, 16000, 50, 0, 0,  0,  30, 0)  :  // 8. DIGITAL: Clean Ducked Vocal
+  p == 9  ? setp(2, 1, 375, 11, 40, 0,  100, 18000, 0, 1, 0,  0,  35, 0)  :  // 9. DIGITAL: Crystal Stereo Triplet
+  p == 10 ? setp(0, 0, 1200, 10, 75, 55, 250, 4000, 40, 0, 50, 30, 50, 75) :  // 10. TAPE: Ambient Flutter Wash
+  p == 11 ? setp(3, 1, 375, 10, 102, 85, 150, 3000, 0, 0, 30, 20, 55, 60) :  // 11. ECHORDER: Self-Oscillating Synth
+  p == 12 ? ( setp(3, 0, 380, 10, 55, 45, 140, 2200, 0, 0, 20, 15, 45, 50); slider28 = 0; ) :  // 12. ECHORDER: Deep Dub Echo
+  p == 13 ? ( setp(3, 0, 300, 10, 65, 35, 140, 3200, 0, 0, 40, 10, 40, 35); slider28 = 1; ) :  // 13. ECHORDER: Modern Dub Wash
+  p == 14 ? ( setp(3, 0, 220, 10, 85, 70, 160, 1800, 0, 0, 15, 30, 55, 75); slider28 = 0; ) :  // 14. ECHORDER: Chaos Dub Grit
+  p == 15 ? ( setp(3, 0, 450, 10, 60, 50, 120, 2000, 0, 0, 45, 15, 50, 45); slider28 = 1; ) :  // 15. ECHORDER: Heavyweight Dub Bass
+  p == 16 ? (                                                                // 16. Reset All Defaults
+    setp(0, 1, 375, 10, 40, 45, 120, 6000, 0, 0, 35, 25, 35, 60);
+    slider14 = 0.3; slider16 = 100; slider17 = 0;
+    slider18 = 0; slider19 = 30; slider20 = 120; slider21 = 6000; slider22 = -0.3; slider23 = 1;
+    slider24 = 0; slider25 = 0; slider26 = 0;
+    slider28 = 0;
+    slider_automate(268435455);
+  );
+  p >= 1 && p <= 15 ? slider_automate(24575);
+  p >= 12 && p <= 15 ? slider_automate(134217728);   // slider28 (Dual Chip) touch for the new dub presets
+);
+
+drW.drift_init(0.8 + rand(0.5));
+drF.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+sm  = 1 - exp(-1 / (0.03 * srate));
+vuc = 1 - exp(-1 / (0.01 * srate));
+dk_a = 1 - exp(-1 / (0.005 * srate)); dk_r = 1 - exp(-1 / (0.25 * srate));
+pkL = 0; pkR = 0; vu_ms = 0; denv = 0; fph = 0; cph = 0; cph2 = 0;
+vt_m = -1;
+cur_preset = 1;
+!ui_dflt ? ui_thm = 0; !ui_dflt ? ui_hw = 1;
+update();
+t_s = t_ms * 0.001 * srate;
+mix_s = mix_t; out_s = out_t;
+ui_dflt = 1;
+
+@slider
+update();
+
+@block
+update();
+dinc = dspd * samplesblock / srate;
+vW = drW.drift_tick(dinc); vF = drF.drift_tick(dinc * 3);
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+
+@sample
+in_process(spl0, spl1);
+inL = in_l; inR = in_r;
+vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
+mix_s += (mix_t - mix_s) * sm;
+out_s += (out_t - out_s) * sm;
+
+t_s += (t_ms * 0.001 * srate - t_s) * t_glide;
+fph += (6.5 + 1.5 * vF) / srate; fph >= 1 ? fph -= 1;
+cph += 0.6 / srate; cph >= 1 ? cph -= 1;
+cph2 += 0.6 / srate * 1.37; cph2 >= 1 ? cph2 -= 1;   // second "chip" clock, deliberately un-synced to cph
+
+// Model-specific Pitch & Clock Wobble Artifacts
+mod = (wow * 0.0025 * vW + flt * 0.00022 * sin(2 * $pi * fph)) * srate;
+etype == 1 ? mod += 0.0006 * srate * sin(2 * $pi * cph);                  // BBD clock chorus
+etype == 3 ? mod += 0.0012 * srate * sin(2 * $pi * cph * 0.5);            // EC-444 clock drift
+
+// Dual Chip (Echorder only): the R channel runs off its own slightly-mistuned clock, so with
+// WIDTH pushed it drifts and beats against L instead of just sitting at a fixed stereo offset.
+dc_on = etype == 3 && dual_chip;
+wid_mul = dc_on ? 0.05 : (etype == 3 ? 0.015 : 0.03);
+modR = mod + (dc_on ? 0.0022 * srate * sin(2 * $pi * cph2) : 0);
+
+dL = min(max(t_s + mod, 3), dlen - 4);
+dR = ping ? dL : min(max(t_s * (1 + wid_mul * wid) + modR, 3), dlen - 4);
+
+eL = rdl(bufL, dL);
+eR = rdl(bufR, dR);
+
+// EC-444 Background BBD Clock Hiss Artifact
+etype == 3 ? (
+  noise = (rand(2.0) - 1.0) * 0.0004 * (1 + slider6 / 50);
+  eL += noise; eR += noise;
+);
+
+frz ? (
+  fL = eL; fR = eR;
+  bufL[wp] = ping ? fR : fL; bufR[wp] = ping ? fL : fR;
+) : (
+  fL = lpL.loopproc(eL) * fb; fR = lpR.loopproc(eR) * fb;
+  ping ? (
+    bufL[wp] = 0.5 * (inL + inR) + fR;
+    bufR[wp] = fL;
+  ) : (
+    bufL[wp] = inL + fL;
+    bufR[wp] = inR + fR;
+  );
+);
+wp += 1; wp >= dlen ? wp = 0;
+
+lvl = max(abs(inL), abs(inR));
+denv += (lvl - denv) * (lvl > denv ? dk_a : dk_r);
+dg = 1 - duck * min(denv * 4, 1);
+
+vt_on ? ( eL = vtL.vt_proc(eL); eR = vtR.vt_proc(eR); );
+
+em = 0.5 * (eL + eR); es = 0.5 * (eL - eR) * wid;
+wL = (em + es) * dg; wR = (em - es) * dg;
+dry_g = min(2 * (1 - mix_s), 1); wet_g = min(2 * mix_s, 1);
+oL = inL * dry_g + wL * wet_g;
+oR = inR * dry_g + wR * wet_g;
+
+oL = ostL.ost_band(oL) * out_s;
+oR = ostR.ost_band(oR) * out_s;
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 1060 300
+ui_begin(1060, 300);
+
+FACE = 0x49796B; INK = 0xF3EBD3; BLU = 0xF3EBD3; DIM = 0xA2B5AC; RED = 0xFF3A22;
+dy_ink = INK; dy_bg = FACE; dy_nov = 1;
+
+function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(FACE); gfx_rect(26 * sc, 0, 1008 * sc, 300 * sc);
+rd_rack(0, 0, 1060, 300, 0xA8ACB2);
+ui_cola(0x000000, 0.35); gfx_rect(26 * sc, 0, 1008 * sc, 2 * sc); gfx_rect(26 * sc, 298 * sc, 1008 * sc, 2 * sc);
+ui_col(BLU); gfx_rect(26 * sc, 62 * sc, 1008 * sc, 3 * sc);
+
+// ---------- HEADER ----------
+rd_badge(60, 34, 15, INK, FACE);
+rd_title(84, 18, "ECHO", 26, INK);
+rd_sub(170, 30, "MULTI-MODE DELAY LINE", DIM, 1);
+
+rd_sq(380, 20, 60, 24, slider1 == 0, BLU, "TAPE")     ? setv(1, 0);
+rd_sq(445, 20, 66, 24, slider1 == 1, BLU, "BUCKET")   ? setv(1, 1);
+rd_sq(516, 20, 66, 24, slider1 == 2, BLU, "DIGITAL")  ? setv(1, 2);
+rd_sq(587, 20, 80, 24, slider1 == 3, BLU, "ECHORDER") ? setv(1, 3);
+
+rd_sq(758, 20, 26, 24, 0, 0x6A7484, "<") ? (
+  cur_preset = cur_preset <= 1 ? 16 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+rd_sq(786, 20, 26, 24, 0, 0x6A7484, ">") ? (
+  cur_preset = cur_preset >= 16 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+rd_sq(820, 20, 80, 24, 0, 0x6A7484, "PRESETS") ? (
+  gfx_x = 820 * sc; gfx_y = 44 * sc;
+  cur_preset = gfx_showmenu("1. Tape: Worn Space Echo|2. Tape: Slapback Saturation|3. Tape: Dub Siren Oscillation|4. Bucket: Memory Lane Ping-Pong|5. Bucket: Dark Analog Crunch|6. Echorder: Maplin EC-444 Drive|7. Echorder: Realistic Slap & Crunch|8. Digital: Clean Ducked Vocal|9. Digital: Crystal Stereo Triplet|10. Tape: Ambient Flutter Wash|11. Echorder: Self-Oscillating Synth|12. Echorder: Deep Dub Echo|13. Echorder: Modern Dub Wash|14. Echorder: Chaos Dub Grit|15. Echorder: Heavyweight Dub Bass|Reset Defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_size_picker(930 * sc, 22 * sc);
+pk_lcd(820 * sc, 47 * sc, 224 * sc, 16 * sc, 0);
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 826 * sc; gfx_y = 50 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
+
+
+// ---------- READOUT + REPEAT LADDER ----------
+ui_col(0x0B0B0C); rd_rr(44 * sc, 78 * sc, 290 * sc, 112 * sc, 5 * sc);
+ui_col(0x1A0705); gfx_rect(50 * sc, 84 * sc, 278 * sc, 100 * sc);
+sprintf(#dms, "%d", floor(t_ms + 0.5)); rd_seg(64, 94, 22, 40, 4, #dms, RED, 0x3A0C08);
+gfx_setfont(4); ui_col(RED); gfx_x = 192 * sc; gfx_y = 120 * sc; gfx_drawstr("ms");
+gfx_x = 220 * sc; gfx_y = 96 * sc; gfx_drawstr(slider2 ? lfo_div_name(slider4) : "FREE");
+gfx_x = 220 * sc; gfx_y = 110 * sc; gfx_drawstr(slider11 ? "FROZEN" : slider5 > 100 ? "RUNAWAY" : slider10 ? "PING-PONG" : "");
+
+fbd = slider11 ? 1 : min(slider5 / 100, 1.1); lv = 1; k = 0;
+loop(16,
+  lv *= max(fbd, 0.0001) * (slider1 == 2 ? 1 : 0.9);
+  ui_col(0x2A0A08); gfx_rect((60 + k * 16.5) * sc, (slider10 && (k & 1) ? 168 : 152) * sc, 12 * sc, 10 * sc);
+  gy_ = slider10 && (k & 1) ? 169 : 153; ga_ = min(sqrt(lv) * 1.5, 1);
+  ui_cola(RED, 0.25 * ga_); gfx_rect((58 + k * 16.5) * sc, (gy_ - 3) * sc, 16 * sc, 14 * sc);
+  ui_cola(RED, ga_); gfx_rect((61 + k * 16.5) * sc, gy_ * sc, 10 * sc, 8 * sc);
+  k += 1; );
+
+// ---------- SWITCHES & VINTAGE EQ ----------
+rd_sq(44, 204, 56, 22, slider2, BLU, "SYNC")    ? setv(2, 1 - slider2);
+rd_sq(106, 204, 56, 22, slider10, BLU, "PING")  ? setv(10, 1 - slider10);
+rd_sq(168, 204, 60, 22, slider11, 0x18A0E0, "FREEZE") ? setv(11, 1 - slider11);
+rd_sq(232, 204, 72, 22, slider28, BLU, "DUAL CHIP") ? setv(28, 1 - slider28);
+k = 0; loop(4, rd_sq(44 + k * 42, 248, 38, 20, slider26 == k, 0xE08A30, k == 0 ? "OFF" : k == 1 ? "-3dB" : k == 2 ? "-6dB" : "-9dB") ? setv(26, k); k += 1; );
+rd_lbl(272, 244, "VINTAGE EQ", INK, 0.9); rd_lbl(272, 256, "500 Hz CUT", DIM, 1); rd_lbl(272, 268, "HP 140 / LP 5k", DIM, 1);
+
+// ---------- DELAY KNOBS ----------
+dy_kst = 7;
+rd_sub(360, 74, "DELAY", BLU, 1);
+
+sprintf(#v, "%.0f ms", slider3);
+slider2 ? ( dy_step = 16; dy_steps = ""; dy_knob(402, 132, 28, 4, 0, 15, 10, 0, 0xC4C6C3, "TIME", hover_txt(402, 132, 28, lfo_div_name(slider4))); )
+        : ( dy_knob(402, 132, 28, 3, 20, 2000, 375, 1, 0xC4C6C3, "TIME", hover_txt(402, 132, 28, #v)); );
+
+sprintf(#v, "%.0f%%", slider5);
+dy_knob(490, 132, 22, 5, 0, 110, 40, 0, 0xC4C6C3, "FEEDBACK", hover_txt(490, 132, 22, #v));
+
+slider1 == 2 ? strcpy(#v, "clean") : sprintf(#v, "%.0f%%", slider6);
+dy_knob(566, 132, 20, 6, 0, 100, 30, 0, 0xC4C6C3, "DRIVE", hover_txt(566, 132, 20, slider1 == 2 ? "clean" : #v));
+
+sprintf(#v, "%.0f Hz", slider7); dy_kf = 1;
+dy_knob(636, 132, 17, 7, 20, 1000, 120, 1, 0x2A2D33, "LO CUT", hover_txt(636, 132, 17, #v));
+
+sprintf(#v, "%.0f Hz", slider8); dy_kf = 2;
+dy_knob(702, 132, 17, 8, 1000, 20000, 6000, 1, 0x2A2D33, "HI CUT", hover_txt(702, 132, 17, #v));
+
+sprintf(#v, "%.0f%%", slider9);
+dy_knob(772, 132, 20, 9, 0, 100, 0, 0, 0xC4C6C3, "DUCK", hover_txt(772, 132, 20, #v));
+
+ui_cola(INK, 0.2); gfx_rect(360 * sc, 200 * sc, 450 * sc, 1 * sc);
+rd_sub(360, 206, "DRIFT", BLU, 1);
+
+sprintf(#v, "%.0f%%", slider27);
+dy_knob(470, 240, 16, 27, 0, 100, 50, 0, 0x6A7484, "DRIFT", hover_txt(470, 240, 16, #v));
+
+ui_cola(INK, 0.15); gfx_rect(580 * sc, 212 * sc, 1 * sc, 74 * sc);
+rd_sub(590, 206, "IN / OUT", BLU, 1);
+rd_ioc1 = 0x2A2D33; rd_ioc2 = 0xD8B040; rd_ioc3 = 0xC8321E;
+rd_io(594, 220, 24, 25, 18, 23);
+
+// ---------- MASTER ----------
+ui_cola(INK, 0.15); gfx_rect(830 * sc, 78 * sc, 1 * sc, 208 * sc);
+rd_sub(848, 74, "MASTER", BLU, 1);
+
+sprintf(#v, "%.0f%%", slider15);
+dy_knob(878, 126, 20, 15, 0, 100, 35, 0, 0xF3EBD3, "MIX", hover_txt(878, 126, 20, #v));
+
+sprintf(#v, "%.0f%%", slider16);
+dy_knob(960, 126, 17, 16, 0, 100, 100, 0, 0x6A7484, "WIDTH", hover_txt(960, 126, 17, #v));
+
+sprintf(#v, "%+.1f dB", slider17);
+dy_knob(878, 220, 20, 17, -24, 12, 0, 0, 0xC4C6C3, "OUTPUT", hover_txt(878, 220, 20, #v));
+
+mL.ui_ledm(946 * sc, 190 * sc, 9 * sc, 60 * sc, pkL); mR.ui_ledm(960 * sc, 190 * sc, 9 * sc, 60 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+rd_lbl(960, 256, "OUT", DIM, 1);
+
+pk_end();
+ui_end();

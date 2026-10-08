@@ -1,0 +1,504 @@
+desc:GFX Equaliser
+//tags: equaliser eq parametric orban 622b mid-side filter
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
+//
+// Four-band parametric in the spirit of the Orban 622B:
+//   - overlapping band ranges, so bands can be stacked
+//   - "proportional" width: gentle and broad for small moves, narrower as the gain is pushed
+//   - the last quarter of each GAIN knob's cut dives into a notch (down to -40 dB)
+//   - LF and HF switch between bell and shelf (SH)
+//   - separate low-cut (HPF) and high-cut (LPF) filters, slope x1-x4 (12 / 24 / 36 / 48 dB/oct,
+//     Butterworth); click the HPF / LPF label to change the slope
+// STEREO / M/S: in M/S mode each band can work on both, the mid only or the sides only.
+// Screen: drag a band's dot to set frequency and gain; mouse wheel on a dot changes its width.
+// Drift: AMOUNT and SPEED. Band frequencies and gains wander together, like an unsteady power supply
+// (bands set flat stay flat). The DRIFT dial scales the AMOUNT (50% = the setting, 100% = twice, 0 = none)
+// and speeds the wander up with it.
+// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIMIT) on the panel.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-lozenge.jsfx-inc
+
+slider1:0<0,1,1{Stereo,Mid/Side}>-Mode
+slider2:100<20,500,1>-Low freq (Hz)
+slider3:0<-16,16,0.1>-Low gain (dB, below -12 = notch)
+slider4:1<0.05,4,0.01>-Low width (oct)
+slider5:1<0,1,1{Bell,Shelf}>-Low shape
+slider6:0<0,2,1{Both,Mid,Side}>-Low M/S target
+slider7:400<80,2000,1>-Lo-mid freq (Hz)
+slider8:0<-16,16,0.1>-Lo-mid gain (dB)
+slider9:1<0.05,4,0.01>-Lo-mid width (oct)
+slider10:0<0,2,1{Both,Mid,Side}>-Lo-mid M/S target
+slider11:2500<400,8000,1>-Hi-mid freq (Hz)
+slider12:0<-16,16,0.1>-Hi-mid gain (dB)
+slider13:1<0.05,4,0.01>-Hi-mid width (oct)
+slider14:0<0,2,1{Both,Mid,Side}>-Hi-mid M/S target
+slider15:8000<1500,20000,10>-High freq (Hz)
+slider16:0<-16,16,0.1>-High gain (dB)
+slider17:1<0.05,4,0.01>-High width (oct)
+slider18:1<0,1,1{Bell,Shelf}>-High shape
+slider19:0<0,2,1{Both,Mid,Side}>-High M/S target
+slider20:20<20,1000,1>-Low cut (Hz, 20 = off)
+slider21:20000<2000,20000,10>-High cut (Hz, 20000 = off)
+slider22:10<0,50,1>-Drift amount (%)
+slider23:10<0,50,1>-(unused, was gain drift)
+slider24:0.2<0.02,2,0.01>-Drift speed (Hz)
+slider25:0<-24,12,0.1>-Output (dB)
+slider26:0<0,100,1>-Band sat (%)
+slider27:30<0,100,1>-Bias (%)
+slider28:120<40,400,1>-Sat low band (Hz)
+slider29:6000<2000,16000,10>-Sat high band (Hz)
+slider30:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider31:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider32:0<-24,12,0.1>-Input trim (dB)
+slider33:0<0,1,1{Off,On}>-Input guard
+slider34:0<0,3,1{x1 12 dB/oct,x2 24 dB/oct,x3 36 dB/oct,x4 48 dB/oct}>-Low cut slope
+slider35:0<0,3,1{x1 12 dB/oct,x2 24 dB/oct,x3 36 dB/oct,x4 48 dB/oct}>-High cut slope
+// DRIFT dial: scales the band frequency / gain wander (slider 22) and its speed (slider 24); 50 % = as set.
+slider36:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-equaliser";                                  // the ? pop-up links to this manual
+
+// ---------- state-variable filter (stable under modulation) ----------
+// typ: 0 bell, 1 low shelf, 2 high shelf, 3 high-pass, 4 low-pass
+function svf_set(f, ge, q, typ) instance(a1, a2, a3, m0, m1, m2) local(Ag, g, k) (
+  g = tan($pi * min(f, srate * 0.45) / srate);
+  Ag = 10 ^ (ge / 40);
+  typ == 0 ? ( k = 1 / (q * Ag); m0 = 1; m1 = k * (Ag * Ag - 1); m2 = 0; ) :
+  typ == 1 ? ( g /= sqrt(Ag); k = 1 / q; m0 = 1; m1 = k * (Ag - 1); m2 = Ag * Ag - 1; ) :
+  typ == 2 ? ( g *= sqrt(Ag); k = 1 / q; m0 = Ag * Ag; m1 = k * (1 - Ag) * Ag; m2 = 1 - Ag * Ag; ) :
+  typ == 3 ? ( k = 1 / q; m0 = 1; m1 = -k; m2 = -1; ) :
+             ( k = 1 / q; m0 = 0; m1 = 0;  m2 = 1; );
+  a1 = 1 / (1 + g * (g + k)); a2 = g * a1; a3 = g * a2;
+);
+function svf_run(x, c1, c2, c3, n0, n1, n2) instance(ic1, ic2) local(v1, v2, v3) (
+  v3 = x - ic2;
+  v1 = c1 * ic1 + c2 * v3;
+  v2 = ic2 + c2 * ic1 + c3 * v3;
+  ic1 = 2 * v1 - ic1; ic2 = 2 * v2 - ic2;
+  n0 * x + n1 * v1 + n2 * v2;
+);
+
+// ---------- band maths (shared by audio and display) ----------
+function eff_gain(gs) ( gs >= -12 ? gs : -12 + (gs + 12) * 7 );           // -16 on the knob = -40 dB notch
+function bell_q(w, ge) local(p) (
+  p = 2 ^ w;
+  sqrt(p) / (p - 1) * (0.75 + 0.5 * min(abs(ge) / 16, 1));                 // proportional width
+);
+function shelf_q(w) ( min(max(0.707 / sqrt(w), 0.3), 2) );
+// Q of stage k (0-based) in an n-stage (order 2n) Butterworth filter
+function bw_q(n, k) ( 1 / (2 * cos($pi * (2 * k + 1) / (4 * n))) );
+
+// magnitude (dB) of one section at frequency f (matches the filters above)
+function mag_db(f, typ, f0, ge, q) local(w, w2, Ag, n, d, s) (
+  w = tan($pi * min(f, srate * 0.49) / srate) / tan($pi * min(f0, srate * 0.45) / srate);
+  w2 = w * w; Ag = 10 ^ (ge / 40);
+  typ == 0 ? ( n = sqr(1 - w2) + sqr(Ag * w / q); d = sqr(1 - w2) + sqr(w / (Ag * q)); ) :
+  typ == 1 ? ( s = Ag * w2 / (q * q); n = Ag * Ag * (sqr(Ag - w2) + s); d = sqr(1 - Ag * w2) + s; ) :
+  typ == 2 ? ( s = Ag * w2 / (q * q); n = Ag * Ag * (sqr(1 - Ag * w2) + s); d = sqr(Ag - w2) + s; ) :
+  typ == 3 ? ( n = w2 * w2; d = sqr(1 - w2) + w2 / (q * q); ) :
+             ( n = 1;       d = sqr(1 - w2) + w2 / (q * q); );
+  10 * log10(max(n, 0.000000000001) / max(d, 0.000000000001));
+);
+
+// drawing-only copies (the screen runs alongside the audio, so it must not share the audio's functions)
+function d_eff_gain(gs) ( gs >= -12 ? gs : -12 + (gs + 12) * 7 );
+function d_bell_q(w, ge) local(p) ( p = 2 ^ w; sqrt(p) / (p - 1) * (0.75 + 0.5 * min(abs(ge) / 16, 1)); );
+function d_shelf_q(w) ( min(max(0.707 / sqrt(w), 0.3), 2) );
+function d_bw_q(n, k) ( 1 / (2 * cos($pi * (2 * k + 1) / (4 * n))) );
+
+function freq_text(f) (
+  f >= 1000 ? sprintf(#ft, "%.2f kHz", f / 1000) : sprintf(#ft, "%.0f Hz", f);
+  #ft;
+);
+function gain_text(gs) local(ge) (
+  ge = d_eff_gain(gs);
+  ge < -12 ? sprintf(#gt, "NOTCH %.0f", ge) : sprintf(#gt, "%+.1f dB", ge);
+  #gt;
+);
+
+// ---------- parameters ----------
+function update() (
+  ms = slider1;
+  tg0 = slider6; tg1 = slider10; tg2 = slider14; tg3 = slider19;
+  sh0 = slider5 ? 1 : 0; sh3 = slider18 ? 2 : 0;
+  hp_on = slider20 > 20.5; lp_on = slider21 < 19995;
+  hpn = slider34 + 1; lpn = slider35 + 1;
+  hp1.svf_set(slider20, 0, bw_q(hpn, 0), 3); hp2.svf_set(slider20, 0, bw_q(hpn, 1), 3);
+  hp3.svf_set(slider20, 0, bw_q(hpn, 2), 3); hp4.svf_set(slider20, 0, bw_q(hpn, 3), 3);
+  lp1.svf_set(slider21, 0, bw_q(lpn, 0), 4); lp2.svf_set(slider21, 0, bw_q(lpn, 1), 4);
+  lp3.svf_set(slider21, 0, bw_q(lpn, 2), 4); lp4.svf_set(slider21, 0, bw_q(lpn, 3), 4);
+  drift_macro(slider36);
+  fdr = slider22 / 100 * dm_a; gdr = fdr; dspd = slider24 * dm_s;      // one AMOUNT moves frequencies and gains together
+  out_t = 10 ^ (slider25 / 20);
+  in_setup(slider32, slider33);
+  ost_setup(slider26 / 100, slider27 / 100, slider28, slider29, slider30, slider31);
+);
+
+// band coefficients with drift (called once per block)
+function band_coefs(dinc) local(v, f, g) (
+  v = dF0.drift_tick(dinc); f = slider2  * 2 ^ (fdr * 0.5 * v); v = dG0.drift_tick(dinc); g = eff_gain(slider3)  * (1 + gdr * 0.3 * v);
+  c0.svf_set(f, g, sh0 ? shelf_q(slider4) : bell_q(slider4, g), sh0);
+  v = dF1.drift_tick(dinc); f = slider7  * 2 ^ (fdr * 0.5 * v); v = dG1.drift_tick(dinc); g = eff_gain(slider8)  * (1 + gdr * 0.3 * v);
+  c1.svf_set(f, g, bell_q(slider9, g), 0);
+  v = dF2.drift_tick(dinc); f = slider11 * 2 ^ (fdr * 0.5 * v); v = dG2.drift_tick(dinc); g = eff_gain(slider12) * (1 + gdr * 0.3 * v);
+  c2.svf_set(f, g, bell_q(slider13, g), 0);
+  v = dF3.drift_tick(dinc); f = slider15 * 2 ^ (fdr * 0.5 * v); v = dG3.drift_tick(dinc); g = eff_gain(slider16) * (1 + gdr * 0.3 * v);
+  c3.svf_set(f, g, sh3 ? shelf_q(slider17) : bell_q(slider17, g), sh3);
+);
+
+// ---------- presets (leave drift, output and the I/O rows alone) ----------
+function pLo(f, g, w, s, t) ( slider2 = f;  slider3 = g;  slider4 = w;  slider5 = s;  slider6 = t; );
+function pLm(f, g, w, t)    ( slider7 = f;  slider8 = g;  slider9 = w;  slider10 = t; );
+function pHm(f, g, w, t)    ( slider11 = f; slider12 = g; slider13 = w; slider14 = t; );
+function pHi(f, g, w, s, t) ( slider15 = f; slider16 = g; slider17 = w; slider18 = s; slider19 = t; );
+function pCut(hpf, lpf, m)  ( slider20 = hpf; slider21 = lpf; slider1 = m; slider34 = 0; slider35 = 0; );
+function pname(p) (
+  p == 1 ? "Vocal Presence" :
+  p == 2 ? "Kick Weight" :
+  p == 3 ? "Bass Clarity" :
+  p == 4 ? "Acoustic Sparkle" :
+  p == 5 ? "Mix Air" :
+  p == 6 ? "Mud Cut" :
+  p == 7 ? "Telephone" :
+  p == 8 ? "De-Harsh" :
+  p == 9 ? "Hum Notch 50 Hz" :
+  p == 10 ? "M/S Wide Air" :
+  p == 11 ? "M/S Centre Focus" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1 ? ( pLo(120, -2, 1, 1, 0);  pLm(300, -2, 1.2, 0); pHm(3000, 3, 1.2, 0);  pHi(10000, 3, 1, 1, 0);  pCut(80, 20000, 0); ) :   // Vocal Presence
+  p == 2 ? ( pLo(60, 4, 1, 0, 0);    pLm(350, -4, 1.5, 0); pHm(3500, 3, 1, 0);    pHi(10000, 0, 1, 1, 0);  pCut(30, 20000, 0); ) :   // Kick Weight
+  p == 3 ? ( pLo(80, 2, 1, 1, 0);    pLm(250, -3, 1.5, 0); pHm(800, 2, 1, 0);     pHi(5000, -2, 1, 1, 0);  pCut(35, 20000, 0); ) :   // Bass Clarity
+  p == 4 ? ( pLo(100, -2, 1, 1, 0);  pLm(200, -2, 1.5, 0); pHm(5000, 2, 1.5, 0);  pHi(12000, 4, 1, 1, 0);  pCut(70, 20000, 0); ) :   // Acoustic Sparkle
+  p == 5 ? ( pLo(100, 0, 1, 1, 0);   pLm(400, 0, 1, 0);    pHm(2500, 0, 1, 0);    pHi(15000, 3, 1.5, 1, 0); pCut(25, 20000, 0); ) :  // Mix Air
+  p == 6 ? ( pLo(100, 0, 1, 1, 0);   pLm(300, -4, 1, 0);   pHm(2500, 0, 1, 0);    pHi(8000, 0, 1, 1, 0);   pCut(50, 20000, 0); ) :   // Mud Cut
+  p == 7 ? ( pLo(100, 0, 1, 1, 0);   pLm(400, 0, 1, 0);    pHm(1500, 6, 1, 0);    pHi(8000, 0, 1, 1, 0);   pCut(400, 3500, 0); slider34 = 1; slider35 = 1; ) :   // Telephone
+  p == 8 ? ( pLo(100, 0, 1, 1, 0);   pLm(400, 0, 1, 0);    pHm(3200, -4, 0.7, 0); pHi(7000, -3, 0.5, 0, 0); pCut(20, 20000, 0); ) :  // De-Harsh
+  p == 9 ? ( pLo(50, -16, 0.05, 0, 0); pLm(100, -16, 0.05, 0); pHm(2500, 0, 1, 0); pHi(8000, 0, 1, 1, 0);  pCut(20, 20000, 0); ) :   // Hum Notch 50 Hz
+  p == 10 ? ( pLo(120, -12, 1, 1, 2); pLm(300, -2, 1.5, 2); pHm(2500, 0, 1, 0);   pHi(10000, 4, 1, 1, 2);  pCut(20, 20000, 1); ) :   // M/S Wide Air
+  p == 11 ? ( pLo(150, -10, 1, 1, 2); pLm(400, 0, 1, 0);    pHm(2000, 2, 1.5, 1); pHi(8000, 0, 1, 1, 0);   pCut(20, 20000, 1); );     // M/S Centre Focus
+  p >= 1 && p <= 11 ? ( slider_automate(2097151); slider_automate(slider34); slider_automate(slider35); );   // sliders 1-21, 34, 35
+  p == 12 ? (                                     // Reset all to defaults
+    pLo(100, 0, 1, 1, 0); pLm(400, 0, 1, 0); pHm(2500, 0, 1, 0); pHi(8000, 0, 1, 1, 0); pCut(20, 20000, 0);
+    slider22 = 10; slider23 = 10; slider24 = 0.2; slider25 = 0;
+    slider26 = 0; slider27 = 30; slider28 = 120; slider29 = 6000; slider30 = -0.3; slider31 = 1;
+    slider32 = 0; slider33 = 0; slider36 = 50;
+    slider_automate(1073741823);                  // sliders 1-30
+    slider_automate(slider31); slider_automate(slider32); slider_automate(slider33);
+    slider_automate(slider34); slider_automate(slider35); slider_automate(slider36);
+  );
+);
+
+// ---------- band group panel (drawn in @gfx) ----------
+// ---------- the four bands in one row: alternating pyramids (two rows of controls each) ----------
+// knob caps per section (as on a console): brown, blue, green, red
+EQ_CLO = 0x8A5A34; EQ_CLM = 0x3A78A0; EQ_CHM = 0x3C9A6C; EQ_CHI = 0xB2423B;
+// a band's controls; positions are unscaled (x, y = knob centres), kx / ky = the SHELF key (0 = none),
+// mx / my = the M/S target key (shown in M/S mode)
+function eq_tag(cx, y, title) local(tw, th) (
+  gfx_setfont(4); gfx_measurestr(title, tw, th);
+  ui_cola(C_INK, 0.85); ui_rrect(cx * sc - tw * 0.5 - 5 * sc, y * sc, tw + 10 * sc, 13 * sc, 2 * sc);
+  ui_col(C_KA); gfx_x = cx * sc - tw * 0.5; gfx_y = y * sc + 2 * sc; gfx_drawstr(title);
+);
+// the narrow / wide Q symbols at the two ends of a width knob
+function eq_qicon(x, y, wide) (
+  ui_cola(C_INK, 0.85);
+  wide ? (
+    gfx_line((x - 7) * sc, y * sc, (x - 4) * sc, y * sc, 1); gfx_line((x - 4) * sc, y * sc, (x - 2) * sc, (y - 5) * sc, 1);
+    gfx_line((x - 2) * sc, (y - 5) * sc, (x + 2) * sc, (y - 5) * sc, 1); gfx_line((x + 2) * sc, (y - 5) * sc, (x + 4) * sc, y * sc, 1);
+    gfx_line((x + 4) * sc, y * sc, (x + 7) * sc, y * sc, 1);
+  ) : (
+    gfx_line((x - 6) * sc, y * sc, (x - 2) * sc, y * sc, 1); gfx_line((x - 2) * sc, y * sc, x * sc, (y - 6) * sc, 1);
+    gfx_line(x * sc, (y - 6) * sc, (x + 2) * sc, y * sc, 1); gfx_line((x + 2) * sc, y * sc, (x + 6) * sc, y * sc, 1);
+  );
+);
+function eq_band(fi, fmin, fmax, fdef, flbl, fx, fy, gx, gy, wx, wy, shp, kx, ky, ti, mx, my, cap) (
+  ui_kcap = cap; ui_knob(fx * sc, fy * sc, fi,     fmin, fmax, fdef, 1, flbl, freq_text(slider(fi)));
+  ui_kcap = cap; ui_knob(gx * sc, gy * sc, fi + 1, -16,  16,   0,    0, "dB", gain_text(slider(fi + 1)));
+  ui_kcap = cap; ui_knob(wx * sc, wy * sc, fi + 2, 0.05, 4,    1,    1, ui_hw ? "" : "Q", "%.2f oct");
+  ui_hw ? ( eq_qicon(wx - 16, wy + 26, 0); eq_qicon(wx + 16, wy + 26, 1); );   // narrow ... wide
+  shp > 0 ? (
+    ui_keycap(kx * sc, ky * sc, 38 * sc, 22 * sc, "SH", slider(shp) == 1, 1) ?
+      ( slider(shp) = 1 - slider(shp); slider_automate(2 ^ (shp - 1)); );
+  );
+  slider1 == 1 ? (
+    ui_keycap(mx * sc, my * sc, 42 * sc, 22 * sc,
+              slider(ti) == 1 ? "MID" : slider(ti) == 2 ? "SIDE" : "BOTH", slider(ti) > 0, 1) ?
+      ( slider(ti) = (slider(ti) + 1) % 3; slider_automate(2 ^ (ti - 1)); );
+  );
+);
+// engraved divider that steps across between a pyramid and an upside-down one
+function eq_div(xt, xb, y) (
+  ui_cola(0x000000, 0.25);
+  gfx_line((xt + 1) * sc, (y + 8) * sc, (xt + 1) * sc, (y + 72) * sc); gfx_line((xt + 1) * sc, (y + 72) * sc, (xb + 1) * sc, (y + 96) * sc);
+  gfx_line((xb + 1) * sc, (y + 96) * sc, (xb + 1) * sc, (y + 156) * sc);
+  ui_cola(C_INK, 0.45);
+  gfx_line(xt * sc, (y + 8) * sc, xt * sc, (y + 72) * sc); gfx_line(xt * sc, (y + 72) * sc, xb * sc, (y + 96) * sc);
+  gfx_line(xb * sc, (y + 96) * sc, xb * sc, (y + 156) * sc);
+);
+
+// ---------- memory / state ----------
+sm  = 1 - exp(-1 / (0.03 * srate));
+vuc = 1 - exp(-1 / (0.01 * srate));
+dF0.drift_init(0.8 + rand(0.5)); dG0.drift_init(0.8 + rand(0.5));
+dF1.drift_init(0.8 + rand(0.5)); dG1.drift_init(0.8 + rand(0.5));
+dF2.drift_init(0.8 + rand(0.5)); dG2.drift_init(0.8 + rand(0.5));
+dF3.drift_init(0.8 + rand(0.5)); dG3.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+pkL = 0; pkR = 0; vu_ms = 0;
+!ui_dflt ? ui_thm = 1; !ui_dflt ? ui_hw = 0;   // defaults for new instances: Blue, hardware (saved projects keep their own)
+cur_preset = 1;
+
+update();
+band_coefs(0);
+out_s = out_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+band_coefs(dspd * samplesblock / srate);
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+
+@sample
+// input stage: DC block, trim, guard
+in_process(spl0, spl1);
+inL = in_l; inR = in_r;
+vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
+out_s += (out_t - out_s) * sm;
+
+// A / B = left / right, or mid / side
+ms ? ( a = 0.5 * (inL + inR); b = 0.5 * (inL - inR); ) : ( a = inL; b = inR; );
+
+hp_on ? (
+  ( a = hsA1.svf_run(a, hp1.a1, hp1.a2, hp1.a3, hp1.m0, hp1.m1, hp1.m2); b = hsB1.svf_run(b, hp1.a1, hp1.a2, hp1.a3, hp1.m0, hp1.m1, hp1.m2); );
+  hpn > 1 ? ( a = hsA2.svf_run(a, hp2.a1, hp2.a2, hp2.a3, hp2.m0, hp2.m1, hp2.m2); b = hsB2.svf_run(b, hp2.a1, hp2.a2, hp2.a3, hp2.m0, hp2.m1, hp2.m2); );
+  hpn > 2 ? ( a = hsA3.svf_run(a, hp3.a1, hp3.a2, hp3.a3, hp3.m0, hp3.m1, hp3.m2); b = hsB3.svf_run(b, hp3.a1, hp3.a2, hp3.a3, hp3.m0, hp3.m1, hp3.m2); );
+  hpn > 3 ? ( a = hsA4.svf_run(a, hp4.a1, hp4.a2, hp4.a3, hp4.m0, hp4.m1, hp4.m2); b = hsB4.svf_run(b, hp4.a1, hp4.a2, hp4.a3, hp4.m0, hp4.m1, hp4.m2); );
+);
+lp_on ? (
+  ( a = lsA1.svf_run(a, lp1.a1, lp1.a2, lp1.a3, lp1.m0, lp1.m1, lp1.m2); b = lsB1.svf_run(b, lp1.a1, lp1.a2, lp1.a3, lp1.m0, lp1.m1, lp1.m2); );
+  lpn > 1 ? ( a = lsA2.svf_run(a, lp2.a1, lp2.a2, lp2.a3, lp2.m0, lp2.m1, lp2.m2); b = lsB2.svf_run(b, lp2.a1, lp2.a2, lp2.a3, lp2.m0, lp2.m1, lp2.m2); );
+  lpn > 2 ? ( a = lsA3.svf_run(a, lp3.a1, lp3.a2, lp3.a3, lp3.m0, lp3.m1, lp3.m2); b = lsB3.svf_run(b, lp3.a1, lp3.a2, lp3.a3, lp3.m0, lp3.m1, lp3.m2); );
+  lpn > 3 ? ( a = lsA4.svf_run(a, lp4.a1, lp4.a2, lp4.a3, lp4.m0, lp4.m1, lp4.m2); b = lsB4.svf_run(b, lp4.a1, lp4.a2, lp4.a3, lp4.m0, lp4.m1, lp4.m2); );
+);
+
+(!ms || tg0 != 2) ? a = sA0.svf_run(a, c0.a1, c0.a2, c0.a3, c0.m0, c0.m1, c0.m2);
+(!ms || tg0 != 1) ? b = sB0.svf_run(b, c0.a1, c0.a2, c0.a3, c0.m0, c0.m1, c0.m2);
+(!ms || tg1 != 2) ? a = sA1.svf_run(a, c1.a1, c1.a2, c1.a3, c1.m0, c1.m1, c1.m2);
+(!ms || tg1 != 1) ? b = sB1.svf_run(b, c1.a1, c1.a2, c1.a3, c1.m0, c1.m1, c1.m2);
+(!ms || tg2 != 2) ? a = sA2.svf_run(a, c2.a1, c2.a2, c2.a3, c2.m0, c2.m1, c2.m2);
+(!ms || tg2 != 1) ? b = sB2.svf_run(b, c2.a1, c2.a2, c2.a3, c2.m0, c2.m1, c2.m2);
+(!ms || tg3 != 2) ? a = sA3.svf_run(a, c3.a1, c3.a2, c3.a3, c3.m0, c3.m1, c3.m2);
+(!ms || tg3 != 1) ? b = sB3.svf_run(b, c3.a1, c3.a2, c3.a3, c3.m0, c3.m1, c3.m2);
+
+ms ? ( oL = a + b; oR = a - b; ) : ( oL = a; oR = b; );
+
+// output stage
+oL = ostL.ost_band(oL) * out_s;
+oR = ostR.ost_band(oR) * out_s;
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 1100 396
+ui_begin(1100, 396);
+lz_colours();
+pk_shad = 0.3; pk_shoff = 0.8;
+CP0 = 0x9A6238; CP1 = 0x3A78C0; CP2 = 0x3C9A6C; CP3 = 0xC0423B;   // knob caps per band: brown, blue, green, red
+BC0 = 0xD08A44; BC1 = 0x4A90E8; BC2 = 0x3CB878; BC3 = 0xE8504A;   // the same, lighter, for the curve
+
+// one band: name + colour, FREQ / GAIN / WIDTH, optional SHELF lamp, M/S target keys (in M/S mode)
+function band(x, w, nm, cap, fi, fmin, fmax, fdef, shp, ti) local(cx) (
+  lz_sect(x, 12, w, 140);
+  lz_led(x + 16, 30, 1, ui_mix(cap, 0xFFFFFF, 0.35)); lz_label(x + 24 + strlen(nm) * 5, 23, nm);
+  slider1 == 1 ? (
+    lz_key(x + w - 124, 18, 38, slider(ti) == 0, 0xFFC830, "ST") ? ( slider(ti) = 0; ui_auto(ti); );
+    lz_key(x + w - 84, 18, 38, slider(ti) == 1, 0xFFC830, "MID") ? ( slider(ti) = 1; ui_auto(ti); );
+    lz_key(x + w - 44, 18, 38, slider(ti) == 2, 0xFFC830, "SIDE") ? ( slider(ti) = 2; ui_auto(ti); );
+  );
+  cx = x + 40;
+  lz_cap = cap; lz_lw = 56; lz_knob(cx, 98, 17, fi, fmin, fmax, fdef, 1, "FREQ", freq_text(slider(fi)));
+  lz_cap = cap; lz_lw = 56; lz_knob(cx + 63, 98, 17, fi + 1, -16, 16, 0, 0, "GAIN", gain_text(slider(fi + 1)));
+  sprintf(#bw, "%.2f oct", slider(fi + 2));
+  lz_cap = cap; lz_lw = 56; lz_knob(cx + 126, 98, 17, fi + 2, 0.05, 4, 1, 1, "WIDTH", #bw);
+  shp > 0 ? ( lz_lamp(cx + 178, 78, slider(shp) == 1, 0xFFC830, "SHELF") ? ( slider(shp) = 1 - slider(shp); ui_auto(shp); ); );
+);
+// four slope keys in a 2 x 2 block (x, y = top left); returns the chosen slope 0 - 3
+function slopes(x, y, v) local(i) (
+  i = 0; loop(4,
+    lz_key(x + (i % 2) * 30, y + floor(i / 2) * 28, 28, v == i, 0xFF4A3A, i == 0 ? "12" : i == 1 ? "24" : i == 2 ? "36" : "48") ? v = i;
+    i += 1; );
+  v;
+);
+
+// ---------- the faceplate ----------
+fh = 388;
+ui_col(0x0B0C0C); gfx_rect(0, 0, gfx_w, gfx_h);
+lz_chassis(6, 4, 1088, fh);
+lz_brand("EQUALISER");
+
+// ---------- the four bands ----------
+band(84, 240, "LF", CP0, 2, 20, 500, 100, 5, 6);
+band(328, 206, "LMF", CP1, 7, 80, 2000, 400, 0, 10);
+band(538, 206, "HMF", CP2, 11, 400, 8000, 2500, 0, 14);
+band(748, 244, "HF", CP3, 15, 1500, 20000, 8000, 18, 19);
+
+// ---------- FILTERS: low cut (black cap) and high cut (yellow cap), each with its slope (dB / oct) ----------
+lz_sect(84, 156, 140, 224);
+lz_head(154, 170, "FILTERS", 120);
+lz_kind = 1; lz_lw = 56; lz_knob(120, 222, 16, 20, 20, 1000, 20, 1, "LOW CUT", slider20 < 20.5 ? "OFF" : freq_text(slider20));
+gs_ = slopes(158, 200, slider34); gs_ != slider34 ? ( slider34 = gs_; ui_auto(34); );
+lz_kind = 2; lz_lw = 56; lz_knob(120, 320, 16, 21, 2000, 20000, 20000, 1, "HIGH CUT", slider21 > 19995 ? "OFF" : freq_text(slider21));
+gs_ = slopes(158, 298, slider35); gs_ != slider35 ? ( slider35 = gs_; ui_auto(35); );
+
+// ---------- the curve ----------
+lz_sect(228, 156, 520, 224);
+gx0 = 244 * sc; gw = 488 * sc; gy0 = 168 * sc; gh = 164 * sc; gmid = gy0 + gh * 0.5;
+ui_col(lz_dk); gfx_rect(gx0 - 2 * sc, gy0 - 2 * sc, gw + 4 * sc, gh + 4 * sc);
+gfx_gradrect(gx0, gy0, gw, gh, 0.80, 0.85, 0.92, 1, 0, 0, 0, 0, -0.0005 / sc, -0.0004 / sc, -0.0003 / sc, 0);
+gfx_setfont(6, "Arial", 9 * sc, 'b');
+gi = 0;
+loop(8, f_ = gi == 0 ? 50 : gi == 1 ? 100 : gi == 2 ? 200 : gi == 3 ? 500 : gi == 4 ? 1000 : gi == 5 ? 2000 : gi == 6 ? 5000 : 10000;
+  qx = gx0 + log(f_ / 20) / log(1000) * gw;
+  ui_col(gi == 1 || gi == 4 || gi == 7 ? 0xF2F6FA : 0xDCE4EE); gfx_rect(qx, gy0, 1, gh);
+  gi == 1 || gi == 4 || gi == 7 ? ( ui_col(0x34485A); gfx_x = qx + 3 * sc; gfx_y = gy0 + gh - 11 * sc; gfx_drawstr(gi == 1 ? "100" : gi == 4 ? "1k" : "10k"); );
+  gi += 1; );
+gi = -2; loop(5, ui_col(gi == 0 ? 0xF6FAFC : 0xDCE4EE); gfx_rect(gx0, gmid - gi * 6 / 18 * gh * 0.5, gw, 1);
+  gi != 0 ? ( ui_col(0x34485A); sprintf(#gl, "%+d", gi * 6); gfx_x = gx0 + 3 * sc; gfx_y = gmid - gi * 6 / 18 * gh * 0.5 - 10 * sc; gfx_drawstr(#gl); ); gi += 1; );
+vs0 = slider5 ? 1 : 0; vs3 = slider18 ? 2 : 0; vhn = slider34 + 1; vln = slider35 + 1;
+eg0 = d_eff_gain(slider3);  eq0 = vs0 ? d_shelf_q(slider4) : d_bell_q(slider4, eg0);
+eg1 = d_eff_gain(slider8);  eq1 = d_bell_q(slider9, eg1);
+eg2 = d_eff_gain(slider12); eq2 = d_bell_q(slider13, eg2);
+eg3 = d_eff_gain(slider16); eq3 = vs3 ? d_shelf_q(slider17) : d_bell_q(slider17, eg3);
+// each band's own curve, shaded in its colour
+b_ = 0;
+loop(4,
+  gc_ = b_ == 0 ? BC0 : b_ == 1 ? BC1 : b_ == 2 ? BC2 : BC3;
+  abs(b_ == 0 ? eg0 : b_ == 1 ? eg1 : b_ == 2 ? eg2 : eg3) > 0.05 ? (
+    gi = 0; gn_ = floor(gw / 2);
+    loop(gn_ + 1, f_ = 20 * 1000 ^ (gi / gn_);
+      db_ = b_ == 0 ? mag_db(f_, vs0, slider2, eg0, eq0) : b_ == 1 ? mag_db(f_, 0, slider7, eg1, eq1) :
+            b_ == 2 ? mag_db(f_, 0, slider11, eg2, eq2) : mag_db(f_, vs3, slider15, eg3, eq3);
+      qx = gx0 + gi * 2; qy = gmid - min(max(db_, -18), 18) / 18 * gh * 0.5;
+      ui_cola(gc_, 0.2); gfx_rect(qx, min(qy, gmid), 2, abs(qy - gmid) + 1);
+      ui_cola(gc_, 0.9); gi > 0 ? gfx_line(px, py, qx, qy, 1);
+      px = qx; py = qy; gi += 1; );
+  );
+  b_ += 1;
+);
+// the total (mid, and the side in M/S)
+showB = slider1 == 1 && (slider6 || slider10 || slider14 || slider19);
+pass = 0;
+loop(showB ? 2 : 1,
+  ui_col(pass ? 0x6A3AA0 : 0x14204A);
+  gi = 0;
+  loop(201, f_ = 20 * 1000 ^ (gi / 200); db_ = 0;
+    k_ = 0; loop(slider20 > 20.5 ? vhn : 0,  db_ += mag_db(f_, 3, slider20, 0, d_bw_q(vhn, k_)); k_ += 1; );
+    k_ = 0; loop(slider21 < 19995 ? vln : 0, db_ += mag_db(f_, 4, slider21, 0, d_bw_q(vln, k_)); k_ += 1; );
+    (slider1 == 0 || (pass == 0 ? slider6 != 2 : slider6 != 1)) ? db_ += mag_db(f_, vs0, slider2, eg0, eq0);
+    (slider1 == 0 || (pass == 0 ? slider10 != 2 : slider10 != 1)) ? db_ += mag_db(f_, 0, slider7, eg1, eq1);
+    (slider1 == 0 || (pass == 0 ? slider14 != 2 : slider14 != 1)) ? db_ += mag_db(f_, 0, slider11, eg2, eq2);
+    (slider1 == 0 || (pass == 0 ? slider19 != 2 : slider19 != 1)) ? db_ += mag_db(f_, vs3, slider15, eg3, eq3);
+    qx = gx0 + gi / 200 * gw; qy = gmid - min(max(db_, -18), 18) / 18 * gh * 0.5;
+    gi > 0 ? ( gfx_line(px, py, qx, qy, 1); gfx_line(px, py + 1, qx, qy + 1, 1); );
+    px = qx; py = qy; gi += 1; );
+  pass += 1;
+);
+slider1 == 1 ? ( gfx_setfont(6, "Arial", 10 * sc, 'b'); ui_col(0x14204A); gfx_x = gx0 + gw - 70 * sc; gfx_y = gy0 + 4 * sc; gfx_drawstr("MID");
+  showB ? ( ui_col(0x6A3AA0); gfx_x = gx0 + gw - 40 * sc; gfx_drawstr("SIDE"); ); );
+// band dots: drag = frequency + gain, mouse wheel = width
+dr = 7 * sc; b_ = 0;
+loop(4,
+  fi = b_ == 0 ? 2 : b_ == 1 ? 7 : b_ == 2 ? 11 : 15;
+  fmin_ = b_ == 0 ? 20 : b_ == 1 ? 80 : b_ == 2 ? 400 : 1500;
+  fmax_ = b_ == 0 ? 500 : b_ == 1 ? 2000 : b_ == 2 ? 8000 : 20000;
+  dx_ = gx0 + log(slider(fi) / 20) / log(1000) * gw;
+  dy_ = gmid - min(max(d_eff_gain(slider(fi + 1)), -18), 18) / 18 * gh * 0.5;
+  hov_ = (mouse_x - dx_) ^ 2 + (mouse_y - dy_) ^ 2 <= dr * dr;
+  pressed && drag_id == 0 && hov_ ? drag_id = 200 + b_;
+  drag_id == 200 + b_ && mdown ? (
+    slider(fi) = floor(min(max(20 * 1000 ^ ((mouse_x - gx0) / gw), fmin_), fmax_) + 0.5);
+    gy_ = min(max((gmid - mouse_y) / (gh * 0.5) * 18, -18), 16);
+    slider(fi + 1) = floor((gy_ >= -12 ? gy_ : -12 + (gy_ + 12) / 7) * 10 + 0.5) / 10;
+    ui_auto(fi); ui_auto(fi + 1);
+  );
+  hov_ && mouse_wheel != 0 && drag_id == 0 ? ( slider(fi + 2) = min(max(slider(fi + 2) * 2 ^ (-mouse_wheel / 120 * 0.15), 0.05), 4); ui_auto(fi + 2); mouse_wheel = 0; );
+  gc_ = b_ == 0 ? BC0 : b_ == 1 ? BC1 : b_ == 2 ? BC2 : BC3;
+  hov_ || drag_id == 200 + b_ ? ( ui_cola(gc_, 0.35); gfx_circle(dx_, dy_, dr + 3 * sc, 1, 1); );
+  ui_col(0x14204A); gfx_circle(dx_, dy_, 6.5 * sc, 1, 1);
+  ui_col(gc_); (b_ == 0 && vs0) || (b_ == 3 && vs3) ? ui_rrect(dx_ - 5 * sc, dy_ - 5 * sc, 10 * sc, 10 * sc, 2 * sc) : gfx_circle(dx_, dy_, 5 * sc, 1, 1);
+  b_ += 1;
+);
+// the strip along the bottom: presets, colour, size, help, HW / flat, stereo / M-S
+ui_col(lz_dk); lz_rr(240, 342, 496, 30, 4);
+ui_button(246 * sc, 348 * sc, 22 * sc, 18 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 12 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(270 * sc, 348 * sc, 22 * sc, 18 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 12 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(300 * sc, 348 * sc, 70 * sc, 18 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 300 * sc; gfx_y = 366 * sc;
+  cur_preset = gfx_showmenu("Vocal Presence|Kick Weight|Bass Clarity|Acoustic Sparkle|Mix Air|Mud Cut|Telephone|De-Harsh|Hum Notch 50 Hz|M/S Wide Air|M/S Centre Focus|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+lz_pick(378, 348);
+ui_size_picker(404 * sc, 348 * sc);
+pk_lcd(464 * sc, 342 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 470 * sc; gfx_y = 345 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 470 * sc; gfx_y = 359 * sc; gfx_drawstr(pname(cur_preset));
+
+lz_hw(466, 348);
+lz_key(598, 345, 64, slider1 == 0, 0xFFC830, "STEREO") ? ( slider1 = 0; ui_auto(1); );
+lz_key(666, 345, 64, slider1 == 1, 0xFFC830, "M / S") ? ( slider1 = 1; ui_auto(1); );
+
+// ---------- IN / OUT ----------
+lz_sect(752, 156, 240, 224);
+lz_head(872, 170, "IN / OUT", 210);
+sprintf(#v, "%+.1f dB", slider32); lz_lw = 56; lz_knob(822, 232, 15, 32, -24, 12, 0, 0, "TRIM", #v);
+ui_guardclick(1700 + 32, 33, 822, 232, 18);   // click TRIM for GUARD
+sprintf(#v, "%.0f%%", slider26); lz_lw = 56; lz_cap = 0xD8B040; lz_knob(922, 232, 15, 26, 0, 100, 0, 0, "SAT", #v);
+lz_label(872, 289, "OUT");
+ui_okfs = 0.9; ui_outkeys(842, 306, 60, 15, 3, 31); ui_okfs = 0.85;
+
+// ---------- OUTPUT: the DRIFT dial, the meter, the level ----------
+lz_sect(996, 12, 62, 368);
+sprintf(#v, "%.0f%%", slider36); lz_lw = 50; lz_knob(1027, 58, 12, 36, 0, 100, 50, 0, "DRIFT", #v);
+mvL = max(lz_mv(pkL), mvL * 0.86); mvR = max(lz_mv(pkR), mvR * 0.86); pkL = pkR = 0;
+lz_meter(1003, 108, 48, 158, mvL, mvR);
+sprintf(#v, "%+.1f", slider25); lz_lw = 50; lz_knob(1027, 332, 14, 25, -24, 12, 0, 0, "LEVEL", #v);
+
+pk_shad = 0.45; pk_shoff = 1;
+
+pk_end();
+ui_end();

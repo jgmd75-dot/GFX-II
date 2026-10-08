@@ -1,0 +1,290 @@
+desc:GFX Compact 12
+//tags: summing mixer compact desk op-amp drive stems
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-dyn (.jsfx-inc) in the same folder.
+//
+// The little 12-channel desk from every 90s project studio as a summing mixer, in the spirit of the famous
+// compact low-noise mixers (personal use; the sound is designed from scratch): clean and honest, with the
+// tight, slightly forward sound of its op-amps - and the gritty edge when you run it hot.
+//
+// SET-UP (REAPER): set the bus track to 12 channels. Send mono sources to channels 1, 2, 3 and 4 (send to a
+// single channel) and stereo stems to 5/6, 7/8, 9/10 and 11/12 (turn off the stems' master send). Mix out on 1/2.
+//   CH 1 - 4   mono channels: HI (12 kHz), MID (2.5 kHz), LOW (80 Hz) EQ, PAN, LEVEL
+//   CH 5 - 12  stereo pairs:  HI, LOW EQ, BALANCE, LEVEL
+//   every channel: SOLO (the SOLO light on the master flashes while anything is soloed) and MUTE.
+// MASTER: MAIN MIX level; HOT - drives the summing amps into their rails (grit, edge and a little bite;
+//   level-matched); NOISE - the desk's own hiss floor; 12-LED meters (0 = 0 VU = -18 dBFS).
+// PRESETS.
+// NAMES       - click the name at the top of a channel strip and type (e.g. Drums); Enter keeps it, Escape cancels,
+//               an empty name goes back to the number. The names are saved with the project.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-dyn.jsfx-inc
+
+slider1:0<-60,10,0.1>-Main mix (dB)
+slider2:0<0,1,1{Off,On}>-Hot
+slider3:0<0,1,1{Off,On}>-Desk noise
+slider4:0<-60,10,0.1>-Ch 1 level (dB)
+slider5:0<-60,10,0.1>-Ch 2 level (dB)
+slider6:0<-60,10,0.1>-Ch 3 level (dB)
+slider7:0<-60,10,0.1>-Ch 4 level (dB)
+slider8:0<-60,10,0.1>-Ch 5-6 level (dB)
+slider9:0<-60,10,0.1>-Ch 7-8 level (dB)
+slider10:0<-60,10,0.1>-Ch 9-10 level (dB)
+slider11:0<-60,10,0.1>-Ch 11-12 level (dB)
+slider12:0<-15,15,0.1>-Ch 1 hi (dB)
+slider13:0<-15,15,0.1>-Ch 2 hi (dB)
+slider14:0<-15,15,0.1>-Ch 3 hi (dB)
+slider15:0<-15,15,0.1>-Ch 4 hi (dB)
+slider16:0<-15,15,0.1>-Ch 5-6 hi (dB)
+slider17:0<-15,15,0.1>-Ch 7-8 hi (dB)
+slider18:0<-15,15,0.1>-Ch 9-10 hi (dB)
+slider19:0<-15,15,0.1>-Ch 11-12 hi (dB)
+slider20:0<-12,12,0.1>-Ch 1 mid (dB)
+slider21:0<-12,12,0.1>-Ch 2 mid (dB)
+slider22:0<-12,12,0.1>-Ch 3 mid (dB)
+slider23:0<-12,12,0.1>-Ch 4 mid (dB)
+slider24:0<-15,15,0.1>-Ch 1 low (dB)
+slider25:0<-15,15,0.1>-Ch 2 low (dB)
+slider26:0<-15,15,0.1>-Ch 3 low (dB)
+slider27:0<-15,15,0.1>-Ch 4 low (dB)
+slider28:0<-15,15,0.1>-Ch 5-6 low (dB)
+slider29:0<-15,15,0.1>-Ch 7-8 low (dB)
+slider30:0<-15,15,0.1>-Ch 9-10 low (dB)
+slider31:0<-15,15,0.1>-Ch 11-12 low (dB)
+slider32:0<-100,100,1>-Ch 1 pan
+slider33:0<-100,100,1>-Ch 2 pan
+slider34:0<-100,100,1>-Ch 3 pan
+slider35:0<-100,100,1>-Ch 4 pan
+slider36:0<-100,100,1>-Ch 5-6 balance
+slider37:0<-100,100,1>-Ch 7-8 balance
+slider38:0<-100,100,1>-Ch 9-10 balance
+slider39:0<-100,100,1>-Ch 11-12 balance
+slider40:0<0,1,1{Off,On}>-Ch 1 mute
+slider41:0<0,1,1{Off,On}>-Ch 2 mute
+slider42:0<0,1,1{Off,On}>-Ch 3 mute
+slider43:0<0,1,1{Off,On}>-Ch 4 mute
+slider44:0<0,1,1{Off,On}>-Ch 5-6 mute
+slider45:0<0,1,1{Off,On}>-Ch 7-8 mute
+slider46:0<0,1,1{Off,On}>-Ch 9-10 mute
+slider47:0<0,1,1{Off,On}>-Ch 11-12 mute
+slider48:0<0,1,1{Off,On}>-Ch 1 solo
+slider49:0<0,1,1{Off,On}>-Ch 2 solo
+slider50:0<0,1,1{Off,On}>-Ch 3 solo
+slider51:0<0,1,1{Off,On}>-Ch 4 solo
+slider52:0<0,1,1{Off,On}>-Ch 5-6 solo
+slider53:0<0,1,1{Off,On}>-Ch 7-8 solo
+slider54:0<0,1,1{Off,On}>-Ch 9-10 solo
+slider55:0<0,1,1{Off,On}>-Ch 11-12 solo
+slider56:0<0,100,1>-Band sat (%)
+slider57:30<0,100,1>-Bias (%)
+slider58:120<40,400,1>-Sat low band (Hz)
+slider59:6000<2000,16000,10>-Sat high band (Hz)
+slider60:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider61:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:ch 1
+in_pin:ch 2
+in_pin:ch 3
+in_pin:ch 4
+in_pin:ch 5
+in_pin:ch 6
+in_pin:ch 7
+in_pin:ch 8
+in_pin:ch 9
+in_pin:ch 10
+in_pin:ch 11
+in_pin:ch 12
+out_pin:main L
+out_pin:main R
+
+@init
+#ui_man = "gfx-compact-12";                                  // the ? pop-up links to this manual
+
+LHD = 180;                                          // signal-light hold per input (gfx)
+
+CG = 100; CGT = 110; CPK = 120; CL = 130; CR = 140; // per channel: gain, target, peak, pan L / R gains
+memset(100, 0, 50);
+
+// one channel's EQ: hi shelf 12 kHz, mid peak 2.5 kHz, low shelf 80 Hz
+function eq_set(hi, mid, lo) instance(h, m, l) ( h.bq_set(3, 12000, 0.7, hi); m.bq_set(2, 2500, 0.9, mid); l.bq_set(4, 80, 0.7, lo); );
+function eq3(x) instance(h, m, l) ( l.bq_run(m.bq_run(h.bq_run(x))) );
+function eq2(x) instance(h, l) ( l.bq_run(h.bq_run(x)) );
+// the summing amp: clean until its rails; HOT pushes it there (asymmetric, op-amp style edge)
+function rail(x) local(a) (
+  hot ? ( x *= 2.8; x = x > 0 ? ost_tanh(x * 1.05) : ost_tanh(x * 1.15) / 1.1; x / 2.94; ) :
+  ( a = abs(x); a < 1.2 ? x : sign(x) * (1.2 + 0.2 * ost_tanh((a - 1.2) / 0.2)) );
+);
+
+function update() local(i, any, a) (
+  mm = slider1 <= -59.9 ? 0 : 10 ^ (slider1 / 20);
+  hot = slider2; nse = slider3;
+  m1.eq_set(slider12, slider20, slider24); m2.eq_set(slider13, slider21, slider25);
+  m3.eq_set(slider14, slider22, slider26); m4.eq_set(slider15, slider23, slider27);
+  s5l.eq_set(slider16, 0, slider28); s5r.eq_set(slider16, 0, slider28); s7l.eq_set(slider17, 0, slider29); s7r.eq_set(slider17, 0, slider29);
+  s9l.eq_set(slider18, 0, slider30); s9r.eq_set(slider18, 0, slider30); s11l.eq_set(slider19, 0, slider31); s11r.eq_set(slider19, 0, slider31);
+  any = 0; i = 0; loop(8, any |= slider(48 + i); i += 1; );
+  solo_on = any;
+  i = 0;
+  loop(8,
+    CGT[i] = slider(40 + i) || (any && !slider(48 + i)) || slider(4 + i) <= -59.9 ? 0 : 10 ^ (slider(4 + i) / 20);
+    a = (slider(32 + i) + 100) / 200;
+    i < 4 ? ( CL[i] = cos(a * 0.5 * $pi); CR[i] = sin(a * 0.5 * $pi); )            // mono: constant-power pan
+          : ( CL[i] = min(1, 2 * (1 - a)); CR[i] = min(1, 2 * a); );               // stereo: balance
+    i += 1;
+  );
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+);
+
+// ---------- presets (channel settings are left alone) ----------
+function pname(p) (
+  p == 1 ? "Clean Desk" :
+  p == 2 ? "Hot Desk" :
+  p == 3 ? "Hot and Noisy" :
+  p == 4 ? "Clean with Desk Noise" :
+  p == 5 ? "Flat all channels" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1 ? ( slider1 = 0; slider2 = 0; slider3 = 0; ) :     // Clean Desk
+  p == 2 ? ( slider1 = 0; slider2 = 1; slider3 = 0; ) :     // Hot Desk
+  p == 3 ? ( slider1 = 0; slider2 = 1; slider3 = 1; ) :     // Hot and Noisy (the real thing)
+  p == 4 ? ( slider1 = -3; slider2 = 0; slider3 = 1; );     // Clean with Desk Noise
+  p >= 1 && p <= 4 ? slider_automate(7);
+  p == 5 ? (                                                // Flat all channels
+    i = 0; loop(8, slider(4 + i) = 0; slider(12 + i) = 0; slider(24 + i) = 0; slider(32 + i) = 0; slider(40 + i) = 0; slider(48 + i) = 0; i += 1; );
+    i = 0; loop(4, slider(20 + i) = 0; i += 1; );
+    i = 4; loop(52, ui_auto(i); i += 1; );
+  );
+  p == 6 ? (                                                // Reset all to defaults
+    i = 0; loop(8, slider(4 + i) = 0; slider(12 + i) = 0; slider(24 + i) = 0; slider(32 + i) = 0; slider(40 + i) = 0; slider(48 + i) = 0; i += 1; );
+    i = 0; loop(4, slider(20 + i) = 0; i += 1; );
+    slider1 = 0; slider2 = 0; slider3 = 0;
+    slider56 = 0; slider57 = 30; slider58 = 120; slider59 = 6000; slider60 = -0.3; slider61 = 1;
+    i = 1; loop(61, ui_auto(i); i += 1; );
+  );
+);
+
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+sm = 1 - exp(-1 / (0.02 * srate));
+nz_g = 10 ^ (-84 / 20);
+cur_preset = 1;
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
+PNL = 0x2A2B2E; INK = 0xF0EEE8; CHI = 0x3FB05C; CMD = 0x2F7FD0; CLO = 0xE0B02A; CPN = 0xB8BCC2;
+update();
+i = 0; loop(8, CG[i] = CGT[i]; i += 1; );
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+
+@serialize
+file_var(0, ui_sz);
+gn = 0; loop(8, file_avail(0) != 0 ? file_string(0, UI_NM + gn); gn += 1; );   // channel names (older projects have none)
+
+@sample
+k = 0; loop(8, CG[k] += (CGT[k] - CG[k]) * sm; k += 1; );
+k = 0; loop(4, CPK[k] = max(CPK[k], abs(spl(k))); k += 1; );
+k = 0; loop(4, CPK[4 + k] = max(CPK[4 + k], max(abs(spl(4 + 2 * k)), abs(spl(5 + 2 * k)))); k += 1; );
+// mono channels 1 - 4
+x = m1.eq3(spl0) * CG[0]; ml = x * CL[0]; mr = x * CR[0];
+x = m2.eq3(spl1) * CG[1]; ml += x * CL[1]; mr += x * CR[1];
+x = m3.eq3(spl2) * CG[2]; ml += x * CL[2]; mr += x * CR[2];
+x = m4.eq3(spl3) * CG[3]; ml += x * CL[3]; mr += x * CR[3];
+// stereo channels 5/6 - 11/12
+ml += s5l.eq2(spl4) * CG[4] * CL[4];   mr += s5r.eq2(spl5) * CG[4] * CR[4];
+ml += s7l.eq2(spl6) * CG[5] * CL[5];   mr += s7r.eq2(spl7) * CG[5] * CR[5];
+ml += s9l.eq2(spl8) * CG[6] * CL[6];   mr += s9r.eq2(spl9) * CG[6] * CR[6];
+ml += s11l.eq2(spl10) * CG[7] * CL[7]; mr += s11r.eq2(spl11) * CG[7] * CR[7];
+// desk noise, the summing amp, main mix
+nse ? ( ml += (rand(2) - 1) * nz_g; mr += (rand(2) - 1) * nz_g; );
+ml = rail(ml * mm); mr = rail(mr * mm);
+ml = ostL.ost_band(ml); mr = ostR.ost_band(mr);
+ost_out(ml, mr);
+spl0 = ost_l; spl1 = ost_r;
+k = 2; loop(10, spl(k) = 0; k += 1; );
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 900 442
+ui_begin(900, ins_show_out ? 562 : 442);
+dy_ink = INK; dy_bg = PNL; dy_kst = 7; dy_nov = 1;
+
+// ---------- panel ----------
+fh = ins_show_out ? 554 : 434;
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
+ui_col(INK); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
+gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INK); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("COMPACT 12");
+gfx_setfont(4); ui_col(CLO); gfx_x = 254 * sc; gfx_y = 30 * sc; gfx_drawstr("12-CHANNEL SUMMING DESK");
+ui_button(528 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 6 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(556 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 6 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 590 * sc; gfx_y = 48 * sc;
+  cur_preset = gfx_showmenu("Clean Desk|Hot Desk|Hot and Noisy|Clean with Desk Noise|Flat all channels|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_size_picker(700 * sc, 22 * sc);
+pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+
+ui_col(0xE8E6E0); gfx_rect(14 * sc, 60 * sc, 872 * sc, 2 * sc);
+
+// ---------- channels ----------
+gk = 0;
+loop(8,
+  cx = 52 + gk * 70;
+  ui_cola(0xFFFFFF, gk < 4 ? 0.035 : 0.06); gfx_rect((cx - 33) * sc, 70 * sc, 66 * sc, 356 * sc);
+  gk < 4 ? sprintf(#cn, "%d", gk + 1) : sprintf(#cn, "%d-%d", 5 + 2 * (gk - 4), 6 + 2 * (gk - 4));
+  ui_namebox(cx, 71, 60, gk, #cn, INK);   // click to name the channel
+  dy_lbl(cx, 89, gk < 4 ? "MONO" : "STEREO", 0.5);
+  LHD[gk] = max(CPK[gk], LHD[gk] * 0.9); CPK[gk] = 0;   // held, so the light does not flicker between audio blocks
+  pk_led(cx * sc, 104 * sc, 3.2 * sc, LHD[gk] > 0.001 && CGT[gk] > 0, dy_grn);
+  sprintf(#v, "%+.1f", slider(12 + gk)); dy_knob(cx, 134, 12, 12 + gk, -15, 15, 0, 0, CHI, "HI", #v);
+  gk < 4 ? ( sprintf(#v, "%+.1f", slider(20 + gk)); dy_knob(cx, 190, 12, 20 + gk, -12, 12, 0, 0, CMD, "MID", #v); );
+  sprintf(#v, "%+.1f", slider(24 + gk)); dy_knob(cx, 246, 12, 24 + gk, -15, 15, 0, 0, CLO, "LOW", #v);
+  slider(32 + gk) == 0 ? strcpy(#v, "C") : sprintf(#v, "%s%.0f", slider(32 + gk) < 0 ? "L" : "R", abs(slider(32 + gk)));
+  dy_knob(cx, 302, 12, 32 + gk, -100, 100, 0, 0, CPN, gk < 4 ? "PAN" : "BAL", #v);
+  slider(4 + gk) <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f", slider(4 + gk));
+  dy_knob(cx, 352, 14, 4 + gk, -60, 10, 0, 0, 0xF4F2EA, "LEVEL", #v);
+  pk_ledbtn((cx - 24) * sc, 397 * sc, 22 * sc, 18 * sc, slider(48 + gk), 0xF2C21B) ? ( slider(48 + gk) = 1 - slider(48 + gk); ui_auto(48 + gk); );
+  pk_ledbtn((cx + 2) * sc, 397 * sc, 22 * sc, 18 * sc, slider(40 + gk), dy_red) ? ( slider(40 + gk) = 1 - slider(40 + gk); ui_auto(40 + gk); );
+  dy_lbl(cx - 13, 417, "SOLO", 0.6); dy_lbl(cx + 13, 417, "MUTE", 0.6);
+  gk += 1;
+);
+
+// ---------- master ----------
+ui_cola(0xFFFFFF, 0.08); gfx_rect(612 * sc, 70 * sc, 272 * sc, 356 * sc);
+dy_title(624, 76, "MAIN MIX");
+dy_ledv(668, 110, 216, pkdL, 1); dy_ledv(684, 110, 216, pkdR, 0);
+pkdL = max(pkL, pkdL * 0.85); pkdR = max(pkR, pkdR * 0.85); pkL = pkR = 0;
+dy_lbl(674, 330, "L", 0.7); dy_lbl(690, 330, "R", 0.7);
+dy_nov = 0;
+slider1 <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider1);
+dy_knob(790, 196, 30, 1, -60, 10, 0, 0, 0xF4F2EA, "MAIN MIX", #v);
+dy_btn(726, 352, slider2, dy_red, "HOT") ? ( slider2 = 1 - slider2; ui_auto(2); );
+dy_btn(776, 352, slider3, dy_amb, "NOISE") ? ( slider3 = 1 - slider3; ui_auto(3); );
+// SOLO light: flashes while anything is soloed
+fl = solo_on && (time_precise() * 2.5) % 1 < 0.6;
+pk_led(850 * sc, 364 * sc, 6 * sc, fl, 0xFFB030);
+dy_lbl(850, 378, "SOLO", 0.8);
+
+pk_end();
+ui_end();

@@ -1,0 +1,413 @@
+desc:GFX Compressor
+//tags: compressor dynamics vca bus glue
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
+//
+// One compressor, three voicings:
+//   VCA     - punchy RMS compressor with program-dependent timing; RATIO goes past infinity
+//             into negative ratios (louder in = quieter out) for pumping, backwards effects
+//   BUS     - stereo-linked glue / mastering compressor: peak-sensing, smooth, low colour
+//   RIDE    - transparent "easy ride" leveller: wide knee, adaptive timing, very musical
+//   OPTO    - optical cell: soft attack, two-stage release (lets go quickly, then slowly)
+// AUTO timing: attack and release follow the programme (release lengthens on sustained reduction).
+// Frequency knob, two modes (click its label to switch):
+//   SC HPF - the detector ignores the lows (12 dB/oct high-pass), the whole signal is compressed
+//   SPLIT  - only the lows below the frequency are compressed, via a Linkwitz-Riley (24 dB/oct)
+//            crossover: flat response when nothing is compressed.
+// MIX in MASTER = parallel compression.
+// DRIFT: threshold and timing breathe slightly. The DRIFT dial scales the threshold and timing drift amounts
+// (50% = the settings below, 100% = twice, 0 = none) and speeds the wander up with them.
+// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIMIT) on the panel.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-lozenge.jsfx-inc
+
+slider1:0<0,3,1{VCA,Bus,Ride,Opto}>-Voicing
+slider2:-18<-50,0,0.1>-Threshold (dB)
+slider3:0.75<0,2,0.001>-Ratio (slope: 0 = 1:1, 1 = inf, 2 = -1:1)
+slider4:10<0.1,100,0.1>-Attack (ms)
+slider5:150<20,2000,1>-Release (ms)
+slider6:1<0,1,1{Off,On}>-Auto timing
+slider7:6<0,18,0.1>-Knee (dB)
+slider8:0<0,24,0.1>-Makeup (dB)
+slider9:80<20,2000,1>-SC HPF / Split freq (Hz, 20 = off)
+slider10:1<0,1,1{Off,On}>-Stereo link
+slider11:5<0,50,1>-Threshold drift (%)
+slider12:10<0,50,1>-Timing drift (%)
+slider13:0.25<0.02,2,0.01>-Drift speed (Hz)
+slider14:100<0,100,1>-Mix (%)
+slider15:0<-24,12,0.1>-Output (dB)
+slider16:0<0,100,1>-Band sat (%)
+slider17:30<0,100,1>-Bias (%)
+slider18:120<40,400,1>-Sat low band (Hz)
+slider19:6000<2000,16000,10>-Sat high band (Hz)
+slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:0<-24,12,0.1>-Input trim (dB)
+slider23:1<0,1,1{Off,On}>-Input guard
+slider24:1<0,1,1{Split,SC HPF}>-Frequency mode
+// DRIFT dial: scales the threshold / timing wander (sliders 11-12) and its speed (slider 13); 50 % = as set.
+slider25:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-compressor";                                  // the ? pop-up links to this manual
+
+function bq_hp(f) instance(b0, b1, b2, a1, a2) local(w0, cw, al, n) (
+  w0 = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w0); al = sin(w0) / (2 * 0.70710678); n = 1 + al;
+  b0 = (1 + cw) * 0.5 / n; b1 = -(1 + cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
+);
+function bq_lp(f) instance(b0, b1, b2, a1, a2) local(w0, cw, al, n) (
+  w0 = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w0); al = sin(w0) / (2 * 0.70710678); n = 1 + al;
+  b0 = (1 - cw) * 0.5 / n; b1 = (1 - cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
+);
+function bq_run(x) instance(b0, b1, b2, a1, a2, x1, x2, y1, y2) local(y) (
+  y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+  x2 = x1; x1 = x; y2 = y1; y1 = y;
+  y;
+);
+
+// detector: RMS (VCA, RIDE) or peak (BUS), result in dB
+function comp_det(pw, pk) instance(e, pe) (
+  voice == 1 ? ( pe = max(pk, pe * pkdec); 20 * log10(max(pe, 0.000001)); )
+             : ( e += (pw - e) * crms;     10 * log10(max(e, 0.000000000001)); );
+);
+
+// static curve with soft knee; returns gain reduction in dB (positive)
+function comp_curve(over) (
+  kn < 0.05 ? ( over > 0 ? slope_e * over : 0; ) :
+  2 * over < -kn ? 0 :
+  2 * abs(over) <= kn ? slope_e * (over + kn * 0.5) * (over + kn * 0.5) / (2 * kn) :
+  slope_e * over;
+);
+
+// gain-reduction smoothing with manual or programme-dependent timing
+function comp_gr(ldb) instance(gr, grs, of, os) local(tg, a, r) (
+  tg = comp_curve(ldb - thr_e);
+  voice == 3 ? (
+    // optical cell: a fast part and a slow part; soft attack, two-stage release
+    of += (tg - of) * (tg > of ? opt_fa : opt_fr);
+    os += (tg - os) * (tg > os ? opt_sa : opt_sr);
+    gr = 0.6 * of + 0.4 * os;
+  ) : (
+  autot ? ( a = att_auto; r = 60 + rel_span * min(grs / 12, 1); ) : ( a = att_ms; r = rel_ms; );
+  a *= tmul; r *= tmul;
+  gr += (tg - gr) * (tg > gr ? 1 - exp(-1 / (0.001 * a * srate)) : 1 - exp(-1 / (0.001 * r * srate)));
+  );
+  grs += (gr - grs) * cslow;
+  gr;
+);
+
+function ratio_text(rsl) (
+  rsl < 0.995 ? sprintf(#rt, "%.1f:1", 1 / (1 - rsl)) :
+  rsl <= 1.005 ? strcpy(#rt, "INF:1") :
+  sprintf(#rt, "-%.1f:1", 1 / (rsl - 1));
+  #rt;
+);
+
+function update() (
+  voice = slider1;
+  thr = slider2;
+  slope = voice == 0 ? slider3 : min(slider3, 1);
+  att_ms = slider4; rel_ms = slider5;
+  autot = slider6;
+  knee = slider7;
+  mk = slider8;
+  split = slider9; fmode = slider24;
+  split > 20.5 ? ( lpL1.bq_lp(split); lpL2.bq_lp(split); lpR1.bq_lp(split); lpR2.bq_lp(split);
+                   hpL1.bq_hp(split); hpL2.bq_hp(split); hpR1.bq_hp(split); hpR2.bq_hp(split);
+                   scfL.bq_hp(split); scfR.bq_hp(split); );
+  link = slider10;
+  drift_macro(slider25);
+  tdr = slider11 / 100 * dm_a; mdr = slider12 / 100 * dm_a;
+  dspd = slider13 * dm_s;
+  mix_t = slider14 / 100;
+  out_t = 10 ^ (slider15 / 20);
+  voice == 0 ? ( att_auto = 8;  rel_span = 900;  kn = knee; ) :
+  voice == 1 ? ( att_auto = 20; rel_span = 800;  kn = knee; ) :
+  voice == 2 ? ( att_auto = 15; rel_span = 1400; kn = max(knee, 10); ) :
+               ( att_auto = 10; rel_span = 1500; kn = max(knee, 12); );
+  in_setup(slider22, slider23);
+  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, slider21);
+);
+
+// ---------- presets (leave Drift speed, Output and the I/O rows alone) ----------
+function setp(v, th, rsl, at, re, au, kne, mk_, hp, lk, mx, fm) (
+  slider1 = v; slider2 = th; slider3 = rsl; slider4 = at; slider5 = re; slider6 = au;
+  slider7 = kne; slider8 = mk_; slider9 = hp; slider10 = lk; slider14 = mx; slider24 = fm;
+);
+function pname(p) (
+  p == 1 ? "Vocal Ride" :
+  p == 2 ? "Drum Smash" :
+  p == 3 ? "Bass Glue" :
+  p == 4 ? "Bus Glue" :
+  p == 5 ? "Negative Pump" :
+  p == 6 ? "Gentle Level" :
+  p == 7 ? "Parallel Crush" :
+  p == 8 ? "Mastering Touch" :
+  p == 9 ? "Opto Vocal" :
+  p == 10 ? "Opto Lows Only" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1 ? setp(2, -20, 0.67, 15,  250, 1, 12, 3, 100, 1, 100, 1) :   // Vocal Ride
+  p == 2 ? setp(0, -28, 0.83, 3,   80,  0, 2,  6, 60,  1, 100, 1) :   // Drum Smash
+  p == 3 ? setp(0, -22, 0.75, 10,  150, 1, 6,  4, 120, 1, 100, 0) :   // Bass Glue
+  p == 4 ? setp(1, -16, 0.5,  30,  300, 0, 6,  2, 90,  1, 100, 1) :   // Bus Glue
+  p == 5 ? setp(0, -24, 1.5,  5,   200, 0, 3,  6, 80,  1, 100, 1) :   // Negative Pump
+  p == 6 ? setp(2, -24, 0.5,  15,  400, 1, 15, 3, 80,  1, 100, 1) :   // Gentle Level
+  p == 7 ? setp(0, -35, 0.9,  1,   60,  0, 0,  10, 80, 1, 40, 1) :    // Parallel Crush
+  p == 8 ? setp(1, -10, 0.33, 30,  500, 1, 9,  1, 100, 1, 100, 1) :   // Mastering Touch
+  p == 9 ? setp(3, -22, 0.75, 10,  150, 1, 12, 4, 80,  1, 100, 1) :   // Opto Vocal
+  p == 10 ? setp(3, -26, 0.8, 10,  150, 1, 12, 3, 160, 1, 100, 0);    // Opto Lows Only
+  p >= 1 && p <= 10 ? slider_automate(8397823);   // sliders 1-10, 14, 24
+  p == 11 ? (                                  // Reset all to defaults
+    slider1 = 0; slider2 = -18; slider3 = 0.75; slider4 = 10; slider5 = 150; slider6 = 1; slider7 = 6;
+    slider8 = 0; slider9 = 80; slider10 = 1; slider11 = 5; slider12 = 10; slider13 = 0.25; slider14 = 100;
+    slider15 = 0; slider16 = 0; slider17 = 30; slider18 = 120; slider19 = 6000; slider20 = -0.3; slider21 = 1;
+    slider22 = 0; slider23 = 1; slider24 = 1; slider25 = 50;
+    slider_automate(33554431);
+  );
+);
+
+// ---------- memory / state ----------
+grh = 0; grlen = 160; memset(grh, 0, grlen); grhi = 0;
+sm    = 1 - exp(-1 / (0.03 * srate));
+vuc   = 1 - exp(-1 / (0.01 * srate));
+crms  = 1 - exp(-1 / (0.01 * srate));
+pkdec = exp(-1 / (0.03 * srate));
+cslow = 1 - exp(-1 / (1.0 * srate));
+opt_fa = 1 - exp(-1 / (0.01 * srate));  opt_fr = 1 - exp(-1 / (0.06 * srate));   // opto fast part
+opt_sa = 1 - exp(-1 / (0.25 * srate));  opt_sr = 1 - exp(-1 / (1.8 * srate));    // opto slow part
+drT.drift_init(0.8 + rand(0.5));
+drM.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+pkL = 0; pkR = 0; vu_ms = 0; dispGr = 0; dispLdb = -60; grPk = 0;
+cur_preset = 1;
+!ui_dflt ? ui_thm = 17; !ui_dflt ? ui_hw = 0;   // defaults for new instances: Mint, flat (saved projects keep their own)
+
+update();
+mix_s = mix_t; out_s = out_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+
+@sample
+// input stage: DC block, trim, guard
+in_process(spl0, spl1);
+inL = in_l; inR = in_r;
+vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
+
+// drift
+dinc = dspd / srate;
+vT = drT.drift_tick(dinc);
+vM = drM.drift_tick(dinc);
+thr_e = thr + tdr * 3 * vT;
+tmul = 1 + 0.3 * mdr * vM;
+slope_e = slope;
+
+mix_s += (mix_t - mix_s) * sm;
+out_s += (out_t - out_s) * sm;
+
+// split: the lows (LR4 low-pass) are the sidechain and the only part that gets compressed
+usesplit = split > 20.5 && fmode == 0;
+usehpf   = split > 20.5 && fmode == 1;
+usesplit ? ( sL = lpL2.bq_run(lpL1.bq_run(inL)); sR = lpR2.bq_run(lpR1.bq_run(inR));
+             hiL = hpL2.bq_run(hpL1.bq_run(inL)); hiR = hpR2.bq_run(hpR1.bq_run(inR)); ) :
+usehpf   ? ( sL = scfL.bq_run(inL); sR = scfR.bq_run(inR); )
+         : ( sL = inL; sR = inR; );
+
+link || voice == 1 ? (
+  ld = dtL.comp_det(0.5 * (sL * sL + sR * sR), max(abs(sL), abs(sR)));
+  grL = compL.comp_gr(ld); grR = grL;
+) : (
+  ldL = dtL.comp_det(sL * sL, abs(sL)); ldR = dtR.comp_det(sR * sR, abs(sR));
+  grL = compL.comp_gr(ldL); grR = compR.comp_gr(ldR);
+  ld = max(ldL, ldR);
+);
+
+gainL = 10 ^ ((mk - grL) / 20); gainR = 10 ^ ((mk - grR) / 20);
+usesplit ? ( cL = hiL + sL * gainL; cR = hiR + sR * gainR; )   // LR4 bands sum flat, in phase
+             : ( cL = inL * gainL; cR = inR * gainR; );
+// VCA colour: a touch of even harmonics under heavy reduction
+voice == 0 ? (
+  cc = 0.04 * min(max(grL, grR) / 15, 1);
+  cL += cc * cL * abs(cL); cR += cc * cR * abs(cR);
+);
+
+oL = inL * (1 - mix_s) + cL * mix_s;
+oR = inR * (1 - mix_s) + cR * mix_s;
+
+// output stage
+oL = ostL.ost_band(oL) * out_s;
+oR = ostR.ost_band(oR) * out_s;
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+dispLdb = ld; grPk = max(grPk, max(grL, grR)); dispGr = max(grL, grR);
+
+@gfx 1000 384
+ui_begin(1000, 384);
+lz_colours();
+pk_shad = 0.3; pk_shoff = 0.8;
+
+// the voicing selector: four coloured lit buttons, two rows of two, names outside (left column: names on the
+// left, right column: names on the right); returns the chosen position
+function vsel(x, y, pos) local(i, cx, cy, tw, th, s) (
+  i = 0;
+  loop(4,
+    cx = x + (i % 2) * 46; cy = y + floor(i / 2) * 40;
+    lz_lamp(cx, cy, pos == i, i == 0 ? 0xFF6FB4 : i == 1 ? 0x3A9CFF : i == 2 ? 0xFF9A22 : 0xFF3A2A, "") ? pos = i;
+    s = i == 0 ? "VCA" : i == 1 ? "BUS" : i == 2 ? "RIDE" : "OPTO";
+    gfx_setfont(6, "Arial", 11 * sc, 'b'); gfx_measurestr(s, tw, th);
+    ui_cola(lz_ink, i == pos ? 1 : 0.65);
+    gfx_x = i % 2 ? (cx + 19) * sc : (cx - 19) * sc - tw; gfx_y = (cy + 13) * sc - th * 0.5; gfx_drawstr(s);
+    i += 1; );
+  pos;
+);
+
+// ---------- the faceplate ----------
+fh = 376;
+ui_col(0x0B0C0C); gfx_rect(0, 0, gfx_w, gfx_h);
+lz_chassis(6, 4, 988, fh);
+lz_brand("COMPRESSOR");
+
+// ---------- the graph section ----------
+lz_sect(84, 12, 250, 358);
+vdb = 10 * log10(max(vu_ms, 0.0000000001));
+lz_led(102, 31, vdb > -50, 0x6AFF8A); lz_label(142, 24, "SIGNAL");
+lz_small(220, 27, "INPUT", 1);
+sprintf(#v, "%.1f dB", max(vdb, -60)); lz_lcd(284, 22, 70, #v);
+// the transfer curve, -60 .. 0 dB
+gx0 = 118; gy0 = 60; gs = 196;
+ui_col(lz_dk); gfx_rect((gx0 - 22) * sc, (gy0 - 8) * sc, (gs + 32) * sc, (gs + 30) * sc);
+gfx_gradrect((gx0 - 21) * sc, (gy0 - 7) * sc, (gs + 30) * sc, (gs + 28) * sc, 0.70, 0.80, 0.86, 1, 0, 0, 0, 0, -0.0006 / sc, -0.0005 / sc, -0.0004 / sc, 0);
+gi = 0; loop(7, ui_col(gi % 3 == 0 ? 0xE4EEF4 : 0xC4D6E2);
+  gfx_rect((gx0 + gi / 6 * gs) * sc, gy0 * sc, 1, gs * sc); gfx_rect(gx0 * sc, (gy0 + gi / 6 * gs) * sc, gs * sc, 1); gi += 1; );
+gfx_setfont(6, "Arial", 9 * sc, 'b'); ui_col(0x2A3C46);
+gi = 1; loop(5, sprintf(#gl, "%d", -60 + gi * 10);
+  gfx_x = (gx0 + gi / 6 * gs - 7) * sc; gfx_y = (gy0 + gs + 6) * sc; gfx_drawstr(#gl);
+  gfx_x = (gx0 - 18) * sc; gfx_y = (gy0 + gs - gi / 6 * gs - 4) * sc; gfx_drawstr(#gl); gi += 1; );
+ui_col(0xD4E2EA); gfx_line(gx0 * sc, (gy0 + gs) * sc, (gx0 + gs) * sc, gy0 * sc, 1);
+kn_d = slider1 == 2 ? max(slider7, 10) : slider1 == 3 ? max(slider7, 12) : slider7;
+slope_d = slider1 == 0 ? slider3 : min(slider3, 1);
+gi = 0;
+loop(121,
+  xin = -60 + gi * 0.5; ov = xin - slider2;
+  grd_ = kn_d < 0.05 ? ( ov > 0 ? slope_d * ov : 0 ) :
+         2 * ov < -kn_d ? 0 : 2 * abs(ov) <= kn_d ? slope_d * (ov + kn_d * 0.5) * (ov + kn_d * 0.5) / (2 * kn_d) : slope_d * ov;
+  yout = min(max(xin - grd_, -60), 0);
+  qx = (gx0 + gi / 120 * gs) * sc; qy = (gy0 + gs - (yout + 60) / 60 * gs) * sc;
+  gi > 0 ? ( ui_col(0xFFFFFF); gfx_line(px, py, qx, qy, 1); gfx_line(px, py - 1, qx, qy - 1, 1); gfx_line(px, py + 1, qx, qy + 1, 1); );
+  px = qx; py = qy; gi += 1;
+);
+qx = gx0 + (slider2 + 60) / 60 * gs;
+ui_col(0x141414); gfx_triangle((qx - 5) * sc, (gy0 + gs + 2) * sc, (qx + 5) * sc, (gy0 + gs + 2) * sc, qx * sc, (gy0 + gs - 6) * sc);
+lin = min(max(dispLdb, -60), 0); lout = min(max(lin - dispGr + slider8, -60), 0);
+ui_col(0xE8241A); gfx_rect((gx0 + (lin + 60) / 60 * gs - 4) * sc, (gy0 + gs - (min(max(lin - dispGr, -60), 0) + 60) / 60 * gs - 4) * sc, 8 * sc, 8 * sc);
+gfx_triangle((gx0 + gs + 1) * sc, (gy0 + gs - (lout + 60) / 60 * gs) * sc, (gx0 + gs + 9) * sc, (gy0 + gs - (lout + 60) / 60 * gs - 6) * sc, (gx0 + gs + 9) * sc, (gy0 + gs - (lout + 60) / 60 * gs + 6) * sc);
+// gain reduction, lit from the right
+grd = max(grPk, grd * 0.86); grPk = 0;
+ui_col(lz_dk); lz_rr(103, 293, 214, 16, 4);
+ui_col(0x0A0C0D); lz_rr(104, 294, 212, 14, 3);
+gi = 0; loop(24, gx_ = 107 + (23 - gi) * 8.6;
+  ui_col(gi < grd ? (gi < 12 ? 0xE8241A : 0xFF6A2A) : 0x3A1A18); gfx_rect(gx_ * sc, 297 * sc, 6.4 * sc, 8 * sc); gi += 1; );
+gi = 0; loop(5, gd_ = gi == 0 ? 24 : gi == 1 ? 18 : gi == 2 ? 12 : gi == 3 ? 6 : 0; sprintf(#gl, gi == 4 ? "0" : "-%d", gd_);
+  lz_small(107 + (24 - gd_) * 8.6 - (gi == 4 ? 3 : 0), 312, #gl, 0.9); gi += 1; );
+// the strip along the bottom: presets, colour, size, help, HW / flat
+ui_col(lz_dk); lz_rr(94, 338, 230, 24, 4);
+ui_button(48 * sc, 341 * sc, 20 * sc, 18 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(70 * sc, 341 * sc, 20 * sc, 18 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(98 * sc, 341 * sc, 64 * sc, 18 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 98 * sc; gfx_y = 359 * sc;
+  cur_preset = gfx_showmenu("Vocal Ride|Drum Smash|Bass Glue|Bus Glue|Negative Pump|Gentle Level|Parallel Crush|Mastering Touch|Opto Vocal|Opto Lows Only|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+lz_pick(170, 341);
+ui_size_picker(196 * sc, 341 * sc);
+pk_lcd(256 * sc, 335 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 262 * sc; gfx_y = 338 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 262 * sc; gfx_y = 352 * sc; gfx_drawstr(pname(cur_preset));
+
+lz_hw(258, 341);
+
+// ---------- COMPRESSOR ----------
+lz_sect(338, 12, 300, 240);
+lz_knob(392, 86, 18, 3, 0, slider1 == 0 ? 2 : 1, 0.75, 0, "RATIO", ratio_text(slider1 == 0 ? slider3 : min(slider3, 1)));
+sprintf(#v, "%.1f dB", slider7); lz_knob(488, 86, 18, 7, 0, 18, 6, 0, "KNEE", #v);
+sprintf(#v, "+%.1f dB", slider8); lz_knob(584, 86, 18, 8, 0, 24, 0, 0, "MAKEUP", #v);
+sprintf(#v, "%.1f dB", slider2); lz_lw = 66; lz_knob(440, 190, 26, 2, -50, 0, -18, 0, "THRESHOLD", #v);
+sprintf(#v, "%.0f%%", slider14); lz_knob(584, 196, 18, 14, 0, 100, 100, 0, "MIX", #v);
+
+// ---------- TIMING + VOICING ----------
+lz_sect(642, 12, 250, 240);
+slider1 == 3 ? strcpy(#v, "OPTO") : slider6 ? strcpy(#v, "AUTO") : sprintf(#v, "%.1f ms", slider4);
+lz_knob(692, 86, 18, 4, 0.1, 100, 10, 1, "ATTACK", #v);
+slider1 == 3 ? strcpy(#v, "OPTO") : slider6 ? strcpy(#v, "AUTO") : sprintf(#v, "%.0f ms", slider5);
+lz_knob(786, 86, 18, 5, 20, 2000, 150, 1, "RELEASE", #v);
+lz_lamp(856, 58, slider6 == 1 || slider1 == 3, 0xFFC830, "AUTO") && slider1 != 3 ? ( slider6 = 1 - slider6; ui_auto(6); );
+gv_ = vsel(722, 160, slider1); gv_ != slider1 ? ( slider1 = gv_; ui_auto(1); );
+lz_lamp(856, 176, slider10 == 1 || slider1 == 1, 0x3AE06A, "LINK") && slider1 != 1 ? ( slider10 = 1 - slider10; ui_auto(10); );
+
+// ---------- SIDE-CHAIN ----------
+lz_sect(338, 256, 300, 114);
+lz_head(488, 270, "SIDE-CHAIN", 270);
+lz_kdim = 1; lz_key(358, 292, 84, slider24 == 1, 0xFF4A3A, "SC HPF") ? ( slider24 = 1; ui_auto(24); );
+lz_kdim = 1; lz_key(358, 326, 84, slider24 == 0, 0xFF4A3A, "SPLIT") ? ( slider24 = 0; ui_auto(24); );
+slider9 < 20.5 ? strcpy(#v, "OFF") : sprintf(#v, slider24 ? "%.0f Hz" : "< %.0f Hz", slider9);
+lz_kind = 1; lz_knob(500, 310, 16, 9, 20, 2000, 80, 1, "", #v);
+lz_small(588, 304, slider24 ? "DETECTOR" : "LOWS ONLY", 0.85);
+lz_small(588, 318, slider24 ? "HIGH-PASS" : "COMPRESSED", 0.6);
+
+// ---------- IN / OUT ----------
+lz_sect(642, 256, 250, 114);
+lz_head(767, 270, "IN / OUT", 220);
+lz_small(694, 286, "TRIM", 0.9); lz_small(767, 286, "SAT", 0.9); lz_small(844, 286, "OUT", 0.9);
+sprintf(#v, "%+.1f dB", slider22); lz_lw = 56; lz_knob(694, 318, 13, 22, -24, 12, 0, 0, "", #v);
+ui_guardclick(1700 + 22, 23, 694, 318, 16);   // click TRIM for GUARD
+sprintf(#v, "%.0f%%", slider16); lz_lw = 52; lz_cap = 0xD8B040; lz_knob(767, 318, 13, 16, 0, 100, 0, 0, "", #v);
+ui_outkeys(817, 300, 54, 14, 3, 21);
+
+// ---------- OUTPUT: the DRIFT dial, the meter, the level ----------
+lz_sect(896, 12, 62, 358);
+sprintf(#v, "%.0f%%", slider25); lz_lw = 50; lz_knob(927, 58, 12, 25, 0, 100, 50, 0, "DRIFT", #v);
+mvL = max(lz_mv(pkL), mvL * 0.86); mvR = max(lz_mv(pkR), mvR * 0.86); pkL = pkR = 0;
+lz_meter(903, 108, 48, 144, mvL, mvR);
+sprintf(#v, "%+.1f", slider15); lz_lw = 50; lz_knob(927, 322, 14, 15, -24, 12, 0, 0, "LEVEL", #v);
+
+pk_shad = 0.45; pk_shoff = 1;
+
+pk_end();
+ui_end();

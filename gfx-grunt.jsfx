@@ -1,0 +1,230 @@
+desc:GFX Grunt - Console Amp Sim
+//tags: amp preamp drive saturation console grunt
+//author: John Garden / Garden FX (GFX)
+//
+// Requires gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
+//
+// "Waka" faceplate: a fixed warm sunrise-orange/red skin (not tied to the usual theme swatches),
+// with an off-white ivory-bakelite cap on the GAIN knob.
+//
+// Signal path: input (trim + guard) -> 140Hz low-shelf bypass splits off the sub-140Hz band ->
+// boost / gain drive -> soft pre-clip -> grunt waveshaping (cubic warmth) -> low band rejoins ->
+// band saturation / tone -> dynamic 330Hz dip -> stereo-linked clipper / limiter -> master.
+//   GAIN   - drive into the stage (ivory bakelite cap). The higher it goes, the more of the
+//            sub-140Hz content is routed around the gain/grunt stage untouched (tighter low end).
+//   BOOST  - small gold-cap knob: extra drive on top of GAIN, plus an asymmetric warmth bias
+//   GRUNT  - amount of cubic waveshaping character. Together with SAG, dynamically pulls gain
+//            out at 330Hz (up to ~6 dB) so heavier settings don't turn boxy/congested.
+//   SAG    - output-stage saturation bias
+//   SQUASH - output-stage band saturation amount
+//   MASTER - output level
+//   Out stage: Off, Clip (soft, zero latency) or Limit (lookahead, PDC reported)
+
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+
+slider1:0<-24,12,0.1>-Gain (dB)
+slider2:0<0,100,1>-Boost (%)
+slider3:0.5<0,1,0.01>-Grunt
+slider4:0.2<0,1,0.01>-Sag
+slider5:0.5<0,1,0.01>-Squash
+slider6:0<-24,12,0.1>-Master (dB)
+slider7:1<0,2,1{Off,Clip,Limit}>-Out stage
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-grunt";                                  // the ? pop-up links to this manual
+
+in_init();
+ost_init(16384); ostL.ost_ch_init(); ostR.ost_ch_init();
+pkL = 0; pkR = 0;   // stereo output meter peaks
+cur_preset = 1;
+ui_thm = 15; ui_hw = 1;   // "Waka" skin is fixed (Ember: burnt orange / warm brown) - no theme picker on this panel
+pk_kstyle = 4;            // ivory bakelite cap (used for the GAIN knob overlay only)
+
+function pname(p) (
+  p == 1 ? "Default" :
+  p == 2 ? "Warm Console" :
+  p == 3 ? "American Crunch" :
+  "British Punch";
+);
+function load_preset(p) (
+  p == 1 ? ( slider1 = 0; slider2 = 0;   slider3 = 0.5; slider4 = 0.2; slider5 = 0.5; slider6 = 0;  slider7 = 1; ) :
+  p == 2 ? ( slider1 = 6; slider2 = 100; slider3 = 0.3; slider4 = 0.4; slider5 = 0.7; slider6 = -2; slider7 = 2; ) :
+  p == 3 ? ( slider1 = 9; slider2 = 100; slider3 = 0.8; slider4 = 0.1; slider5 = 0.3; slider6 = -4; slider7 = 1; ) :
+  p == 4 ? ( slider1 = 4; slider2 = 0;   slider3 = 0.6; slider4 = 0.5; slider5 = 0.8; slider6 = -1; slider7 = 2; );
+  p > 0 ? slider_automate(127);   // sliders 1-7
+);
+
+// one-pole lowpass, used to split out the sub-140Hz band so it can bypass the gain/grunt stage
+function lp140_set(freq) instance(a) (
+  a = 1 - exp(-2 * $pi * freq / srate);
+);
+function lp140_run(x) instance(a, z) (
+  z += a * (x - z);
+  z;
+);
+
+// TPT state-variable filter (Zavalishin) - bandpass tap used to carve a dynamic dip at 330Hz
+function svf_set(freq, q) instance(g, k, a1, a2, a3) (
+  g = tan($pi * freq / srate);
+  k = 1 / q;
+  a1 = 1 / (1 + g * (g + k));
+  a2 = g * a1;
+  a3 = g * a2;
+);
+function svf_bp(x) instance(ic1eq, ic2eq, g, k, a1, a2, a3) local(v1, v2, v3) (
+  v3 = x - ic2eq;
+  v1 = a1 * ic1eq + a2 * v3;
+  v2 = ic2eq + a2 * ic1eq + a3 * v3;
+  ic1eq = 2 * v1 - ic1eq;
+  ic2eq = 2 * v2 - ic2eq;
+  v1;
+);
+
+function update() (
+  in_setup(slider1, 1);
+  ost_setup(slider5, slider4, 90, 7500, 0, slider7);
+  lpL140.lp140_set(140); lpR140.lp140_set(140);
+  nL.svf_set(330, 0.9); nR.svf_set(330, 0.9);
+);
+
+update();
+
+// ivory-bakelite cap overlay drawn on top of the GAIN knob, reusing pk_bkcap() from gfx-panel
+// (ui_knob underneath still handles all drag / wheel / double-click-reset interaction).
+function gr_bake(cx, cy, r, idx, vmin, vmax) local(n, a1) (
+  n = (slider(idx) - vmin) / (vmax - vmin);
+  a1 = -0.75 * $pi + n * 1.5 * $pi;
+  pk_bkcap(cx, cy, r, a1);
+);
+
+@slider
+update();
+
+@block
+update();
+
+@serialize
+file_var(0, ui_sz);
+// ui_thm and ui_hw are fixed for this skin and not saved/restored (no theme picker on this panel)
+
+@sample
+in_process(spl0, spl1);
+
+// --- Core Grunt Amp Sim DSP Engine (true stereo) ---
+// Low-shelf pass-through at 140Hz: as GAIN is pushed up, an increasing fraction of the sub-140Hz
+// band skips the gain/grunt stage entirely (bypassed dry) instead of being driven and waveshaped,
+// so the low end stays tight and un-fuzzed under heavy drive instead of turning to mush.
+low_l = lpL140.lp140_run(in_l); low_r = lpR140.lp140_run(in_r);
+high_l = in_l - low_l; high_r = in_r - low_r;
+gain_n = (slider1 + 24) / 36;                    // 0 at -24dB .. 1 at +12dB
+lowshelf_bypass = gain_n * gain_n * 0.85;        // up to 85% of the low band skips the gain module at max GAIN
+dry_low_l = low_l * lowshelf_bypass; dry_low_r = low_r * lowshelf_bypass;
+
+sig_l = high_l + low_l * (1 - lowshelf_bypass);
+sig_r = high_r + low_r * (1 - lowshelf_bypass);
+
+// Boost & Gain stage - BOOST (0-100%) adds extra drive on top of GAIN
+boost_amt = slider2 / 100;
+drive = 1 + (slider1 + 24) / 36 * 3 + boost_amt * 4;
+sig_l *= drive;
+sig_r *= drive;
+
+// Soft pre-clip: with GAIN and BOOST both driven hard, "drive" above can reach 8x (+18 dB).
+// Taming it here with a tanh soft-knee keeps the cubic/even-harmonic terms below from
+// exploding into huge, DC-shifted peaks that blow straight past the output stage (even in
+// Clip/Limit mode) and can trigger a DAW's protective mute on the master bus.
+sig_l = ost_tanh(sig_l);
+sig_r = ost_tanh(sig_r);
+
+// Grunt character waveshaping, with BOOST also adding an asymmetric (even-harmonic) warmth bias
+grunt_amt = slider3;
+grunt_bias = boost_amt * 0.15;
+sig_l = sig_l + grunt_amt * 0.4 * (sig_l * sig_l * sig_l) + grunt_bias * (sig_l * sig_l);
+sig_r = sig_r + grunt_amt * 0.4 * (sig_r * sig_r * sig_r) + grunt_bias * (sig_r * sig_r);
+
+// Re-introduce the untouched low end that skipped the gain/grunt stage above; it still goes
+// through the output stage (squash/sag + clipper/limiter) and master gain like everything else.
+sig_l += dry_low_l;
+sig_r += dry_low_r;
+
+// Independent stereo band saturation via the output stage
+sig_l = ostL.ost_band(sig_l);
+sig_r = ostR.ost_band(sig_r);
+
+// Dynamic 330Hz dip: Grunt and Sag both pile up midrange harmonic energy, so the more they're
+// driven the more gain is pulled out at 330Hz to stop the amp sounding boxy/congested.
+notch_amt = min((slider3 + slider4) * 0.5, 1);     // 0-1, from Grunt + Sag
+notch_coeff = notch_amt * 0.5;                     // ~ -6 dB max cut at 330Hz when both are maxed
+sig_l -= notch_coeff * nL.svf_bp(sig_l);
+sig_r -= notch_coeff * nR.svf_bp(sig_r);
+
+// Stereo-linked output limiter / clipper stage
+ost_out(sig_l, sig_r);
+
+master_g = 10 ^ (slider6 / 20);
+spl0 = ost_l * master_g;
+spl1 = ost_r * master_g;
+
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));   // post-master stereo output peaks
+
+@gfx 480 260
+ui_begin(480, 260);
+
+// warm sunrise wash (burnt orange -> red ember), under everything else - the "Waka" mood
+gfx_gradrect(0, 0, gfx_w, gfx_h, 0.62, 0.22, 0.08, 0.16, 0, 0, 0, 0, 0.14 / gfx_h, 0.02 / gfx_h, -0.03 / gfx_h, 0);
+
+// --- Top Bar ---
+ui_header("GRUNT");
+
+// Presets dropdown menu with working preset assignments
+ui_button(177 * sc, 12 * sc, 24 * sc, 20 * sc, "<", 0, 1) ? (
+    cur_preset = cur_preset <= 1 ? 4 : cur_preset - 1;
+    load_preset(cur_preset);
+);
+ui_button(203 * sc, 12 * sc, 24 * sc, 20 * sc, ">", 0, 1) ? (
+    cur_preset = cur_preset >= 4 ? 1 : cur_preset + 1;
+    load_preset(cur_preset);
+);
+ui_button(235 * sc, 12 * sc, 72 * sc, 20 * sc, "PRESETS", 0, 1) ? (
+    cur_preset = gfx_showmenu("Default|Warm Console|American Crunch|British Punch");
+    cur_preset > 0 ? load_preset(cur_preset);
+);
+
+// Size picker & help (no theme picker - this panel's "Waka" skin is fixed)
+// ui_begin() already clamps sc to the picked Size preset (never scales past it, only down
+// to fit a smaller window), so the panel content stops growing once the host window is
+// dragged bigger - it just leaves the warm gradient background around it instead of stretching.
+ui_size_picker(400 * sc, 13 * sc);
+pk_lcd(309 * sc, 12 * sc, 86 * sc, 20 * sc, 0);
+pk_lcdfont(9, 7 * sc); ui_col(pk_lcdc);
+gfx_x = 313 * sc; gfx_y = 18 * sc; gfx_drawstr(pname(cur_preset));
+
+
+// --- Second Row: Gain // Boost // Grunt // Sag ---
+y2 = 98 * sc;
+ui_knob(65 * sc, y2, 1, -24, 12, 0, 0, "GAIN", "%+.1f dB");
+gr_bake(65 * sc, y2, 21 * sc, 1, -24, 12);                                       // ivory bakelite cap
+ui_kcap = 0xD8B040; ui_knob(185 * sc, y2, 2, 0, 100, 0, 0, "BOOST", "%.0f%%");   // small yellow-cap knob (from Head)
+ui_knob(305 * sc, y2, 3, 0, 1, 0.5, 0, "GRUNT", "%.2f");
+ui_knob(425 * sc, y2, 4, 0, 1, 0.2, 0, "SAG", "%.2f");
+
+// --- Third Row: Squash // Master // Meters ---
+y3 = 198 * sc;
+ui_knob(65 * sc, y3, 5, 0, 1, 0.5, 0, "SQUASH", "%.2f");
+ui_knob(185 * sc, y3, 6, -24, 12, 0, 0, "MASTER", "%+.1f dB");
+
+// Meters on the right of the third row (stereo: L on top, R below)
+ui_screen(260 * sc, y3 - 22 * sc, 190 * sc, 52 * sc);
+mL.ui_ledm(275 * sc, y3 - 16 * sc, 160 * sc, 9 * sc, pkL);
+mR.ui_ledm(275 * sc, y3 - 2 * sc, 160 * sc, 9 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;   // per-redraw decay of the held peaks
+
+ui_end();

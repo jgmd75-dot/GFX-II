@@ -1,0 +1,130 @@
+desc:GFX Output stage (include) - Garden FX
+//author: JGWizrad / Garden FX (GFX)
+//
+// Band-focused "loose knit" saturation + clipper / lookahead limiter.
+//   - Signal splits into low / mid / high (subtractive, so it sums back perfectly).
+//   - Only the low and high bands are saturated; mids pass clean.
+//   - Saturation is a wide, soft biased curve. The bias floats with the signal
+//     envelope (loosens as level rises), giving even harmonics that breathe.
+//   - Final stage: Off, Clip (soft, zero latency) or Limit (3 ms lookahead, PDC reported).
+//     CLIP: ceil_db is the ceiling the peaks are clipped at.
+//     LIMIT: ceil_db is the THRESHOLD of a brickwall limiter: the signal is raised by (-0.3 - threshold) dB
+//     into a fixed -0.3 dBFS ceiling, so pulling it down limits harder and gets louder, peaks held at -0.3.
+//     (Set ost_ceilmode = 1 after ost_init to keep ceil_db as the limiter's ceiling instead.)
+//
+// Usage in a plugin:
+//   import gfx-output.jsfx-inc
+//   @init    ost_init(memory_offset);  ostL.ost_ch_init(); ostR.ost_ch_init();
+//            (needs 4096 free memory slots from memory_offset)
+//   @block   ost_setup(sat 0..1, bias 0..1, low_hz, high_hz, ceiling_db, mode 0/1/2);
+//   @sample  l = ostL.ost_band(l); r = ostR.ost_band(r);   // band saturation
+//            (apply output gain here)
+//            ost_out(l, r); spl0 = ost_l; spl1 = ost_r;      // clipper / limiter
+//   Display: ost_gr (min gain since last reset, set it back to 1 after reading),
+//            ost_clipped (1 if the clipper engaged; reset to 0 after reading).
+
+@init
+
+function ost_tanh(x) local(e) (
+  x = min(max(x, -20), 20); e = exp(2 * x); (e - 1) / (e + 1);
+);
+
+// wide soft biased curve, unity small-signal gain, no static DC offset
+function ost_curve(x, d, b) local(tbias, s) (
+  tbias = ost_tanh(d * b);
+  s = d * (1 - tbias * tbias);
+  (ost_tanh(d * (x + b)) - tbias) / s;
+);
+
+function ost_clip(x, c) local(a, k) (
+  a = abs(x); k = 0.8 * c;
+  a < k ? x : ( ost_clipped = 1; sign(x) * (k + (c - k) * ost_tanh((a - k) / (c - k))); );
+);
+
+function ost_init(mem) (
+  ost_buf = mem; ost_bsz = 2048; ost_bmask = ost_bsz - 1;
+  memset(ost_buf, 0, ost_bsz * 2);
+  ost_wp = 0; ost_g = 1; ost_hg = 1; ost_hc = 0; ost_gr = 1; ost_clipped = 0;
+  ost_N = min(floor(0.003 * srate), ost_bsz - 1);
+  ost_att = 1 - exp(-5 / ost_N);
+  ost_rel = 1 - exp(-1 / (0.08 * srate));
+  ost_envc = 1 - exp(-1 / (0.15 * srate));
+  ost_lastlf = -1; ost_lasthf = -1;
+  ost_lg = 1; ost_lgs = 1; ost_lgc = 1 - exp(-1 / (0.03 * srate)); ost_ceilmode = 0;
+);
+
+function ost_setup(sat, bias, lf, hf, ceil_db, mode) local(w0, cw, alp, q0) (
+  ost_amt = sat;
+  ost_drv = 1 + 12 * sat * sqrt(sat);                // starts biting around -20 dBFS at full SAT
+  ost_wet = min(sat * 3, 1);
+  ost_bias = bias * 0.3;
+  mode == 2 && !ost_ceilmode ? (
+    ost_ceil = 10 ^ (-0.3 / 20); ost_lg = 10 ^ ((-0.3 - ceil_db) / 20);   // threshold: gain into the limiter
+  ) : (
+    ost_ceil = 10 ^ (ceil_db / 20); ost_lg = 1;
+  );
+  ost_mode = mode;
+  lf != ost_lastlf ? (
+    ost_lastlf = lf;
+    w0 = 2 * $pi * min(lf, srate * 0.45) / srate; cw = cos(w0); alp = sin(w0) / (2 * 0.70710678); q0 = 1 + alp;
+    ost_lb0 = (1 - cw) * 0.5 / q0; ost_lb1 = (1 - cw) / q0; ost_lb2 = ost_lb0;
+    ost_la1 = -2 * cw / q0; ost_la2 = (1 - alp) / q0;
+  );
+  hf != ost_lasthf ? (
+    ost_lasthf = hf;
+    w0 = 2 * $pi * min(hf, srate * 0.45) / srate; cw = cos(w0); alp = sin(w0) / (2 * 0.70710678); q0 = 1 + alp;
+    ost_hb0 = (1 + cw) * 0.5 / q0; ost_hb1 = -(1 + cw) / q0; ost_hb2 = ost_hb0;
+    ost_ha1 = -2 * cw / q0; ost_ha2 = (1 - alp) / q0;
+  );
+  pdc_bot_ch = 0; pdc_top_ch = 2;
+  pdc_delay = mode == 2 ? ost_N : 0;
+);
+
+function ost_ch_init() instance(lz1, lz2, hz1, hz2, dcx, dcy, env) (
+  lz1 = 0; lz2 = 0; hz1 = 0; hz2 = 0; dcx = 0; dcy = 0; env = 0;
+);
+
+// band split + saturation of lows and highs, mids untouched
+function ost_band(x) instance(lz1, lz2, hz1, hz2, dcx, dcy, env) local(lo, rest, hi, mid, b, d) (
+  lo = ost_lb0 * x + lz1;
+  lz1 = ost_lb1 * x - ost_la1 * lo + lz2;
+  lz2 = ost_lb2 * x - ost_la2 * lo;
+  rest = x - lo;
+  hi = ost_hb0 * rest + hz1;
+  hz1 = ost_hb1 * rest - ost_ha1 * hi + hz2;
+  hz2 = ost_hb2 * rest - ost_ha2 * hi;
+  mid = rest - hi;
+
+  env += (abs(x) - env) * ost_envc;
+  ost_amt > 0 ? (
+    b = ost_bias * (0.4 + 1.2 * min(env, 1));          // loose knit: bias floats with level
+    d = ost_wet * (ost_curve(lo, ost_drv, b) - lo);    // what the saturation adds to the lows
+    hi = hi + ost_wet * (ost_curve(hi, ost_drv, b * 0.5) - hi);
+  ) : d = 0;
+  // DC blocker on the added part only, so the clean signal still sums back exactly flat
+  dcy = d - dcx + 0.9995 * dcy; dcx = d;
+  lo + dcy + mid + hi;
+);
+
+// stereo-linked clipper / limiter; results in ost_l, ost_r
+function ost_out(l, r) local(c, pk, gt, rp, del_l, del_r) (
+  c = ost_ceil;
+  ost_mode == 2 ? (
+    ost_lgs += (ost_lg - ost_lgs) * ost_lgc; l *= ost_lgs; r *= ost_lgs;
+    ost_buf[ost_wp] = l; ost_buf[ost_bsz + ost_wp] = r;
+    rp = (ost_wp - ost_N + ost_bsz) & ost_bmask;
+    del_l = ost_buf[rp]; del_r = ost_buf[ost_bsz + rp];
+    ost_wp = (ost_wp + 1) & ost_bmask;
+    pk = max(abs(l), abs(r));
+    gt = pk > c ? c / pk : 1;
+    gt < ost_hg ? ( ost_hg = gt; ost_hc = ost_N; ) : ( ost_hc > 0 ? ost_hc -= 1 : ost_hg = gt; );
+    ost_g += (ost_hg - ost_g) * (ost_hg < ost_g ? ost_att : ost_rel);
+    ost_gr = min(ost_gr, ost_g);
+    l = min(max(del_l * ost_g, -c), c);
+    r = min(max(del_r * ost_g, -c), c);
+  ) : ost_mode == 1 ? (
+    l = ost_clip(l, c);
+    r = ost_clip(r, c);
+  );
+  ost_l = l; ost_r = r;
+);

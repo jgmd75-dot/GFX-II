@@ -1,0 +1,265 @@
+desc:GFX Desert Ten
+//tags: amp amplifier guitar solid state practice combo fuzz saturation cabinet tuner
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn, gfx-faceplate, gfx-instrument, gfx-headsmooth and gfx-amp
+// (.jsfx-inc) in the same folder.
+//
+// Desert Ten - a little 10-watt solid-state practice combo with an 8" open-back speaker, in the spirit of the
+// one the desert-rock records were made with (personal use; the sound is designed from scratch).
+//   PRE         - the op-amp preamp gain: clean to a raspy rail clip.
+//   SATURATION  - switches in the diode clipper with its midrange push: the gnarly, fuzzy tone.
+//   LOW / MID / HIGH - the tone controls, 0..10 (5 = flat).
+//   POST        - the volume into the 10-watt power amp: clean at first, then a hard solid-state clip.
+//   CAB / MIC   - the 8" open-back speaker on or off (line out), and the mic from on axis to off axis.
+//   GATE        - a noise gate before the amp (fully down = off).   TUNER - shows the note and mutes the output.
+// THEME colours the control panel, pinstripe and lamp; HW switches between the faceplate and the flat look.
+// The amp runs in mono (as a real amp) at twice the sample rate; both outputs carry it.
+// DRIFT: the clipping diodes' balance wanders slightly. The DRIFT dial scales it (50% = the drift amount / speed
+// settings, 100% = twice, 0 = none).
+// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIM) along the bottom of the combo.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-headsmooth.jsfx-inc
+import gfx-amp.jsfx-inc
+
+slider1:5<0,10,0.1>-Pre
+slider2:0<0,1,1{Off,On}>-Saturation
+slider3:5<0,10,0.1>-Low
+slider4:5<0,10,0.1>-Mid
+slider5:5<0,10,0.1>-High
+slider6:4<0,10,0.1>-Post
+slider7:-80<-80,-20,0.5>-Gate threshold (dB, -80 = off)
+slider8:1<0,1,1{Off,On}>-Cabinet
+slider9:3<0,10,0.1>-Mic position (on - off axis)
+slider10:0<-24,12,0.1>-Output (dB)
+slider11:0<0,1,1{Off,On}>-Tuner (mutes)
+slider12:0<-24,12,0.1>-Input trim (dB)
+slider13:0<0,1,1{Off,On}>-Input guard
+slider14:25<0,100,1>-Drift amount (%)
+slider15:0.25<0.02,2,0.01>-Drift speed (Hz)
+slider16:0<0,100,1>-Band sat (%)
+slider17:30<0,100,1>-Bias (%)
+slider18:120<40,400,1>-Sat low band (Hz)
+slider19:6000<2000,16000,10>-Sat high band (Hz)
+slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+// DRIFT dial: scales how far the clipping diodes' balance and the power amp's bias wander, and how fast
+slider22:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-desert-ten";                                  // the ? pop-up links to this manual
+
+// ---------- the amp core, run at twice the sample rate ----------
+// op-amp into its rails: a firm knee (k sets the hardness)
+function dt_rail(x, k) ( x / (1 + abs(x) ^ k) ^ (1 / k); );
+// silicon diode pair to ground: soft-ish, with a slight imbalance
+function dt_diode(x, a) ( x >= 0 ? 1 - exp(-x) : -(1 - exp(x * (1 + a))) / (1 + a); );
+function amp_core(x) local(y) (
+  y = ihp.am_run(x);
+  y = (dt_rail(y * g1 + 0.06, 4) - dt_rail(0.06, 4)) * c1;   // PRE: the op-amp stage (slightly off centre)
+  slider2 ? (                                        // SATURATION: midrange push into the diodes
+    y = shp.am_run(y); y = spk.am_run(y);
+    y = dt_diode(y * gs + dbias, dasy) - dt_diode(dbias, dasy);
+    y = slp.am_run(y) * cs;
+  );
+  y = tl.am_run(y); y = tm.am_run(y); y = th.am_run(y);     // tone controls
+  y = phc.am_run(y) * pm;                            // POST into the power amp
+  y = dt_rail(y, 8);                                 // 10 W solid state: clean, then a hard clip
+  y = plp.am_run(y);
+  y * mk;
+);
+
+function update() local(fs2) (
+  fs2 = 2 * srate;
+  g1 = 10 ^ ((slider1 * 3.6 - 6) / 20); c1 = 1 / (g1 ^ 0.6);         // -6 .. +30 dB into the op-amp
+  gs = 10 ^ ((slider1 * 1.2 + 14) / 20); cs = 0.26;                   // +14 .. +26 dB into the diodes
+  pm = 10 ^ ((slider6 * 3.4 - 18) / 20); mk = 0.42 / (pm ^ 0.78);       // -18 .. +16 dB into the power amp
+  ihp.am_bq(1, 80, 0.7, 0, fs2);
+  shp.am_bq(1, 220, 0.7, 0, fs2);
+  spk.am_bq(2, 900, 0.7, 8, fs2);
+  slp.am_bq(0, 5000, 0.7, 0, fs2);
+  tl.am_bq(4, 120, 0.7, (slider3 - 5) * 2.6, fs2);
+  tm.am_bq(2, 700, 0.6, (slider4 - 5) * 2.6 + 1.5, fs2);
+  th.am_bq(3, 2800, 0.7, (slider5 - 5) * 2.6, fs2);
+  phc.am_bq(1, 50, 0.7, 0, fs2);
+  plp.am_bq(0, 16000, 0.7, 0, fs2);
+  cab.am_cab_set(slider8 ? 4 : 0, slider9);
+  out_t = 10 ^ (slider10 / 20);
+  drift_macro(slider22);
+  drift = slider14 / 100 * dm_a; dspd = slider15 * dm_s;
+  in_setup(slider12, slider13);
+  ins_output_setup(16);
+);
+
+up.am_aa(); dn.am_aa();
+dB1.drift_init(0.8 + rand(0.5)); dB2.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+sm = 1 - exp(-1 / (0.03 * srate));
+mpk = 0;
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1; !ui_dflt ? ui_kstyle = 0;   // defaults for new instances: Graphite (aluminium panel), hardware
+BH_TOL = 0x141416;
+update();
+out_s = out_t; mute_s = 1;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+dinc = dspd * samplesblock / srate;
+dasy = 0.15 + 0.1 * drift * dB1.drift_tick(dinc);
+dbias = 0.03 * drift * dB2.drift_tick(dinc);
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+
+@sample
+in_process(spl0, spl1);
+x = (in_l + in_r) * 0.5;
+slider11 ? am_tun_push(x);
+x *= gt.am_gate(x, slider7);
+// amp at 2x
+z = up.am_aa_run(x * 2); dn.am_aa_run(amp_core(z));
+z = up.am_aa_run(0);     y = dn.am_aa_run(amp_core(z)) * 2;
+y = cab.am_cab_run(y);
+out_s += (out_t - out_s) * sm;
+mute_s += ((slider11 ? 0 : 1) - mute_s) * sm;
+y *= out_s * mute_s;
+oL = ostL.ost_band(y); oR = ostR.ost_band(y);
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+mpk = max(mpk, abs(spl0));
+
+@gfx 780 315
+ui_begin(780, 315);
+ui_col(ui_hw ? 0x0B0C0D : C_BG); gfx_rect(0, 0, gfx_w, gfx_h);
+
+// colours from the theme: the panel takes its light tone, the pinstripe and lamp its accent
+// (Graphite keeps the aluminium panel with an orange stripe and lamp)
+BH_PNL = ui_hw ? C_S2 : C_HDR; BH_INK = ui_ink(BH_PNL);
+BH_ACC = ui_thm == 5 ? 0xFF8A1E : C_ACC;
+BH_TXT = ui_hw ? 0xD8DCE2 : C_TITLE;
+
+// a big control: the hardware knob, or the flat GFX knob
+function bh_big(cx, cy, idx, vmin, vmax, vdef, step, label, fmt) (
+  ui_hw ? ( pk_bkstep = step; pk_bigknob(cx * sc, cy * sc, 22 * sc, idx, vmin, vmax, vdef, 11, 0, 1, label, fmt); pk_bkstep = 0; )
+        : ( knob_step = step; ui_section(0); C_INK = BH_INK; ui_knob(cx * sc, cy * sc, idx, vmin, vmax, vdef, 0, label, fmt); );
+);
+
+// ---------- the head: tolex box, control panel ----------
+function bh_tolex(x, y, w, h) local(i, px, py) (
+  ui_hw ? (
+    ui_col(0x050506); ui_rrs(x * sc, y * sc, w * sc, h * sc, 8 * sc);
+    ui_col(BH_TOL); ui_rrs((x + 1) * sc, (y + 1) * sc, (w - 2) * sc, (h - 2) * sc, 7 * sc);
+    i = 0;
+    loop(900,                                       // the grain
+      px = x + 4 + ((i * 7919) % 997) / 997 * (w - 8); py = y + 4 + ((i * 104729) % 991) / 991 * (h - 8);
+      ui_cola(i % 2 ? 0xFFFFFF : 0x000000, i % 2 ? 0.035 : 0.25); gfx_rect(px * sc, py * sc, 1 * sc + 1, 1 * sc + 1);
+      i += 1;
+    );
+    gfx_gradrect((x + 2) * sc, (y + 2) * sc, (w - 4) * sc, 30 * sc, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06 / (30 * sc));
+  ) : (
+    ui_col(C_BG); gfx_rect(x * sc, y * sc, w * sc, h * sc);
+  );
+);
+T = 8; TH = 298;
+bh_tolex(8, T, 764, TH);
+// name and the pilot lamp
+gfx_setfont(6, "Trebuchet MS", 22 * sc, 'bi');
+ui_hw ? ( ui_cola(0x000000, 0.6); gfx_x = 33 * sc; gfx_y = (T + 11) * sc; gfx_drawstr("Desert Ten"); );
+ui_col(BH_TXT); gfx_x = 32 * sc; gfx_y = (T + 10) * sc; gfx_drawstr("Desert Ten");
+gfx_setfont(4); ui_cola(BH_TXT, 0.6); gfx_x += 10 * sc; gfx_y = (T + 20) * sc; gfx_drawstr("GFX  ·  SOLID STATE 10");
+pk_led(446 * sc, (T + 24) * sc, 5 * sc, 1, BH_ACC);
+ui_theme_picker(468 * sc, (T + 15) * sc);
+BH_PNL = ui_hw ? C_S2 : C_HDR; BH_INK = ui_ink(BH_PNL); BH_ACC = ui_thm == 5 ? 0xFF8A1E : C_ACC; BH_TXT = ui_hw ? 0xD8DCE2 : C_TITLE;
+ui_hw_toggle(496 * sc, (T + 15) * sc);
+ui_size_picker(560 * sc, (T + 15) * sc);
+
+// control panel
+px0 = 20; py0 = T + 46; pw = 740; ph = 150;
+ui_hw ? (
+  ui_col(0x2A2C30); ui_rrs(px0 * sc, py0 * sc, pw * sc, ph * sc, 4 * sc);
+  ui_col(BH_PNL); ui_rrs((px0 + 1) * sc, (py0 + 1) * sc, (pw - 2) * sc, (ph - 2) * sc, 3 * sc);
+  gi = 0; loop(floor((ph - 4) / 2), ui_cola(gi % 3 ? 0xFFFFFF : 0x000000, gi % 3 ? 0.06 : 0.03);
+    gfx_line((px0 + 2) * sc, (py0 + 2 + gi * 2) * sc, (px0 + pw - 3) * sc, (py0 + 2 + gi * 2) * sc); gi += 1; );
+  ui_col(ui_mix(BH_ACC, 0x000000, 0.35)); gfx_rect((px0 + 2) * sc, (py0 + ph - 9) * sc, (pw - 4) * sc, 3 * sc);   // pinstripe
+  pk_screw((px0 + 10) * sc, (py0 + 12) * sc); pk_screw((px0 + pw - 10) * sc, (py0 + 12) * sc);
+) : (
+  ui_col(BH_PNL); ui_rrect(px0 * sc, py0 * sc, pw * sc, ph * sc, 5 * sc);
+  ui_col(C_ACC); gfx_rect(px0 * sc, (py0 + 8) * sc, 3 * sc, (ph - 16) * sc);
+);
+
+pk_ink = BH_INK; pk_bg = BH_PNL; pk_bkfs = 11; pk_nonum = 1; pk_ptr = 0xEDE3C8; pk_kstyle = 0;
+ky = py0 + 72;
+// the two sections, as on the original: GAIN (PRE, SATURATION, POST) | EQUALIZATION (LOW, MID, HIGH)
+function dt_bracket(x1, x2, y, txt) local(w, h, cx) (
+  gfx_setfont(4); gfx_measurestr(txt, w, h); cx = (x1 + x2) * 0.5 * sc;
+  ui_col(BH_INK);
+  gfx_line(x1 * sc, (y + 5) * sc, x1 * sc, y * sc); gfx_line(x2 * sc, (y + 5) * sc, x2 * sc, y * sc);
+  gfx_line(x1 * sc, y * sc, cx - w * 0.5 - 5 * sc, y * sc); gfx_line(cx + w * 0.5 + 5 * sc, y * sc, x2 * sc, y * sc);
+  gfx_x = cx - w * 0.5; gfx_y = y * sc - h * 0.5; gfx_drawstr(txt);
+);
+function dt_sep(x) (
+  ui_hw ? ( ui_cola(0x000000, 0.35); gfx_rect(x * sc, (py0 + 6) * sc, max(1, sc), (ph - 18) * sc);
+            ui_cola(0xFFFFFF, 0.45); gfx_rect(x * sc + max(1, sc), (py0 + 6) * sc, max(1, sc), (ph - 18) * sc); )
+        : ( ui_cola(BH_INK, 0.25); gfx_rect(x * sc, (py0 + 8) * sc, max(1, sc), (ph - 16) * sc); );
+);
+dt_sep(340);
+dt_bracket(80, 280, py0 + 16, "GAIN");
+dt_bracket(430, 670, py0 + 16, "EQUALIZATION");
+pk_kstyle = 7; pk_kcol = 0xE6E0D0;   // cream PRE cap
+bh_big(90, ky, 1, 0, 10, 5, 0, "PRE", "%.1f");
+ui_keycap(138 * sc, (ky + 18) * sc, 84 * sc, 22 * sc, "SATURATION", slider2, 1) ? ( slider2 = 1 - slider2; slider_automate(2 ^ 1); );
+pk_kcol = 0x7FB2DC;                  // the blue POST cap
+bh_big(270, ky, 6, 0, 10, 4, 0, "POST", "%.1f");
+pk_kcol = 0x75787D;                  // grey EQ caps
+bh_big(440, ky, 3, 0, 10, 5, 0, "LOW", "%.1f");
+bh_big(550, ky, 4, 0, 10, 5, 0, "MID", "%.1f");
+bh_big(660, ky, 5, 0, 10, 5, 0, "HIGH", "%.1f");
+pk_kstyle = 0;
+pk_nonum = 0; pk_bkfs = 15; pk_ptr = -1;
+
+// lower strip: GATE | TUNER | CAB + MIC | OUTPUT + meter
+ly = T + 246;
+ui_section(2); C_INK = BH_TXT; ui_knonum = 2;
+ui_knob(60 * sc, ly * sc, 7, -80, -20, -80, 0, "GATE", slider7 <= -79.5 ? "OFF" : "%.0f dB");
+ui_keycap(108 * sc, (ly - 22) * sc, 56 * sc, 22 * sc, "TUNER", slider11, 1) ? ( slider11 = 1 - slider11; slider_automate(2 ^ 10); );
+slider11 ? am_tun_draw(172 * sc, (ly - 24) * sc, 130 * sc, 44 * sc, 0xD8DCE2, 0xFFB030)
+         : ( ui_col(0x0A0B0C); ui_rrect(172 * sc, (ly - 24) * sc, 130 * sc, 44 * sc, 3 * sc); gfx_setfont(4); ui_cola(0xD8DCE2, 0.3); ui_text(237 * sc, (ly - 7) * sc, "TUNER OFF"); );
+ui_keycap(340 * sc, (ly - 22) * sc, 56 * sc, 22 * sc, "CAB", slider8, 1) ? ( slider8 = 1 - slider8; slider_automate(2 ^ 7); );
+ui_knob(440 * sc, ly * sc, 9, 0, 10, 3, 0, "MIC", "%.1f");
+ui_knob(560 * sc, ly * sc, 10, -24, 12, 0, 0, "OUTPUT", "%+.1f dB");
+ui_knonum = 0;
+bh_lv = max(mpk, bh_lv * 0.8); mpk = 0;
+hs_leds(690, ly - 4, bh_lv, BH_TXT);
+
+// bottom row: DRIFT | IN / OUT
+// by = T + 294; kc = by + (ui_hw ? 40 : 48); // the flat knobs carry their name above
+// pk_box(226 * sc, by * sc, 84 * sc, 90 * sc, BH_TXT, "DRIFT");
+// pk_box(322 * sc, by * sc, 232 * sc, 90 * sc, BH_TXT, "IN / OUT");
+// ui_section(2); C_INK = BH_TXT; ui_knonum = 2;
+// ui_knob(268 * sc, kc * sc, 22, 0, 100, 50, 0, "DRIFT", "%.0f%%");
+// ui_io(338, kc - 30, 12, 13, 16, 21);
+// ui_knonum = 0;
+
+
+pk_end();
+ui_end();

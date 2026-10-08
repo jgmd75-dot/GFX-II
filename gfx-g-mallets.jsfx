@@ -1,0 +1,557 @@
+desc:GFX G-Mallets
+//tags: instrument mallets tuned percussion marimba vibraphone glockenspiel xylophone celesta kalimba steel pan bells grand
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
+//
+// Tuned percussion / mallet / keyboard synth (modal synthesis: each note is a set of decaying partials).
+// Models: MARIMBA, VIBES, GLOCK, XYLOPHONE, CELESTA, KALIMBA, STEEL PAN, TUBULAR BELLS, E.GRAND.
+//   MALLET: hardness (brighter, clickier attack);  RESONATOR: tube / body (fuller, longer fundamental);
+//   TONE; VELOCITY: how much playing dynamics matter.
+// FILTER: 12 dB low-pass per voice with its own envelope.
+// AMP: attack, ring length (DECAY) and damping (RELEASE).
+// TREMOLO (vibes motor at STEREO 0, auto-pan at 100), CHORUS.
+// AGE detunes each key slightly; DRIFT: GFX instrument standard (gfx-instrument).
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+slider1:0<0,8,1{Marimba,Vibes,Glock,Xylophone,Celesta,Kalimba,Steel Pan,Tubular Bells,E.Grand}>-Model
+slider2:50<0,100,1>-Mallet (%)
+slider3:50<0,100,1>-Resonator (%)
+slider4:100<25,400,1>-Decay / ring (%)
+slider5:100<25,400,1>-Release / damping (%)
+slider6:60<0,100,1>-Tone (%)
+slider7:70<0,100,1>-Velocity (%)
+slider8:5<0.5,10,0.01>-Tremolo rate (Hz)
+slider9:0<0,100,1>-Tremolo depth (%)
+slider10:100<0,100,1>-Tremolo stereo (%)
+slider11:0<0,100,1>-Chorus (%)
+slider12:0.8<0.1,5,0.01>-Chorus rate (Hz)
+slider13:20<0,100,1>-Age (%)
+slider14:25<0,100,1>-Drift (%)
+slider15:0<0,16,1>-MIDI channel (0 = omni)
+slider16:0<-24,12,0.1>-Output (dB)
+slider17:0<0,100,1>-Band sat (%)
+slider18:30<0,100,1>-Bias (%)
+slider19:120<40,400,1>-Sat low band (Hz)
+slider20:6000<2000,16000,10>-Sat high band (Hz)
+slider21:-0.3<-6,0,0.1>-Ceiling (dB)
+slider22:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider23:1<0.5,2000,0.1>-Attack (ms)
+slider27:18000<100,18000,1>-Filter cutoff (Hz)
+slider28:0<0,100,1>-Filter resonance (%)
+slider29:0<0,100,1>-Filter env amount (%)
+slider30:50<0,100,1>-Filter key track (%)
+slider31:1<0.5,2000,0.1>-Filter attack (ms)
+slider32:600<5,10000,1>-Filter decay (ms)
+slider33:30<0,100,1>-Filter sustain (%)
+slider34:400<5,5000,1>-Filter release (ms)
+slider35:20<20,500,1>-Mono below (Hz, 20 = off)
+slider36:0<0,100,1>-Stereo width (%)
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+
+NV = 16; NP = 12;
+current_preset = 1;
+#preset_name = "Soft Marimba";
+// ---------- memory map ----------
+vn = 0; vg = 20; vs = 40; vact = 60; vr = 80; vlev = 100; vnp = 120;     // per voice
+vt0 = 140; vtz = 160; vtf = 180; vtd = 200; vmod = 220;
+PBASE = 1000;                                   // partials: P + block * 200 + v * 12 + k
+ps = PBASE; pc = PBASE + 200; pws = PBASE + 400; pwc = PBASE + 600; pa = PBASE + 800; pd = PBASE + 1000;
+keydet = 3000;                              // per-key detune (AGE), 128
+evq = 4000;                                 // MIDI event queue (4 x 512)
+cbuf = 8192; cmask = 8191;                  // chorus delay line
+memset(0, 0, 8192); memset(cbuf, 0, 8192);
+i = 0; loop(NV, vn[i] = -1; i += 1; );
+i = 0; loop(128, keydet[i] = rand(2) - 1; i += 1; );
+pedal = 0; cwp = 0; tph = 0; cph = 0;
+
+function tanh_(x) local(e) ( x = min(max(x, -20), 20); e = exp(2 * x); (e - 1) / (e + 1); );
+
+// one partial: frequency ratio, amplitude, decay time (s)
+function setp(v, k, f, a, t) local(w, j) (
+  j = v * NP + k;
+  w = 2 * $pi * min(f, srate * 0.45) / srate;
+  pws[j] = sin(w); pwc[j] = cos(w);
+  f < srate * 0.45 ? ( pa[j] += a; ) : pa[j] = 0;
+  pd[j] = exp(-1 / (max(t, 0.002) * srate));
+);
+
+// strike / pluck a key
+function note_on(n, vel) local(v, best, bl, f0, vg_, h, Tdec, k, a, B, fk, j, keep, was, rb) (
+  best = -1; v = 0;
+  loop(NV, vn[v] == n && vact[v] ? best = v; v += 1; );
+  keep = best >= 0;                                   // a re-struck key keeps ringing into the new strike
+  best < 0 ? ( v = 0; loop(NV, best < 0 && !vact[v] ? best = v; v += 1; ); );
+  best < 0 ? ( bl = 1000000; v = 0; loop(NV, !vg[v] && vlev[v] < bl ? ( bl = vlev[v]; best = v; ); v += 1; ); );
+  best < 0 ? ( bl = 1000000; v = 0; loop(NV, vlev[v] < bl ? ( bl = vlev[v]; best = v; ); v += 1; ); );
+  v = best;
+  // de-click: any jump at a (re)start is smoothed; a fresh / reused voice also fades in over 2 ms
+  was = vact[v];
+  vdf[v] = 1; !was ? ( vpy[v] = 0; vpy2[v] = 0; vdo[v] = 0; );
+  vat[v] = keep ? 1 : 0;
+  !keep ? ( k = 0; loop(NP, j = v * NP + k; ps[j] = 0; pc[j] = 1; pa[j] = 0; k += 1; ); vtz[v] = 0; );
+  vn[v] = n; vg[v] = 1; vs[v] = 0; vact[v] = 1; vr[v] = 1; vmod[v] = model;
+  f0 = 440 * 2 ^ ((n - 69 + keydet[n] * age * 0.12) / 12) * pmul;
+  vg_ = (1 - sens) + sens * (vel / 127) ^ 1.5;
+  h = hammer * (0.4 + 0.6 * vel / 127);
+  Tdec = T0 * dec_k * 2 ^ (-(n - 48) / 19);                      // lower notes ring longer
+  vrel_t = Trel * rel_k * (1 + max(60 - n, 0) / 40);
+  vnp[v] = model == 8 ? 12 : 6;
+  f0 *= ins_note_detune();                                        // per-note tuning offset (drift)
+  rb = 0.6 + 0.8 * reso;                                         // resonator: fuller, longer fundamental
+  model == 0 ? (            // MARIMBA: rosewood bar tuned 1 : 4 : 10, tube resonator
+    setp(v, 0, f0, vg_ * (0.7 + 0.6 * reso), Tdec * rb);
+    setp(v, 1, f0 * 3.99, vg_ * (0.08 + 0.35 * h), Tdec * 0.22);
+    setp(v, 2, f0 * 9.9, vg_ * 0.12 * h * h, Tdec * 0.07);
+    setp(v, 3, f0 * 2, vg_ * 0.05 * reso, Tdec * 0.5);
+    setp(v, 4, f0 * 15.6, vg_ * 0.05 * h * h, 0.012);
+    setp(v, 5, f0 * 6.5, vg_ * 0.03 * h, 0.03);
+  ) : model == 1 ? (        // VIBES: aluminium bar 1 : 4 : 10, long ring
+    setp(v, 0, f0, vg_ * (0.75 + 0.5 * reso), Tdec * rb);
+    setp(v, 1, f0 * 4.0, vg_ * (0.06 + 0.25 * h), Tdec * 0.35);
+    setp(v, 2, f0 * 10.0, vg_ * 0.06 * h, Tdec * 0.12);
+    setp(v, 3, f0 * 2.0, vg_ * 0.03 * reso, Tdec * 0.6);
+    setp(v, 4, f0 * 17.1, vg_ * 0.04 * h * h, 0.02);
+    setp(v, 5, f0 * 1.0015, vg_ * 0.15 * reso, Tdec * rb * 0.8);
+  ) : model == 2 ? (        // GLOCK: free steel bar 1 : 2.76 : 5.40 : 8.93
+    setp(v, 0, f0, vg_, Tdec);
+    setp(v, 1, f0 * 2.756, vg_ * (0.25 + 0.35 * h), Tdec * 0.55);
+    setp(v, 2, f0 * 5.404, vg_ * (0.08 + 0.25 * h), Tdec * 0.3);
+    setp(v, 3, f0 * 8.933, vg_ * 0.12 * h, Tdec * 0.15);
+    setp(v, 4, f0 * 13.34, vg_ * 0.05 * h * h, 0.04);
+    setp(v, 5, f0 * 2, vg_ * 0.04 * reso, Tdec * 0.7);
+  ) : model == 3 ? (        // XYLOPHONE: rosewood bar tuned 1 : 3, short and bright
+    setp(v, 0, f0, vg_ * (0.8 + 0.4 * reso), Tdec * rb);
+    setp(v, 1, f0 * 3.0, vg_ * (0.2 + 0.4 * h), Tdec * 0.45);
+    setp(v, 2, f0 * 6.0, vg_ * 0.15 * h, Tdec * 0.2);
+    setp(v, 3, f0 * 9.2, vg_ * 0.1 * h * h, Tdec * 0.08);
+    setp(v, 4, f0 * 2.0, vg_ * 0.06, Tdec * 0.3);
+    setp(v, 5, f0 * 13.5, vg_ * 0.05 * h * h, 0.01);
+  ) : model == 4 ? (        // CELESTA: struck steel plate over a wooden resonator, bell-like
+    setp(v, 0, f0, vg_, Tdec * rb);
+    setp(v, 1, f0 * 2.01, vg_ * (0.3 + 0.2 * h), Tdec * 0.6);
+    setp(v, 2, f0 * 3.03, vg_ * 0.12, Tdec * 0.4);
+    setp(v, 3, f0 * 4.1, vg_ * 0.08 * h, Tdec * 0.25);
+    setp(v, 4, f0 * 6.7, vg_ * 0.1 * h * h, 0.05);
+    setp(v, 5, f0 * 1.003, vg_ * 0.2, Tdec * 0.9);
+  ) : model == 5 ? (        // KALIMBA: plucked steel tine on a box
+    setp(v, 0, f0, vg_ * (0.8 + 0.4 * reso), Tdec * rb);
+    setp(v, 1, f0 * 5.2, vg_ * (0.1 + 0.3 * h), Tdec * 0.2);
+    setp(v, 2, f0 * 9.6, vg_ * 0.08 * h, Tdec * 0.1);
+    setp(v, 3, f0 * 2.0, vg_ * 0.08 * reso, Tdec * 0.4);
+    setp(v, 4, f0 * 3.0, vg_ * 0.03, Tdec * 0.3);
+    setp(v, 5, f0 * 14.3, vg_ * 0.04 * h, 0.015);
+  ) : model == 6 ? (        // STEEL PAN: harmonically tuned note area, shimmering
+    setp(v, 0, f0, vg_, Tdec);
+    setp(v, 1, f0 * 2.0, vg_ * (0.45 + 0.2 * h), Tdec * 0.7);
+    setp(v, 2, f0 * 3.0, vg_ * (0.2 + 0.2 * h), Tdec * 0.5);
+    setp(v, 3, f0 * 1.004, vg_ * 0.35 * reso, Tdec * 0.9);
+    setp(v, 4, f0 * 4.02, vg_ * 0.08 * h, Tdec * 0.3);
+    setp(v, 5, f0 * 2.006, vg_ * 0.15, Tdec * 0.6);
+  ) : model == 7 ? (        // TUBULAR BELLS: chime partials, very long ring
+    setp(v, 0, f0, vg_ * 0.6, Tdec * rb);
+    setp(v, 1, f0 * 2.0, vg_ * 0.9, Tdec * 0.9);
+    setp(v, 2, f0 * 3.0, vg_ * 0.6, Tdec * 0.75);
+    setp(v, 3, f0 * 4.16, vg_ * (0.3 + 0.2 * h), Tdec * 0.55);
+    setp(v, 4, f0 * 5.43, vg_ * 0.2 * h, Tdec * 0.4);
+    setp(v, 5, f0 * 6.79, vg_ * 0.12 * h, Tdec * 0.3);
+  ) : (                     // E.GRAND: stiff strings (stretched partials), detuned pair on the lowest partials
+    B = 0.0003 * 2 ^ ((n - 60) / 18);
+    k = 1;
+    loop(9,
+      fk = k * f0 * sqrt(1 + B * k * k);
+      a = vg_ * 0.75 * (1 / k) ^ (1.7 - 1.1 * h * (0.3 + 0.7 * vel / 127));
+      setp(v, k - 1, fk, a, Tdec / (1 + 0.35 * (k - 1)));
+      k += 1;
+    );
+    setp(v, 9,  f0 * 1.0007, vg_ * 0.55, Tdec * 0.9);
+    setp(v, 10, 2 * f0 * sqrt(1 + 4 * B) * 0.9993, vg_ * 0.2, Tdec * 0.7);
+    setp(v, 11, 3 * f0 * sqrt(1 + 9 * B) * 1.0006, vg_ * 0.08, Tdec * 0.6);
+  );
+  // mallet / pluck transient: harder mallets are brighter and shorter
+  vt0[v] = vg_ * (0.08 + 0.25 * h) * (model == 5 ? 0.6 : model == 8 ? 1.2 : 1);
+  vtf[v] = 1 - exp(-2 * $pi * min(f0 * (2 + 5 * h), 9000) / srate);
+  vtd[v] = exp(-1 / ((0.002 + 0.006 * (1 - h)) * srate));
+  // envelopes restart (a re-struck key keeps its current level), filter state clears on a fresh voice
+  !keep ? ( vae[v] = 0; vf1[v] = 0; vf2[v] = 0; );
+  vas[v] = 1; vfs[v] = 1; vvel[v] = vel / 127;
+  vrd[v] = exp(-1 / (vrel_t * srate));
+);
+vrd = 240; vdo = 260; vdf = 280; vpy = 300; vpy2 = 320; vat = 340;
+memset(260, 0, 100);
+vae = 400; vas = 420; vfe = 440; vfs = 460; vf1 = 480; vf2 = 500; vvel = 520; vgo = 540;   // amp / filter envelopes, filter state
+memset(400, 0, 160);
+
+
+function note_off(n) local(v) (
+  v = 0; loop(NV, vn[v] == n && vg[v] ? ( vg[v] = 0; vs[v] = pedal; ); v += 1; );
+);
+function pedal_set(on) local(v) (
+  pedal = on;
+  !on ? ( v = 0; loop(NV, vs[v] = 0; v += 1; ); );
+);
+function all_off() local(v) ( v = 0; loop(NV, vg[v] = 0; vs[v] = 0; v += 1; ); pedal = 0; );
+
+function model_name(m) ( m == 0 ? "MARIMBA" : m == 1 ? "VIBES" : m == 2 ? "GLOCK" : m == 3 ? "XYLOPHONE" : m == 4 ? "CELESTA" :
+  m == 5 ? "KALIMBA" : m == 6 ? "STEEL PAN" : m == 7 ? "BELLS" : "E.GRAND"; );
+
+function update() (
+  model = slider1;
+  #preset_name = model_name(model);
+  hammer = slider2 / 100; reso = slider3 / 100;
+  dec_k = slider4 / 100; rel_k = slider5 / 100;
+  sens = slider7 / 100;
+  //        marimba vibes glock xylo celesta kalimba pan  bells grand
+  T0   = model == 0 ? 1.6 : model == 1 ? 5.5 : model == 2 ? 3.5 : model == 3 ? 0.7 : model == 4 ? 2.2 :
+         model == 5 ? 1.8 : model == 6 ? 2.2 : model == 7 ? 8 : 7;
+  Trel = model == 1 ? 0.35 : model == 7 ? 0.6 : model == 8 ? 0.22 : model == 2 ? 0.3 : 0.12;
+  tone_f = 1500 * 9 ^ (slider6 / 100) * (model == 0 || model == 3 ? 0.8 : 1);
+  hp_c = 1 - exp(-2 * $pi * (model == 7 ? 120 : model == 0 ? 40 : 60) / srate);
+  ng = model == 8 ? 0.08 : model == 7 ? 0.09 : model == 6 ? 0.11 : 0.13;     // headroom: chords peak well below 0 dBFS
+  trate = slider8; tdep = slider9 / 100; tst = slider10 / 100;
+  chm = slider11 / 100; crate = slider12;
+  age = slider13 / 100; drift = slider14 / 100;
+  chan = slider15;
+  out_t = 10 ^ (slider16 / 20);
+  ins_output_setup(17); ins_stereo_setup(35);
+  // amp attack and filter envelope (coefficients settle in about the given time)
+  a_ac = 1 - exp(-4.6 / (slider23 * 0.001 * srate));
+  f_cut = slider27; f_res = slider28 / 100; f_amt = slider29 / 100; f_key = slider30 / 100;
+  f_ac = 1 - exp(-4.6 / (slider31 * 0.001 * srate)); f_dc = 1 - exp(-4.6 / (slider32 * 0.001 * srate));
+  f_sl = slider33 / 100; f_rc = 1 - exp(-4.6 / (slider34 * 0.001 * srate));
+  f_on = f_cut < 17999 || f_amt > 0 || f_res > 0;
+  f_k = 2 - 1.95 * f_res;
+);
+
+// ---------- presets (voice, tremolo, chorus, filter, amp, delay; drift / output left alone) ----------
+function setpr(m, hm, rs, dc, rl, tn, ve, tr, td, ts, ch, crt) (
+  slider1 = m; slider2 = hm; slider3 = rs; slider4 = dc; slider5 = rl; slider6 = tn; slider7 = ve;
+  slider8 = tr; slider9 = td; slider10 = ts; slider11 = ch; slider12 = crt;
+  // clean defaults for the newer sections (individual presets add to these)
+  slider23 = 1;
+  slider27 = 18000; slider28 = 0; slider29 = 0; slider30 = 50; slider31 = 1; slider32 = 600; slider33 = 30; slider34 = 400;
+);
+function load_preset(p) (
+  current_preset = p;
+  p == 1  ? ( setpr(0, 35, 60, 100, 100, 55, 70, 5, 0, 100, 0, 0.8); #preset_name = "Soft Marimba"; ) :
+  p == 2  ? ( setpr(0, 80, 50, 90, 100, 70, 80, 5, 0, 100, 0, 0.8); #preset_name = "Hard Marimba"; ) :
+  p == 3  ? ( setpr(1, 40, 60, 100, 100, 55, 70, 4.5, 45, 0, 0, 0.8); #preset_name = "Vibes Motor"; ) :
+  p == 4  ? ( setpr(1, 55, 50, 100, 100, 60, 75, 5, 0, 100, 20, 0.6); #preset_name = "Vibes Dry"; ) :
+  p == 5  ? ( setpr(2, 60, 40, 100, 100, 65, 70, 5, 0, 100, 0, 0.8); #preset_name = "Glockenspiel"; ) :
+  p == 6  ? ( setpr(3, 75, 50, 100, 100, 70, 80, 5, 0, 100, 0, 0.8); #preset_name = "Xylophone"; ) :
+  p == 7  ? ( setpr(4, 50, 50, 100, 100, 60, 65, 5, 0, 100, 30, 0.7); #preset_name = "Celesta Box"; ) :
+  p == 8  ? ( setpr(5, 45, 60, 100, 100, 55, 70, 5, 0, 100, 0, 0.8); #preset_name = "Kalimba"; ) :
+  p == 9  ? ( setpr(6, 50, 50, 100, 100, 60, 75, 6, 15, 100, 25, 0.9); #preset_name = "Steel Pan"; ) :
+  p == 10 ? ( setpr(7, 55, 50, 100, 100, 55, 70, 5, 0, 100, 0, 0.8); #preset_name = "Tubular Bells"; ) :
+  p == 11 ? ( setpr(1, 30, 70, 150, 120, 40, 60, 4, 30, 100, 40, 0.5);
+              slider23 = 120; slider27 = 2500; slider29 = 35; slider32 = 1500; slider33 = 50; 
+              #preset_name = "Mallet Pad"; ) :
+  p == 12 ? ( setpr(8, 60, 50, 100, 100, 70, 70, 5, 0, 100, 60, 0.7); #preset_name = "Grand 80s Chorus"; ) :
+  p == 13 ? ( setpr(8, 55, 50, 110, 100, 60, 75, 5, 0, 100, 0, 0.8); #preset_name = "Grand Dry"; );
+  
+  p >= 1 && p <= 13 ? slider_automate(4095 + 4194304 + 17112760320);
+  
+  p == 14 ? (
+    setpr(0, 50, 50, 100, 100, 60, 70, 5, 0, 100, 0, 0.8);
+    slider13 = 20; slider14 = 25; slider15 = 0; slider16 = 0;
+    slider17 = 0; slider18 = 30; slider19 = 120; slider20 = 6000; slider21 = -0.3; slider22 = 1; slider35 = 20; slider36 = 0;
+    #preset_name = model_name(slider1);
+    slider_automate(4194303 + 4194304 + 17112760320 + 51539607552);
+  );
+);
+
+// ---------- state ----------
+ins_drift_init();
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+sm = 1 - exp(-1 / (0.03 * srate));
+pkL = 0; pkR = 0; midi_led = 0; nact = 0; pmul = 1;
+ui_thm = 3; ui_hw = 1;   // fixed vintage-cream faceplate
+ui_kstyle = 0;           // GFX standard knobs: machined ring, 6a for drift / output
+CRM = 0xEFE6D2; BRN = 0x5A3E2B; AMB = 0xE8A33A; REDL = 0xFF3A2A;
+SH1 = 0xE7DCC3; SH2 = 0xDCCFB2; SH3 = 0xD0C1A3;      // sound, shaping / effects, utility
+// section: recessed tray, printed outline and title, knob style for its role
+function mgroup(x, y, w, h, sec, title, shade) (
+  pk_inset(x * sc, y * sc, w * sc, h * sc, shade);
+  pk_box(x * sc, y * sc, w * sc, h * sc, BRN, title);
+  ui_section(sec == 0 ? 2 : sec); C_INK = BRN;
+);
+update();
+out_s = out_t;
+
+@slider
+update();
+
+@block
+evn = 0;
+while (midirecv(mofs, m1, m2, m3)) (
+  stt = m1 & 0xF0; mch = (m1 & 0x0F) + 1;
+  (chan == 0 || mch == chan) && evn < 512 ? (
+    evq[evn * 4] = mofs; evq[evn * 4 + 1] = stt; evq[evn * 4 + 2] = m2; evq[evn * 4 + 3] = m3; evn += 1;
+  );
+  midisend(mofs, m1, m2, m3);
+);
+evi = 0; spos = 0;
+panic_req ? ( all_off(); panic_req = 0; );
+update();
+// drift: GFX instrument standard (pitch, filter and tone wander)
+ins_drift_block(drift, samplesblock);
+pmul = ins_pitch;
+tone_c = 1 - exp(-2 * $pi * min(tone_f * 2 ^ ins_tone, srate * 0.45) / srate);
+fi_step = 1 / (0.002 * srate); dc_k = exp(-1 / (0.002 * srate));
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+file_var(0, current_preset);
+file_var(0, #preset_name);   // keep the LCD's patch name in sync with what was actually saved
+
+@sample
+while (evi < evn && evq[evi * 4] <= spos) (
+  e1 = evq[evi * 4 + 1]; e2 = evq[evi * 4 + 2]; e3 = evq[evi * 4 + 3];
+  e1 == 0x90 && e3 > 0 ? ( note_on(e2, e3); midi_led = 1; ins_midi_hit(); ) :
+  e1 == 0x80 || e1 == 0x90 ? note_off(e2) :
+  e1 == 0xB0 ? (
+    e2 == 64 ? pedal_set(e3 >= 64);
+    e2 == 120 || e2 == 123 ? all_off();
+  );
+  evi += 1;
+);
+spos += 1;
+
+nz = rand(2) - 1;
+mix = 0; nact = 0;
+av = 0;
+loop(NV,
+  vact[av] ? (
+    nact += 1;
+    // dampers fall when the key and the pedal are both up
+    rm = (vg[av] || vs[av]) ? 1 : vrd[av];
+    x = 0; amp = 0;
+    j = av * NP;
+    loop(vnp[av],
+      s_ = ps[j] * pwc[j] + pc[j] * pws[j];
+      pc[j] = pc[j] * pwc[j] - ps[j] * pws[j];
+      ps[j] = s_;
+      pa[j] *= pd[j] * rm;
+      x += pa[j] * s_;
+      amp += pa[j];
+      j += 1;
+    );
+    // hammer / pluck transient
+    vt0[av] > 0.0001 ? ( vtz[av] += (nz * vt0[av] - vtz[av]) * vtf[av]; vt0[av] *= vtd[av]; x += vtz[av]; );
+    // pickup
+    vat[av] < 1 ? ( vat[av] = min(vat[av] + fi_step, 1); x *= vat[av]; );
+    vdf[av] ? ( vdo[av] = 2 * vpy[av] - vpy2[av] - x; vdf[av] = 0; );   // continue the waveform's own slope
+    x += vdo[av]; vdo[av] *= dc_k;
+    vpy2[av] = vpy[av]; vpy[av] = x;
+    // amp envelope (gate = key or pedal held)
+    gt = vg[av] || vs[av];
+    vas[av] == 1 ? ( vae[av] += (1.3 - vae[av]) * a_ac; vae[av] >= 1 ? ( vae[av] = 1; vas[av] = 2; ); ) :
+    gt ? ( vae[av] += (f_sl - vae[av]) * f_dc; ) : ( vae[av] += (0 - vae[av]) * f_rc; );
+    x *= vae[av];
+    // filter: 12 dB low-pass with its own envelope, per voice
+    f_on ? (
+      vfs[av] == 1 ? ( vfe[av] += (1.3 - vfe[av]) * f_ac; vfe[av] >= 1 ? ( vfe[av] = 1; vfs[av] = 2; ); ) :
+      gt ? ( vfe[av] += (f_sl - vfe[av]) * f_dc; ) : ( vfe[av] += (0 - vfe[av]) * f_rc; );
+      fc = f_cut * 2 ^ (f_amt * vfe[av] * 6 * (1 - sens + sens * vvel[av]) + f_key * (vn[av] - 60) / 12 + ins_cut);
+      fg = tan($pi * min(max(fc, 20), srate * 0.45) / srate);
+      fa1 = 1 / (1 + fg * (fg + f_k)); fa2 = fg * fa1; fa3 = fg * fa2;
+      fv3 = x - vf2[av]; fv1 = fa1 * vf1[av] + fa2 * fv3; fv2 = vf2[av] + fa2 * vf1[av] + fa3 * fv3;
+      vf1[av] = 2 * fv1 - vf1[av]; vf2[av] = 2 * fv2 - vf2[av];
+      x = fv2;
+    );
+    mix += x;
+    vlev[av] = amp * vae[av];
+    amp < 0.00015 && vt0[av] < 0.0001 && !vg[av] ? ( vact[av] = 0; vn[av] = -1; );
+  );
+  av += 1;
+);
+
+// body: high-pass, tone
+hpz += (mix - hpz) * hp_c; y = mix - hpz;
+tlz += (y - tlz) * tone_c; y = tlz;
+model == 8 ? ( prz += (y - prz) * 0.25; y += 0.35 * (y - prz); );         // e.grand: bright pickup
+y *= ng;
+
+// tremolo: amp (STEREO 0) .. auto-pan (STEREO 100)
+tph += trate / srate; tph >= 1 ? tph -= 1;
+ts_ = sin(2 * $pi * tph);
+gA = 1 - tdep * (1 - tst) * 0.5 * (1 + ts_);
+oL = y * gA * (1 - tdep * tst * 0.5 * (1 + ts_));
+oR = y * gA * (1 - tdep * tst * 0.5 * (1 - ts_));
+
+// chorus
+cbuf[cwp] = y;
+chm > 0 ? (
+  cph += crate / srate; cph >= 1 ? cph -= 1;
+  dL = (0.007 + 0.0018 * sin(2 * $pi * cph)) * srate;
+  dR = (0.007 + 0.0018 * cos(2 * $pi * cph)) * srate;
+  rp = cwp - dL; ri = floor(rp); rf = rp - ri; cL = cbuf[ri & cmask] * (1 - rf) + cbuf[(ri + 1) & cmask] * rf;
+  rp = cwp - dR; ri = floor(rp); rf = rp - ri; cR = cbuf[ri & cmask] * (1 - rf) + cbuf[(ri + 1) & cmask] * rf;
+  oL = (oL + chm * cL) / (1 + 0.4 * chm); oR = (oR + chm * cR) / (1 + 0.4 * chm);
+);
+cwp = (cwp + 1) & cmask;
+
+
+out_s += (out_t - out_s) * sm;
+oL = ostL.ost_band(oL) * out_s;
+oR = ostR.ost_band(oR) * out_s;
+ins_stereo(oL, oR); ost_out(ins_sl, ins_sr);           // mono-maker / widener, then the output stage
+spl0 = ost_l;
+spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 640 552
+ui_thm = 3; ui_hw = 1;
+ui_begin(640, 552);
+// ---------- chassis: cream panel between wooden cheeks ----------
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+fh = ins_show_out ? 664 : 552;                         // the output tray folds out below
+pk_chassis(16 * sc, 4 * sc, 608 * sc, fh * sc, CRM);
+ui_col(BRN); gfx_circle(44 * sc, 24 * sc, 14 * sc, 1, 1);
+gfx_setfont(4); ui_col(CRM); ui_text(44 * sc, 19 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 20 * sc, 'b'); ui_col(BRN); gfx_x = 66 * sc; gfx_y = 12 * sc; gfx_drawstr("MALLETS");
+gfx_setfont(4); ui_cola(BRN, 0.7); gfx_x = 160 * sc; gfx_y = 20 * sc; gfx_drawstr("TUNED PERCUSSION SYNTHESIZER");
+
+// ---------- header controls: Instrument LCD readout + ergonomic keycap buttons ----------
+pk_lcd(316 * sc, 8 * sc, 96 * sc, 28 * sc, 0);
+pk_lcdfont(7, 12 * sc); ui_col(pk_lcdc); gfx_x = 324 * sc; gfx_y = 15 * sc;
+gfx_drawstr(#preset_name);
+
+ui_button(422 * sc, 8 * sc, 24 * sc, 28 * sc, "<", 0, 1) ? (
+  current_preset = current_preset <= 1 ? 14 : current_preset - 1;
+  load_preset(current_preset);
+);
+
+ui_button(448 * sc, 8 * sc, 24 * sc, 28 * sc, ">", 0, 1) ? (
+  current_preset = current_preset >= 14 ? 1 : current_preset + 1;
+  load_preset(current_preset);
+);
+
+ui_noled = 1;
+ui_button(478 * sc, 8 * sc, 68 * sc, 28 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 478 * sc; gfx_y = 40 * sc;
+  sel = gfx_showmenu("Soft Marimba|Hard Marimba|Vibes Motor|Vibes Dry|Glockenspiel|Xylophone|Celesta Box|Kalimba|Steel Pan|Tubular Bells|Mallet Pad|Grand 80s Chorus|Grand Dry|Reset all to defaults");
+  sel > 0 ? load_preset(sel);
+);
+
+ui_size_picker(554 * sc, 13 * sc);
+
+// ---------- display: keyboard lighting up with each sounding note ----------
+pk_lcd(16 * sc, 50 * sc, 608 * sc, 84 * sc, 0);
+pk_lcdfont(7, 16 * sc); ui_col(pk_lcdc); gfx_x = 26 * sc; gfx_y = 57 * sc;
+gfx_drawstr(model_name(slider1));
+pk_lcdfont(8, 11 * sc); ui_cola(pk_lcdc, 0.75); gfx_x = 150 * sc; gfx_y = 61 * sc;
+gfx_drawstr(slider1 == 0 ? "rosewood bars, tube resonators" : slider1 == 1 ? "aluminium bars, long ring" :
+            slider1 == 2 ? "steel bars, bright and bell-like" : slider1 == 3 ? "rosewood bars, short and dry" :
+            slider1 == 4 ? "struck steel plates, music-box" : slider1 == 5 ? "plucked steel tines" :
+            slider1 == 6 ? "tuned steel drum" : slider1 == 7 ? "chimes, very long ring" : "electric grand, stretched strings");
+sprintf(#ks, "%d sounding%s", nact, pedal ? "   SUSTAIN" : "");
+gfx_x = 500 * sc; gfx_y = 61 * sc; gfx_drawstr(#ks);
+// key levels from the voices
+memset(7000, 0, 128);
+i = 0; loop(NV, vn[i] >= 0 ? 7000[vn[i]] = max(7000[vn[i]], min(vlev[i] * 2.5, 1)); i += 1; );
+kx0 = 26 * sc; kw = 588 * sc / 52; ky0 = 76 * sc; kh = 50 * sc;
+wk = 0; n_ = 21;
+loop(88,
+  pcl = n_ % 12;
+  !(pcl == 1 || pcl == 3 || pcl == 6 || pcl == 8 || pcl == 10) ? (
+    qx = kx0 + wk * kw;
+    ui_col(ui_mix(0x3A2408, AMB, 0.25 + 0.75 * 7000[n_])); gfx_rect(qx, ky0, kw - 1, kh);
+    wk += 1;
+  );
+  n_ += 1;
+);
+wk = 0; n_ = 21;
+loop(88,
+  pcl = n_ % 12;
+  (pcl == 1 || pcl == 3 || pcl == 6 || pcl == 8 || pcl == 10) ? (
+    qx = kx0 + wk * kw - kw * 0.32;
+    ui_col(ui_mix(0x120A02, 0xFFD080, 7000[n_])); gfx_rect(qx, ky0, kw * 0.64, kh * 0.6);
+  ) : wk += 1;
+  n_ += 1;
+);
+
+// ---------- VOICE ----------
+mgroup(16, 140, 608, 96, 0, "VOICE", SH1);
+knob_step = 1;
+ui_knob(76 * sc,  186 * sc, 1, 0, 8, 0, 0, "MODEL", model_name(slider1));
+ui_knob(196 * sc, 186 * sc, 2, 0, 100, 50, 0, "MALLET",  "%.0f%%");
+ui_knob(316 * sc, 186 * sc, 3, 0, 100, 50, 0, "RESONATOR", "%.0f%%");
+ui_knob(436 * sc, 186 * sc, 6, 0, 100, 60, 0, "TONE",    "%.0f%%");
+ui_knob(556 * sc, 186 * sc, 7, 0, 100, 70, 0, "VELOCITY", "%.0f%%");
+
+// ---------- FILTER ----------
+mgroup(16, 244, 608, 96, 0, "FILTER", SH1);
+ui_knob(60 * sc,  290 * sc, 27, 100, 18000, 18000, 1, "CUTOFF", slider27 > 17999 ? "OPEN" : "%.0f Hz");
+ui_knob(132 * sc, 290 * sc, 28, 0, 100, 0, 0, "RES", "%.0f%%");
+ui_knob(204 * sc, 290 * sc, 29, 0, 100, 0, 0, "ENV", "%.0f%%");
+ui_knob(276 * sc, 290 * sc, 30, 0, 100, 50, 0, "KEY", "%.0f%%");
+ui_knob(348 * sc, 290 * sc, 31, 0.5, 2000, 1, 1, "ATTACK", "%.1f ms");
+ui_knob(420 * sc, 290 * sc, 32, 5, 10000, 600, 1, "DECAY", "%.0f ms");
+ui_knob(492 * sc, 290 * sc, 33, 0, 100, 30, 0, "SUSTAIN", "%.0f%%");
+ui_knob(564 * sc, 290 * sc, 34, 5, 5000, 400, 1, "RELEASE", "%.0f ms");
+
+// ---------- AMP: attack, ring length, damping ----------
+mgroup(16, 348, 220, 96, 0, "AMP", SH2);
+ui_knob(58 * sc,  394 * sc, 23, 0.5, 2000, 1, 1, "ATTACK", "%.1f ms");
+ui_knob(126 * sc, 394 * sc, 4, 25, 400, 100, 1, "DECAY",   "%.0f%%");
+ui_knob(194 * sc, 394 * sc, 5, 25, 400, 100, 1, "RELEASE", "%.0f%%");
+
+// ---------- TREMOLO ----------
+mgroup(244, 348, 226, 96, 0, "TREMOLO", SH2);
+ui_knob(288 * sc, 394 * sc, 8,  0.5, 10, 5, 1, "RATE",   "%.2f Hz");
+ui_knob(357 * sc, 394 * sc, 9,  0, 100, 0, 0, "DEPTH",  "%.0f%%");
+ui_knob(426 * sc, 394 * sc, 10, 0, 100, 100, 0, "STEREO", slider10 < 1 ? "MOTOR" : slider10 > 99 ? "PAN" : "%.0f%% pan");
+
+// ---------- CHORUS ----------
+mgroup(478, 348, 146, 96, 0, "CHORUS", SH2);
+ui_knob(518 * sc, 394 * sc, 11, 0, 100, 0, 0, "AMOUNT", "%.0f%%");
+ui_knob(584 * sc, 394 * sc, 12, 0.1, 5, 0.8, 1, "RATE", "%.2f Hz");
+
+// ---------- DRIFT ----------
+mgroup(16, 452, 170, 96, 1, "DRIFT", SH3);
+ui_knob(62 * sc,  498 * sc, 13, 0, 100, 20, 0, "AGE", "%.0f%%");
+ui_knob(140 * sc, 498 * sc, 14, 0, 100, 25, 0, "DRIFT", "%.0f%%");
+
+// ---------- MIDI ----------
+mgroup(194, 452, 170, 96, 3, "MIDI", SH3);
+knob_step = 1;
+ui_knob(240 * sc, 498 * sc, 15, 0, 16, 0, 0, "CHANNEL", slider15 == 0 ? "OMNI" : "CH %.0f");
+pk_led(294 * sc, 478 * sc, 3 * sc, ins_midi_lit() || nact > 0, REDL);
+gfx_setfont(4); ui_col(BRN);
+gfx_x = 304 * sc; gfx_y = 474 * sc; gfx_drawstr("MIDI IN");
+gfx_x = 286 * sc; gfx_y = 492 * sc; gfx_drawstr("CC64 = sustain");
+gfx_x = 286 * sc; gfx_y = 505 * sc; gfx_drawstr("16 voices");
+pk_ledbtn(286 * sc, 520 * sc, 24 * sc, 20 * sc, 0, REDL) ? panic_req = 1;
+gfx_setfont(4); ui_col(BRN); gfx_x = 316 * sc; gfx_y = 525 * sc; gfx_drawstr("PANIC");
+
+// ---------- MASTER (+ the OUTPUT button) ----------
+mgroup(372, 452, 252, 96, 2, "MASTER", SH3);
+ui_knob(422 * sc, 498 * sc, 16, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
+mL.ui_ledm(578 * sc, 464 * sc, 14 * sc, 70 * sc, pkL);
+mR.ui_ledm(598 * sc, 464 * sc, 14 * sc, 70 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+gfx_setfont(4); ui_col(BRN); ui_text(595 * sc, 536 * sc, "OUT");
+
+// ---------- OUTPUT (shared instrument tray, folds out below) ----------
+ins_show_out ? (
+  ins_stereo_box(16, 560, 35, SH3, BRN);
+  ins_output_tray(194, 560, 17, SH3, BRN, REDL);
+);
+
+// wooden cheeks last, so the section trays tuck under them
+pk_wood(2 * sc, 2 * sc, 16 * sc, (fh + 4) * sc); pk_wood(622 * sc, 2 * sc, 16 * sc, (fh + 4) * sc);
+pk_end();
+ui_end();

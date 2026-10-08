@@ -1,0 +1,336 @@
+desc:GFX Cassette 4
+//tags: summing mixer cassette four-track tape lo-fi noise reduction wow flutter
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-dyn (.jsfx-inc) in the same folder.
+//
+// A cassette four-track as a summing mixer, in the spirit of the 80s portable multitrack recorders (personal use;
+// the sound is designed from scratch). Four stereo stems each go to their own track of the tape - recorded,
+// played back through the heads - and are then mixed down with the recorder's little mixer.
+//
+// SET-UP (REAPER): set the bus track to 8 channels and send the stems to it on 1/2, 3/4, 5/6 and 7/8 (turn off
+// the stem tracks' master send). The mix leaves on 1/2.   1/2 TRACK 1   3/4 TRACK 2   5/6 TRACK 3   7/8 TRACK 4
+//
+// MODEL  15 - the compact standard-speed machine: B-type noise reduction (it lifts the quiet highs on the way in
+//             and takes them back down on the way out), a soft top end (~9.5 kHz), a fat head bump, more wow and hiss.
+//        44 - the double-speed machine with the 2:1 / 1:2 compander noise reduction: everything is compressed 2:1
+//             (with a treble lift) onto the tape and expanded 1:2 coming back, so the hiss all but disappears - but
+//             the expander reacts to what comes OFF the tape, so it breathes and pumps a little, the famous character.
+//             More top end (~15 kHz), steadier transport.
+// TAPE   DRIVE - recording level: hotter = more tape saturation (level-matched, so it only changes the colour).
+//        WOW   - wow and flutter (one transport: all four tracks wobble together).
+//        HISS  - the tape noise (the middle = the model's own; each track has its own hiss, so 4 tracks = 4x).
+//        AGE   - an older, worn tape: the top end goes and dropouts creep in.
+//        NR    - noise reduction in / out (out: the raw tape, hiss and all).
+// MIXER  per track: TREBLE (10 kHz) and BASS (100 Hz) +/-10 dB, PAN, LEVEL, SOLO, MUTE. MASTER, VU meters.
+// PRESETS.
+// NAMES       - click the name at the top of a channel strip and type (e.g. Drums); Enter keeps it, Escape cancels,
+//               an empty name goes back to the number. The names are saved with the project.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-dyn.jsfx-inc
+
+slider1:0<0,1,1{15 (standard speed / B-type NR),44 (double speed / compander NR)}>-Model
+slider2:1<0,1,1{Off,On}>-Noise reduction
+slider3:0<-6,12,0.1>-Tape drive (dB)
+slider4:30<0,100,1>-Wow / flutter (%)
+slider5:50<0,100,1>-Hiss (%)
+slider6:10<0,100,1>-Age (%)
+slider7:0<-24,12,0.1>-Master (dB)
+slider8:0<-60,6,0.1>-Track 1 level (dB)
+slider9:0<-60,6,0.1>-Track 2 level (dB)
+slider10:0<-60,6,0.1>-Track 3 level (dB)
+slider11:0<-60,6,0.1>-Track 4 level (dB)
+slider12:0<-10,10,0.1>-Track 1 treble (dB)
+slider13:0<-10,10,0.1>-Track 2 treble (dB)
+slider14:0<-10,10,0.1>-Track 3 treble (dB)
+slider15:0<-10,10,0.1>-Track 4 treble (dB)
+slider16:0<-10,10,0.1>-Track 1 bass (dB)
+slider17:0<-10,10,0.1>-Track 2 bass (dB)
+slider18:0<-10,10,0.1>-Track 3 bass (dB)
+slider19:0<-10,10,0.1>-Track 4 bass (dB)
+slider20:0<-100,100,1>-Track 1 pan
+slider21:0<-100,100,1>-Track 2 pan
+slider22:0<-100,100,1>-Track 3 pan
+slider23:0<-100,100,1>-Track 4 pan
+slider24:0<0,1,1{Off,On}>-Track 1 mute
+slider25:0<0,1,1{Off,On}>-Track 2 mute
+slider26:0<0,1,1{Off,On}>-Track 3 mute
+slider27:0<0,1,1{Off,On}>-Track 4 mute
+slider28:0<0,1,1{Off,On}>-Track 1 solo
+slider29:0<0,1,1{Off,On}>-Track 2 solo
+slider30:0<0,1,1{Off,On}>-Track 3 solo
+slider31:0<0,1,1{Off,On}>-Track 4 solo
+slider32:0<0,100,1>-Band sat (%)
+slider33:30<0,100,1>-Bias (%)
+slider34:120<40,400,1>-Sat low band (Hz)
+slider35:6000<2000,16000,10>-Sat high band (Hz)
+slider36:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider37:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:track 1 L
+in_pin:track 1 R
+in_pin:track 2 L
+in_pin:track 2 R
+in_pin:track 3 L
+in_pin:track 3 R
+in_pin:track 4 L
+in_pin:track 4 R
+out_pin:mix L
+out_pin:mix R
+
+@init
+#ui_man = "gfx-cassette-4";                                  // the ? pop-up links to this manual
+
+LHD = 180;                                          // signal-light hold per input (gfx)
+
+DEN = 0.00000000000000000001;
+BSZ = 8192; BMSK = BSZ - 1;                         // wow delay lines: 8 x 8192 from 10000
+TG = 100; TGT = 110; TPK = 120; PL = 130; PR = 140; // per track: gain, target, peak, pan L / R gains
+NZ = 160;                                           // hiss state per track side (8)
+memset(10000, 0, BSZ * 8); memset(100, 0, 70);
+
+// ---------- one tape path (one side of one track) ----------
+function tp_set() instance(hl, hb, pe, de) (
+  hl.bq_set(0, hfc, 0.65, 0);                      // playback head: top-end loss
+  hb.bq_set(2, bumpf, 1.1, bumpg);                 // head bump
+  pe.bq_set(3, 2000, 0.6, 10);                     // compander NR: treble lift into the tape ...
+  de.bq_set(3, 2000, 0.6, -10);                    // ... and back down after the expander
+);
+// x in -> tape out. buf = this path's wow delay line; nz = its hiss sample
+function tp(x, buf, nz) instance(hl, hb, pe, de, ee, ed, bh, be, dh, dbe) local(y, lv, g, h, k, rp, i, f) (
+  y = x * rec_g;
+  // ---- record: noise-reduction encode ----
+  nr ? (
+    model ? (
+      y = pe.bq_run(y);                            // compander: treble lift, then 2:1 around -20 dBFS
+      ee += (y * y - ee) * nr_c + DEN; lv = 10 * log10(ee);
+      y *= 10 ^ (min(-0.5 * (lv + 20), 24) / 20);
+    ) : (
+      bh += (y - bh) * b_c; h = y - bh;            // B-type: lift the highs when they are quiet
+      be += (abs(h) - be) * nr_c; k = 2.16 * (1 - min(be / 0.06, 1));   // up to +10 dB
+      y += k * h;
+    );
+  );
+  // ---- the tape: saturation (soft, a touch asymmetric) ----
+  y = ost_tanh(y * sat_k + 0.03) / sat_k - ost_tanh(0.03) / sat_k;
+  // ---- transport: wow / flutter (a modulated delay) ----
+  buf[wpos] = y;
+  rp = wpos - wdel; rp < 0 ? rp += BSZ;
+  i = floor(rp); f = rp - i;
+  y = buf[i & BMSK] * (1 - f) + buf[(i + 1) & BMSK] * f;
+  // ---- playback head: top-end loss, head bump, dropouts, hiss ----
+  y = hb.bq_run(hl.bq_run(y)) * drop_g + nz;
+  // ---- noise-reduction decode ----
+  nr ? (
+    model ? (
+      ed += (y * y - ed) * nr_c + DEN; lv = 10 * log10(ed);     // 1:2 expander hears what came off the tape
+      y *= 10 ^ (max(lv + 20, -60) / 20);
+      y = de.bq_run(y);
+    ) : (
+      dh += (y - dh) * b_c; h = y - dh;
+      dbe += (abs(h) - dbe) * nr_c; k = 2.16 * (1 - min(dbe / 0.06, 1));
+      y -= k / (1 + k) * h;
+    );
+  );
+  y * play_g;
+);
+
+// ---------- mixer channel EQ (treble 10 kHz, bass 100 Hz shelves) ----------
+function eq_set(tr, bs) instance(ts, bsf) ( ts.bq_set(3, 10000, 0.7, tr); bsf.bq_set(4, 100, 0.7, bs); );
+function eq(x) instance(ts, bsf) ( bsf.bq_run(ts.bq_run(x)) );
+
+function update() local(i, a, any) (
+  model = slider1; nr = slider2;
+  hfc = (model ? 15000 : 9500) * (1 - 0.45 * slider6 / 100);
+  bumpf = model ? 95 : 70; bumpg = model ? 1.5 : 2.5;
+  sat_k = model ? 1.3 : 1.6;
+  nr_c = 1 - exp(-1 / ((model ? 0.015 : 0.008) * srate));
+  b_c = 1 - exp(-2 * $pi * 3000 / srate);
+  rec_g = 10 ^ (slider3 / 20); play_g = 1 / rec_g;
+  wow_a = slider4 / 100 * (model ? 0.55 : 1);
+  hiss_g = (slider5 / 50) * 10 ^ ((model ? -54 : -50) / 20);
+  age = slider6 / 100;
+  mst = 10 ^ (slider7 / 20);
+  a0l.tp_set(); a0r.tp_set(); a1l.tp_set(); a1r.tp_set(); a2l.tp_set(); a2r.tp_set(); a3l.tp_set(); a3r.tp_set();
+  e0l.eq_set(slider12, slider16); e0r.eq_set(slider12, slider16); e1l.eq_set(slider13, slider17); e1r.eq_set(slider13, slider17);
+  e2l.eq_set(slider14, slider18); e2r.eq_set(slider14, slider18); e3l.eq_set(slider15, slider19); e3r.eq_set(slider15, slider19);
+  any = slider28 || slider29 || slider30 || slider31;
+  i = 0;
+  loop(4,
+    TGT[i] = slider(24 + i) || (any && !slider(28 + i)) || slider(8 + i) <= -59.9 ? 0 : 10 ^ (slider(8 + i) / 20);
+    a = (slider(20 + i) + 100) / 200;              // balance: centre = both sides at full level
+    PL[i] = min(1, 2 * (1 - a)); PR[i] = min(1, 2 * a);
+    i += 1;
+  );
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+);
+
+// ---------- presets (track levels, pans, mutes and solos are left alone) ----------
+// model, nr, drive, wow, hiss, age
+function pp(m, n, d, w, h, a) ( slider1 = m; slider2 = n; slider3 = d; slider4 = w; slider5 = h; slider6 = a; );
+function pname(p) (
+  p == 1 ? "Bedroom Demo (15)" :
+  p == 2 ? "Hot and Woolly (15)" :
+  p == 3 ? "No NR, Old Tape (15)" :
+  p == 4 ? "Worn-out Cassette (15)" :
+  p == 5 ? "Clean Double Speed (44)" :
+  p == 6 ? "Pumping Compander (44)" :
+  p == 7 ? "Squashed Tape (44)" :
+  p == 8 ? "44 without NR" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1 ? pp(0, 1, 0, 30, 50, 10) :       // Bedroom Demo (15)
+  p == 2 ? pp(0, 1, 6, 45, 60, 30) :       // Hot and Woolly (15)
+  p == 3 ? pp(0, 0, 3, 60, 100, 50) :      // No NR, Old Tape (15)
+  p == 4 ? pp(0, 1, 9, 80, 70, 70) :       // Worn-out Cassette (15)
+  p == 5 ? pp(1, 1, 0, 20, 50, 5) :        // Clean Double Speed (44)
+  p == 6 ? pp(1, 1, 6, 25, 50, 10) :       // Pumping Compander (44)
+  p == 7 ? pp(1, 1, 10, 35, 80, 20) :      // Squashed Tape (44)
+  p == 8 ? pp(1, 0, 2, 20, 70, 10);        // 44 without NR
+  p >= 1 && p <= 8 ? slider_automate(63);   // sliders 1-6
+  p == 9 ? (                                // Reset all to defaults
+    pp(0, 1, 0, 30, 50, 10); slider7 = 0;
+    i = 0; loop(4, slider(8 + i) = 0; slider(12 + i) = 0; slider(16 + i) = 0; slider(20 + i) = 0; slider(24 + i) = 0; slider(28 + i) = 0; i += 1; );
+    slider32 = 0; slider33 = 30; slider34 = 120; slider35 = 6000; slider36 = -0.3; slider37 = 1;
+    slider_automate(137438953471);          // sliders 1-37
+  );
+);
+
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+sm = 1 - exp(-1 / (0.02 * srate));
+vuc = 1 - exp(-1 / (0.3 * srate));
+dr_r = 1 - exp(-1 / (0.03 * srate));
+wpos = 0; drop_g = 1; drop_t = 1;
+cur_preset = 1;
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
+update();
+i = 0; loop(4, TG[i] = TGT[i]; i += 1; );
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+
+@serialize
+file_var(0, ui_sz);
+gn = 0; loop(4, file_avail(0) != 0 ? file_string(0, UI_NM + gn); gn += 1; );   // channel names (older projects have none)
+
+@sample
+// ---------- transport: wow (0.6 Hz + a slow wander) and flutter (6 Hz), one for all tracks ----------
+wph += 0.6 / srate; wph -= floor(wph);
+fph += 6.2 / srate; fph -= floor(fph);
+wnd += ((rand(2) - 1) - wnd) * 0.00002;
+wdel = (2 + wow_a * (0.45 * sin(2 * $pi * wph) + 1.5 * wnd + 0.06 * sin(2 * $pi * fph))) * 0.001 * srate + 2;
+// dropouts (AGE): now and then the tape loses contact for a moment
+age > 0 && rand(1) < age * age * 1.2 / srate ? ( drop_t = 10 ^ (-(4 + rand(10)) / 20); drop_n = (0.02 + rand(0.06)) * srate; );
+drop_n > 0 ? drop_n -= 1 : drop_t = 1;
+drop_g += (drop_t - drop_g) * dr_r;
+// hiss: an independent noise per track side, gently pink
+k = 0;
+loop(8, NZ[k] += ((rand(2) - 1) - NZ[k]) * 0.5; k += 1; );
+// ---------- the four tracks: record, tape, playback ----------
+k = 0; loop(4, TG[k] += (TGT[k] - TG[k]) * sm; TPK[k] = max(TPK[k], max(abs(spl(2 * k)), abs(spl(2 * k + 1)))); k += 1; );
+t0l = a0l.tp(spl0, 10000, NZ[0] * hiss_g); t0r = a0r.tp(spl1, 10000 + BSZ, NZ[1] * hiss_g);
+t1l = a1l.tp(spl2, 10000 + 2 * BSZ, NZ[2] * hiss_g); t1r = a1r.tp(spl3, 10000 + 3 * BSZ, NZ[3] * hiss_g);
+t2l = a2l.tp(spl4, 10000 + 4 * BSZ, NZ[4] * hiss_g); t2r = a2r.tp(spl5, 10000 + 5 * BSZ, NZ[5] * hiss_g);
+t3l = a3l.tp(spl6, 10000 + 6 * BSZ, NZ[6] * hiss_g); t3r = a3r.tp(spl7, 10000 + 7 * BSZ, NZ[7] * hiss_g);
+wpos = (wpos + 1) & BMSK;
+// ---------- mixdown: EQ, level, pan ----------
+ml = e0l.eq(t0l) * TG[0] * PL[0] + e1l.eq(t1l) * TG[1] * PL[1] + e2l.eq(t2l) * TG[2] * PL[2] + e3l.eq(t3l) * TG[3] * PL[3];
+mr = e0r.eq(t0r) * TG[0] * PR[0] + e1r.eq(t1r) * TG[1] * PR[1] + e2r.eq(t2r) * TG[2] * PR[2] + e3r.eq(t3r) * TG[3] * PR[3];
+ml *= mst; mr *= mst;
+ml = ostL.ost_band(ml); mr = ostR.ost_band(mr);
+ost_out(ml, mr);
+spl0 = ost_l; spl1 = ost_r;
+spl2 = spl3 = spl4 = spl5 = spl6 = spl7 = 0;
+vmL += (spl0 * spl0 - vmL) * vuc; vmR += (spl1 * spl1 - vmR) * vuc;
+
+@gfx 760 404
+ui_begin(760, ins_show_out ? 524 : 404);
+slider1 ? ( PNL = 0xB4B8BE; INK = 0x1C1F24; ACC = 0x2F6FD0; WIN = 0x1A1C20; )
+        : ( PNL = 0x1B1B1D; INK = 0xEDEAE2; ACC = 0xE8502A; WIN = 0x0E0E10; );
+dy_ink = INK; dy_bg = PNL; dy_kst = 20; dy_nov = 1;
+
+// ---------- panel ----------
+fh = ins_show_out ? 516 : 396;
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 4 * sc, 744 * sc, fh * sc, PNL);
+ui_col(INK); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
+gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INK); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("CASSETTE 4");
+gfx_setfont(4); ui_col(ACC); gfx_x = 246 * sc; gfx_y = 30 * sc;
+gfx_drawstr(model ? "MODEL 44" : "MODEL 15");
+ui_button(388 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 9 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(416 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 9 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(450 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 450 * sc; gfx_y = 48 * sc;
+  cur_preset = gfx_showmenu("Bedroom Demo (15)|Hot and Woolly (15)|No NR, Old Tape (15)|Worn-out Cassette (15)|Clean Double Speed (44)|Pumping Compander (44)|Squashed Tape (44)|44 without NR|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_size_picker(560 * sc, 22 * sc);
+pk_lcd(620 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 626 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 626 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+
+ui_col(ACC); gfx_rect(14 * sc, 60 * sc, 732 * sc, 3 * sc);
+
+// ---------- the mixer: four tracks ----------
+gk = 0;
+loop(4,
+  cx = 64 + gk * 92;
+  ui_cola(INK, 0.06); gfx_rect((cx - 42) * sc, 72 * sc, 84 * sc, 316 * sc);
+  sprintf(#tn, "TRACK %d", gk + 1); ui_namebox(cx, 73, 78, gk, #tn, INK);   // click to name the track
+  sprintf(#tn, "%d-%d", 2 * gk + 1, 2 * gk + 2); dy_lbl(cx, 94, #tn, 0.55);
+  LHD[gk] = max(TPK[gk], LHD[gk] * 0.9); TPK[gk] = 0;   // held, so the light does not flicker between audio blocks
+  pk_led(cx * sc, 106 * sc, 3.5 * sc, LHD[gk] > 0.001 && TGT[gk] > 0, dy_grn);
+  sprintf(#v, "%+.1f dB", slider(12 + gk)); dy_knob(cx, 136, 13, 12 + gk, -10, 10, 0, 0, slider1 ? 0x2F6FD0 : 0xE8502A, "TREBLE", #v);
+sprintf(#v, "%+.1f dB", slider(16 + gk)); dy_knob(cx, 194, 13, 16 + gk, -10, 10, 0, 0, slider1 ? 0x2F6FD0 : 0xE8502A, "BASS", #v);
+  slider(20 + gk) == 0 ? strcpy(#v, "C") : sprintf(#v, "%s %.0f", slider(20 + gk) < 0 ? "L" : "R", abs(slider(20 + gk)));
+  dy_knob(cx, 252, 13, 20 + gk, -100, 100, 0, 0, 0xB8BCC2, "PAN", #v);
+  slider(8 + gk) <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider(8 + gk));
+  dy_knob(cx, 312, 16, 8 + gk, -60, 6, 0, 0, 0xF2F2EE, "LEVEL", #v);
+  pk_ledbtn((cx - 24) * sc, 358 * sc, 22 * sc, 18 * sc, slider(28 + gk), 0xF2C21B) ? ( slider(28 + gk) = 1 - slider(28 + gk); ui_auto(28 + gk); );
+  pk_ledbtn((cx + 2) * sc, 358 * sc, 22 * sc, 18 * sc, slider(24 + gk), dy_red) ? ( slider(24 + gk) = 1 - slider(24 + gk); ui_auto(24 + gk); );
+  dy_lbl(cx - 13, 379, "SOLO", 0.6); dy_lbl(cx + 13, 379, "MUTE", 0.6);
+  gk += 1;
+);
+
+// ---------- meters ----------
+vuL.ui_vu(400 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmL + 0.0000000001) + 18, "L");
+vuR.ui_vu(576 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmR + 0.0000000001) + 18, "R");
+
+// ---------- tape + master ----------
+ui_cola(INK, 0.06); gfx_rect(400 * sc, 188 * sc, 346 * sc, 200 * sc);
+gfx_setfont(6, "Trebuchet MS", 13 * sc, 'b'); ui_col(ACC); gfx_x = 410 * sc; gfx_y = 194 * sc; gfx_drawstr("TAPE");
+ui_col(ACC); gfx_rect(410 * sc, 210 * sc, 326 * sc, 1 * sc);
+dy_nov = 0;
+sprintf(#v, "%+.1f dB", slider3); dy_knob(436, 250, 17, 3, -6, 12, 0, 0, ACC, "DRIVE", #v);
+sprintf(#v, "%.0f", slider4); dy_knob(504, 250, 17, 4, 0, 100, 30, 0, 0xB8BCC2, "WOW", #v);
+sprintf(#v, "%.0f", slider5); dy_knob(572, 250, 17, 5, 0, 100, 50, 0, 0xB8BCC2, "HISS", #v);
+sprintf(#v, "%.0f", slider6); dy_knob(640, 250, 17, 6, 0, 100, 10, 0, 0xB8BCC2, "AGE", #v);
+sprintf(#v, "%+.1f dB", slider7); dy_knob(710, 250, 20, 7, -24, 12, 0, 0, 0xF2F2EE, "MASTER", #v);
+dy_btn(414, 330, slider1 == 0, ACC, "15") ? ( slider1 = 0; ui_auto(1); );
+dy_btn(462, 330, slider1 == 1, ACC, "44") ? ( slider1 = 1; ui_auto(1); );
+dy_lbl(462, 374, "MODEL", 0.55);
+dy_lbl(574, 338, model ? "DOUBLE SPEED" : "STANDARD SPEED", 0.7);
+dy_lbl(574, 352, model ? "COMPANDER NR" : "B-TYPE NR", 0.7);
+dy_btn(650, 330, slider2, dy_grn, "NR") ? ( slider2 = 1 - slider2; ui_auto(2); );
+
+pk_end();
+ui_end();

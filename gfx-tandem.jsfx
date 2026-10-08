@@ -1,0 +1,392 @@
+desc:GFX Tandem
+//tags: compressor rms soft-knee vca series stereo-link sidechain parallel
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
+//
+// Two RMS / VCA soft-knee compressors in series on one panel, in the spirit of the classic 80s soft-knee
+// compressors (personal use; the sound is designed from scratch). Two stages that each do a little is the old
+// trick for heavy compression that still sounds open.
+//   THRESHOLD (red)  - where the stage starts working (dBFS, RMS: it follows loudness, not peaks).
+//   RATIO (yellow)   - 1:1 (off) through 2:1, 4:1 to INF:1 (limiting) and on to NEGATIVE ratios (-2:1, -1:1):
+//                      past INF the louder the input, the quieter the output - pumping, swelling, "backwards".
+//   OUTPUT (blue)    - the stage's make-up gain.
+//   BELOW / KNEE / ABOVE - where the level sits against the threshold. IN - the stage in or out.
+//   HARD             - off: the soft knee (the ratio eases in over 10 dB); on: it starts at the threshold.
+//   DECOUPLE (stage 1) - off: both sides get the same gain (the image stays put). On: each side mostly answers
+//                      its own level (80% own, 20% shared), like unlinking a bus compressor.
+//   EXT KEY (stage 1) - stage 1 listens to the key input (plug-in pins 3 / 4) instead of the audio, for
+//                      ducking; KEY IN lights when a key signal arrives. Stage 2 always hears stage 1's output.
+//   GRIT (stage 2)   - drives stage 2's VCA into gentle 2nd and 3rd harmonics; grittier the harder it works.
+//   Timing is program dependent, as on the originals: the further over the threshold, the faster the attack
+//   (about 15 ms for 10 dB, 5 ms for 30 dB); the release recovers at a steady 120 dB per second.
+//   MASTER: CLIP soft-clips the output at -0.3 dBFS (no latency).
+//   MASTER: SC HPF - high-pass on what both detectors hear (OFF below 20 Hz), so the bass does not pump.
+//           MIX    - parallel compression: the dry signal blended back in.
+//           The curve shows both stages together, with the live level riding on it.
+// PRESETS: starting points for common jobs (they set both stages, SC HPF and MIX; the rest is left alone).
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+slider1:1<0,1,1{Out,In}>-Stage 1 in
+slider2:-24<-60,0,0.1>-Stage 1 threshold (dB)
+slider3:0.33<0,2,0.01>-Stage 1 compression (0 = 1:1, 1 = inf:1, 2 = -1:1)
+slider4:0<-20,20,0.1>-Stage 1 output (dB)
+slider5:0<0,1,1{Soft,Hard}>-Stage 1 knee
+slider6:0<0,1,1{Linked,Decoupled}>-Stage 1 decouple
+slider7:0<0,1,1{Internal,External}>-Stage 1 key
+slider8:1<0,1,1{Out,In}>-Stage 2 in
+slider9:-12<-60,0,0.1>-Stage 2 threshold (dB)
+slider10:0.75<0,2,0.01>-Stage 2 compression (0 = 1:1, 1 = inf:1, 2 = -1:1)
+slider11:0<-20,20,0.1>-Stage 2 output (dB)
+slider12:0<0,1,1{Soft,Hard}>-Stage 2 knee
+slider13:0<0,1,1{Off,On}>-Stage 2 grit
+slider14:0<0,400,1>-Sidechain HPF (Hz, below 20 = off)
+slider15:100<0,100,1>-Mix (%)
+slider16:0<-24,12,0.1>-Input trim (dB)
+slider17:1<0,1,1{Off,On}>-Input guard
+slider18:0<0,100,1>-Band sat (%)
+slider19:30<0,100,1>-Bias (%)
+slider20:120<40,400,1>-Sat low band (Hz)
+slider21:6000<2000,16000,10>-Sat high band (Hz)
+slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:left input
+in_pin:right input
+in_pin:key left
+in_pin:key right
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-tandem";                                  // the ? pop-up links to this manual
+
+// ---------- sidechain high-pass (12 dB/oct) ----------
+function hp_set(f) instance(b0, b1, b2, a1, a2) local(w0, cw, al, n) (
+  w0 = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w0); al = sin(w0) / (2 * 0.70710678); n = 1 + al;
+  b0 = (1 + cw) * 0.5 / n; b1 = -(1 + cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
+);
+function hp_run(x) instance(b0, b1, b2, a1, a2, x1, x2, y1, y2) local(y) (
+  sc_on ? (
+    y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x; y2 = y1; y1 = y;
+  ) : ( x1 = x2 = y1 = y2 = 0; y = x; );
+  y;
+);
+
+// ---------- one compressor stage ----------
+KNEE = 10;                                         // soft knee width (dB)
+function st_set(base, dc) instance(on, thr, cc, og, kn, dec) (
+  on = slider(base); thr = slider(base + 1); cc = slider(base + 2);
+  og = 10 ^ (slider(base + 3) / 20); kn = slider(base + 4) ? 0 : KNEE; dec = dc;
+);
+// static gain (dB, <= 0) for an RMS level lv (dBFS): soft or hard knee; cc past 1 = negative ratios
+function st_gain(lv) instance(thr, cc, kn) local(o, f) (
+  o = lv - thr;
+  f = kn > 0 ? ( o <= -kn * 0.5 ? 0 : o >= kn * 0.5 ? o : sqr(o + kn * 0.5) / (2 * kn) ) : max(o, 0);
+  max(-cc * f, -60);
+);
+// program-dependent smoothing in dB: attack faster the further over, release at 120 dB/s
+function st_smooth(t, e) local(d) (
+  t < e ? ( d = e - t; e + (t - e) * min(1, max(d, 5) / (0.15 * srate)); ) : min(t, e + rel_step);
+);
+// kl, kr: what the detectors hear. l, r: the audio. Leaves ol / orr and the meters.
+function st_run(l, r, kl, kr) instance(on, cc, og, dec, msL, msR, eL, eR, grm, lvm, ol, orr)
+                              local(lvL, lvR, lvK, tK, tL, tR) (
+  msL += (kl * kl - msL) * rms_c; msR += (kr * kr - msR) * rms_c;
+  lvL = 10 * log10(msL + 0.0000000001); lvR = 10 * log10(msR + 0.0000000001);
+  lvK = 10 * log10(0.5 * (msL + msR) + 0.0000000001);
+  lvm = lvK;
+  on ? (
+    tK = this.st_gain(lvK);
+    dec ? ( tL = 0.8 * this.st_gain(lvL) + 0.2 * tK; tR = 0.8 * this.st_gain(lvR) + 0.2 * tK; ) : ( tL = tK; tR = tK; );
+    eL = st_smooth(tL, eL); eR = st_smooth(tR, eR);
+    grm = min(grm, min(eL, eR));
+    ol = l * 10 ^ (eL / 20) * og; orr = r * 10 ^ (eR / 20) * og;
+  ) : ( eL = eR = 0; ol = l; orr = r; );
+);
+
+// ---------- GRIT: stage 2's VCA pushed into 2nd + 3rd harmonics (more as it works harder) ----------
+function grit(x, gr) instance(dcx, dcy) local(u, k2, y) (
+  k2 = 0.10 + 0.012 * min(-gr, 20);
+  u = min(max(x * 1.6, -1.5), 1.5);
+  y = (u + k2 * u * u - 0.06 * u * u * u) / 1.6;
+  dcy = y - dcx + 0.9995 * dcy; dcx = y;              // the even harmonics bring DC: block it
+  dcy;
+);
+
+// ---------- presets ----------
+// stage 1: in, threshold, compression, output, hard, decouple, ext key
+function p1(on, t, c, o, hd, dc, ky) ( slider1 = on; slider2 = t; slider3 = c; slider4 = o; slider5 = hd; slider6 = dc; slider7 = ky; );
+// stage 2: in, threshold, compression, output, hard, grit; then SC HPF and MIX
+function p2(on, t, c, o, hd, gr, hp, mx) ( slider8 = on; slider9 = t; slider10 = c; slider11 = o; slider12 = hd; slider13 = gr; slider14 = hp; slider15 = mx; );
+function pname(p) (
+  p == 1 ? "Gentle Glue" :
+  p == 2 ? "Vocal Leveller" :
+  p == 3 ? "Vocal Upfront" :
+  p == 4 ? "Drum Bus Stack" :
+  p == 5 ? "Parallel Crush" :
+  p == 6 ? "Bass Even" :
+  p == 7 ? "Acoustic Guitar" :
+  p == 8 ? "Peak Catcher" :
+  p == 9 ? "Negative Pump" :
+  p == 10 ? "Reverse Swell" :
+  p == 11 ? "Ducker (ext key)" :
+  "Reset all to defaults";
+);
+function load_preset(p) (
+  p == 1  ? ( p1(1, -24, 0.33, 1, 0, 0, 0); p2(1, -14, 0.5,  1, 0, 0, 0,   100); ) :   // Gentle Glue
+  p == 2  ? ( p1(1, -30, 0.5,  3, 0, 0, 0); p2(1, -16, 0.8,  2, 0, 0, 80,  100); ) :   // Vocal Leveller
+  p == 3  ? ( p1(1, -32, 0.67, 3, 0, 0, 0); p2(1, -18, 0.9,  2, 1, 1, 100, 100); ) :   // Vocal Upfront
+  p == 4  ? ( p1(1, -26, 0.67, 3, 0, 1, 0); p2(1, -16, 0.75, 2, 0, 1, 80,  70); ) :    // Drum Bus Stack
+  p == 5  ? ( p1(1, -40, 0.9,  8, 0, 0, 0); p2(1, -24, 1,    6, 1, 1, 60,  35); ) :    // Parallel Crush
+  p == 6  ? ( p1(1, -28, 0.6,  3, 0, 0, 0); p2(1, -18, 0.8,  2, 0, 1, 0,   100); ) :   // Bass Even
+  p == 7  ? ( p1(1, -26, 0.4,  2, 0, 1, 0); p2(1, -16, 0.6,  1, 0, 0, 90,  100); ) :   // Acoustic Guitar
+  p == 8  ? ( p1(1, -20, 0.5,  2, 0, 0, 0); p2(1, -6,  1,    0, 1, 0, 40,  100); ) :   // Peak Catcher
+  p == 9  ? ( p1(1, -30, 0.5,  3, 0, 0, 0); p2(1, -30, 1.6,  6, 0, 0, 120, 60); ) :    // Negative Pump
+  p == 10 ? ( p1(0, -24, 0.33, 0, 0, 0, 0); p2(1, -36, 2,    9, 0, 0, 0,   50); ) :    // Reverse Swell
+  p == 11 ? ( p1(1, -40, 0.9,  0, 0, 0, 1); p2(1, -10, 0.5,  0, 0, 0, 0,   100); );    // Ducker (ext key)
+  p >= 1 && p <= 11 ? slider_automate(32767);       // sliders 1-15
+  p == 12 ? (                                       // Reset all to defaults
+    p1(1, -24, 0.33, 0, 0, 0, 0); p2(1, -12, 0.75, 0, 0, 0, 0, 100);
+    slider16 = 0; slider17 = 1; slider18 = 0; slider19 = 30; slider20 = 120; slider21 = 6000; slider22 = -0.3; slider23 = 1;
+    slider_automate(8388607);                       // sliders 1-23
+  );
+);
+
+function update() (
+  s1.st_set(1, slider6); s2.st_set(8, 0);
+  grit_on = slider13;
+  sc_on = slider14 >= 20;
+  sc_on ? ( h1L.hp_set(slider14); h1R.hp_set(slider14); h2L.hp_set(slider14); h2R.hp_set(slider14); );
+  key = slider7;
+  mix_t = slider15 / 100;
+  in_setup(0, slider17);
+  ost_setup(0, 0, 120, 6000, -0.3, slider23 == 1);   // no GFX output stage on this unit, only CLIP: a soft clip at -0.3 dBFS
+);
+
+in_init();
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+rms_c = 1 - exp(-1 / (0.008 * srate));              // RMS integration (8 ms)
+rel_step = 120 / srate;                             // release: 120 dB per second
+sm = 1 - exp(-1 / (0.03 * srate));
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
+PNL = 0x1F2023; INK = 0xE8E6E0;
+CAP_T = 0xD8392B; CAP_R = 0xE8C22E; CAP_O = 0x2F7FD0; CAP_M = 0xB8BCC2;   // knob caps: threshold, ratio, output, master
+REDL = 0xFF3A2A; AMBL = 0xFFB030; GRNL = 0x46D86A; BLUL = 0x4AA8FF;
+cur_preset = 1;
+update();
+mix_s = mix_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();                                          // panel knobs do not run @slider
+
+@serialize
+file_var(0, ui_sz);
+
+@sample
+in_process(spl0, spl1);
+dl = in_l; dr = in_r;
+key_pk = max(key_pk, max(abs(spl2), abs(spl3)));
+// stage 1 hears the key input or the audio; stage 2 always hears stage 1's output
+key ? ( k1L = h1L.hp_run(spl2 * in_g); k1R = h1R.hp_run(spl3 * in_g); ) : ( k1L = h1L.hp_run(dl); k1R = h1R.hp_run(dr); );
+s1.st_run(dl, dr, k1L, k1R);
+k2L = h2L.hp_run(s1.ol); k2R = h2R.hp_run(s1.orr);
+s2.st_run(s1.ol, s1.orr, k2L, k2R);
+wl = s2.ol; wr = s2.orr;
+grit_on && s2.on ? ( wl = gL.grit(wl, s2.eL); wr = gR.grit(wr, s2.eR); );
+// parallel mix
+mix_s += (mix_t - mix_s) * sm;
+oL = dl + (wl - dl) * mix_s; oR = dr + (wr - dr) * mix_s;
+oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
+ost_out(oL, oR);
+spl0 = ost_l; spl1 = ost_r;
+pkI = max(pkI, max(abs(dl), abs(dr)));
+pkO = max(pkO, max(abs(spl0), abs(spl1)));
+lv_in = s1.lvm;
+
+@gfx 900 352
+ui_begin(900, ins_show_out ? 476 : 352);
+
+function lbl(x, y, s, col, a) ( gfx_setfont(4); ui_cola(col, a); ui_text(x * sc, y * sc, s); );
+
+// printed ticks + labels round a knob at chosen places (n = 0..1 of the travel)
+function tick(cx, cy, r, n, s, col) local(a, ca, sa) (
+  a = -0.75 * $pi + n * 1.5 * $pi; ca = cos(a - 0.5 * $pi); sa = sin(a - 0.5 * $pi);
+  ui_cola(col, 0.85); gfx_line(cx + ca * (r + 5 * sc), cy + sa * (r + 5 * sc), cx + ca * (r + 11 * sc), cy + sa * (r + 11 * sc), 1);
+  strlen(s) ? ( gfx_setfont(4); ui_col(col); ui_text(cx + ca * (r + 21 * sc), cy + sa * (r + 21 * sc) - 5 * sc, s); );
+);
+
+// a coloured-cap knob (unscaled centre and radius)
+function cknob(cx, cy, r, idx, lo, hi, def, col, nm, ns, l0, ls, label, fmt) (
+  pk_ink = INK; pk_kstyle = 7; pk_kcol = col; pk_bkfs = 12; pk_nonum = nm;
+  pk_bigknob(cx * sc, cy * sc, r * sc, idx, lo, hi, def, ns, l0, ls, label, fmt);
+  pk_nonum = 0;
+);
+function ratio_txt(dst, c) (
+  c >= 0.995 && c <= 1.005 ? strcpy(dst, "INF:1") : sprintf(dst, "%.1f:1", 1 / (1 - c));
+);
+
+// gain reduction: 12 LEDs in a row, 1 - 30 dB, green / amber / red
+function grrow(x, y, gr) local(i, d, xx, c) (
+  lbl(x - 14, y + 2, "GR", INK, 0.8);
+  i = 0;
+  loop(12,
+    d = i == 0 ? 1 : i == 1 ? 2 : i == 2 ? 3 : i == 3 ? 4 : i == 4 ? 6 : i == 5 ? 8 : i == 6 ? 10 : i == 7 ? 12 :
+        i == 8 ? 15 : i == 9 ? 20 : i == 10 ? 25 : 30;
+    xx = x + i * 22;
+    c = d <= 6 ? GRNL : d <= 15 ? AMBL : REDL;
+    ui_col(0x08080A); gfx_rect(xx * sc, y * sc, 18 * sc, 10 * sc);
+    ui_col(-gr >= d ? c : ui_mix(c, 0x000000, 0.82)); gfx_rect((xx + 1) * sc, (y + 1) * sc, 16 * sc, 8 * sc);
+    -gr >= d ? ( ui_cola(0xFFFFFF, 0.35); gfx_rect((xx + 2) * sc, (y + 2) * sc, 14 * sc, 2 * sc); );
+    sprintf(#gl, "%d", d); lbl(xx + 9, y + 14, #gl, INK, 0.6);
+    i += 1;
+  );
+);
+
+// a button with its caption underneath
+function cbtn(x, y, on, col, s) local(hit) (
+  hit = pk_ledbtn(x * sc, y * sc, 40 * sc, 26 * sc, on, col);
+  lbl(x + 20, y + 30, s, INK, 0.9);
+  hit;
+);
+
+// one stage (unscaled x = the section's left edge)
+function stage(x, base, k, name) local(thr, kn, o, gr) (
+  gfx_setfont(6, "Trebuchet MS", 16 * sc, 'b'); ui_col(INK); gfx_x = (x + 4) * sc; gfx_y = 78 * sc; gfx_drawstr(name);
+  // IN, then BELOW / KNEE / ABOVE
+  pk_ledbtn((x + 90) * sc, 76 * sc, 30 * sc, 22 * sc, slider(base), GRNL) ? ( slider(base) = 1 - slider(base); ui_auto(base); );
+  lbl(x + 136, 82, "IN", INK, 0.8);
+  thr = slider(base + 1); kn = slider(base + 4) ? 0 : KNEE;
+  o = (k == 0 ? s1.lvm : s2.lvm) - thr;
+  pk_led((x + 192) * sc, 82 * sc, 4 * sc, slider(base) && o < -kn * 0.5 - 0.01, GRNL);
+  pk_led((x + 236) * sc, 82 * sc, 4 * sc, slider(base) && kn > 0 && o >= -kn * 0.5 && o <= kn * 0.5, AMBL);
+  pk_led((x + 280) * sc, 82 * sc, 4 * sc, slider(base) && o > kn * 0.5 + 0.01, REDL);
+  lbl(x + 192, 92, "BELOW", INK, 0.6); lbl(x + 236, 92, "KNEE", INK, 0.6); lbl(x + 280, 92, "ABOVE", INK, 0.6);
+  // THRESHOLD / RATIO / OUTPUT
+  cknob(x + 52, 168, 28, base + 1, -60, 0, k == 0 ? -24 : -12, CAP_T, 0, 7, -60, 10, "THRESHOLD", "%.1f dB");
+  ratio_txt(#rtx, slider(base + 2));
+  cknob(x + 172, 168, 28, base + 2, 0, 2, k == 0 ? 0.33 : 0.75, CAP_R, 1, 0, 0, 0, "RATIO", #rtx);
+  tick((x + 172) * sc, 168 * sc, 28 * sc, 0, "1", INK);     tick((x + 172) * sc, 168 * sc, 28 * sc, 0.1667, "1.5", INK);
+  tick((x + 172) * sc, 168 * sc, 28 * sc, 0.25, "2", INK);  tick((x + 172) * sc, 168 * sc, 28 * sc, 0.375, "4", INK);
+  tick((x + 172) * sc, 168 * sc, 28 * sc, 0.45, "", INK);   tick((x + 172) * sc, 168 * sc, 28 * sc, 0.5, "INF", 0xFF6A50);
+  tick((x + 172) * sc, 168 * sc, 28 * sc, 0.75, "-2", INK); tick((x + 172) * sc, 168 * sc, 28 * sc, 1, "-1", INK);
+  cknob(x + 270, 172, 22, base + 3, -20, 20, 0, CAP_O, 0, 5, -20, 10, "OUTPUT", "%+.1f dB");
+  // GR
+  gr = k == 0 ? s1.grm : s2.grm; k == 0 ? s1.grm = 0 : s2.grm = 0;
+  grd[k] = min(gr, grd[k] * 0.82);
+  grrow(x + 34, 244, grd[k]);
+  // buttons
+  cbtn(x + 20, 284, slider(base + 4), AMBL, "HARD") ? ( slider(base + 4) = 1 - slider(base + 4); ui_auto(base + 4); );
+  k == 0 ? (
+    cbtn(x + 80, 284, slider6, BLUL, "DECOUPLE") ? ( slider6 = 1 - slider6; ui_auto(6); );
+    cbtn(x + 140, 284, slider7, AMBL, "EXT KEY") ? ( slider7 = 1 - slider7; ui_auto(7); );
+    pk_led((x + 200) * sc, 292 * sc, 3.5 * sc, key_pk > 0.001, GRNL); key_pk *= 0.7;
+    lbl(x + 200, 302, "KEY IN", INK, 0.6);
+  ) : (
+    cbtn(x + 80, 284, slider13, REDL, "GRIT") ? ( slider13 = 1 - slider13; ui_auto(13); );
+  );
+);
+
+// transfer curve of both stages (static), with the live level
+function curve_y(xdb) local(a, b) (
+  a = s1.on ? xdb + s1.st_gain(xdb) + 20 * log10(s1.og) : xdb;
+  s2.on ? a + s2.st_gain(a) + 20 * log10(s2.og) : a;
+);
+function transfer(x, y, w, h) local(i, xd, yd, px, py, qx, qy, xm, ym) (
+  ui_col(0x050505); ui_rrect(x * sc, y * sc, w * sc, h * sc, 4 * sc);
+  ui_col(0x0E1013); gfx_rect((x + 3) * sc, (y + 3) * sc, (w - 6) * sc, (h - 6) * sc);
+  i = 0;
+  loop(7,
+    xd = -60 + i * 10; ui_cola(0xFFFFFF, 0.07);
+    gfx_line((x + 8 + (xd + 60) / 66 * (w - 16)) * sc, (y + 6) * sc, (x + 8 + (xd + 60) / 66 * (w - 16)) * sc, (y + h - 6) * sc);
+    gfx_line((x + 8) * sc, (y + h - 8 - (xd + 60) / 66 * (h - 16)) * sc, (x + w - 8) * sc, (y + h - 8 - (xd + 60) / 66 * (h - 16)) * sc);
+    i += 1;
+  );
+  ui_cola(0xFFFFFF, 0.18); gfx_line((x + 8) * sc, (y + h - 8) * sc, (x + w - 8) * sc, (y + 8) * sc);
+  i = 0;
+  loop(133,
+    xd = -60 + i * 0.5; yd = curve_y(xd);
+    qx = (x + 8 + (xd + 60) / 66 * (w - 16)) * sc; qy = (y + h - 8 - min(max((yd + 60) / 66, 0), 1) * (h - 16)) * sc;
+    ui_col(CAP_R);
+    i > 0 ? ( gfx_line(px, py, qx, qy, 1); gfx_line(px, py + 1, qx, qy + 1, 1); );
+    px = qx; py = qy; i += 1;
+  );
+  lvd += (min(max(lv_in, -60), 6) - lvd) * 0.5;
+  lvd > -59.5 ? (
+    xm = (x + 8 + (lvd + 60) / 66 * (w - 16)) * sc; ym = (y + h - 8 - min(max((curve_y(lvd) + 60) / 66, 0), 1) * (h - 16)) * sc;
+    ui_cola(0xFFFFFF, 0.25); gfx_circle(xm, ym, 6 * sc, 1, 1); ui_col(0xFFFFFF); gfx_circle(xm, ym, 3 * sc, 1, 1);
+  );
+  gfx_setfont(4); ui_cola(INK, 0.5);
+  gfx_x = (x + 9) * sc; gfx_y = (y + 6) * sc; gfx_drawstr("OUT");
+  gfx_x = (x + w - 22) * sc; gfx_y = (y + h - 18) * sc; gfx_drawstr("IN");
+);
+
+// ---------- panel ----------
+fh = ins_show_out ? 468 : 344;
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
+ui_col(INK); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
+gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INK); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("TANDEM");
+gfx_setfont(4); ui_cola(INK, 0.6); gfx_x = 186 * sc; gfx_y = 30 * sc; gfx_drawstr("TWO-STAGE RMS COMPRESSOR");
+ui_button(526 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
+  cur_preset = cur_preset <= 1 ? 12 : cur_preset - 1;
+  load_preset(cur_preset);
+);
+ui_button(554 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
+  cur_preset = cur_preset >= 12 ? 1 : cur_preset + 1;
+  load_preset(cur_preset);
+);
+ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 590 * sc; gfx_y = 48 * sc;
+  cur_preset = gfx_showmenu("Gentle Glue|Vocal Leveller|Vocal Upfront|Drum Bus Stack|Parallel Crush|Bass Even|Acoustic Guitar|Peak Catcher|Negative Pump|Reverse Swell|Ducker (ext key)|Reset all to defaults");
+  cur_preset > 0 ? load_preset(cur_preset);
+);
+ui_size_picker(700 * sc, 22 * sc);
+pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
+pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+
+// the colour stripe under the header: the three cap colours
+ui_col(CAP_T); gfx_rect(14 * sc, 60 * sc, 290 * sc, 3 * sc);
+ui_col(CAP_R); gfx_rect(304 * sc, 60 * sc, 290 * sc, 3 * sc);
+ui_col(CAP_O); gfx_rect(594 * sc, 60 * sc, 292 * sc, 3 * sc);
+// section dividers
+ui_cola(0xFFFFFF, 0.08); gfx_rect(344 * sc, 74 * sc, 1.5 * sc, 258 * sc); gfx_rect(676 * sc, 74 * sc, 1.5 * sc, 258 * sc);
+ui_cola(0x000000, 0.5);  gfx_rect(345.5 * sc, 74 * sc, 1 * sc, 258 * sc); gfx_rect(677.5 * sc, 74 * sc, 1 * sc, 258 * sc);
+
+grd = 1000;
+stage(20, 1, 0, "STAGE 1");
+stage(354, 8, 1, "STAGE 2");
+
+// ---------- MASTER ----------
+gfx_setfont(6, "Trebuchet MS", 16 * sc, 'b'); ui_col(INK); gfx_x = 692 * sc; gfx_y = 78 * sc; gfx_drawstr("MASTER");
+transfer(692, 100, 184, 88);
+cknob(734, 238, 20, 14, 0, 400, 0, CAP_M, 1, 0, 0, 0, "SC HPF", slider14 < 20 ? "OFF" : "%.0f Hz");
+tick(734 * sc, 238 * sc, 20 * sc, 0, "OFF", INK); tick(734 * sc, 238 * sc, 20 * sc, 0.5, "200", INK); tick(734 * sc, 238 * sc, 20 * sc, 1, "400", INK);
+cknob(834, 238, 20, 15, 0, 100, 100, CAP_M, 0, 3, 0, 50, "MIX", "%.0f%%");
+mI.ui_ledm(712 * sc, 304 * sc, 88 * sc, 9 * sc, pkI);
+mO.ui_ledm(712 * sc, 318 * sc, 88 * sc, 9 * sc, pkO);
+// CLIP: soft-clips the output at -0.3 dBFS (the label turns red while it is clipping)
+pk_ledbtn(808 * sc, 303 * sc, 30 * sc, 18 * sc, slider23 == 1, 0xFF3A2A) ? ( slider23 = slider23 == 1 ? 0 : 1; ui_auto(23); );
+clpd = ost_clipped ? 1 : clpd * 0.9; ost_clipped = 0;
+lbl(823, 325, "CLIP", clpd > 0.1 ? 0xFF3A2A : INK, clpd > 0.1 ? 1 : 0.7);
+lbl(700, 303, "IN", INK, 0.7); lbl(700, 317, "OUT", INK, 0.7);
+pkI *= 0.85; pkO *= 0.85;
+sprintf(#gt, "%.1f", min(s1.eL + s2.eL, 0)); lbl(856, 303, "GR", INK, 0.7); lbl(856, 317, #gt, INK, 0.9);
+
+pk_end();
+ui_end();
