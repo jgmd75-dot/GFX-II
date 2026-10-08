@@ -12,6 +12,10 @@ desc:GFX MK3
 //           BASS shelf 50 / 100 / 200 Hz  +-15 dB
 //           PRESENCE bell 0.7 / 1 / 1.4 / 2 / 2.8 / 4 / 5.6 kHz  +-12 dB
 //           TREBLE shelf 5 / 8 / 12 kHz  +-15 dB
+//           FIZZ: the broadcast "cut-through" top. An exciter generates new harmonics from everything
+//           above 3 kHz, a peak shapes them round 8 kHz, and the result is pinned at a fixed level
+//           under the programme (the way a station's multiband processor holds its top band), so
+//           the air stays constant and the voice cuts through background noise. Works with EQ IN.
 // COMP    VCA compressor in the spirit of the Gain Brain II:
 //           peak-sensing feed-forward, fast VCA attack, small fixed knee, ratio up to infinity.
 //           Program-dependent release ("linear integration"): the detector watches the crest
@@ -67,6 +71,7 @@ slider21:0<0,1,1{EQ > Comp,Comp > EQ}>-Order
 slider22:0<-24,12,0.1>-Output (dB)
 slider23:0<0,2,1{Flat,Lift,Dip}>-Voice 2k
 slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider25:0<0,1,1{Off,On}>-Fizz
 
 in_pin:Left
 in_pin:Right
@@ -136,6 +141,11 @@ sLfL = alloc(4); sLfR = alloc(4); sMfL = alloc(4); sMfR = alloc(4); sHfL = alloc
 cVb = alloc(5); sVbL = alloc(4); sVbR = alloc(4);
 ost_init(alloc(4096));                              // GFX output stage (clip / limit)
 cBP(cVb, 2000, 0.7);
+// FIZZ: high-pass into the exciter, high-pass after it, a peak at 8 kHz
+cFz1 = alloc(5); cFz2 = alloc(5); cFz3 = alloc(5);
+sFz1L = alloc(4); sFz1R = alloc(4); sFz2L = alloc(4); sFz2R = alloc(4); sFz3L = alloc(4); sFz3R = alloc(4);
+cHP(cFz1, 3000, 0.7071); cHP(cFz2, 5000, 0.7071); cPK(cFz3, 8000, 6, 0.9);
+fzA = cms(0.001); fzR = cms(0.04); fzW = cms(0.03); fzEnv = 0; fzPrg = 0;
 
 ironC = 1 - exp(-2*$pi*180/srate);
 prcC = 1 - exp(-2*$pi*150/srate);
@@ -148,10 +158,23 @@ mPL = mPR = 0; mGR = 0; mClip = 0;
 lastEq = -1;
 
 // EQ and the compressor work on the globals ch0 / ch1
+// FIZZ: excite the top, shape it round 8 kHz, then pin it about 18 dB under the programme
+function doFizz() local(h0, h1, e0, e1, ea, pa, g) (
+  h0 = bqf(ch0, cFz1, sFz1L); h1 = bqf(ch1, cFz1, sFz1R);
+  e0 = tanh(4*h0); e0 += 0.3*e0*e0;                 // odd + even harmonics
+  e1 = tanh(4*h1); e1 += 0.3*e1*e1;
+  e0 = bqf(bqf(e0, cFz2, sFz2L), cFz3, sFz3L); e1 = bqf(bqf(e1, cFz2, sFz2R), cFz3, sFz3R);
+  ea = max(abs(e0), abs(e1));
+  fzEnv += (ea - fzEnv)*(ea > fzEnv ? fzA : fzR);
+  pa = max(abs(ch0), abs(ch1)); fzPrg += (pa - fzPrg)*fzW;
+  g = min(16, 0.12*fzPrg/(fzEnv + 0.000001));        // up to +24 dB on quiet top, held on loud
+  ch0 += g*e0; ch1 += g*e1;
+);
 function doEQ() (
   ch0 = bqf(ch0, cLf, sLfL); ch1 = bqf(ch1, cLf, sLfR);
   ch0 = bqf(ch0, cMf, sMfL); ch1 = bqf(ch1, cMf, sMfR);
   ch0 = bqf(ch0, cHf, sHfL); ch1 = bqf(ch1, cHf, sHfR);
+  fzOn ? doFizz();
 );
 function doComp() local(pk_, lev, tg, boost, kk) (
   pk_ = max(abs(ch0), abs(ch1));
@@ -183,7 +206,7 @@ function pcp(on, th, ra, at, re, md, mk, pr, od) (
   slider13 = on; slider14 = th; slider15 = ra; slider16 = at; slider17 = re; slider18 = md; slider19 = mk; slider20 = pr; slider21 = od;
 );
 function apply_preset(n) (
-  pin(0, 0, 1, 0); peq(1, 1, 0, 3, 0, 1, 0); pcp(0, -12, 4, 2, 250, 0, 0, 1, 0); slider22 = 0; slider23 = 0;
+  pin(0, 0, 1, 0); peq(1, 1, 0, 3, 0, 1, 0); pcp(0, -12, 4, 2, 250, 0, 0, 1, 0); slider22 = 0; slider23 = 0; slider25 = 0;
   n == 1  ? ( pin(6, 0, 1, 2);  peq(1, 1, -2, 4, 3, 1, 2);   pcp(1, -20, 4, 1, 180, 0, 4, 1, 0); ) :
   n == 2  ? ( pin(4, 0, 1, 1);  peq(1, 0, 2, 2, -2, 2, 3);   pcp(1, -22, 3, 3, 300, 0, 5, 1, 0); ) :
   n == 3  ? ( pin(6, 0, 1, 3);  peq(1, 1, -3, 3, 2, 1, 1);   pcp(1, -24, 6, 0.5, 150, 0, 7, 1, 0); ) :
@@ -231,6 +254,7 @@ linStep = 10/(relT*srate);                      // LIN: 10 dB per release time
 mkG = slider19;
 prcOn = slider20 > 0.5;
 vcMode = floor(slider23 + 0.5);
+fzOn = slider25 > 0.5;
 ord = slider21 > 0.5;
 outG = db2g(slider22);
 ost_setup(0, 0, 120, 6000, -0.3, floor(slider24 + 0.5));   // no band saturation: clip / limit only
@@ -551,7 +575,7 @@ function fms(v) (
 function fhz(v, d) ( v >= 1000 ? sprintf(d, "%.2g kHz", v/1000) : sprintf(d, "%d Hz", v); d; );
 function go_preset(n) (
   slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0;
-  slider_automate(8388607);                         // sliders 1-23
+  slider_automate(8388607 + 16777216);              // sliders 1-23 and 25
 );
 
 // ---- panel screw: black on the charcoal hardware, the house silver one on cream (900-space units) ----
@@ -596,6 +620,7 @@ function eq_unit(y0) (
   plate(338, y0, 630, 212);
   tape(366, y0 + 12, "EQ");
   inkey(872, y0 + 10, slider6 > 0.5) ? ( tog(6); setmsg("EQUALISER", slider6 > 0.5 ? "IN" : "OUT"); );
+  mkey(788, y0 + 13, 66, 26, "FIZZ", slider25 > 0.5, AMB) ? ( tog(25); setmsg("FIZZ", slider25 > 0.5 ? "EXCITER + AIR" : "OFF"); );
   gfx_setfont(8); ui_col(hw ? INK2 : NTX); TC(445, y0 + 52, "BASS"); TC(653, y0 + 52, "PRESENCE"); TC(861, y0 + 52, "TREBLE");
   hw ? ( ui_cola(INK, 0.15); gfx_rect(549*qs, (y0 + 56)*qs, 1*qs, 140*qs); gfx_rect(757*qs, (y0 + 56)*qs, 1*qs, 140*qs); )
      : ( ui_col(ui_mix(NB, ND, 0.35)); R(549, y0 + 56, 1, 140); ui_col(ui_mix(NB, NL, 0.6)); R(550, y0 + 56, 1, 140);
