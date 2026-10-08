@@ -1,0 +1,1052 @@
+desc:GFX G Pocket 70
+//tags: instrument multitimbral gm xg rompler sound module
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-output, gfx-ui, gfx-panel, gfx-instrument, gfx-voice, gfx-drift, gfx-dyn and gfx-faceplate (.jsfx-inc)
+// in the same folder.
+//
+// A 16-part sound module in the spirit of the late-90s pocket sequencers: every MIDI channel plays its own
+// part (channel 10 is the drum kit), and every part has the classic VOICE EDIT page.
+// VOICES      128 GM-style programs (synthesised - no samples), grouped in 16 categories, plus a drum kit
+//             on the GM drum map. Program change, bank select (MSB 127 = drums) and the usual controllers work.
+// VOICE EDIT  per part: MONO / POLY, ELEMENT RESERVE (voices kept for the part), VELOCITY SENS depth and offset,
+//             PORTAMENTO switch and time, MOD WHEEL LFO depth to pitch / filter / amplitude, FILTER cutoff and
+//             resonance, EG attack / decay / release, VIBRATO rate / depth / delay, BEND range, DRY level.
+// MIXER       per part: volume, pan, reverb and chorus sends, mute.     TUNE  per part: note shift, detune.
+// EFFECTS     reverb and chorus buses (time / level / depth on the sliders), then the GFX output stage.
+// POLYPHONY   16 voices shared by the parts (the reserve keeps voices for a part when the others are busy).
+// DRIFT       a digital box: only a tiny tuning scatter on each note.
+// MIDI CCs    0 / 32 bank, 1 mod wheel, 5 porta time, 7 volume, 10 pan, 11 expression, 64 sustain, 65 porta,
+//             71 resonance, 72 release, 73 attack, 74 cutoff, 91 reverb, 93 chorus, 120 / 123 off, 121 reset.
+// The mini keyboard plays the selected part. The part settings are saved with the project.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-voice.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<-24,6,0.1>-Master volume (dB)
+slider2:10<0,100,1>-Drift (%)
+slider3:45<0,100,1>-Reverb time (%)
+slider4:70<0,100,1>-Reverb level (%)
+slider5:50<0,100,1>-Chorus depth (%)
+slider6:0<0,100,1>-Band sat (%)
+slider7:30<0,100,1>-Bias (%)
+slider8:120<40,400,1>-Sat low band (Hz)
+slider9:6000<2000,16000,10>-Sat high band (Hz)
+slider10:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider11:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-pocket-70";
+NV = 16;
+PG = 70000;              // programs: 128 x 16
+PT = 72100;              // parts: 16 x 32 (saved)
+CH = 72700;              // per channel controllers: 16 x 8
+VS = 73000;              // voices: 16 x 64
+PK = 80000;              // pluck delay lines: 16 x 4096
+RV = 150000;             // reverb / chorus memory
+EQO = 146000; EQT = 146400; EQN = 146800; EQV = 147200; EQC = 147600;   // event queue
+
+function pg(i, a, b, c, d, e, f, g, h, k, l, m, n, o, p, q, r) local(z) (
+  z = PG + i*16;
+  z[0] = a; z[1] = b; z[2] = c; z[3] = d; z[4] = e; z[5] = f; z[6] = g; z[7] = h;
+  z[8] = k; z[9] = l; z[10] = m; z[11] = n; z[12] = o; z[13] = p; z[14] = q; z[15] = r;
+);
+// ---------- the 128 programs (type, octave, cutoff, resonance, filter env, key track, A, D, S, R,
+//            detune 2nd osc, p1, p2, p3, vibrato, level) and their names ----------
+pg(0, 4, 0, 6000, 0.1, 1, 0.5, 1, 2500, 0, 500, 0, 1, 2.2, 600, 0, 0.5);
+strcpy(200 + 0, "GrandPno");
+pg(1, 4, 0, 8000, 0.1, 1, 0.5, 1, 2500, 0, 500, 0, 1, 3, 600, 0, -1);
+strcpy(200 + 1, "BritePno");
+pg(2, 4, 0, 6000, 0.1, 1, 0.5, 1, 2500, 0, 500, 4, 1, 2.5, 600, 0, 0);
+strcpy(200 + 2, "E.Grand");
+pg(3, 4, 0, 6000, 0.1, 1, 0.5, 1, 2500, 0, 500, 12, 1, 2.2, 600, 0, 0.5);
+strcpy(200 + 3, "HnkyTonk");
+pg(4, 4, 0, 5000, 0.1, 0.5, 0.5, 1, 3000, 0.1, 600, 0, 1, 1.6, 400, 0, 0.5);
+strcpy(200 + 4, "E.Piano1");
+pg(5, 4, 0, 8000, 0.1, 1.5, 0.5, 1, 2500, 0.05, 500, 0, 14, 1.2, 300, 0, 0.5);
+strcpy(200 + 5, "E.Piano2");
+pg(6, 5, 0, 6000, 0.2, 1.5, 0.5, 1, 1500, 0, 300, 0, 0.5, 0, 0.996, 0, 4.5);
+strcpy(200 + 6, "Harpsi.");
+pg(7, 3, 0, 1800, 0.4, 2, 0.5, 1, 500, 0, 100, 0, 0.15, 0, 300, 0, 0);
+strcpy(200 + 7, "Clavi.");
+pg(8, 4, 12, 9000, 0.1, 1.5, 0.5, 1, 1500, 0, 500, 0, 3.5, 1.5, 200, 0, 1);
+strcpy(200 + 8, "Celesta");
+pg(9, 4, 12, 9000, 0.1, 1.5, 0.5, 1, 2000, 0, 800, 0, 3.5, 1, 150, 0, -0.5);
+strcpy(200 + 9, "Glocken");
+pg(10, 4, 12, 9000, 0.1, 1.5, 0.5, 1, 1200, 0, 600, 0, 5, 1.2, 150, 0, 1.5);
+strcpy(200 + 10, "MusicBox");
+pg(11, 4, 0, 8000, 0.1, 1.5, 0.5, 1, 3000, 0, 900, 0, 4, 0.8, 300, 0, -0.5);
+strcpy(200 + 11, "Vibes");
+pg(12, 4, 0, 6000, 0.1, 1.5, 0.5, 1, 500, 0, 200, 0, 4, 1.5, 60, 0, 4.5);
+strcpy(200 + 12, "Marimba");
+pg(13, 4, 12, 9000, 0.1, 1.5, 0.5, 1, 350, 0, 150, 0, 3, 2, 40, 0, 4.5);
+strcpy(200 + 13, "Xylophon");
+pg(14, 4, 0, 9000, 0.1, 1.5, 0.5, 1, 5000, 0, 1500, 0, 3.5, 2.5, 900, 0, -3.5);
+strcpy(200 + 14, "TubulBel");
+pg(15, 5, 0, 7000, 0.1, 1.5, 0.5, 1, 2000, 0, 500, 0, 0.5, 0, 0.998, 0, 4.5);
+strcpy(200 + 15, "Dulcimer");
+pg(16, 7, 0, 8000, 0, 0, 0.5, 3, 100, 1, 60, 0, 0.8, 0.6, 300, 0, -1.5);
+strcpy(200 + 16, "DrawOrgn");
+pg(17, 7, 0, 8000, 0, 0, 0.5, 3, 100, 1, 60, 0, 0.6, 1, 300, 0, -2.5);
+strcpy(200 + 17, "PercOrgn");
+pg(18, 7, 0, 8000, 0, 0, 0.5, 3, 100, 1, 60, 0, 1, 0.8, 300, 0, -3);
+strcpy(200 + 18, "RockOrgn");
+pg(19, 7, 0, 8000, 0, 0, 0.5, 40, 100, 1, 600, 0, 0.9, 0.9, 300, 0, -3);
+strcpy(200 + 19, "ChrchOrg");
+pg(20, 3, 0, 2500, 0.1, 0, 0.5, 30, 100, 1, 200, 0, 0.35, 0, 300, 0, -5);
+strcpy(200 + 20, "ReedOrgn");
+pg(21, 8, 0, 3500, 0.1, 0, 0.5, 20, 100, 1, 150, 8, 0.5, 0, 300, 3, 1);
+strcpy(200 + 21, "Acordion");
+pg(22, 3, 0, 2800, 0.3, 0.5, 0.5, 20, 300, 0.8, 150, 0, 0.3, 0, 300, 8, -4);
+strcpy(200 + 22, "Harmnica");
+pg(23, 8, 0, 3000, 0.1, 0, 0.5, 20, 100, 1, 150, 10, 0.5, 0, 300, 0, 1);
+strcpy(200 + 23, "TangoAcd");
+pg(24, 5, 0, 3000, 0.1, 0.5, 0.5, 1, 3000, 0, 250, 0, 0.5, 0, 0.995, 0, 7.5);
+strcpy(200 + 24, "NylonGtr");
+pg(25, 5, 0, 5000, 0.1, 0.5, 0.5, 1, 3000, 0, 250, 0, 0.5, 0, 0.997, 0, 6);
+strcpy(200 + 25, "SteelGtr");
+pg(26, 5, 0, 2200, 0.1, 0.5, 0.5, 1, 3000, 0, 250, 0, 0.5, 0, 0.994, 0, 10);
+strcpy(200 + 26, "Jazz Gtr");
+pg(27, 5, 0, 6000, 0.1, 0.5, 0.5, 1, 3000, 0, 250, 0, 0.5, 0, 0.997, 0, 5.5);
+strcpy(200 + 27, "CleanGtr");
+pg(28, 5, 0, 5000, 0.1, 0.5, 0.5, 1, 300, 0, 250, 0, 0.5, 0, 0.985, 0, 7);
+strcpy(200 + 28, "Mute.Gtr");
+pg(29, 8, 0, 2500, 0.3, 1, 0.5, 2, 2000, 0.6, 200, 6, 0.5, 0, 300, 0, 2);
+strcpy(200 + 29, "Ovrdrive");
+pg(30, 8, 0, 3200, 0.4, 1, 0.5, 2, 3000, 0.7, 200, 12, 0.5, 0, 300, 0, 1);
+strcpy(200 + 30, "Dist.Gtr");
+pg(31, 0, 12, 8000, 0.1, 1.5, 0.5, 1, 1500, 0, 400, 0, 0.5, 0, 300, 0, 0.5);
+strcpy(200 + 31, "GtrHarmo");
+pg(32, 1, -12, 1200, 0.2, 0.5, 0.5, 1, 1500, 0.2, 150, 0, 0.5, 0, 300, 0, 1.5);
+strcpy(200 + 32, "Aco.Bass");
+pg(33, 4, -12, 1500, 0.2, 1.5, 0.5, 1, 800, 0.5, 150, 0, 1, 1.2, 300, 0, 0.5);
+strcpy(200 + 33, "FngrBass");
+pg(34, 2, -12, 1100, 0.2, 2, 0.5, 1, 400, 0.4, 150, 0, 0.5, 0, 300, 0, 4);
+strcpy(200 + 34, "PickBass");
+pg(35, 1, -12, 1400, 0.2, 1.5, 0.5, 1, 2000, 0.6, 150, 0, 0.5, 0, 300, 4, -1);
+strcpy(200 + 35, "Fretless");
+pg(36, 4, -12, 3000, 0.2, 1.5, 0.5, 1, 800, 0.5, 150, 0, 1, 2.5, 120, 0, 0.5);
+strcpy(200 + 36, "SlapBas1");
+pg(37, 4, -12, 3000, 0.2, 1.5, 0.5, 1, 800, 0.5, 150, 0, 2, 2.5, 120, 0, -2.5);
+strcpy(200 + 37, "SlapBas2");
+pg(38, 2, -12, 500, 0.6, 3, 0.5, 1, 300, 0.3, 150, 0, 0.5, 0, 300, 0, 5.5);
+strcpy(200 + 38, "SynBass1");
+pg(39, 3, -12, 700, 0.5, 2.5, 0.5, 1, 350, 0.4, 150, 0, 0.3, 0, 300, 0, -0.5);
+strcpy(200 + 39, "SynBass2");
+pg(40, 8, 0, 3500, 0.05, 0.3, 0.5, 80, 500, 1, 500, 4, 0.5, 0, 300, 14, 0.5);
+strcpy(200 + 40, "Violin");
+pg(41, 8, 0, 2800, 0.05, 0.3, 0.5, 90, 500, 1, 500, 4, 0.5, 0, 300, 12, 1);
+strcpy(200 + 41, "Viola");
+pg(42, 8, -12, 2200, 0.05, 0.3, 0.5, 90, 500, 1, 500, 4, 0.5, 0, 300, 10, -2);
+strcpy(200 + 42, "Cello");
+pg(43, 8, -12, 1600, 0.05, 0.3, 0.5, 100, 500, 1, 500, 4, 0.5, 0, 300, 8, -1.5);
+strcpy(200 + 43, "Contrabs");
+pg(44, 8, 0, 3500, 0.05, 0.3, 0.5, 180, 500, 1, 500, 7, 0.5, 1, 300, 0, 3);
+strcpy(200 + 44, "Trem.Str");
+pg(45, 2, 0, 2500, 0.1, 1, 0.5, 1, 300, 0, 150, 0, 0.5, 0, 300, 0, 7.5);
+strcpy(200 + 45, "Pizz.Str");
+pg(46, 5, 0, 6000, 0.1, 1.5, 0.5, 1, 3000, 0, 900, 0, 0.5, 0, 0.998, 0, 5);
+strcpy(200 + 46, "Harp");
+pg(47, 6, -24, 300, 0.4, 1, 0.5, 1, 900, 0, 500, 0, 0.5, 0.2, 300, 0, 12);
+strcpy(200 + 47, "Timpani");
+pg(48, 8, 0, 3500, 0.05, 0.3, 0.5, 180, 500, 1, 500, 7, 0.5, 0, 300, 6, 2.5);
+strcpy(200 + 48, "Strings1");
+pg(49, 8, 0, 2600, 0.05, 0.3, 0.5, 350, 500, 1, 900, 7, 0.5, 0, 300, 6, 4);
+strcpy(200 + 49, "Strings2");
+pg(50, 8, 0, 4500, 0.05, 0.3, 0.5, 150, 500, 1, 500, 12, 0.5, 0, 300, 0, 1.5);
+strcpy(200 + 50, "Syn Str1");
+pg(51, 3, 0, 3000, 0.05, 0.3, 0.5, 300, 500, 1, 500, 9, 0.45, 0, 300, 0, -1);
+strcpy(200 + 51, "Syn Str2");
+pg(52, 1, 0, 1600, 0.35, 0.2, 0.5, 250, 500, 1, 600, 8, 0.5, 0, 300, 10, 4);
+strcpy(200 + 52, "ChoirAah");
+pg(53, 1, 0, 1100, 0.35, 0.2, 0.5, 250, 500, 1, 600, 8, 0.5, 0, 300, 10, 4);
+strcpy(200 + 53, "VoiceOoh");
+pg(54, 3, 0, 1800, 0.35, 0.2, 0.5, 250, 500, 1, 600, 8, 0.3, 0, 300, 10, -1.5);
+strcpy(200 + 54, "SynVoice");
+pg(55, 8, 0, 5000, 0.1, 1, 0.5, 1, 500, 0, 300, 15, 0.5, 0, 300, 0, 5);
+strcpy(200 + 55, "Orch.Hit");
+pg(56, 2, 0, 900, 0.15, 2.2, 0.6, 40, 600, 0.75, 180, 0, 0.5, 0, 300, 5, 2.5);
+strcpy(200 + 56, "Trumpet");
+pg(57, 2, -12, 700, 0.15, 2.2, 0.6, 40, 600, 0.75, 180, 0, 0.5, 0, 300, 5, 0.5);
+strcpy(200 + 57, "Trombone");
+pg(58, 2, -24, 500, 0.15, 2.2, 0.6, 40, 600, 0.75, 180, 0, 0.5, 0, 300, 5, 0);
+strcpy(200 + 58, "Tuba");
+pg(59, 3, 0, 1500, 0.5, 1, 0.6, 40, 600, 0.75, 180, 0, 0.25, 0, 300, 5, -4);
+strcpy(200 + 59, "Mute.Trp");
+pg(60, 1, -12, 1000, 0.15, 1.2, 0.6, 80, 600, 0.75, 180, 0, 0.5, 0, 300, 5, -0.5);
+strcpy(200 + 60, "Fr.Horn");
+pg(61, 8, 0, 900, 0.15, 2.2, 0.6, 60, 600, 0.75, 180, 8, 0.5, 0, 300, 5, 5.5);
+strcpy(200 + 61, "BrasSect");
+pg(62, 8, 0, 700, 0.3, 2.8, 0.6, 20, 600, 0.75, 180, 10, 0.5, 0, 300, 5, 4.5);
+strcpy(200 + 62, "SynBras1");
+pg(63, 8, 0, 600, 0.15, 2.5, 0.6, 150, 600, 0.75, 180, 14, 0.5, 0, 300, 0, 8);
+strcpy(200 + 63, "SynBras2");
+pg(64, 3, 12, 1500, 0.35, 1, 0.5, 30, 400, 0.8, 120, 0, 0.35, 0, 300, 8, -4.5);
+strcpy(200 + 64, "SprnoSax");
+pg(65, 3, 0, 1500, 0.35, 1, 0.5, 30, 400, 0.8, 120, 0, 0.3, 0, 300, 8, -4);
+strcpy(200 + 65, "Alto Sax");
+pg(66, 3, -12, 1100, 0.35, 1, 0.5, 30, 400, 0.8, 120, 0, 0.28, 0, 300, 8, -4.5);
+strcpy(200 + 66, "TenorSax");
+pg(67, 3, -12, 800, 0.35, 1, 0.5, 30, 400, 0.8, 120, 0, 0.25, 0, 300, 8, -4);
+strcpy(200 + 67, "Bari.Sax");
+pg(68, 3, 0, 1800, 0.5, 1, 0.5, 30, 400, 0.8, 120, 0, 0.15, 0, 300, 8, -3.5);
+strcpy(200 + 68, "Oboe");
+pg(69, 3, 0, 1300, 0.5, 1, 0.5, 30, 400, 0.8, 120, 0, 0.18, 0, 300, 8, -4);
+strcpy(200 + 69, "Eng.Horn");
+pg(70, 3, -12, 900, 0.4, 1, 0.5, 30, 400, 0.8, 120, 0, 0.2, 0, 300, 8, -4);
+strcpy(200 + 70, "Bassoon");
+pg(71, 3, 0, 1300, 0.2, 1, 0.5, 30, 400, 0.8, 120, 0, 0.5, 0, 300, 8, -3.5);
+strcpy(200 + 71, "Clarinet");
+pg(72, 0, 12, 6000, 0, 0, 0.5, 60, 300, 0.9, 150, 0, 0.5, 0.15, 300, 6, -3.5);
+strcpy(200 + 72, "Piccolo");
+pg(73, 0, 0, 6000, 0, 0, 0.5, 60, 300, 0.9, 150, 0, 0.5, 0.15, 300, 6, -1.5);
+strcpy(200 + 73, "Flute");
+pg(74, 1, 0, 6000, 0, 0, 0.5, 60, 300, 0.9, 150, 0, 0.5, 0.05, 300, 6, 0);
+strcpy(200 + 74, "Recorder");
+pg(75, 0, 0, 6000, 0, 0, 0.5, 60, 300, 0.9, 150, 0, 0.5, 0.35, 300, 6, -2);
+strcpy(200 + 75, "PanFlute");
+pg(76, 0, -12, 6000, 0, 0, 0.5, 60, 300, 0.9, 150, 0, 0.5, 0.4, 300, 6, -3.5);
+strcpy(200 + 76, "Bottle");
+pg(77, 0, 0, 6000, 0, 0, 0.5, 10, 200, 0.6, 150, 0, 0.5, 0.6, 300, 6, 0.5);
+strcpy(200 + 77, "Shakhchi");
+pg(78, 0, 12, 6000, 0, 0, 0.5, 60, 300, 0.9, 150, 0, 0.5, 0, 300, 10, -3.5);
+strcpy(200 + 78, "Whistle");
+pg(79, 1, 0, 6000, 0, 0, 0.5, 60, 300, 0.9, 150, 0, 0.5, 0.05, 300, 4, 0);
+strcpy(200 + 79, "Ocarina");
+pg(80, 3, 0, 4000, 0.25, 1, 0.5, 3, 500, 0.8, 150, 0, 0.5, 0, 300, 8, -4.5);
+strcpy(200 + 80, "SquareLd");
+pg(81, 2, 0, 4000, 0.25, 1, 0.5, 3, 500, 0.8, 150, 6, 0.5, 0, 300, 8, 1.5);
+strcpy(200 + 81, "Saw.Lead");
+pg(82, 1, 0, 4000, 0.25, 1, 0.5, 3, 500, 0.8, 150, 0, 0.5, 0.1, 300, 8, 0.5);
+strcpy(200 + 82, "CaliopLd");
+pg(83, 3, 0, 4000, 0.25, 2, 0.5, 3, 200, 0.6, 150, 0, 0.3, 0, 300, 8, -1.5);
+strcpy(200 + 83, "Chiff Ld");
+pg(84, 8, 0, 3000, 0.5, 1, 0.5, 3, 500, 0.8, 150, 10, 0.5, 0, 300, 8, 1.5);
+strcpy(200 + 84, "CharanLd");
+pg(85, 1, 0, 1800, 0.35, 0.2, 0.5, 40, 500, 1, 600, 8, 0.5, 0, 300, 10, 1.5);
+strcpy(200 + 85, "Voice Ld");
+pg(86, 2, 0, 4000, 0.25, 1, 0.5, 3, 500, 0.8, 150, 702, 0.5, 0, 300, 8, -1);
+strcpy(200 + 86, "Fifth Ld");
+pg(87, 2, -12, 1500, 0.4, 1, 0.5, 3, 500, 0.8, 150, 1200, 0.5, 0, 300, 8, -1);
+strcpy(200 + 87, "Bass &Ld");
+pg(88, 4, 0, 5000, 0.15, 0.5, 0.5, 600, 1500, 1, 1500, 9, 2, 1, 2000, 0, -1);
+strcpy(200 + 88, "NewAgePd");
+pg(89, 8, 0, 1800, 0.15, 0.5, 0.5, 600, 1500, 1, 1500, 9, 0.5, 0, 300, 0, 6);
+strcpy(200 + 89, "Warm Pad");
+pg(90, 8, 0, 2400, 0.15, 1.5, 0.5, 40, 1500, 1, 1500, 9, 0.5, 0, 300, 0, 0.5);
+strcpy(200 + 90, "PolySyPd");
+pg(91, 1, 0, 1300, 0.35, 0.2, 0.5, 600, 500, 1, 1500, 8, 0.5, 0, 300, 10, 5.5);
+strcpy(200 + 91, "ChoirPad");
+pg(92, 3, 0, 1500, 0.15, 0.5, 0.5, 800, 1500, 1, 1500, 9, 0.4, 0, 300, 0, 4);
+strcpy(200 + 92, "BowedPad");
+pg(93, 4, 0, 6000, 0.15, 0.5, 0.5, 600, 1500, 1, 1500, 9, 3.5, 1.5, 3000, 0, 0);
+strcpy(200 + 93, "MetalPad");
+pg(94, 1, 0, 2500, 0.15, 0.5, 0.5, 600, 1500, 1, 1500, 12, 0.5, 0, 300, 6, 5.5);
+strcpy(200 + 94, "Halo Pad");
+pg(95, 8, 0, 900, 0.6, 3, 0.5, 1500, 4000, 0.4, 1500, 9, 0.5, 0, 300, 0, 12);
+strcpy(200 + 95, "SweepPad");
+pg(96, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 0, 2.7, 2, 1500, 0, -3);
+strcpy(200 + 96, "Rain");
+pg(97, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 8, 1.5, 2, 1500, 0, -2);
+strcpy(200 + 97, "SoundTrk");
+pg(98, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 0, 3.9, 2, 1500, 0, -2);
+strcpy(200 + 98, "Crystal");
+pg(99, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 10, 1.2, 2, 1500, 0, -3);
+strcpy(200 + 99, "Atmosphr");
+pg(100, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 0, 2, 2, 1500, 0, -2.5);
+strcpy(200 + 100, "Bright");
+pg(101, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 5, 0.7, 2, 1500, 0, -2);
+strcpy(200 + 101, "Goblin");
+pg(102, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 0, 1.4, 2, 1500, 0, -0.5);
+strcpy(200 + 102, "Echoes");
+pg(103, 4, 0, 5000, 0.1, 1.5, 0.5, 200, 2000, 0.6, 1500, 0, 5.3, 2, 1500, 0, -2);
+strcpy(200 + 103, "Sci-Fi");
+pg(104, 5, 0, 5000, 0.4, 1.5, 0.5, 1, 2500, 0, 400, 0, 0.5, 0, 0.998, 0, 3.5);
+strcpy(200 + 104, "Sitar");
+pg(105, 5, 0, 5000, 0.1, 1.5, 0.5, 1, 2500, 0, 400, 0, 0.5, 0, 0.99, 0, 7.5);
+strcpy(200 + 105, "Banjo");
+pg(106, 5, 0, 5000, 0.1, 1.5, 0.5, 1, 2500, 0, 400, 0, 0.5, 0, 0.993, 0, 7.5);
+strcpy(200 + 106, "Shamisen");
+pg(107, 5, 0, 5000, 0.1, 1.5, 0.5, 1, 2500, 0, 400, 0, 0.5, 0, 0.996, 0, 4.5);
+strcpy(200 + 107, "Koto");
+pg(108, 4, 0, 6000, 0.1, 1.5, 0.5, 1, 900, 0, 300, 0, 4.5, 1.2, 80, 0, 4);
+strcpy(200 + 108, "Kalimba");
+pg(109, 3, 0, 2200, 0.35, 1, 0.5, 50, 400, 0.8, 120, 0, 0.2, 0, 300, 0, -3.5);
+strcpy(200 + 109, "Bagpipe");
+pg(110, 2, 0, 3500, 0.05, 0.3, 0.5, 50, 500, 1, 500, 0, 0.5, 0, 300, 12, -1.5);
+strcpy(200 + 110, "Fiddle");
+pg(111, 3, 0, 2500, 0.5, 1, 0.5, 30, 400, 0.8, 120, 0, 0.12, 0, 300, 12, -2.5);
+strcpy(200 + 111, "Shanai");
+pg(112, 4, 12, 9000, 0.1, 1.5, 0.5, 1, 1500, 0, 500, 0, 5.4, 1.5, 400, 0, 1.5);
+strcpy(200 + 112, "TnklBell");
+pg(113, 4, 12, 6000, 0.1, 1.5, 0.5, 1, 400, 0, 200, 0, 2.3, 2, 80, 0, 5.5);
+strcpy(200 + 113, "Agogo");
+pg(114, 4, 0, 6000, 0.1, 1.5, 0.5, 1, 1500, 0, 500, 0, 2, 1.5, 300, 0, 0);
+strcpy(200 + 114, "SteelDrm");
+pg(115, 4, 12, 5000, 0.1, 1.5, 0.5, 1, 120, 0, 80, 0, 3.1, 3, 20, 0, 7);
+strcpy(200 + 115, "WoodBlok");
+pg(116, 6, -24, 200, 0.3, 2, 0.5, 1, 800, 0, 400, 0, 0.5, 0.3, 300, 0, 12);
+strcpy(200 + 116, "TaikoDrm");
+pg(117, 0, -12, 3000, 0.1, 0, 0.5, 1, 500, 0, 300, 0, 0.5, 0.1, 300, 0, 4.5);
+strcpy(200 + 117, "MelodTom");
+pg(118, 0, 0, 4000, 0.1, 1.5, 0.5, 1, 400, 0, 200, 0, 0.5, 0.05, 300, 0, 5);
+strcpy(200 + 118, "Syn.Drum");
+pg(119, 6, 0, 6000, 0.2, 0, 0.5, 1500, 100, 1, 200, 0, 0.5, 1, 300, 0, 12);
+strcpy(200 + 119, "RevCymbl");
+pg(120, 6, 0, 2500, 0.3, 0, 0.5, 1, 150, 0, 300, 0, 0.5, 1, 300, 0, 12);
+strcpy(200 + 120, "FretNoiz");
+pg(121, 6, 0, 1500, 0.3, 0, 0.5, 80, 500, 0.7, 300, 0, 0.5, 1, 300, 0, 10.5);
+strcpy(200 + 121, "BrthNoiz");
+pg(122, 6, 0, 900, 0.3, 0, 0.5, 900, 500, 0.7, 1500, 0, 0.5, 1, 300, 0, 12);
+strcpy(200 + 122, "Seashore");
+pg(123, 0, 24, 3000, 0.1, 1.5, 0.5, 5, 300, 0.5, 100, 0, 0.5, 0, 300, 80, 2);
+strcpy(200 + 123, "Tweet");
+pg(124, 3, 12, 4000, 0.1, 1.5, 0.5, 1, 100, 1, 50, 0, 0.5, 0, 300, 0, -6);
+strcpy(200 + 124, "Telphone");
+pg(125, 6, 0, 400, 0.6, 0, 0.5, 5, 500, 0.7, 300, 0, 0.5, 1, 300, 0, 12);
+strcpy(200 + 125, "Helicptr");
+pg(126, 6, 0, 4000, 0.3, 0, 0.5, 300, 500, 0.7, 800, 0, 0.5, 1, 300, 0, 6.5);
+strcpy(200 + 126, "Applause");
+pg(127, 6, 0, 1200, 0.2, 0, 0.5, 1, 300, 0, 300, 0, 0.5, 1, 300, 0, 12);
+strcpy(200 + 127, "Gunshot");
+
+// ---------- parts ----------
+// 0 program, 1 drum kit, 2 mono, 3 element reserve, 4 vel depth, 5 vel offset, 6 porta sw, 7 porta time,
+// 8 MW pitch, 9 MW filter, 10 MW amp, 11 cutoff, 12 resonance, 13 attack, 14 decay, 15 release,
+// 16 vib rate, 17 vib depth, 18 vib delay, 19 bend, 20 dry, 21 volume, 22 pan, 23 reverb, 24 chorus,
+// 25 note shift, 26 detune, 27 mute
+function part_reset(p) local(z) (
+  z = PT + p*32; memset(z, 0, 32);
+  z[1] = p == 9; z[3] = p == 9 ? 4 : 2; z[4] = 64; z[5] = 64; z[8] = 10; z[19] = 2; z[20] = 127;
+  z[21] = 100; z[23] = 40;
+);
+function ctl_reset(c) local(z) ( z = CH + c*8; z[0] = 0; z[1] = 1; z[2] = 0; z[3] = 0; );
+!p70_init ? ( k = 0; loop(16, part_reset(k); k += 1; ); p70_init = 1; );
+k = 0; loop(16, ctl_reset(k); k += 1; );
+memset(VS, 0, NV*64);
+
+function pnm(p) ( 200 + min(max(floor(p + 0.5), 0), 127); );
+function cat_name(c) (
+  c == 0 ? "Piano" : c == 1 ? "Chrom Perc" : c == 2 ? "Organ" : c == 3 ? "Guitar" : c == 4 ? "Bass" : c == 5 ? "Strings" :
+  c == 6 ? "Ensemble" : c == 7 ? "Brass" : c == 8 ? "Reed" : c == 9 ? "Pipe" : c == 10 ? "Synth Lead" : c == 11 ? "Synth Pad" :
+  c == 12 ? "Synth FX" : c == 13 ? "Ethnic" : c == 14 ? "Percussive" : "Sound FX";
+);
+function cat_abbr(c) (
+  c == 0 ? "Pf" : c == 1 ? "Cp" : c == 2 ? "Or" : c == 3 ? "Gt" : c == 4 ? "Ba" : c == 5 ? "St" : c == 6 ? "En" : c == 7 ? "Br" :
+  c == 8 ? "Rd" : c == 9 ? "Pi" : c == 10 ? "Ld" : c == 11 ? "Pd" : c == 12 ? "Fx" : c == 13 ? "Et" : c == 14 ? "Pc" : "Se";
+);
+
+// ---------- drum kit (GM map): tone (frequency, pitch drop, its time, tone decay, tone level) + filtered noise ----------
+function ms2c(ms) ( exp(-1/(max(ms, 0.1)*0.001*srate)); );
+function dset(b, f, pe, pt, td, ta, na, nd, nf, hp, lv) local(g, k) (
+  b[42] = f; b[43] = pe; b[44] = ms2c(pt); b[45] = ms2c(td); b[8] = ta; b[46] = na; b[47] = ms2c(nd); b[48] = hp;
+  g = tan($pi*min(nf, srate*0.45)/srate); k = hp ? 1.4 : 0.9;
+  b[20] = k; b[50] = 1/(1 + g*(g + k)); b[51] = g*b[50]; b[52] = g*b[51];
+  b[38] = 1; b[39] = 1; b[40] = 1; b[62] *= lv;
+);
+function drum_setup(b, n) (
+  n == 35 || n == 36 ? dset(b, 50, 2.2, 35, 320, 1, 0.08, 15, 3000, 0, 1.1) :
+  n == 37 ? dset(b, 420, 0.3, 5, 40, 0.6, 0.4, 30, 2500, 0, 0.7) :
+  n == 38 ? dset(b, 190, 0.5, 15, 110, 0.5, 0.75, 170, 3500, 1, 0.9) :
+  n == 40 ? dset(b, 210, 0.5, 12, 90, 0.4, 0.85, 150, 5000, 1, 0.9) :
+  n == 39 ? dset(b, 0, 0, 1, 1, 0, 1, 160, 1200, 0, 1) :
+  n == 42 ? dset(b, 0, 0, 1, 1, 0, 0.6, 45, 8000, 1, 0.6) :
+  n == 44 ? dset(b, 0, 0, 1, 1, 0, 0.55, 65, 7500, 1, 0.5) :
+  n == 46 ? dset(b, 0, 0, 1, 1, 0, 0.55, 380, 7500, 1, 0.55) :
+  n == 41 || n == 43 || n == 45 || n == 47 || n == 48 || n == 50 ?
+    dset(b, n == 41 ? 80 : n == 43 ? 95 : n == 45 ? 110 : n == 47 ? 135 : n == 48 ? 155 : 180, 0.5, 60, 350, 1, 0.08, 40, 2000, 0, 0.9) :
+  n == 49 || n == 57 || n == 52 ? dset(b, 0, 0, 1, 1, 0, 0.5, 1300, 5500, 1, 0.55) :
+  n == 55 ? dset(b, 0, 0, 1, 1, 0, 0.5, 600, 6500, 1, 0.5) :
+  n == 51 || n == 59 ? dset(b, 3100, 0, 1, 900, 0.12, 0.3, 1100, 7000, 1, 0.55) :
+  n == 53 ? dset(b, 2300, 0, 1, 700, 0.5, 0.15, 600, 6000, 1, 0.55) :
+  n == 54 ? dset(b, 0, 0, 1, 1, 0, 0.5, 160, 9000, 1, 0.5) :
+  n == 56 ? dset(b, 560, 0, 1, 250, 0.6, 0.1, 80, 800, 0, 0.6) :
+  n >= 60 && n <= 64 ? dset(b, n == 60 ? 300 : n == 61 ? 220 : n == 62 ? 200 : n == 63 ? 170 : 140, 0.3, 20, 180, 1, 0.1, 30, 2000, 0, 0.8) :
+  n == 69 || n == 70 ? dset(b, 0, 0, 1, 1, 0, 0.45, 70, 7000, 1, 0.45) :
+  n == 75 ? dset(b, 2500, 0, 1, 60, 0.8, 0, 1, 1000, 0, 0.6) :
+  n == 76 || n == 77 ? dset(b, n == 76 ? 1700 : 1300, 0, 1, 70, 0.8, 0.05, 20, 2000, 0, 0.6) :
+  dset(b, 600, 0.2, 10, 80, 0.4, 0.4, 60, 3000, 0, 0.5);
+);
+
+// ---------- voice allocation ----------
+function part_count(p) local(i, n) ( n = 0; i = 0; loop(NV, VS[i*64] > 0 && VS[i*64 + 2] == p ? n += 1; i += 1; ); n; );
+function v_alloc(p) local(i, b, best, ba, a) (
+  best = -1;
+  i = 0; loop(NV, best < 0 && VS[i*64] == 0 ? best = i; i += 1; );
+  // steal: the oldest releasing voice, then the oldest voice of a part above its reserve, then the oldest
+  best < 0 ? ( ba = 0; i = 0; loop(NV, b = VS + i*64; b[0] == 3 && (best < 0 || b[6] < ba) ? ( best = i; ba = b[6]; ); i += 1; ); );
+  best < 0 ? ( ba = 0; i = 0; loop(NV, b = VS + i*64; a = PT + b[2]*32;
+    part_count(b[2]) > a[3] && (best < 0 || b[6] < ba) ? ( best = i; ba = b[6]; ); i += 1; ); );
+  best < 0 ? ( ba = 0; i = 0; loop(NV, b = VS + i*64; best < 0 || b[6] < ba ? ( best = i; ba = b[6]; ); i += 1; ); );
+  best;
+);
+function v_release(b) ( b[0] > 0 && b[0] < 3 ? ( b[49] < 0 ? 0 : b[0] = 3; ); b[5] = 0; );
+
+function note_on(c, n, vel) local(z, q, b, v, i, leg, f, at, de, re, vv, len, j, lp) (
+  z = PT + c*32;
+  !z[27] ? (
+    vage += 1;
+    leg = -1;
+    !z[1] && z[2] ? ( i = 0; loop(NV, b = VS + i*64; b[0] > 0 && b[0] < 3 && b[2] == c && b[5] ? leg = i; i += 1; ); );
+    leg >= 0 ? (
+      b = VS + leg*64; b[3] = n; b[10] = n + z[25]; !(z[6] && z[7] > 0) ? b[9] = b[10]; b[6] = vage;
+    ) : (
+      z[1] && (n == 42 || n == 44) ? ( i = 0; loop(NV, b = VS + i*64; b[0] > 0 && b[2] == c && b[3] == 46 ? b[0] = 0; i += 1; ); );
+      v = v_alloc(c); b = VS + v*64;
+      memset(b, 0, 64);
+      b[2] = c; b[3] = n; b[5] = 1; b[6] = vage; b[21] = 0;
+      vv = min(max(vel*z[4]/64 + (z[5] - 64), 1), 127)/127;
+      b[37] = (rand(2) - 1)*drift*3;                       // drift: a tiny tuning scatter per note
+      z[1] ? (
+        b[49] = -1; b[7] = -1; b[62] = vv*vv*1.6; b[0] = 2; b[1] = 1;
+        drum_setup(b, n);
+      ) : (
+        b[7] = z[0]; q = PG + z[0]*16;
+        b[49] = q[0]; b[9] = b[10] = n + z[25];
+        at = q[6]*2^(z[13]/16); de = q[7]*2^(z[14]/16); re = q[9]*2^(z[15]/16);
+        b[28] = 1/max(1, at*0.001*srate); b[29] = 1 - exp(-4.6/(max(de, 1)*0.001*srate)); b[30] = q[8];
+        b[31] = 1 - exp(-4.6/(max(re, 1)*0.001*srate));
+        b[55] = q[10] > 0 ? 2^(q[10]/1200) : 0; b[56] = q[11]; b[57] = q[12]; b[58] = q[13];
+        b[59] = q[4]; b[60] = q[5];
+        b[61] = min(max(q[2]*2^(z[11]/16), 30), srate*0.45);
+        b[20] = 2*(1 - min(max(q[3] + z[12]/128, 0), 0.95));
+        b[62] = vv*10^(q[15]/20)*0.5; b[63] = q[14];
+        b[54] = q[12]; b[53] = q[0] == 4 ? exp(-1/(max(q[13], 5)*0.001*srate)) : 1; b[16] = q[12];
+        b[0] = 1; b[1] = 0; b[24] = 0;
+        q[0] == 5 ? (                                     // pluck: fill the line with a noise burst
+          f = 440*2^((n + z[25] + q[1] - 69)/12);
+          len = min(max(floor(srate/f), 2), 4090); b[26] = len; b[25] = 0;
+          lp = 0; j = 0; loop(len, lp += (rand(2) - 1 - lp)*min(1, q[2]/8000 + 0.2); PK[v*4096 + j] = lp*2; j += 1; );
+        );
+      );
+    );
+  );
+);
+function note_off(c, n) local(i, b, z) (
+  z = CH + c*8;
+  i = 0; loop(NV, b = VS + i*64; b[0] > 0 && b[2] == c && b[3] == n && b[5] ? ( z[2] ? ( b[21] = 1; b[5] = 0; ) : v_release(b); ); i += 1; );
+);
+function sustain_off(c) local(i, b) ( i = 0; loop(NV, b = VS + i*64; b[0] > 0 && b[2] == c && b[21] ? ( b[21] = 0; v_release(b); ); i += 1; ); );
+function all_off(c) local(i, b) ( i = 0; loop(NV, b = VS + i*64; b[0] > 0 && (c < 0 || b[2] == c) ? v_release(b); i += 1; ); );
+
+// ---------- control rate (every 32 samples): pitch, vibrato, mod wheel, filter ----------
+function vctl(b, v) local(z, c, q, vr, vd, ramp, vib, mw, st, f, oct, g, k, ac, tc) (
+  z = PT + b[2]*32; c = CH + b[2]*8;
+  b[49] >= 0 ? (
+    q = PG + b[7]*16;
+    z[6] && z[7] > 0 ? ( tc = 1 - exp(-32/(z[7]/127*1.5*srate + 1)); b[9] += (b[10] - b[9])*tc; ) : b[9] = b[10];
+    vr = 5.5*2^(z[16]/32); vd = b[63] + z[17]*0.8;
+    ramp = min(max((b[23]/srate - z[18]/127*2)/0.4, 0), 1);
+    b[22] += vr*32/srate; b[22] -= floor(b[22]);
+    vib = sin(2*$pi*b[22]);
+    mw = c[0];
+    st = b[9] + q[1] + z[26]*0.2/100 + c[3]*z[19] + (vib*(vd*ramp + mw*z[8]/127*100) + b[37])/100;
+    f = 440*2^((st - 69)/12);
+    b[11] = min(f/srate, 0.45);
+    b[12] = b[55] > 0 ? min(b[11]*b[55], 0.45) : 0;
+    oct = b[59]*(b[1] - 1) + b[60]*(b[3] - 60)/12 + mw*z[9]/127*2*vib;
+    f = min(max(b[61]*2^oct, 30), srate*0.45);
+    g = tan($pi*f/srate); k = b[20];
+    b[50] = 1/(1 + g*(g + k)); b[51] = g*b[50]; b[52] = g*b[51];
+    b[19] = 1 - mw*z[10]/127*0.45*(1 + vib);
+  );
+  // pan / sends from the mixer and controllers
+  ac = z[21]/127*c[1];
+  b[32] = ac*sqrt(0.5 - z[22]/128); b[33] = ac*sqrt(0.5 + z[22]/128);
+  b[34] = z[23]/127; b[35] = z[24]/127; b[36] = z[20]/127;
+);
+
+// ---------- one voice, one sample ----------
+function vrun(b, v) local(t, y, ph, s, p2, nz, v1, v2, v3, k, a1, a2, a3, i0, i1, o) (
+  y = 0;
+  b[49] < 0 ? (
+    // drum
+    b[38] *= b[44]; b[39] *= b[45]; b[40] *= b[47];
+    b[42] > 0 ? ( b[13] += b[42]*(1 + b[43]*b[38])/srate; b[13] -= floor(b[13]); y = sin(2*$pi*b[13])*b[39]*b[8]; );
+    b[46] > 0 ? (
+      nz = rand(2) - 1;
+      k = b[20]; a1 = b[50]; a2 = b[51]; a3 = b[52];
+      v3 = nz - b[18]; v1 = a1*b[17] + a2*v3; v2 = b[18] + a2*b[17] + a3*v3; b[17] = 2*v1 - b[17]; b[18] = 2*v2 - b[18];
+      y += (b[48] ? nz - k*v1 - v2 : k*v1)*b[40]*b[46];
+    );
+    b[39] < 0.0001 && b[40] < 0.0001 ? b[0] = 0;
+    y *= b[62]*0.9;
+  ) : (
+    // amplitude envelope
+    b[0] == 1 ? ( b[1] += b[28]; b[1] >= 1 ? ( b[1] = 1; b[0] = 2; ); ) :
+    b[0] == 2 ? ( b[1] += (b[30] - b[1])*b[29]; ) :
+    ( b[1] += (0 - b[1])*b[31]; b[1] < 0.0001 ? b[0] = 0; );
+    (b[24] -= 1) <= 0 ? ( b[24] = 32; vctl(b, v); );
+    b[23] += 1;
+    t = b[49];
+    b[13] += b[11]; b[13] -= floor(b[13]); ph = b[13];
+    t == 0 ? ( y = sin(2*$pi*ph); b[57] > 0 ? ( b[27] += (rand(2) - 1 - b[27])*0.3; y += b[57]*b[27]*2; ); ) :
+    t == 1 ? ( y = 1 - 4*abs(ph - 0.5); b[12] > 0 ? ( b[14] += b[12]; b[14] -= floor(b[14]); y = (y + 1 - 4*abs(b[14] - 0.5))*0.6; ); ) :
+    t == 2 || t == 8 ? (
+      y = 2*ph - 1 - vo_blep(ph, b[11]);
+      b[12] > 0 ? ( b[14] += b[12]; b[14] -= floor(b[14]); y = (y + 2*b[14] - 1 - vo_blep(b[14], b[12]))*0.6; );
+    ) :
+    t == 3 ? (
+      p2 = ph + 1 - b[56]; p2 -= floor(p2);
+      y = (2*ph - 1 - vo_blep(ph, b[11])) - (2*p2 - 1 - vo_blep(p2, b[11]));
+      b[12] > 0 ? ( b[14] += b[12]; b[14] -= floor(b[14]); p2 = b[14] + 1 - b[56]; p2 -= floor(p2);
+                    y = (y + (2*b[14] - 1 - vo_blep(b[14], b[12])) - (2*p2 - 1 - vo_blep(p2, b[12])))*0.6; );
+    ) :
+    t == 4 ? (
+      b[15] += b[11]*b[56]; b[15] -= floor(b[15]);
+      b[16] = b[16]*b[53] + b[54]*0.15*(1 - b[53]);       // the index falls towards 15 % of its start
+      y = sin(2*$pi*ph + b[16]*sin(2*$pi*b[15]));
+    ) :
+    t == 5 ? (
+      o = PK + v*4096; i0 = b[25]; i1 = i0 + 1; i1 >= b[26] ? i1 = 0;
+      y = o[i0]; o[i0] = (o[i0] + o[i1])*0.5*b[58]; b[25] = i1;
+    ) :
+    t == 6 ? ( y = rand(2) - 1; ) :
+    t == 7 ? ( y = (sin(2*$pi*ph) + b[56]*sin(4*$pi*ph) + b[57]*sin(6*$pi*ph) + 0.35*sin(8*$pi*ph))*0.5; );
+    // 12 dB state-variable low-pass
+    a1 = b[50]; a2 = b[51]; a3 = b[52];
+    v3 = y - b[18]; v1 = a1*b[17] + a2*v3; v2 = b[18] + a2*b[17] + a3*v3; b[17] = 2*v1 - b[17]; b[18] = 2*v2 - b[18];
+    y = v2*b[1]*b[62]*b[19];
+  );
+  y;
+);
+
+// ---------- effects ----------
+RVN = 0;
+CML = 149000; CMB = 149010; CMP = 149020; CMF = 149030; APL = 149040; APB = 149050; APP = 149060;
+memset(149000, 0, 70);
+function rv_alloc(n) local(p) ( p = RV + RVN; RVN += n + 4; p; );
+rs_ = srate/44100;
+k = 0; loop(8, CML[k] = floor((k == 0 ? 1116 : k == 1 ? 1277 : k == 2 ? 1422 : k == 3 ? 1557 : k == 4 ? 1139 : k == 5 ? 1300 : k == 6 ? 1445 : 1580)*rs_);
+  CMB[k] = rv_alloc(CML[k]); k += 1; );
+k = 0; loop(4, APL[k] = floor((k == 0 ? 556 : k == 1 ? 441 : k == 2 ? 579 : 464)*rs_); APB[k] = rv_alloc(APL[k]); k += 1; );
+CHB = rv_alloc(4096); chw = 0;
+memset(RV, 0, RVN);
+function comb(k, x) local(b, i, y) (
+  b = CMB[k]; i = CMP[k]; y = b[i];
+  CMF[k] = y*(1 - rv_damp) + CMF[k]*rv_damp;
+  b[i] = x + CMF[k]*rv_fb; i += 1; i >= CML[k] ? i = 0; CMP[k] = i;
+  y;
+);
+function allp(k, x) local(b, i, y) (
+  b = APB[k]; i = APP[k]; y = b[i];
+  b[i] = x + y*0.5; i += 1; i >= APL[k] ? i = 0; APP[k] = i;
+  y - x;
+);
+
+// ---------- event queue ----------
+function q_push(ofs, t, n, v, c) local(i) (
+  qcount < 390 ? (
+    i = qcount; while (i > 0 && EQO[i - 1] > ofs) ( EQO[i] = EQO[i - 1]; EQT[i] = EQT[i - 1]; EQN[i] = EQN[i - 1]; EQV[i] = EQV[i - 1]; EQC[i] = EQC[i - 1]; i -= 1; );
+    EQO[i] = ofs; EQT[i] = t; EQN[i] = n; EQV[i] = v; EQC[i] = c; qcount += 1;
+  );
+);
+
+function update() (
+  drift = slider2/100;
+  rv_fb = 0.7 + slider3/100*0.28; rv_damp = 0.35 - slider3/100*0.15; rv_lv = slider4/100*0.35;
+  ch_dep = slider5/100;
+  vol_t = 10^(slider1/20);
+  ins_output_setup(6);
+);
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+sm = 1 - exp(-1/(0.03*srate));
+vage = 0; qcount = 0; chph = 0; kb_held = -1; kb_on = kb_off = 0;
+!ui_dflt ? ( ui_sz = 2; p70_part = 0; p70_page = 0; p70_cur = 0; p70_oct = 0; );
+update(); vol_s = vol_t;
+ui_dflt = 1;
+
+@slider
+update();
+
+@block
+update();
+qcount = 0;
+while (midirecv(mofs, m1, m2, m3)) (
+  st = m1 & 0xF0; c = m1 & 0x0F; z = PT + c*32; zc = CH + c*8;
+  st == 0x90 && m3 > 0 ? ( q_push(mofs, 1, m2, m3, c); ins_midi_hit(); midi_part = c; midi_t = time_precise(); ) :
+  st == 0x80 || st == 0x90 ? q_push(mofs, 0, m2, 0, c) :
+  st == 0xE0 ? zc[3] = ((m3*128 + m2) - 8192)/8192 :
+  st == 0xC0 ? ( !z[1] ? z[0] = m2; ) :
+  st == 0xB0 ? (
+    m2 == 0 ? z[1] = (m3 == 127 || m3 == 126) ? 1 : (c == 9 && m3 == 0 ? 1 : 0) :
+    m2 == 1 ? zc[0] = m3/127 :
+    m2 == 5 ? z[7] = m3 :
+    m2 == 7 ? z[21] = m3 :
+    m2 == 10 ? z[22] = m3 - 64 :
+    m2 == 11 ? zc[1] = m3/127 :
+    m2 == 64 ? ( zc[2] = m3 >= 64; !zc[2] ? q_push(mofs, 2, 0, 0, c); ) :
+    m2 == 65 ? z[6] = m3 >= 64 :
+    m2 == 71 ? z[12] = m3 - 64 :
+    m2 == 72 ? z[15] = m3 - 64 :
+    m2 == 73 ? z[13] = m3 - 64 :
+    m2 == 74 ? z[11] = m3 - 64 :
+    m2 == 91 ? z[23] = m3 :
+    m2 == 93 ? z[24] = m3 :
+    m2 == 121 ? ( zc[0] = 0; zc[1] = 1; zc[3] = 0; zc[2] = 0; q_push(mofs, 2, 0, 0, c); ) :
+    m2 == 120 || m2 == 123 ? q_push(mofs, 3, 0, 0, c);
+  );
+);
+// the mini keyboard on the panel plays the selected part
+kb_on > 0 ? ( q_push(0, 1, kb_on - 1, 100, p70_part); kb_on = 0; );
+kb_off > 0 ? ( q_push(0, 0, kb_off - 1, 0, p70_part); kb_off = 0; );
+panic_req ? ( q_push(0, 3, 0, 0, -1); panic_req = 0; );
+eqi = 0; spos = 0;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, p70_init);
+file_var(0, p70_part);
+file_var(0, p70_page);
+file_mem(0, PT, 16*32);
+
+@sample
+while (eqi < qcount && EQO[eqi] <= spos) (
+  et = EQT[eqi];
+  et == 1 ? note_on(EQC[eqi], EQN[eqi], EQV[eqi]) : et == 0 ? note_off(EQC[eqi], EQN[eqi]) : et == 2 ? sustain_off(EQC[eqi]) : all_off(EQC[eqi]);
+  eqi += 1;
+);
+spos += 1;
+
+dL = dR = sR = sC = 0;
+vi = 0;
+loop(NV,
+  vb = VS + vi*64;
+  vb[0] > 0 ? (
+    vy = vrun(vb, vi);
+    vb[49] < 0 ? ( (vb[24] -= 1) <= 0 ? ( vb[24] = 32; vctl(vb, vi); ); );
+    vd = vy*vb[36];
+    dL += vd*vb[32]; dR += vd*vb[33];
+    sR += vy*vb[34]*(vb[32] + vb[33]); sC += vy*vb[35]*(vb[32] + vb[33]);
+  );
+  vi += 1;
+);
+// reverb: four combs and two all-passes a side
+rin = sR*0.5;
+rL = comb(0, rin) + comb(1, rin) + comb(2, rin) + comb(3, rin);
+rR = comb(4, rin) + comb(5, rin) + comb(6, rin) + comb(7, rin);
+rL = allp(1, allp(0, rL)); rR = allp(3, allp(2, rR));
+// chorus: one line, two modulated taps
+CHB[chw] = sC; chw = (chw + 1) & 4095;
+chph += 0.6/srate; chph -= floor(chph);
+cdl = (0.012 + 0.004*ch_dep*sin(2*$pi*chph))*srate; cdr = (0.012 + 0.004*ch_dep*cos(2*$pi*chph))*srate;
+p_ = chw - cdl; p_ < 0 ? p_ += 4096; i_ = floor(p_); f_ = p_ - i_; cL = CHB[i_ & 4095]*(1 - f_) + CHB[(i_ + 1) & 4095]*f_;
+p_ = chw - cdr; p_ < 0 ? p_ += 4096; i_ = floor(p_); f_ = p_ - i_; cR = CHB[i_ & 4095]*(1 - f_) + CHB[(i_ + 1) & 4095]*f_;
+oL = dL + rL*rv_lv + cL*0.7;
+oR = dR + rR*rv_lv + cR*0.7;
+vol_s += (vol_t - vol_s)*sm;
+oL = ostL.ost_band(oL*0.4)*vol_s;
+oR = ostR.ost_band(oR*0.4)*vol_s;
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+
+@gfx 900 645
+// =====================================================================
+// GUI - the handheld box: silver body, the backlit LCD (VOICE EDIT / MIXER / TUNE pages), the F-keys under it,
+// part and octave keys on the left, cursor and -1 / +1 keys on the right, a two-octave mini keyboard below.
+// Design space 1200 x 860 at qs = 0.75 * sc (900 x 645 at size M).
+// =====================================================================
+ui_begin(900, 645);
+qs = sc*0.75;
+gfx_setfont(8, "Arial", 12*qs, 'b');
+gfx_setfont(9, "Courier New", 24*qs, 'b');
+gfx_setfont(10, "Arial", 15*qs, 'b');
+gfx_setfont(11, "Arial", 12.5*qs, 'b');
+gfx_setfont(12, "Trebuchet MS", 32*qs, 'b');
+gfx_setfont(13, "Courier New", 17*qs, 'b');
+gfx_setfont(14, "Arial", 11*qs, 'b');
+LK = 0x161A1B; LB = 0xC8D3C0; LM = 0x8F9A88;     // LCD ink, glass, mid
+BODY = 0xBCC0C3; BODY2 = 0xA9AEB2; KEYC = 0x3A3D41; KEYT = 0xE8E8E6;
+
+function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
+function RO(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs), 0); );
+function RR(x, y, w, h, r) ( rd_rr(x*qs, y*qs, w*qs, h*qs, r*qs); );
+function LN(x1, y1, x2, y2) ( gfx_line(x1*qs, y1*qs, x2*qs, y2*qs, 1); );
+function TX(x, y, t) ( gfx_x = x*qs; gfx_y = y*qs; gfx_drawstr(t); );
+function TC(cx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = cx*qs - w*0.5; gfx_y = y*qs; gfx_drawstr(t); );
+function TR(rx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = rx*qs - w; gfx_y = y*qs; gfx_drawstr(t); );
+function inbox(x, y, w, h) ( mouse_x >= x*qs && mouse_x < (x + w)*qs && mouse_y >= y*qs && mouse_y < (y + h)*qs; );
+function hitbox(x, y, w, h) local(h_) ( h_ = pressed && drag_id == 0 && inbox(x, y, w, h); h_ ? drag_id = -1; h_; );
+function lcol() ( ui_col(LK); );
+function pz() ( PT + p70_part*32; );
+
+// ---- the edit-page parameters: part index, range, default, names ----
+CTP = 148100; CMN = 148130; CMX = 148160; CDF = 148190;
+function cdef(i, p, lo, hi, d) ( CTP[i] = p; CMN[i] = lo; CMX[i] = hi; CDF[i] = d; );
+cdef(0, 2, 0, 1, 0); cdef(1, 3, 0, 16, 2); cdef(2, 4, 0, 127, 64); cdef(3, 5, 0, 127, 64); cdef(4, 6, 0, 1, 0);
+cdef(5, 7, 0, 127, 0); cdef(6, 8, 0, 127, 10); cdef(7, 9, 0, 127, 0); cdef(8, 10, 0, 127, 0);
+cdef(9, 11, -64, 63, 0); cdef(10, 12, -64, 63, 0); cdef(11, 13, -64, 63, 0); cdef(12, 14, -64, 63, 0); cdef(13, 15, -64, 63, 0);
+cdef(14, 16, -64, 63, 0); cdef(15, 17, -64, 63, 0); cdef(16, 18, -64, 63, 0); cdef(17, 19, -24, 24, 2); cdef(18, 20, 0, 127, 127);
+// mixer / tune (ids 20..)
+cdef(20, 21, 0, 127, 100); cdef(21, 22, -64, 63, 0); cdef(22, 23, 0, 127, 40); cdef(23, 24, 0, 127, 0); cdef(24, 25, -24, 24, 0); cdef(25, 26, -64, 63, 0);
+function cname(i) (
+  i == 0 ? "Mono/Poly" : i == 1 ? "Elem Reserve" : i == 2 ? "VelSens Depth" : i == 3 ? "VelSens Offset" : i == 4 ? "Portamento Sw" :
+  i == 5 ? "Porta Time" : i == 6 ? "MW Pitch Mod" : i == 7 ? "MW Filter Mod" : i == 8 ? "MW Amp Mod" : i == 9 ? "Cutoff" :
+  i == 10 ? "Resonance" : i == 11 ? "EG Attack" : i == 12 ? "EG Decay" : i == 13 ? "EG Release" : i == 14 ? "Vibrato Rate" :
+  i == 15 ? "Vibrato Depth" : i == 16 ? "Vibrato Delay" : i == 17 ? "Pitch Bend" : i == 18 ? "Dry Level" : i == 20 ? "Volume" :
+  i == 21 ? "Pan" : i == 22 ? "Reverb Send" : i == 23 ? "Chorus Send" : i == 24 ? "Note Shift" : "Detune";
+);
+function cval(i, v) (
+  i == 0 ? (v ? "Mono" : "Poly") : i == 4 ? (v ? "On" : "Off") :
+  i == 21 ? (v == 0 ? "C" : v < 0 ? sprintf(#cv, "L%d", -v) : sprintf(#cv, "R%d", v)) :
+  CMN[i] < 0 ? sprintf(#cv, v > 0 ? "+%d" : "%d", v) : sprintf(#cv, "%d", v);
+);
+// drag / wheel / double-click on one parameter of one part
+function lpar(i, p, x, y, w, h) local(z, hov, v, did) (
+  z = PT + p*32 + CTP[i]; did = 3000 + i*16 + p;
+  hov = inbox(x, y, w, h);
+  pressed && hov && drag_id == 0 ? (
+    p70_part = p; p70_cur = i;
+    time_precise() - lp_t < 0.35 && lp_id == did ? ( z[0] = CDF[i]; drag_id = -1; lp_t = 0; ) : (
+      CMX[i] - CMN[i] <= 1 ? ( z[0] = z[0] ? CMN[i] : CMX[i]; drag_id = -1; ) : ( drag_id = did; lp_y = mouse_y; lp_v = z[0]; );
+      lp_t = time_precise(); lp_id = did;
+    );
+  );
+  drag_id == did ? (
+    v = lp_v + (lp_y - mouse_y)/((mouse_cap & 8 ? 6 : 1.5)*sc)*(CMX[i] - CMN[i])/127;
+    z[0] = min(max(floor(v + 0.5), CMN[i]), CMX[i]);
+    p70_cur = i; p70_part = p;
+  );
+  hov && mouse_wheel != 0 && drag_id == 0 ? ( z[0] = min(max(z[0] + sign(mouse_wheel), CMN[i]), CMX[i]); mouse_wheel = 0; p70_cur = i; p70_part = p; );
+  hov || drag_id == did ? ( strcpy(#dn, cname(i)); strcpy(#dv, cval(i, z[0])); dshow = 1; );
+);
+function frac(i, v) ( (v - CMN[i])/(CMX[i] - CMN[i]); );
+// LCD knob and slider
+function lknob(cx, cy, r, f, sel) local(a) (
+  sel ? ( lcol(); gfx_circle(cx*qs, cy*qs, (r + 3)*qs, 1, 1); ui_col(LB); ) : lcol();
+  gfx_circle(cx*qs, cy*qs, r*qs, 0, 1); gfx_circle(cx*qs, cy*qs, (r - 1)*qs, 0, 1);
+  a = (-0.75 + 1.5*f)*$pi;
+  LN(cx + sin(a)*r*0.25, cy - cos(a)*r*0.25, cx + sin(a)*r*0.95, cy - cos(a)*r*0.95);
+  LN(cx + sin(a)*r*0.25 + 1, cy - cos(a)*r*0.25, cx + sin(a)*r*0.95 + 1, cy - cos(a)*r*0.95);
+);
+function lslider(cx, y, h, f, sel) local(k, hy) (
+  lcol(); R(cx - 1, y, 2, h);
+  k = 0; loop(9, R(cx - 9, y + k*h/8, 5, 1); R(cx + 5, y + k*h/8, 5, 1); k += 1; );
+  hy = y + (1 - f)*h;
+  sel ? ( lcol(); R(cx - 12, hy - 8, 24, 16); ui_col(LB); R(cx - 9, hy - 1, 18, 2); )
+      : ( ui_col(LB); R(cx - 11, hy - 7, 22, 14); lcol(); RO(cx - 11, hy - 7, 22, 14); R(cx - 9, hy - 1, 18, 2); );
+);
+function lhead(x, y, w, t, sel) ( sel ? ( lcol(); R(x, y, w, 20); ui_col(LB); ) : lcol(); gfx_setfont(11); TC(x + w*0.5, y + 3, t); );
+// a physical key on the body
+function bkey(x, y, w, h, t) local(hov, hit) (
+  hov = inbox(x, y, w, h); hit = hitbox(x, y, w, h);
+  ui_cola(0x000000, 0.35); RR(x + 1, y + 2, w, h, 5);
+  ui_col(hov ? 0x4A4E53 : KEYC); RR(x, y, w, h, 5);
+  ui_cola(0xFFFFFF, 0.12); R(x + 4, y + 2, w - 8, 1);
+  gfx_setfont(14); ui_col(KEYT); TC(x + w*0.5, y + h*0.5 - 6, t);
+  hit;
+);
+function prog_menu(x, y) local(k, c, j, s) (
+  #pm = ""; c = 0;
+  loop(16,
+    strcat(#pm, ">"); strcat(#pm, cat_name(c)); strcat(#pm, "|");
+    j = 0; loop(8, s = c*8 + j; j == 7 ? strcat(#pm, "<");
+      (pz())[0] == s && !(pz())[1] ? strcat(#pm, "!");
+      sprintf(#pe, "%03d  %s", s + 1, pnm(s)); strcat(#pm, #pe); strcat(#pm, "|"); j += 1; );
+    c += 1;
+  );
+  strcat(#pm, (pz())[1] ? "!Drum Kit" : "Drum Kit");
+  gfx_x = x*qs; gfx_y = y*qs; k = gfx_showmenu(#pm);
+  k > 0 && k <= 128 ? ( (pz())[0] = k - 1; (pz())[1] = 0; ) : k == 129 ? (pz())[1] = 1;
+);
+
+// ---------------------------------------------------------------------
+ui_col(0x0E0F10); gfx_rect(0, 0, gfx_w, gfx_h);
+// ---- body ----
+ui_cola(0x000000, 0.5); RR(14, 16, 1176, 838, 34);
+ui_col(BODY2); RR(10, 10, 1180, 840, 34);
+ui_col(BODY); RR(14, 14, 1172, 832, 31);
+gfx_gradrect(14*qs, 14*qs, 1172*qs, 300*qs, 1, 1, 1, 0.16, 0, 0, 0, 0, 0, 0, 0, -0.16/(300*qs));
+ui_col(0x3D6FB6); gfx_circle(58*qs, 44*qs, 20*qs, 1, 1);
+gfx_setfont(2); ui_col(0xFFFFFF); ui_text(58*qs, 37*qs, "GFX");
+gfx_setfont(12); ui_col(0x26292C); TX(88, 22, "G POCKET 70");
+gfx_setfont(11); ui_col(0x4A4E53); TX(300, 36, "16-PART TONE GENERATOR");
+gfx_setfont(8, "Trebuchet MS", 13*qs, 'b'); ui_size_picker(1070*qs, 26*qs);
+
+// ---- LCD ----
+ui_col(0x26292C); RR(176, 70, 848, 560, 12);
+ui_col(0x111314); RR(186, 80, 828, 540, 8);
+ui_col(LB); R(196, 88, 808, 524);
+gfx_gradrect(196*qs, 88*qs, 808*qs, 524*qs, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06/(524*qs));
+X0 = 206; Y0 = 96; W = 788;
+z_ = pz(); dshow = 0;
+
+// row 1: page bar
+lcol(); R(X0, Y0, W, 30);
+gfx_setfont(13); ui_col(LB);
+TX(X0 + 8, Y0 + 5, p70_page == 0 ? "VOICE -- VOICE EDIT --" : p70_page == 1 ? "VOICE -- MIXER --" : "VOICE -- TUNE --");
+sprintf(#pt, "PART=%02d", p70_part + 1); TR(X0 + W - 8, Y0 + 5, #pt);
+// row 2: transport icons, CAT / PGM / BANK / name, octave box
+k = 0; loop(3, lcol(); RO(X0 + k*30, Y0 + 36, 26, 26); RO(X0 + k*30 + 1, Y0 + 37, 24, 24); k += 1; );
+lcol(); gfx_circle((X0 + 13)*qs, (Y0 + 49)*qs, 6*qs, 1, 1); R(X0 + 37, Y0 + 43, 12, 12);
+gfx_triangle((X0 + 67)*qs, (Y0 + 42)*qs, (X0 + 67)*qs, (Y0 + 56)*qs, (X0 + 79)*qs, (Y0 + 49)*qs);
+lcol(); RO(X0 + 94, Y0 + 34, 560, 30);
+gfx_setfont(14); TX(X0 + 100, Y0 + 38, "CAT"); k = 0; loop(5, RO(X0 + 126 + k*5, Y0 + 39, 5, 10); k += 1; ); R(X0 + 129, Y0 + 39, 2, 6); R(X0 + 134, Y0 + 39, 2, 6); R(X0 + 144, Y0 + 39, 2, 6);
+TX(X0 + 100, Y0 + 50, "PGM");
+gfx_setfont(9);
+z_[1] ? ( TX(X0 + 156, Y0 + 37, "001"); gfx_setfont(14); TX(X0 + 220, Y0 + 40, "BANK"); gfx_setfont(9); TX(X0 + 256, Y0 + 37, "127"); TX(X0 + 330, Y0 + 37, "Std.Kit"); )
+      : ( sprintf(#pg_, "%03d", z_[0] + 1); TX(X0 + 156, Y0 + 37, #pg_); gfx_setfont(14); TX(X0 + 220, Y0 + 40, "BANK"); gfx_setfont(9); TX(X0 + 256, Y0 + 37, "000");
+          TX(X0 + 330, Y0 + 37, pnm(z_[0])); gfx_setfont(14); TX(X0 + 470, Y0 + 40, cat_abbr(floor(z_[0]/8))); );
+hitbox(X0 + 94, Y0 + 34, 560, 30) ? prog_menu(X0 + 156, Y0 + 66);
+lcol(); RO(X0 + 664, Y0 + 34, 124, 30); gfx_setfont(13); sprintf(#oc, "OCT %+d", p70_oct); TC(X0 + 726, Y0 + 40, #oc);
+
+// row 4: parts
+lcol(); R(X0, Y0 + 108, 30, 20); ui_col(LB); R(X0 + 3, Y0 + 111, 24, 14); lcol(); k = 0; loop(4, R(X0 + 5 + k*6, Y0 + 113, 3, 3); R(X0 + 5 + k*6, Y0 + 120, 3, 3); k += 1; );
+gfx_setfont(11); TX(X0 + 36, Y0 + 110, "PART");
+k = 0;
+loop(16,
+  px_ = X0 + 90 + k*43;
+  lcol(); RO(px_, Y0 + 106, 38, 22);
+  k == p70_part ? ( R(px_, Y0 + 106, 38, 22); ui_col(LB); gfx_setfont(13); sprintf(#pn_, "%d", k + 1); TC(px_ + 19, Y0 + 108, #pn_); ) : (
+    part_count(k) > 0 ? ( lcol(); R(px_ + 4, Y0 + 110, 30, 14); ) : (PT + k*32)[27] ? ( lcol(); LN(px_ + 4, Y0 + 110, px_ + 34, Y0 + 124); );
+    (PT + k*32)[1] ? ( lcol(); gfx_setfont(14); TC(px_ + 19, Y0 + 110, "DR"); );
+  );
+  hitbox(px_, Y0 + 106, 38, 22) ? p70_part = k;
+  k += 1;
+);
+
+p70_page == 0 ? (
+  // ---- VOICE EDIT ----
+  y5 = Y0 + 134;
+  // MONO / POLY
+  lcol(); RO(X0, y5, 112, 96);
+  lhead(X0, y5, 112, "MONO/POLY", p70_cur == 0);
+  lcol(); RO(X0 + 42, y5 + 28, 30, 14); z_[2] ? R(X0 + 44, y5 + 30, 13, 10) : R(X0 + 57, y5 + 30, 13, 10);
+  gfx_setfont(14); lcol(); TC(X0 + 28, y5 + 58, "MONO"); TC(X0 + 84, y5 + 58, "POLY");
+  z_[2] ? R(X0 + 8, y5 + 74, 40, 3) : R(X0 + 64, y5 + 74, 40, 3);
+  lpar(0, p70_part, X0, y5, 112, 96);
+  // ELEM RSRV
+  lcol(); RO(X0 + 114, y5, 60, 96);
+  gfx_setfont(11); lhead(X0 + 114, y5, 60, "ELEM", p70_cur == 1); lcol(); TC(X0 + 144, y5 + 22, "RSRV");
+  gfx_setfont(9); sprintf(#er, "%02d", z_[3]); p70_cur == 1 ? ( R(X0 + 120, y5 + 50, 48, 28); ui_col(LB); ) : lcol(); TC(X0 + 144, y5 + 52, #er);
+  lpar(1, p70_part, X0 + 114, y5, 60, 96);
+  // VELCTY SENS
+  lcol(); RO(X0 + 176, y5, 140, 96); lhead(X0 + 176, y5, 140, "VELCTY SENS", 0);
+  gfx_setfont(14); lcol(); TC(X0 + 211, y5 + 26, "DEPTH"); TC(X0 + 281, y5 + 26, "OFFST");
+  lknob(X0 + 211, y5 + 66, 16, frac(2, z_[4]), p70_cur == 2); lpar(2, p70_part, X0 + 178, y5 + 22, 68, 72);
+  lknob(X0 + 281, y5 + 66, 16, frac(3, z_[5]), p70_cur == 3); lpar(3, p70_part, X0 + 248, y5 + 22, 68, 72);
+  // PORTAMENT
+  lcol(); RO(X0 + 318, y5, 140, 96); lhead(X0 + 318, y5, 140, "PORTAMENT", 0);
+  gfx_setfont(14); lcol(); TC(X0 + 353, y5 + 26, "SW"); TC(X0 + 423, y5 + 26, "TIME");
+  p70_cur == 4 ? ( R(X0 + 330, y5 + 44, 46, 22); ui_col(LB); ) : lcol();
+  RO(X0 + 336, y5 + 48, 34, 12); z_[6] ? R(X0 + 353, y5 + 50, 15, 8) : R(X0 + 338, y5 + 50, 15, 8);
+  lcol(); TC(X0 + 342, y5 + 70, "OFF"); TC(X0 + 366, y5 + 70, "ON");
+  lpar(4, p70_part, X0 + 320, y5 + 22, 66, 72);
+  lknob(X0 + 423, y5 + 66, 16, frac(5, z_[7]), p70_cur == 5); lpar(5, p70_part, X0 + 390, y5 + 22, 66, 72);
+  // MW LFO DEPTH
+  lcol(); RO(X0 + 460, y5, W - 460, 96); lhead(X0 + 460, y5, W - 460, "MW LFO DEPTH", 0);
+  k = 0;
+  loop(3,
+    cx_ = X0 + 460 + (W - 460)*(k + 0.5)/3;
+    gfx_setfont(14); lcol(); TC(cx_, y5 + 26, k == 0 ? "P.MOD" : k == 1 ? "F.MOD" : "A.MOD");
+    lknob(cx_, y5 + 66, 16, frac(6 + k, z_[8 + k]), p70_cur == 6 + k);
+    lpar(6 + k, p70_part, cx_ - 50, y5 + 22, 100, 72);
+    k += 1;
+  );
+
+  // FILTER / EG / VIBRATO / BEND / DRY
+  y6 = Y0 + 236;
+  pw_ = 232;
+  k = 0;
+  loop(3,
+    gx_ = X0 + k*(pw_ + 2);
+    lcol(); RO(gx_, y6, pw_, 250);
+    lhead(gx_, y6, pw_, k == 0 ? "FILTER" : k == 1 ? "EG" : "VIBRATO", 0);
+    lcol(); R(gx_, y6 + 112, pw_, 1);
+    k += 1;
+  );
+  // filter graph: flat, resonant bump at the cutoff, then the fall
+  q_ = PG + z_[0]*16;
+  fcx_ = X0 + 30 + 150*min(max((log(max(q_[2], 30)*2^(z_[11]/16))/log(2) - 5)/9.5, 0), 1);
+  rh_ = 10 + 50*min(max(q_[3] + z_[12]/128, 0), 0.95);
+  lcol(); LN(X0 + 10, y6 + 80, fcx_ - 20, y6 + 80); LN(fcx_ - 20, y6 + 80, fcx_ - 6, y6 + 80 - rh_); LN(fcx_ - 6, y6 + 80 - rh_, fcx_ + 2, y6 + 80 - rh_);
+  LN(fcx_ + 2, y6 + 80 - rh_, fcx_ + 24, y6 + 106); LN(fcx_ - 6, y6 + 80 - rh_ - 1, fcx_ + 2, y6 + 80 - rh_ - 1);
+  ui_col(LM); LN(fcx_ - 14, y6 + 80, fcx_ + 40, y6 + 106);
+  // EG graph
+  ex_ = X0 + pw_ + 2;
+  ea_ = 8 + 36*min(max((log(max(q_[6], 1)*2^(z_[13]/16))/log(10))/3.5, 0), 1);
+  ed_ = 10 + 46*min(max((log(max(q_[7], 1)*2^(z_[14]/16))/log(10))/4, 0), 1);
+  er_ = 10 + 50*min(max((log(max(q_[9], 1)*2^(z_[15]/16))/log(10))/4, 0), 1);
+  es_ = z_[1] ? 0 : q_[8];
+  sy_ = y6 + 100 - es_*70;
+  lcol(); LN(ex_ + 10, y6 + 100, ex_ + 10 + ea_, y6 + 30); LN(ex_ + 10 + ea_, y6 + 30, ex_ + 10 + ea_ + ed_, sy_);
+  LN(ex_ + 10 + ea_ + ed_, sy_, ex_ + pw_ - 20 - er_, sy_); LN(ex_ + pw_ - 20 - er_, sy_, ex_ + pw_ - 20, y6 + 100);
+  LN(ex_ + 10, y6 + 101, ex_ + 10 + ea_, y6 + 31); LN(ex_ + 10 + ea_, y6 + 31, ex_ + 10 + ea_ + ed_, sy_ + 1);
+  LN(ex_ + 10 + ea_ + ed_, sy_ + 1, ex_ + pw_ - 20 - er_, sy_ + 1); LN(ex_ + pw_ - 20 - er_, sy_ + 1, ex_ + pw_ - 20, y6 + 101);
+  // vibrato graph: delay, then the wave (rate and depth)
+  vx_ = X0 + 2*(pw_ + 2);
+  vdl_ = 10 + 60*(z_[18] + 64)/127; vdp_ = 6 + 30*(z_[17] + 64)/127; vrt_ = 2 + 6*(z_[16] + 64)/127;
+  lcol(); LN(vx_ + 8, y6 + 70, vx_ + 8 + vdl_, y6 + 70);
+  ui_col(LM); LN(vx_ + 8, y6 + 72, vx_ + pw_ - 8, y6 + 72);
+  lcol(); px_ = vx_ + 8 + vdl_; py_ = y6 + 70;
+  j = 0; loop(60, xx_ = vx_ + 8 + vdl_ + j*(pw_ - 16 - vdl_)/59; yy_ = y6 + 70 - sin(j/59*vrt_*2*$pi)*vdp_*min(1, j/12);
+    LN(px_, py_, xx_, yy_); px_ = xx_; py_ = yy_; j += 1; );
+  // sliders
+  sy0_ = y6 + 140; sh_ = 96;
+  k = 0;
+  loop(8,
+    gi_ = k < 2 ? 9 + k : k < 5 ? 11 + (k - 2) : 14 + (k - 5);
+    cx_ = k < 2 ? X0 + 58 + k*116 : k < 5 ? X0 + pw_ + 2 + 40 + (k - 2)*76 : X0 + 2*(pw_ + 2) + 40 + (k - 5)*76;
+    gfx_setfont(14); lcol();
+    TC(cx_, y6 + 118, k == 0 ? "CUTOFF" : k == 1 ? "RESNANCE" : k == 2 ? "ATTCK" : k == 3 ? "DECAY" : k == 4 ? "RLESE" : k == 5 ? "RATE" : k == 6 ? "DEPTH" : "DELAY");
+    lslider(cx_, sy0_, sh_, frac(gi_, z_[CTP[gi_]]), p70_cur == gi_);
+    lpar(gi_, p70_part, cx_ - 30, sy0_ - 14, 60, sh_ + 28);
+    k += 1;
+  );
+  // BEND CNTRL and DRY LEVEL columns
+  bx_ = X0 + 3*(pw_ + 2); bw_ = (W - 3*(pw_ + 2) - 2)/2;
+  lcol(); RO(bx_, y6, bw_, 250); RO(bx_ + bw_ + 2, y6, bw_, 250);
+  gfx_setfont(14); lcol(); TC(bx_ + bw_*0.5, y6 + 4, "BEND"); TC(bx_ + bw_*0.5, y6 + 16, "CNTRL");
+  TC(bx_ + bw_*1.5 + 2, y6 + 4, "DRY"); TC(bx_ + bw_*1.5 + 2, y6 + 16, "LEVEL");
+  lslider(bx_ + bw_*0.5, y6 + 46, 180, frac(17, z_[19]), p70_cur == 17); lpar(17, p70_part, bx_, y6 + 30, bw_, 210);
+  lslider(bx_ + bw_*1.5 + 2, y6 + 46, 180, frac(18, z_[20]), p70_cur == 18); lpar(18, p70_part, bx_ + bw_ + 2, y6 + 30, bw_, 210);
+) : p70_page == 1 ? (
+  // ---- MIXER: pan, reverb, chorus, volume, mute for the 16 parts ----
+  y5 = Y0 + 134; cw_ = 45.5; lx_ = X0 + 60;
+  gfx_setfont(14); lcol();
+  TX(X0, y5 + 6, "PGM"); TX(X0, y5 + 46, "PAN"); TX(X0, y5 + 96, "REV"); TX(X0, y5 + 146, "CHO"); TX(X0, y5 + 196, "VOL"); TX(X0, y5 + 332, "MUTE");
+  k = 0;
+  loop(16,
+    zz_ = PT + k*32; cx_ = lx_ + (k + 0.5)*cw_;
+    k == p70_part ? ( ui_col(LM); R(lx_ + k*cw_ + 1, y5, cw_ - 2, 344); );
+    lcol(); gfx_setfont(14); zz_[1] ? TC(cx_, y5 + 6, "DRM") : ( sprintf(#pg_, "%03d", zz_[0] + 1); TC(cx_, y5 + 6, #pg_); );
+    gfx_setfont(14); TC(cx_, y5 + 20, zz_[1] ? "Kit" : cat_abbr(floor(zz_[0]/8)));
+    lknob(cx_, y5 + 58, 13, frac(21, zz_[22]), 0); lpar(21, k, cx_ - 22, y5 + 40, 44, 38);
+    lknob(cx_, y5 + 108, 13, frac(22, zz_[23]), 0); lpar(22, k, cx_ - 22, y5 + 90, 44, 38);
+    lknob(cx_, y5 + 158, 13, frac(23, zz_[24]), 0); lpar(23, k, cx_ - 22, y5 + 140, 44, 38);
+    lslider(cx_, y5 + 196, 120, frac(20, zz_[21]), 0); lpar(20, k, cx_ - 20, y5 + 186, 40, 140);
+    lcol(); RO(cx_ - 12, y5 + 330, 24, 14); zz_[27] ? R(cx_ - 10, y5 + 332, 20, 10);
+    hitbox(cx_ - 14, y5 + 328, 28, 18) ? ( zz_[27] = !zz_[27]; p70_part = k; zz_[27] ? all_off(k); );
+    k += 1;
+  );
+) : (
+  // ---- TUNE: note shift and detune for the 16 parts ----
+  y5 = Y0 + 134; cw_ = 45.5; lx_ = X0 + 60;
+  gfx_setfont(14); lcol(); TX(X0, y5 + 6, "PART"); TX(X0, y5 + 60, "NOTE"); TX(X0, y5 + 72, "SHIFT"); TX(X0, y5 + 180, "DETUNE");
+  k = 0;
+  loop(16,
+    zz_ = PT + k*32; cx_ = lx_ + (k + 0.5)*cw_;
+    k == p70_part ? ( ui_col(LM); R(lx_ + k*cw_ + 1, y5, cw_ - 2, 344); );
+    lcol(); gfx_setfont(13); sprintf(#pn_, "%d", k + 1); TC(cx_, y5 + 4, #pn_);
+    lknob(cx_, y5 + 76, 15, frac(24, zz_[25]), 0); lpar(24, k, cx_ - 22, y5 + 56, 44, 44);
+    gfx_setfont(14); lcol(); TC(cx_, y5 + 98, cval(24, zz_[25]));
+    lknob(cx_, y5 + 196, 15, frac(25, zz_[26]), 0); lpar(25, k, cx_ - 22, y5 + 176, 44, 44);
+    gfx_setfont(14); lcol(); TC(cx_, y5 + 218, cval(25, zz_[26]));
+    k += 1;
+  );
+  gfx_setfont(14); lcol(); TX(X0, y5 + 300, "DETUNE: 1 STEP = 0.2 CENT.  NOTE SHIFT: SEMITONES.  CC / PROGRAM CHANGES FOLLOW THE MIDI CHANNEL OF EACH PART.");
+);
+
+// row 3: data display (what the cursor or the mouse is on)
+lcol(); RO(X0 + 94, Y0 + 68, 560, 34);
+!dshow ? ( p70_page == 0 ? ( strcpy(#dn, cname(p70_cur)); strcpy(#dv, cval(p70_cur, z_[CTP[p70_cur]])); )
+                         : ( strcpy(#dn, p70_page == 1 ? "Mixer" : "Tune"); sprintf(#dv, "Part %d", p70_part + 1); ); );
+gfx_setfont(9); TX(X0 + 110, Y0 + 72, #dn); TR(X0 + 640, Y0 + 72, #dv);
+// row 7: tabs
+ty_ = Y0 + 492;
+k = 0;
+loop(3,
+  tx_ = X0 + k*118; on_ = (k == 0 && p70_page == 1) || (k == 1 && p70_page == 2) || (k == 2 && p70_page == 0);
+  lcol(); on_ ? R(tx_, ty_, 112, 26) : RO(tx_, ty_, 112, 26);
+  gfx_setfont(10); on_ ? ui_col(LB) : lcol(); TC(tx_ + 56, ty_ + 4, k == 0 ? "Mixer" : k == 1 ? "Tune" : "VoicEdit");
+  hitbox(tx_, ty_, 112, 26) ? p70_page = k == 0 ? 1 : k == 1 ? 2 : 0;
+  k += 1;
+);
+lcol(); RO(X0 + W - 112, ty_, 112, 26); gfx_setfont(10); TC(X0 + W - 56, ty_ + 4, "PT1~16");
+
+// ---- keys under the LCD ----
+fy_ = 640;
+k = 0;
+loop(9,
+  fx_ = 196 + k*91;
+  bkey(fx_, fy_, 80, 24, k == 0 || k == 7 ? "SHIFT" : k == 8 ? "EXIT" : sprintf(#fk, "F%d", k)) ? (
+    k == 1 ? p70_page = 1 : k == 2 ? p70_page = 2 : k == 3 ? p70_page = 0 :
+    k == 4 ? p70_part = (p70_part + 15) % 16 : k == 5 ? p70_part = (p70_part + 1) % 16 :
+    k == 6 ? ( (pz())[1] = !(pz())[1]; ) : k == 8 ? panic_req = 1;
+  );
+  k += 1;
+);
+gfx_setfont(14); ui_col(0x4A4E53);
+TC(287, 668, "MIXER"); TC(378, 668, "TUNE"); TC(469, 668, "VOICE"); TC(560, 668, "PART -"); TC(651, 668, "PART +"); TC(742, 668, "DRUM"); TC(924, 668, "PANIC");
+
+// ---- left: part / octave keys, MIDI lamp ----
+gfx_setfont(11); ui_col(0x2E3134); TC(95, 110, "PART");
+bkey(40, 130, 50, 34, "-") ? p70_part = (p70_part + 15) % 16;
+bkey(100, 130, 50, 34, "+") ? p70_part = (p70_part + 1) % 16;
+gfx_setfont(11); ui_col(0x2E3134); TC(95, 200, "OCTAVE");
+bkey(40, 220, 50, 34, "-") ? p70_oct = max(p70_oct - 1, -3);
+bkey(100, 220, 50, 34, "+") ? p70_oct = min(p70_oct + 1, 3);
+gfx_setfont(11); ui_col(0x2E3134); TC(95, 290, "MIDI IN");
+rd_led(95*0.75, 320*0.75, 7*0.75, ins_midi_lit(), 0x46D86A);
+time_precise() - midi_t < 0.15 ? ( gfx_setfont(11); ui_col(0x2E3134); sprintf(#mp, "PART %d", midi_part + 1); TC(95, 336, #mp); );
+// ---- right: cursor and value keys ----
+gfx_setfont(11); ui_col(0x2E3134); TC(1105, 110, "CURSOR");
+bkey(1080, 130, 50, 34, "^") ? p70_page == 0 ? p70_cur = p70_cur >= 9 ? max(p70_cur - 9, 0) : p70_cur;
+bkey(1050, 170, 50, 34, "<") ? p70_page == 0 ? p70_cur = max(p70_cur - 1, 0) : p70_part = (p70_part + 15) % 16;
+bkey(1110, 170, 50, 34, ">") ? p70_page == 0 ? p70_cur = min(p70_cur + 1, 18) : p70_part = (p70_part + 1) % 16;
+bkey(1080, 210, 50, 34, "v") ? p70_page == 0 ? p70_cur = min(p70_cur + 9, 18);
+gfx_setfont(11); ui_col(0x2E3134); TC(1105, 290, "VALUE");
+p70_page == 0 ? (
+  bkey(1040, 310, 60, 34, "-1/NO") ? ( zp_ = pz() + CTP[p70_cur]; zp_[0] = max(zp_[0] - 1, CMN[p70_cur]); );
+  bkey(1110, 310, 60, 34, "+1/YES") ? ( zp_ = pz() + CTP[p70_cur]; zp_[0] = min(zp_[0] + 1, CMX[p70_cur]); );
+) : ( bkey(1040, 310, 60, 34, "-1/NO"); bkey(1110, 310, 60, 34, "+1/YES"); );
+
+// ---- the slider row: drift, reverb, chorus, master, output stage ----
+gfx_setfont(14); ui_col(0x2E3134);
+dy_kst = 7; dy_ink = 0x2E3134; dy_ntick = 11;
+TC(60, 400, "REVERB"); dy_knob(60*0.75, 440*0.75, 18*0.75, 3, 0, 100, 45, 0, 0x9DA2A8, "TIME", "");
+dy_knob(130*0.75, 440*0.75, 18*0.75, 4, 0, 100, 70, 0, 0x9DA2A8, "LEVEL", "");
+TC(95, 500, "CHORUS"); dy_knob(95*0.75, 540*0.75, 18*0.75, 5, 0, 100, 50, 0, 0x9DA2A8, "DEPTH", "");
+gfx_setfont(14); ui_col(0x2E3134); TC(1105, 400, "MASTER");
+dy_knob(1070*0.75, 440*0.75, 18*0.75, 1, -24, 6, 0, 0, 0x9DA2A8, "VOLUME", "");
+dy_knob(1140*0.75, 440*0.75, 18*0.75, 2, 0, 100, 10, 0, 0x8A6BD8, "DRIFT", "");
+ins_io(1062*0.75, 520*0.75, 6, 0x2E3134);
+
+// ---- mini keyboard (two octaves and a C), plays the selected part ----
+kx0 = 196; ky0 = 690; kw_ = 808/15; kh_ = 140;
+ui_col(0x26292C); RR(kx0 - 8, ky0 - 8, 824, kh_ + 16, 8);
+kdown_ = -1;
+mdown && mouse_y >= ky0*qs && mouse_y < (ky0 + kh_)*qs && mouse_x >= kx0*qs && mouse_x < (kx0 + 808)*qs && (drag_id == 0 || drag_id == 9000) ? (
+  drag_id = 9000;
+  wi_ = floor((mouse_x/qs - kx0)/kw_);
+  kdown_ = floor(wi_/7)*12 + (wi_ % 7 == 0 ? 0 : wi_ % 7 == 1 ? 2 : wi_ % 7 == 2 ? 4 : wi_ % 7 == 3 ? 5 : wi_ % 7 == 4 ? 7 : wi_ % 7 == 5 ? 9 : 11);
+  mouse_y < (ky0 + kh_*0.6)*qs ? (
+    j = 0; loop(14, (j % 7) != 2 && (j % 7) != 6 ? ( bx2_ = kx0 + (j + 1)*kw_ - kw_*0.3;
+      mouse_x >= bx2_*qs && mouse_x < (bx2_ + kw_*0.6)*qs ? kdown_ = floor(j/7)*12 + (j % 7 == 0 ? 1 : j % 7 == 1 ? 3 : j % 7 == 3 ? 6 : j % 7 == 4 ? 8 : 10); ); j += 1; );
+  );
+);
+kdown_ != kb_held ? (
+  kb_held >= 0 ? kb_off = 48 + p70_oct*12 + kb_held + 1;
+  kdown_ >= 0 ? kb_on = 48 + p70_oct*12 + kdown_ + 1;
+  kb_held = kdown_;
+);
+j = 0;
+loop(15,
+  ui_col(0xF2F2EE); R(kx0 + j*kw_ + 1, ky0, kw_ - 2, kh_);
+  wn_ = floor(j/7)*12 + (j % 7 == 0 ? 0 : j % 7 == 1 ? 2 : j % 7 == 2 ? 4 : j % 7 == 3 ? 5 : j % 7 == 4 ? 7 : j % 7 == 5 ? 9 : 11);
+  wn_ == kb_held ? ( ui_col(0x8FB4D8); R(kx0 + j*kw_ + 1, ky0 + kh_ - 30, kw_ - 2, 30); );
+  j += 1;
+);
+j = 0;
+loop(14,
+  (j % 7) != 2 && (j % 7) != 6 ? (
+    bn_ = floor(j/7)*12 + (j % 7 == 0 ? 1 : j % 7 == 1 ? 3 : j % 7 == 3 ? 6 : j % 7 == 4 ? 8 : 10);
+    ui_col(bn_ == kb_held ? 0x3D6FB6 : 0x1A1B1D); R(kx0 + (j + 1)*kw_ - kw_*0.3, ky0, kw_*0.6, kh_*0.6);
+  );
+  j += 1;
+);
+gfx_setfont(14); ui_col(0x2E3134); sprintf(#kc, "C%d", 3 + p70_oct); TX(kx0 + 4, ky0 + kh_ - 16, #kc);
+
+pk_end();
+ui_end();
