@@ -187,12 +187,13 @@ gfx_setfont(12, "Trebuchet MS", 34*qs, 'b');
 gfx_setfont(13, "Trebuchet MS", 20*qs, 'b');
 GRN = 0x46D86A; AMB = 0xFFB030; RED = 0xFF3A2A; BLU = 0x3E8BFF;
 
-function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
-function RR(x, y, w, h, r) ( rd_rr(x*qs, y*qs, w*qs, h*qs, r*qs); );
-function CIRC(x, y, rr, f) ( gfx_circle(x*qs, y*qs, rr*qs, f, 1); );
-function TX(x, y, t) ( gfx_x = x*qs; gfx_y = y*qs; gfx_drawstr(t); );
-function TC(cx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = cx*qs - w*0.5; gfx_y = y*qs; gfx_drawstr(t); );
-function inbox(x, y, w, h) ( mouse_x >= x*qs && mouse_x < (x + w)*qs && mouse_y >= y*qs && mouse_y < (y + h)*qs; );
+// ox: horizontal offset (design units) - lets the two half-racks trade places with the ORDER key
+function R(x, y, w, h) ( gfx_rect((x + ox)*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
+function RR(x, y, w, h, r) ( rd_rr((x + ox)*qs, y*qs, w*qs, h*qs, r*qs); );
+function CIRC(x, y, rr, f) ( gfx_circle((x + ox)*qs, y*qs, rr*qs, f, 1); );
+function TX(x, y, t) ( gfx_x = (x + ox)*qs; gfx_y = y*qs; gfx_drawstr(t); );
+function TC(cx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = (cx + ox)*qs - w*0.5; gfx_y = y*qs; gfx_drawstr(t); );
+function inbox(x, y, w, h) ( mouse_x >= (x + ox)*qs && mouse_x < (x + w + ox)*qs && mouse_y >= y*qs && mouse_y < (y + h)*qs; );
 function hitbox(x, y, w, h) local(h_) ( h_ = pressed && drag_id == 0 && inbox(x, y, w, h); h_ ? drag_id = -1; h_; );
 function setmsg(n, v) ( strcpy(#lcdn, n); strcpy(#lcdv, v); lcd_t = time_precise(); );
 function tog(idx) ( slider(idx) = slider(idx) < 0.5; ui_auto(idx); );
@@ -200,18 +201,18 @@ function touch(idx, name, val) ( drag_id == 1600 + idx ? setmsg(name, val); );
 function knob(idx, cx, cy, r, lo, hi, def, lg, cap, ink, st, label, val) (
   dy_kst = st; dy_ink = ink; dy_ntick = 11;
   // house style: the value only shows while the mouse is over the knob (or dragging it)
-  dy_knob(cx*0.75, cy*0.75, r*0.75, idx, lo, hi, def, lg, cap, label,
+  dy_knob((cx + ox)*0.75, cy*0.75, r*0.75, idx, lo, hi, def, lg, cap, label,
     drag_id == 1600 + idx || inbox(cx - r - 8, cy - r - 8, 2*r + 16, 2*r + 52) ? val : "");
   touch(idx, label, val);
 );
 // lit square key with its caption underneath
 function key(x, y, w, h, on, c, cap, ink) local(hit) (
   rd_sqbg = 0x101012;
-  hit = rd_sq(x*0.75, y*0.75, w*0.75, h*0.75, on, c, "");
+  hit = rd_sq((x + ox)*0.75, y*0.75, w*0.75, h*0.75, on, c, "");
   gfx_setfont(8); ui_col(ink); TC(x + w*0.5, y + h + 6, cap);
   hit;
 );
-function lamp(x, y, on, c) ( rd_led(x*0.75, y*0.75, 5*0.75, on, c); );
+function lamp(x, y, on, c) ( rd_led((x + ox)*0.75, y*0.75, 5*0.75, on, c); );
 // vertical gain-reduction ladder, 0 .. -20 dB downward
 function grl(x, y, h, gr, ink, label) local(k, n, sh, lit, c) (
   n = 16; sh = h/n;
@@ -224,7 +225,7 @@ function grl(x, y, h, gr, ink, label) local(k, n, sh, lit, c) (
   );
   gfx_setfont(8); ui_col(ink); TC(x + 8, y + h + 8, label);
 );
-function rscrew(x, y) ( rd_screw(x*0.75, y*0.75); );
+function rscrew(x, y) ( rd_screw((x + ox)*0.75, y*0.75); );
 function pname(n) (
   n == 0 ? "INIT" : n == 1 ? "DRUM BUS" : n == 2 ? "VOCAL EXPRESSOR" : n == 3 ? "BASS TIGHT" :
   n == 4 ? "MIX GLUE" : n == 5 ? "PARALLEL SMASH" : n == 6 ? "ACOUSTIC NATURAL" : "NEGATIVE PUMP";
@@ -232,6 +233,7 @@ function pname(n) (
 function go_preset(n) ( slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0; slider_automate(1048575); );
 
 // ---------------------------------------------------------------------
+ox = 0;
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
 
 // ---- top strip: name, presets, order, mix, drift, out stage, size ----
@@ -274,8 +276,9 @@ gfx_setfont(8, "Trebuchet MS", 13.5*qs, 'b');
 ui_size_picker(1336*qs, 26*qs);
 
 // ---- half-rack A: brushed silver ----
+ox = ord ? 716 : 0;                  // B > A: unit A moves to the right
 INKA = 0x1A1B1E;
-rd_brushed(10*0.75, 86*0.75, 704*0.75, 268*0.75, 0xC9CCD0);
+rd_brushed((10 + ox)*0.75, 86*0.75, 704*0.75, 268*0.75, 0xC9CCD0);
 ui_cola(0x000000, 0.35); R(10, 352, 704, 2); ui_cola(0xFFFFFF, 0.4); R(10, 86, 704, 1);
 rscrew(24, 100); rscrew(24, 340); rscrew(700, 100); rscrew(700, 340);
 gfx_setfont(13); ui_col(INKA); TX(44, 98, "A");
@@ -293,9 +296,10 @@ vGa = max(mGrA, vGa*0.9); mGrA = 0;
 grl(670, 136, 186, vGa, INKA, "GR");
 
 // ---- half-rack B: grey and blue ----
+ox = ord ? -716 : 0;
 INKB = 0xEEF0F2;
 ui_col(0x5A6068); R(726, 86, 704, 268);
-gfx_gradrect(726*qs, 86*qs, 704*qs, 124*qs, 1, 1, 1, 0.08, 0, 0, 0, 0, 0, 0, 0, -0.08/(124*qs));
+gfx_gradrect((726 + ox)*qs, 86*qs, 704*qs, 124*qs, 1, 1, 1, 0.08, 0, 0, 0, 0, 0, 0, 0, -0.08/(124*qs));
 ui_col(0x2E5FA8); R(726, 86, 704, 6);
 ui_cola(0x000000, 0.35); R(726, 352, 704, 2);
 rscrew(740, 106); rscrew(740, 340); rscrew(1416, 106); rscrew(1416, 340);
@@ -324,6 +328,7 @@ loop(16, lit_ = od_ >= -30 + (16 - k)*30/16 - 30/16; c_ = k < 2 ? RED : k < 5 ? 
   ui_col(lit_ ? c_ : ui_mix(c_, 0x000000, 0.8)); R(1374, 136 + k*11.6 + 1, 16, 9.6); k += 1; );
 gfx_setfont(8); ui_col(INKB); TC(1382, 330, "OUT");
 // order lamps between the units
+ox = 0;
 lamp(720, 220, aOn && bOn, AMB);
 
 pk_end();
