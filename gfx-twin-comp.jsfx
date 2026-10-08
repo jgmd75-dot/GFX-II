@@ -1,0 +1,322 @@
+desc:GFX Twin Comp
+// gfx-twin-comp - two classic compressors in one rack, in either order
+//tags: dynamics compressor vca rms overeasy expressor dual
+//author: JGWizrad / Garden FX (GFX)
+//
+// A  VCA      in the spirit of the dbx 160: true-RMS detection, a fast VCA, OVEREASY soft knee (or hard).
+//             COMPRESSION runs 1:1 .. INF:1 and on past it into negative ratios (louder in, quieter out).
+//             Program-dependent timing: the attack quickens the further the signal is over threshold
+//             (about 15 ms for 10 dB, 5 ms for 20 dB) and the release recovers at a steady 120 dB per second.
+//             BELOW / OVEREASY / ABOVE lamps show where the level sits against the threshold.
+// B  EXPRESSOR in the spirit of the Aphex 651: peak-sensing, smooth knee, DRIVE / RATIO / ATTACK / RELEASE.
+//             EASYRIDER: automatic, opto-smooth timing (quick attack, a two-stage programme-dependent release).
+//             HF EXP: brings the top back up in proportion to the gain reduction, so heavy compression stays open.
+//             SPR: two all-passes at 180 Hz rotate the low end against the top for a tighter, firmer bottom.
+//             LF CUT: a 150 Hz high-pass on the detector only - bass peaks no longer pump the compressor.
+// ORDER       A only / B only / A > B / B > A.  MIX blends in the dry signal (parallel compression).
+// DRIFT       an uneven supply under both VCAs: their gain and colour wobble very slightly (level-neutral).
+// OUT         the GFX output stage: OFF / CLIP (soft clip at -0.3 dBFS) / LIMIT (3 ms lookahead).
+//
+// GUI: drag knobs (Shift = fine), double-click / Ctrl-click = reset. Click the LCD for the preset list.
+// S / M / L / ? = size and help.
+//
+// Requires gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,7,1{Init,Drum Bus,Vocal Expressor,Bass Tight,Mix Glue,Parallel Smash,Acoustic Natural,Negative Pump}>-Preset
+slider2:2<0,3,1{A only,B only,A > B,B > A}>-Order
+slider3:-20<-40,0,0.1>-A Threshold (dB)
+slider4:40<0,100,1>-A Compression (%)
+slider5:1<0,1,1{Off,On}>-A OverEasy
+slider6:0<-20,20,0.1>-A Output (dB)
+slider7:-20<-40,0,0.1>-B Drive (dB)
+slider8:3<1,20,0.1>-B Ratio
+slider9:5<0.1,50,0.01>-B Attack (ms)
+slider10:300<30,3000,1>-B Release (ms)
+slider11:0<0,1,1{Off,On}>-B Easyrider
+slider12:30<0,100,1>-B HF Exp (%)
+slider13:0<0,1,1{Off,On}>-B SPR
+slider14:0<0,1,1{Off,On}>-B LF Cut
+slider15:0<-20,20,0.1>-B Output (dB)
+slider16:100<0,100,1>-Mix (%)
+slider17:20<0,100,1>-Drift (%)
+slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+@init
+#ui_man = "gfx-twin-comp";
+nextmem = 0;
+function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
+function db2g(d) ( exp(d*0.11512925465); );
+function g2db(g) ( 8.68588963807*log(max(g, 0.0000000001)); );
+function tc(s) ( 1 - exp(-1/(max(s, 0.000001)*srate)); );
+ost_init(alloc(4096));
+
+// ---------- engine A: VCA, true RMS, OverEasy, program-dependent timing ----------
+function engA() local(ms_, lv, over, tg, k) (
+  aMs += (max(xL*xL, xR*xR) - aMs)*aRmsC;
+  lv = 10*log10(max(aMs, 0.0000000001)) + 3;          // RMS, read against peak dBFS (a sine's RMS + 3 dB)
+  over = lv - aThr;
+  aLamp = over < -aKn*0.5 ? 0 : over <= aKn*0.5 && aKn > 0 ? 1 : 2;   // BELOW / OVEREASY / ABOVE
+  tg = min(40, dy_curve(over, aKn)*aSl);
+  tg > aGr ? ( k = tc(max(0.0015, 0.15/max(1, tg - aGr))); aGr += (tg - aGr)*k; )
+           : aGr = max(tg, aGr - 120/srate);            // 120 dB per second
+  k = db2g(-aGr)*aOut*dGa;
+  xL *= k; xR *= k;
+  // the VCA's colour: a whisper of second harmonic that grows with gain reduction (and the supply wander)
+  k = 0.004*(1 + aGr/10)*dCa;
+  xL += k*xL*abs(xL); xR += k*xR*abs(xR);
+  mGrA = max(mGrA, aGr);
+);
+
+// ---------- engine B: Expressor ----------
+function ap1(x) instance(x1, y1) local(y) ( y = bAp*x + x1 - bAp*y1; x1 = x; y1 = y; y; );
+function engB() local(dl, dr, pk, lv, tg, g, boost, hL, hR) (
+  bLpL += (xL - bLpL)*bLcC; bLpR += (xR - bLpR)*bLcC;
+  bLcut ? ( dl = xL - bLpL; dr = xR - bLpR; ) : ( dl = xL; dr = xR; );
+  pk = max(abs(dl), abs(dr));
+  lv = g2db(pk);
+  tg = min(40, dy_curve(lv - bThr, 6)*bSl);
+  bEasy ? (
+    bGf += (tg - bGf)*(tg > bGf ? bEA : bEF);           // fast stage: the peaks
+    bGs += (tg - bGs)*(tg > bGs ? bEA*0.25 : bES);      // slow stage: the body (opto-like memory)
+    bGr = max(bGf, bGs);
+  ) : (
+    bGr += (tg - bGr)*(tg > bGr ? bAt : bRl);
+  );
+  g = db2g(-bGr)*bOut*dGb;
+  xL *= g; xR *= g;
+  // HF EXP: lift the top in proportion to the gain reduction (up to +6 dB)
+  bHfx > 0 ? (
+    boost = db2g(min(6, bGr*0.5*bHfx)) - 1;
+    bHpL += (xL - bHpL)*bHfC; bHpR += (xR - bHpR)*bHfC;
+    hL = xL - bHpL; hR = xR - bHpR;
+    xL += boost*hL; xR += boost*hR;
+  );
+  // SPR: rotate the low end
+  bSpr ? ( xL = sL2.ap1(sL1.ap1(xL)); xR = sR2.ap1(sR1.ap1(xR)); );
+  mGrB = max(mGrB, bGr);
+);
+
+// ---------- parameters ----------
+function setup() local(s) (
+  ord = floor(slider2 + 0.5);
+  aThr = slider3; s = slider4/100;
+  aSl = s <= 0.8 ? s/0.8 : 1 + (s - 0.8)/0.2*0.5;      // 1:1 .. INF:1 at 80%, then negative ratios to -2:1
+  aKn = slider5 > 0.5 ? 10 : 0;
+  aOut = db2g(slider6);
+  bThr = slider7; bSl = 1 - 1/max(1, slider8);
+  bAt = tc(slider9*0.001); bRl = tc(slider10*0.001);
+  bEasy = slider11 > 0.5; bHfx = slider12/100; bSpr = slider13 > 0.5; bLcut = slider14 > 0.5;
+  bOut = db2g(slider15);
+  mix = slider16/100; drA = slider17/100;
+  ost_setup(0, 0, 120, 6000, -0.3, floor(slider18 + 0.5));
+);
+aRmsC = tc(0.005);
+bEA = tc(0.008); bEF = tc(0.09); bES = tc(1.4);
+bLcC = 1 - exp(-2*$pi*150/srate); bHfC = 1 - exp(-2*$pi*3500/srate);
+t_ = tan($pi*180/srate); bAp = (t_ - 1)/(t_ + 1);
+dGa = dGb = dCa = 1; dwA = dwB = 0; dtA = dtB = 0; dsA = dsB = 0;
+mGrA = mGrB = 0; mOut = 0; aLamp = 0;
+
+// ---------- presets: order, A thr / comp / OE / out, B drive / ratio / att / rel / easy / hfx / spr / lfcut / out, mix ----------
+function pa(o, at, ac, ae, ao) ( slider2 = o; slider3 = at; slider4 = ac; slider5 = ae; slider6 = ao; );
+function pb(bd, br, ba, bl, be, bh, bs, bc, bo, m) (
+  slider7 = bd; slider8 = br; slider9 = ba; slider10 = bl; slider11 = be; slider12 = bh; slider13 = bs; slider14 = bc; slider15 = bo; slider16 = m;
+);
+function apply_preset(n) (
+  n == 0 ? ( pa(2, -20, 40, 1, 0);   pb(-20, 3, 5, 300, 0, 30, 0, 0, 0, 100); ) :     // Init
+  n == 1 ? ( pa(0, -18, 60, 1, 4);   pb(-20, 3, 5, 300, 0, 30, 0, 0, 0, 100); ) :     // Drum Bus
+  n == 2 ? ( pa(1, -20, 40, 1, 0);   pb(-24, 4, 3, 250, 1, 40, 0, 1, 5, 100); ) :     // Vocal Expressor
+  n == 3 ? ( pa(2, -16, 70, 0, 2);   pb(-18, 3, 10, 200, 0, 0, 1, 0, 2, 100); ) :     // Bass Tight
+  n == 4 ? ( pa(3, -14, 30, 1, 1);   pb(-16, 2, 20, 400, 1, 20, 1, 1, 1, 100); ) :    // Mix Glue
+  n == 5 ? ( pa(2, -28, 90, 0, 10);  pb(-26, 8, 1, 120, 0, 50, 0, 0, 4, 40); ) :      // Parallel Smash
+  n == 6 ? ( pa(1, -20, 40, 1, 0);   pb(-22, 2.5, 15, 500, 1, 25, 0, 1, 3, 100); ) :  // Acoustic Natural
+           ( pa(0, -24, 92, 1, 6);   pb(-20, 3, 5, 300, 0, 30, 0, 0, 0, 100); );      // Negative Pump
+);
+!ui_dflt ? ( ui_sz = 2; lastPreset = slider1; );
+ui_dflt = 1;
+setup();
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, lastPreset);
+
+@slider
+slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
+setup();
+
+@block
+setup();
+// DRIFT: an uneven supply under both VCAs - slow random walks of gain (+/-0.15 dB at 100%) and colour
+dwA -= samplesblock; dwA <= 0 ? ( dwA = srate*(0.5 + rand(1.5)); dtA = rand(2) - 1; );
+dwB -= samplesblock; dwB <= 0 ? ( dwB = srate*(0.4 + rand(1.2)); dtB = rand(2) - 1; );
+dsA += (dtA - dsA)*min(1, samplesblock/(0.6*srate)); dsB += (dtB - dsB)*min(1, samplesblock/(0.5*srate));
+dGa = db2g(0.15*drA*dsA); dGb = db2g(0.15*drA*dsB); dCa = 1 + 0.8*drA*dsA;
+
+@sample
+inL = spl0; inR = spl1;
+xL = inL; xR = inR;
+ord == 0 ? engA() : ord == 1 ? engB() : ord == 2 ? ( engA(); engB(); ) : ( engB(); engA(); );
+yL = inL + (xL - inL)*mix; yR = inR + (xR - inR)*mix;
+ost_out(yL, yR);
+spl0 = ost_l; spl1 = ost_r;
+a_ = max(abs(spl0), abs(spl1)); mOut = a_ > mOut ? a_ : mOut*0.9997;
+
+@gfx 1080 270
+// =====================================================================
+// GUI - a top strip over two half-rack units: A in the brushed silver of the classic VCA box, B in the
+// grey-and-blue of the Expressor. Design space 1440 x 360 at qs = 0.75 * sc (1080 x 270 at size M).
+// =====================================================================
+ui_begin(1080, 270);
+qs = sc*0.75;
+
+gfx_setfont(6, "Trebuchet MS", 15*qs, 'b');
+gfx_setfont(8, "Trebuchet MS", 13.5*qs, 'b');
+gfx_setfont(9, "Courier New", 24*qs, 'b');
+gfx_setfont(10, "Courier New", 15*qs, 'b');
+gfx_setfont(12, "Trebuchet MS", 34*qs, 'b');
+gfx_setfont(13, "Trebuchet MS", 20*qs, 'b');
+GRN = 0x46D86A; AMB = 0xFFB030; RED = 0xFF3A2A; BLU = 0x3E8BFF;
+
+function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
+function RR(x, y, w, h, r) ( rd_rr(x*qs, y*qs, w*qs, h*qs, r*qs); );
+function CIRC(x, y, rr, f) ( gfx_circle(x*qs, y*qs, rr*qs, f, 1); );
+function TX(x, y, t) ( gfx_x = x*qs; gfx_y = y*qs; gfx_drawstr(t); );
+function TC(cx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = cx*qs - w*0.5; gfx_y = y*qs; gfx_drawstr(t); );
+function inbox(x, y, w, h) ( mouse_x >= x*qs && mouse_x < (x + w)*qs && mouse_y >= y*qs && mouse_y < (y + h)*qs; );
+function hitbox(x, y, w, h) local(h_) ( h_ = pressed && drag_id == 0 && inbox(x, y, w, h); h_ ? drag_id = -1; h_; );
+function setmsg(n, v) ( strcpy(#lcdn, n); strcpy(#lcdv, v); lcd_t = time_precise(); );
+function tog(idx) ( slider(idx) = slider(idx) < 0.5; ui_auto(idx); );
+function touch(idx, name, val) ( drag_id == 1600 + idx ? setmsg(name, val); );
+function knob(idx, cx, cy, r, lo, hi, def, lg, cap, ink, st, label, val) (
+  dy_kst = st; dy_ink = ink; dy_ntick = 11;
+  dy_knob(cx*0.75, cy*0.75, r*0.75, idx, lo, hi, def, lg, cap, label, val);
+  touch(idx, label, val);
+);
+// lit square key with its caption underneath
+function key(x, y, w, h, on, c, cap, ink) local(hit) (
+  rd_sqbg = 0x101012;
+  hit = rd_sq(x*0.75, y*0.75, w*0.75, h*0.75, on, c, "");
+  gfx_setfont(8); ui_col(ink); TC(x + w*0.5, y + h + 6, cap);
+  hit;
+);
+function lamp(x, y, on, c) ( rd_led(x*0.75, y*0.75, 5*0.75, on, c); );
+// vertical gain-reduction ladder, 0 .. -20 dB downward
+function grl(x, y, h, gr, ink, label) local(k, n, sh, lit, c) (
+  n = 16; sh = h/n;
+  ui_col(0x08080A); R(x - 3, y - 3, 22, h + 6);
+  k = 0;
+  loop(n,
+    lit = gr >= (k + 0.5)*20/n; c = k >= 12 ? RED : AMB;
+    ui_col(lit ? c : ui_mix(c, 0x000000, 0.8)); R(x, y + k*sh + 1, 16, sh - 2);
+    k += 1;
+  );
+  gfx_setfont(8); ui_col(ink); TC(x + 8, y + h + 8, label);
+);
+function rscrew(x, y) ( rd_screw(x*0.75, y*0.75); );
+function pname(n) (
+  n == 0 ? "INIT" : n == 1 ? "DRUM BUS" : n == 2 ? "VOCAL EXPRESSOR" : n == 3 ? "BASS TIGHT" :
+  n == 4 ? "MIX GLUE" : n == 5 ? "PARALLEL SMASH" : n == 6 ? "ACOUSTIC NATURAL" : "NEGATIVE PUMP";
+);
+function go_preset(n) ( slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0; slider_automate(65535); );
+
+// ---------------------------------------------------------------------
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+
+// ---- top strip: name, presets, order, mix, drift, out stage, size ----
+ui_col(0x1E2023); R(0, 0, 1440, 76);
+gfx_gradrect(0, 0, 1440*qs, 30*qs, 1, 1, 1, 0.05, 0, 0, 0, 0, 0, 0, 0, -0.05/(30*qs));
+ui_col(0xC8402A); CIRC(40, 38, 22, 1);
+gfx_setfont(2); ui_col(0xF2EEE4); ui_text(40*qs, 31*qs, "GFX");
+gfx_setfont(12); ui_col(0xEDEBE4); TX(74, 14, "TWIN COMP");
+gfx_setfont(8); ui_col(0xA8ABB0); TX(76, 52, "VCA  +  EXPRESSOR");
+
+ui_col(0x050505); R(300, 10, 290, 56);
+ui_col(0x140C04); R(304, 14, 282, 48);
+ui_col(0xFFAE2A);
+time_precise() - lcd_t < 1.5 ? ( gfx_setfont(10); TX(316, 18, #lcdn); gfx_setfont(9); TX(316, 34, #lcdv); )
+  : ( gfx_setfont(10); sprintf(#l1, "PRESET %02d/08", slider1 + 1); TX(316, 18, #l1); gfx_setfont(9); TX(316, 34, pname(slider1)); );
+hitbox(300, 10, 290, 56) ? (
+  #pm = ""; k = 0; loop(8, slider1 == k ? strcat(#pm, "!"); strcat(#pm, pname(k)); k < 7 ? strcat(#pm, "|"); k += 1; );
+  gfx_x = mouse_x; gfx_y = mouse_y; k = gfx_showmenu(#pm); k > 0 ? go_preset(k - 1);
+);
+ui_button(600*qs, 14*qs, 38*qs, 48*qs, "<", 0, 1) ? go_preset((slider1 + 7) % 8);
+ui_button(642*qs, 14*qs, 38*qs, 48*qs, ">", 0, 1) ? go_preset((slider1 + 1) % 8);
+
+// ORDER: one key steps A > B, B > A, A only, B only
+o_hov = inbox(712, 16, 150, 44);
+o_hov && pressed && drag_id == 0 ? (
+  drag_id = -1; o_held = 1;
+  slider2 = ord == 2 ? 3 : ord == 3 ? 0 : ord == 0 ? 1 : 2; ui_auto(2); ord = slider2;
+  setmsg("ORDER", ord == 0 ? "A ONLY" : ord == 1 ? "B ONLY" : ord == 2 ? "A > B" : "B > A");
+);
+!mdown ? o_held = 0;
+ui_bbckey(712*qs, 16*qs, 150*qs, 44*qs, ord == 0 ? "A ONLY" : ord == 1 ? "B ONLY" : ord == 2 ? "A  >  B" : "B  >  A", o_held, 1, 1, 1, o_hov, o_held, 13);
+gfx_setfont(8); ui_col(0xA8ABB0); TC(787, 62, "ORDER");
+
+knob(16, 900, 36, 16, 0, 100, 100, 0, 0x9DA2A8, 0xD8D8D2, 7, "", "");
+gfx_setfont(8); ui_col(0xA8ABB0); TC(900, 58, "MIX"); touch(16, "MIX", (sprintf(#tv, "%.0f%%", slider16); #tv));
+knob(17, 966, 36, 16, 0, 100, 20, 0, 0x8A6BD8, 0xD8D8D2, 7, "", "");
+gfx_setfont(8); ui_col(0xA8ABB0); TC(966, 58, "DRIFT"); touch(17, "DRIFT", (sprintf(#tv, "%.0f%%", slider17); #tv));
+ui_okfs = 0.8; ui_outkeys(1010*0.75, 8*0.75, 52*0.75, 12, 2, 18);
+gfx_setfont(8, "Trebuchet MS", 13.5*qs, 'b');
+ui_size_picker(1250*qs, 26*qs);
+
+// ---- half-rack A: brushed silver ----
+INKA = 0x1A1B1E;
+rd_brushed(10*0.75, 86*0.75, 704*0.75, 268*0.75, 0xC9CCD0);
+ui_cola(0x000000, 0.35); R(10, 352, 704, 2); ui_cola(0xFFFFFF, 0.4); R(10, 86, 704, 1);
+rscrew(24, 100); rscrew(24, 340); rscrew(700, 100); rscrew(700, 340);
+gfx_setfont(13); ui_col(INKA); TX(44, 98, "A");
+gfx_setfont(8); ui_col(0x3C4048); TX(70, 104, "VCA COMPRESSOR  -  TRUE RMS");
+// threshold lamps
+lamp(66, 178, aLamp == 0, GRN); lamp(66, 220, aLamp == 1 && aKn > 0, AMB); lamp(66, 262, aLamp == 2, RED);
+gfx_setfont(8); ui_col(INKA); TX(82, 171, "BELOW"); TX(82, 213, "OVEREASY"); TX(82, 255, "ABOVE");
+sprintf(#vA1, "%.1f dB", slider3); knob(3, 240, 216, 40, -40, 0, -20, 0, 0x0D0D0F, INKA, 0, "THRESHOLD", #vA1);
+s_ = slider4/100; s_ < 0.795 ? sprintf(#vA2, "%.1f:1", 1/max(0.0001, 1 - s_/0.8)) : s_ <= 0.805 ? strcpy(#vA2, "INF:1") : sprintf(#vA2, "-%.1f:1", 1/max(0.0001, (s_ - 0.8)/0.2*0.5));
+knob(4, 380, 216, 40, 0, 100, 40, 0, 0x0D0D0F, INKA, 0, "COMPRESSION", #vA2);
+sprintf(#vA3, "%+.1f dB", slider6); knob(6, 520, 216, 32, -20, 20, 0, 0, 0x0D0D0F, INKA, 0, "OUTPUT", #vA3);
+key(590, 150, 54, 40, slider5 > 0.5, AMB, "OVEREASY", INKA) ? ( tog(5); setmsg("OVEREASY", slider5 > 0.5 ? "SOFT KNEE" : "HARD KNEE"); );
+vGa = max(mGrA, vGa*0.9); mGrA = 0;
+grl(670, 136, 186, vGa, INKA, "GR");
+
+// ---- half-rack B: grey and blue ----
+INKB = 0xEEF0F2;
+ui_col(0x5A6068); R(726, 86, 704, 268);
+gfx_gradrect(726*qs, 86*qs, 704*qs, 124*qs, 1, 1, 1, 0.08, 0, 0, 0, 0, 0, 0, 0, -0.08/(124*qs));
+ui_col(0x2E5FA8); R(726, 86, 704, 6);
+ui_cola(0x000000, 0.35); R(726, 352, 704, 2);
+rscrew(740, 106); rscrew(740, 340); rscrew(1416, 106); rscrew(1416, 340);
+gfx_setfont(13); ui_col(INKB); TX(760, 100, "B");
+gfx_setfont(8); ui_col(0xC6CCD4); TX(786, 106, "EXPRESSOR  -  PEAK");
+CB = 0x3A6FB8;
+sprintf(#vB1, "%.1f dB", slider7);  knob(7, 800, 186, 30, -40, 0, -20, 0, CB, INKB, 7, "DRIVE", #vB1);
+sprintf(#vB2, "%.1f:1", slider8);   knob(8, 896, 186, 30, 1, 20, 3, 1, CB, INKB, 7, "RATIO", #vB2);
+slider9 < 10 ? sprintf(#vB3, "%.2f ms", slider9) : sprintf(#vB3, "%.0f ms", slider9);
+knob(9, 992, 186, 30, 0.1, 50, 5, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "ATTACK", bEasy ? "AUTO" : #vB3);
+slider10 >= 1000 ? sprintf(#vB4, "%.2f s", slider10/1000) : sprintf(#vB4, "%.0f ms", slider10);
+knob(10, 1088, 186, 30, 30, 3000, 300, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "RELEASE", bEasy ? "AUTO" : #vB4);
+sprintf(#vB5, "%+.1f dB", slider15); knob(15, 1184, 186, 30, -20, 20, 0, 0, 0x9DA2A8, INKB, 7, "OUTPUT", #vB5);
+key(790, 270, 70, 30, slider11 > 0.5, BLU, "EASYRIDER", INKB) ? ( tog(11); setmsg("EASYRIDER", slider11 > 0.5 ? "AUTO TIMING" : "MANUAL"); );
+key(880, 270, 70, 30, slider13 > 0.5, BLU, "SPR", INKB) ? ( tog(13); setmsg("SPR", slider13 > 0.5 ? "LOW END ROTATED" : "OFF"); );
+key(970, 270, 70, 30, slider14 > 0.5, BLU, "LF CUT", INKB) ? ( tog(14); setmsg("DETECTOR LF CUT", slider14 > 0.5 ? "150 Hz" : "OFF"); );
+sprintf(#vB6, "%.0f%%", slider12); knob(12, 1140, 288, 20, 0, 100, 30, 0, 0xE8E2D4, INKB, 7, "HF EXP", #vB6);
+vGb = max(mGrB, vGb*0.9); mGrB = 0;
+grl(1270, 136, 186, vGb, INKB, "GR");
+vOut = max(mOut, vOut*0.9);
+// output level ladder (dBFS) beside the GR
+k = 0; od_ = g2db(vOut);
+ui_col(0x08080A); R(1313, 133, 22, 192);
+loop(16, lit_ = od_ >= -30 + (16 - k)*30/16 - 30/16; c_ = k < 2 ? RED : k < 5 ? AMB : GRN;
+  ui_col(lit_ ? c_ : ui_mix(c_, 0x000000, 0.8)); R(1316, 136 + k*11.6 + 1, 16, 9.6); k += 1; );
+gfx_setfont(8); ui_col(INKB); TC(1324, 330, "OUT");
+// order lamps between the units
+lamp(720, 220, ord != 1, AMB);
+
+pk_end();
+ui_end();
