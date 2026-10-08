@@ -615,12 +615,31 @@ function plate(x, y, w, h) (
   );
 );
 
+// ---- FIZZ: a small square red button, its LED to the right, the label to the left (22 x 22 at x, y) ----
+function fizzkey(x, y, on) local(hov, hit, dn, tw, th) (
+  hov = inbox(x, y, 22, 22);
+  hit = pressed && drag_id == 0 && hov; hit ? drag_id = -1;
+  dn = hov && mdown && drag_id == -1;
+  hw ? ( ui_cola(0x000000, 0.5); R(x + 1, y + 2, 22, 22); ui_col(0x0A0A0B); R(x - 1, y - 1, 24, 24); )
+     : ( n_raised(x - 1, y - 1, 24, 24, 4, 3); );
+  ui_col(dn ? 0x9A1C15 : 0xC8281E); RR(x, y, 22, 22, 3);
+  !dn ? ( ui_col(0xE0483A); RR(x + 2, y + 2, 18, 9, 2); ui_cola(0xFFFFFF, 0.25); R(x + 3, y + 2, 16, 1); );
+  hw ? rd_led((x + 34)*0.75, (y + 11)*0.75, 4*0.75, on, RED) : (
+    ui_col(NW); CIRC(x + 34, y + 11, 6, 1);
+    on ? ( ui_cola(RED, 0.3); CIRC(x + 34, y + 11, 8, 1); );
+    ui_col(on ? RED : ui_mix(NW, RED, 0.15)); CIRC(x + 34, y + 11, 4, 1);
+  );
+  gfx_setfont(8); ui_col(hw ? INK2 : NTX); gfx_measurestr("FIZZ", tw, th);
+  gfx_x = (x - 8)*qs - tw; gfx_y = (y + 11)*qs - th*0.5; gfx_drawstr("FIZZ");
+  hit;
+);
+
 // ---- the EQ unit (top at y0, 212 tall) ----
 function eq_unit(y0) (
   plate(338, y0, 630, 212);
   tape(366, y0 + 12, "EQ");
   inkey(872, y0 + 10, slider6 > 0.5) ? ( tog(6); setmsg("EQUALISER", slider6 > 0.5 ? "IN" : "OUT"); );
-  mkey(788, y0 + 13, 66, 26, "FIZZ", slider25 > 0.5, AMB) ? ( tog(25); setmsg("FIZZ", slider25 > 0.5 ? "EXCITER + AIR" : "OFF"); );
+  fizzkey(814, y0 + 15, slider25 > 0.5) ? ( tog(25); setmsg("FIZZ", slider25 > 0.5 ? "EXCITER + AIR" : "OFF"); );
   gfx_setfont(8); ui_col(hw ? INK2 : NTX); TC(445, y0 + 52, "BASS"); TC(653, y0 + 52, "PRESENCE"); TC(861, y0 + 52, "TREBLE");
   hw ? ( ui_cola(INK, 0.15); gfx_rect(549*qs, (y0 + 56)*qs, 1*qs, 140*qs); gfx_rect(757*qs, (y0 + 56)*qs, 1*qs, 140*qs); )
      : ( ui_col(ui_mix(NB, ND, 0.35)); R(549, y0 + 56, 1, 140); ui_col(ui_mix(NB, NL, 0.6)); R(550, y0 + 56, 1, 140);
