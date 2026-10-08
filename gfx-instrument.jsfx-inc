@@ -1,4 +1,4 @@
-desc:GFX instrument essentials (include) - Garden FX
+desc:GFX instrument essentials (include)
 //author: JGWizrad / Garden FX (GFX)
 //
 // The universal parts shared by every GFX instrument (the effects keep gfx-input / gfx-drift / gfx-output).

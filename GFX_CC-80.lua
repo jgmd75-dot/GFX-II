@@ -1,5 +1,5 @@
 -- @description GFX CC-80 - pocket-calculator chord generator
--- @author Garden FX (GFX)
+-- @author JGWizrad / Garden FX (GFX)
 -- @version 1.0
 -- @about
 --   An 80s pocket-calculator style chord scratchpad. Build a chord from a root (A-G, flat/sharp),

@@ -1,7 +1,7 @@
-desc:gfx-quad22
+desc:GFX Quad22
 // gfx-quad22 - Dolby A-Style 4-Band Compander / Saturator / EQ
 //tags: dynamics multiband saturation eq
-//author: Emergent (inspired by the Dolby Model 361 + Cat. No. 22 card)
+//author: JGWizrad / Garden FX (GFX)
 //
 // A modern rebuild of the Dolby A "Cat 22" idea as a 4-band channel strip.
 // Splits audio at 80 Hz / 3 kHz / 9 kHz with phase-coherent Linkwitz-Riley (LR4)

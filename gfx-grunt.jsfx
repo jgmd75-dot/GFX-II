@@ -1,6 +1,6 @@
-desc:GFX Grunt - Console Amp Sim
+desc:GFX Grunt
 //tags: amp preamp drive saturation console grunt
-//author: John Garden / Garden FX (GFX)
+//author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
 //
