@@ -4,26 +4,40 @@ desc:GFX G Piano
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
 //
-// A physical-model acoustic piano: no samples, every note is played on modelled strings.
-//   STRINGS  each key has one string in the low bass and two from there up (a unison pair, slightly detuned,
-//            so notes beat and fall away in two stages like the real thing). Each string is a tuned digital
-//            waveguide: a delay line with a fractional (Thiran) tuner, a two-stage dispersion all-pass for
-//            STIFFNESS (the partials run sharp, more so at the ends of the keyboard), and a loss filter that
-//            makes the top die away faster than the fundamental. The loop is re-tuned at note-on so the
-//            fundamental stays exactly in pitch whatever the stiffness.
-//   HAMMER   a felt strike: a raised-cosine force pulse whose length shortens with velocity and HAMMER, so
-//            loud notes are brighter as well as louder, applied at 1/8 (grand) or 1/9 (upright) of the
-//            string, which notches the matching partials. A low "knock" from the action rides on top.
-//   DAMPERS  key up drops the damper: DAMPER sets how fast it stops the string (the bass rings on longer).
-//            The top two octaves have no dampers, as on a real piano. Sustain pedal (CC64) lifts them all;
-//            soft pedal (CC67) moves the hammer to softer felt.
-//   BODY     a soundboard of six resonant modes (grand: broad and low; upright: higher and boxier) and TONE.
-//   PEDAL RES  with the sustain pedal down the open strings ring in sympathy: a long, dark resonance halo.
-//   ROOM     a short stereo room. SPREAD pans the keys across the stereo field (bass left, as the player hears it).
-//   GRAND / UPRIGHT  the model: string length (sustain and bass stiffness), strike point, hammer, body.
-// Drift: each note is tuned a few cents off, as on a piano a while after tuning.
-// MIDI: sustain (CC64), soft pedal (CC67), all notes off (CC123 / 120). Re-striking a ringing key hits the
-// same strings again, so repeated notes build up instead of restarting.
+// A physically modelled acoustic piano: no samples, every note is computed from the physics of hammer, strings,
+// soundboard and the coupling between them.
+//
+// HAMMER    a mass on a non-linear, hysteretic felt spring (F = K (c^p + alpha d(c^p)/dt), c = felt compression).
+//           MIDI velocity sets the hammer's speed; the strike is simulated sample by sample against the moving
+//           string, so the contact time, the bounce and the energy handed over all come out of the physics:
+//           a soft strike stays in contact longer (dark), a hard one compresses the stiff felt (bright).
+//           HAMMER sets the felt (hardness, exponent, hysteresis). Soft pedal (CC67) shifts to softer felt.
+// STRINGS   each string is a bidirectional digital waveguide: two delay lines carrying the travelling waves
+//           towards the bridge and back to the agraffe, an inverting reflection at each end, the hammer
+//           acting at its strike point (1/8 of the string on the grand, 1/9 on the upright). At the bridge
+//           the wave passes a fractional Thiran tuner, the stiffness dispersion cascade (four all-passes in
+//           the bass, two above, solved per key for a stiff-string inharmonicity curve so the partials
+//           stretch sharp) and a loss filter that takes the top away faster than the fundamental.
+//           The loop is re-tuned at every note-on, so the fundamental stays in pitch whatever the stiffness.
+// UNISON    one string in the low bass, two in the tenor, three from the middle up, each micro-detuned
+//           (UNISON) so they drift in and out of phase: beating, shimmer and the two-stage decay.
+// SOUNDBOARD the bridge signal drives a network of 16 wooden-plate modes (grand: broad and low; upright:
+//           higher and boxier). Each mode has the same Q, so the high modes die away much faster than the low.
+// SYMPATHY  every string ends on one bridge junction: the incoming waves are summed, the bridge moves under
+//           their combined force (a resistive bridge impedance) and every string's reflection carries that
+//           motion back. Energy is only shared or lost there, so any number of coupled strings stays stable.
+//           Strings with their dampers up (held keys, keys pressed silently, everything with the sustain pedal
+//           down, the undamped top octaves) pick up the notes you play and ring in sympathy; with the pedal
+//           down a bank of 36 open strings (E1 - D#4) joins the junction too. RESONANCE sets how light (how
+//           responsive) the bridge is. Press a key silently (velocity 1 - 3) and hold it to hear its strings
+//           answer the notes you play.
+// DAMPERS   key up lowers the damper (DAMPER sets how hard it stops the string; the bass rings on longer).
+// ROOM, SPREAD (bass left, treble right as the player hears it), TONE, GRAND / UPRIGHT.
+// CPU       keys are retired as soon as their energy falls below audibility; the open-string bank only runs
+//           while the pedal is down or it is still ringing.
+// Drift: each note is tuned a few cents off, as on a piano some weeks after tuning.
+// MIDI: sustain (CC64), soft pedal (CC67), all notes off (CC123 / 120). Re-striking a ringing key strikes the
+// same strings again.
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -41,7 +55,7 @@ slider7:60<0,100,1>-Sustain (%)
 slider8:45<0,100,1>-Damper (%)
 slider9:55<0,100,1>-Body (%)
 slider10:50<0,100,1>-Tone (%)
-slider11:35<0,100,1>-Pedal resonance (%)
+slider11:35<0,100,1>-Sympathetic resonance (%)
 slider12:25<0,100,1>-Room (%)
 slider13:60<0,100,1>-Spread (%)
 slider14:15<0,100,1>-Drift (%)
@@ -62,55 +76,55 @@ out_pin:right output
 @init
 #ui_man = "gfx-g-piano";                                   // the ? pop-up links to this manual
 
-NV = 16;                                  // voices (keys)
-NS = NV * 2;                              // strings
-// ---- voice arrays ----
-v_act = 1000; v_note = 1020; v_held = 1040; v_sus = 1060; v_age = 1080; v_ns = 1100;
-v_pl = 1120; v_pr = 1140; v_env = 1160; v_et = 1180; v_en = 1200; v_ea = 1220; v_eb = 1240;
-v_ka = 1260; v_kl = 1280; v_nd = 1300; v_live = 1320;
-memset(1000, 0, 340);
-// ---- string arrays ----
-s_wp = 2000; s_L = 2040; s_eta = 2080; s_tx = 2120; s_ty = 2160; s_a = 2200;
-s_ax = 2240; s_ay = 2280; s_bx = 2320; s_by = 2360; s_g = 2400; s_gh = 2440; s_gr = 2480;
-s_p = 2520; s_lp = 2560; s_w = 2600;
-memset(2000, 0, 640);
-SZ = 8192; BUF = 100000;                  // one delay line per string (A0 at 192 kHz needs ~7000)
-memset(BUF, 0, NS * SZ);
-// ---- reverbs: pedal resonance halo and room (4 lines each) ----
-FSZ = 8192; FRB = BUF + NS * SZ; FRM = FRB + 4 * FSZ;     // FRB..: resonance, FRM..: room
-memset(FRB, 0, 8 * FSZ);
-f_wp = 0;
+// ---------- memory (allocated with nextmem, clear of the output stage at 20000) ----------
+nextmem = 30000;
+function alloc(n) local(ptr) ( ptr = nextmem; nextmem += n; memset(ptr, 0, n); ptr; );
+
+NV = 16;                                  // keys sounding at once
+MS = 3;                                   // strings per key (max)
+NSTR = NV * MS;
+RS = 4096; RM = RS - 1; RS2 = 2 * RS;     // one rail per direction per string (A0 at 192 kHz needs ~3500)
+NY = 36; YS = 8192; YM = YS - 1;          // open-string bank (pedal down), E1 .. D#4
+FSZ = 8192; FM = FSZ - 1;                 // room lines
+
+// voices (keys)
+v_act = alloc(NV); v_note = alloc(NV); v_held = alloc(NV); v_sus = alloc(NV); v_age = alloc(NV);
+v_ns = alloc(NV); v_pl = alloc(NV); v_pr = alloc(NV); v_env = alloc(NV); v_t = alloc(NV);
+v_nd = alloc(NV); v_sil = alloc(NV); v_ka = alloc(NV); v_kl = alloc(NV); v_gn = alloc(NV);
+// hammers (one per key)
+h_on = alloc(NV); h_y = alloc(NV); h_v = alloc(NV); h_ys = alloc(NV); h_im = alloc(NV);
+h_K = alloc(NV); h_pw = alloc(NV); h_al = alloc(NV); h_cp = alloc(NV); h_fr = alloc(NV);
+// strings
+s_N = alloc(NSTR); s_h = alloc(NSTR); s_eta = alloc(NSTR); s_tx = alloc(NSTR); s_ty = alloc(NSTR);
+s_a = alloc(NSTR); s_nap = alloc(NSTR);
+s_x1 = alloc(NSTR); s_y1 = alloc(NSTR); s_x2 = alloc(NSTR); s_y2 = alloc(NSTR);
+s_x3 = alloc(NSTR); s_y3 = alloc(NSTR); s_x4 = alloc(NSTR); s_y4 = alloc(NSTR);
+s_p = alloc(NSTR); s_lp = alloc(NSTR); s_g = alloc(NSTR); s_gh = alloc(NSTR); s_gr = alloc(NSTR); s_w = alloc(NSTR);
+s_yi = alloc(NSTR); s_ol = alloc(NSTR); v_dv = alloc(NV);
+RAIL = alloc(NSTR * RS2);                 // string s: [RAIL + s*RS2] towards the bridge, [+ RS] back to the agraffe
+// open-string bank
+y_L = alloc(NY); y_eta = alloc(NY); y_tx = alloc(NY); y_ty = alloc(NY); y_p = alloc(NY); y_lp = alloc(NY);
+y_g = alloc(NY); y_gd = alloc(NY); y_yi = alloc(NY);
+YB = alloc(NY * YS);
+// soundboard modes: 16 x (5 coefficients + 4 state)
+BM = alloc(16 * 9); bm_g = alloc(16);
+// room
+FRM = alloc(4 * FSZ);
+gw = 0;
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000..24095
 
 ins_drift_init();
-agec = 0; sus_pedal = 0; soft_pedal = 0;
+agec = 0; sus_pedal = 0; soft_pedal = 0; sym_on = 0; sym_env = 0;
 TP = 2 * $pi;
 
-// ---------- string tuning ----------
+// ---------- tuning ----------
 // phase delay (samples) of a first-order all-pass (a + z^-1) / (1 + a z^-1) at w
 function ap_tau(a, w) ( -(atan2(-sin(w), a + cos(w)) - atan2(-a * sin(w), 1 + a * cos(w))) / w; );
 // phase delay of the loss filter y = (1 - p) x + p y1 at w
 function lp_tau(p, w) ( atan2(p * sin(w), 1 - p * cos(w)) / w; );
-// set string s to frequency f with dispersion coefficient a, loss pole p, sustain T60 t60 and release T60 trel
-function str_set(s, f, a, p, t60, trel) local(w, per, dl, li, fd, eta, err, mag, k) (
-  // (EEL names are case-insensitive: keep every local distinct from p / a / s / f)
-  w = TP * f / srate; per = srate / f;
-  dl = per - 2 * ap_tau(a, w) - lp_tau(p, w);
-  k = 0; loop(12, dl < 2.2 && a < -0.001 ? ( a *= 0.6; dl = per - 2 * ap_tau(a, w) - lp_tau(p, w); ); k += 1; );
-  li = max(1, floor(dl - 0.5)); fd = dl - li;
-  eta = (1 - fd) / (1 + fd);
-  err = ap_tau(eta, w) - fd;                // one correction pass for the Thiran tuner at this frequency
-  fd = fd - err; eta = (1 - fd) / (1 + fd);
-  s_L[s] = min(li, SZ - 4); s_eta[s] = eta; s_a[s] = a; s_p[s] = p;
-  mag = (1 - p) / sqrt(1 - 2 * p * cos(w) + p * p);
-  // loop gain: the fundamental decays in t60; capped below 1 so the loop (unity at DC) always dies away
-  s_gh[s] = min(0.99995, 10 ^ (-3 / (t60 * f)) / mag);
-  s_gr[s] = min(0.9995, 10 ^ (-3 / (trel * f)) / mag);
-);
-
 // dispersion coefficient that stretches the partials like a stiff string with inharmonicity B:
-// partial k should sit at k f0 sqrt(1 + B k^2) / sqrt(1 + B). Solved by bisection on the two all-passes.
-function disp_a(f, B) local(w, per, kk, tgt, lo, hi, mid, dv) (
+// partial k should sit at k f0 sqrt(1 + B k^2) / sqrt(1 + B). Bisection on the nap all-passes.
+function disp_a(f, B, nap) local(w, per, kk, tgt, lo, hi, mid, dv) (
   w = TP * f / srate; per = srate / f;
   kk = min(8, floor(0.42 * srate / f));
   kk < 2 ? 0 : (
@@ -118,70 +132,112 @@ function disp_a(f, B) local(w, per, kk, tgt, lo, hi, mid, dv) (
     lo = -0.95; hi = 0;
     loop(22,
       mid = 0.5 * (lo + hi);
-      dv = 2 * (ap_tau(mid, w) - ap_tau(mid, kk * w));
+      dv = nap * (ap_tau(mid, w) - ap_tau(mid, kk * w));
       dv > tgt ? lo = mid : hi = mid;
     );
     0.5 * (lo + hi);
   );
 );
+// tune string s (two rails, round trip 2 x rail + bridge filters = one period) and set its losses
+// (EEL names are case-insensitive: every local is kept distinct from the parameters)
+function str_set(s, f, a, nap, p, t60, trel, beta) local(w, per, dl, rl, fd, eta, err, mag, kk) (
+  w = TP * f / srate; per = srate / f;
+  dl = per - nap * ap_tau(a, w) - lp_tau(p, w);
+  kk = 0; loop(12, dl < 5 && a < -0.001 ? ( a *= 0.6; dl = per - nap * ap_tau(a, w) - lp_tau(p, w); ); kk += 1; );
+  rl = max(1, floor((dl - 0.5) / 2)); fd = max(0.3, dl - 2 * rl);
+  eta = (1 - fd) / (1 + fd);
+  err = ap_tau(eta, w) - fd;                 // one correction pass for the Thiran tuner at this frequency
+  fd = max(0.3, fd - err); eta = (1 - fd) / (1 + fd);   // (fd >= 0.3 keeps the all-pass pole well inside)
+  s_N[s] = min(rl, RS - 4); s_eta[s] = eta; s_a[s] = a; s_nap[s] = nap; s_p[s] = p;
+  s_h[s] = max(1, min(s_N[s] - 1, floor(beta * s_N[s] + 0.5)));
+  mag = (1 - p) / sqrt(1 - 2 * p * cos(w) + p * p);
+  // loop gain per period: the fundamental decays in t60; capped below 1 so the loop always dies away
+  s_gh[s] = min(0.99995, 10 ^ (-3 / (t60 * f)) / mag);
+  s_gr[s] = min(0.9995, 10 ^ (-3 / (trel * f)) / mag);
+);
+function str_clear(s) local(rb) (
+  rb = RAIL + s * RS2; memset(rb, 0, RS2);
+  s_tx[s] = s_ty[s] = s_x1[s] = s_y1[s] = s_x2[s] = s_y2[s] = s_x3[s] = s_y3[s] = s_x4[s] = s_y4[s] = s_lp[s] = 0;
+);
+// open string j of the bank: a single tuned loop (no hammer, no stiffness)
+function sym_set(j) local(nt, f, w, per, rl, fd, eta, pp, mag, t60) (
+  nt = 28 + j; f = 440 * 2 ^ ((nt - 69) / 12);
+  w = TP * f / srate; per = srate / f;
+  pp = 0.2 * 2 ^ (-(nt - 60) / 24);
+  rl = floor(per - lp_tau(pp, w) - 0.5); fd = per - lp_tau(pp, w) - rl;
+  eta = (1 - fd) / (1 + fd);
+  y_L[j] = min(rl, YS - 4); y_eta[j] = eta; y_p[j] = pp;
+  mag = (1 - pp) / sqrt(1 - 2 * pp * cos(w) + pp * pp);
+  t60 = max(1.5, 14 * 2 ^ (-(nt - 21) / 23));
+  y_g[j] = min(0.9999, 10 ^ (-3 / (t60 * f)) / mag);
+  y_gd[j] = min(0.999, 10 ^ (-3 / (0.12 * f)) / mag);
+);
+j = 0; loop(NY, sym_set(j); j += 1; );
 
 // ---------- notes ----------
-function note_on(n, vel) local(i, best, ba, f, ns, k, a, p, t60, trel, det, ph, vA, hv, th, pan, s, x, jit, strike) (
+function note_on(n, vel) local(i, best, ba, f, ns, kk, a, nap, pp, t60, trel, det, vv, pan, s, jit, beta, mr, tc, pw, v0, B, rstk) (
   best = -1;
   i = 0; loop(NV, v_act[i] && v_note[i] == n && best < 0 ? best = i; i += 1; );            // re-strike: same strings
   best < 0 ? ( i = 0; loop(NV, !v_act[i] && best < 0 ? best = i; i += 1; ); );               // free key
-  best < 0 ? ( ba = 10 ^ 12; i = 0; loop(NV, !v_held[i] && v_age[i] < ba ? ( ba = v_age[i]; best = i; ); i += 1; ); );   // oldest released
-  best < 0 ? ( ba = 10 ^ 12; i = 0; loop(NV, v_age[i] < ba ? ( ba = v_age[i]; best = i; ); i += 1; ); );                 // oldest
+  best < 0 ? ( ba = 10 ^ 12; i = 0; loop(NV, !v_held[i] && v_age[i] < ba ? ( ba = v_age[i]; best = i; ); i += 1; ); );
+  best < 0 ? ( ba = 10 ^ 12; i = 0; loop(NV, v_age[i] < ba ? ( ba = v_age[i]; best = i; ); i += 1; ); );
   i = best;
-  restrike = v_act[i] && v_note[i] == n;
+  rstk = v_act[i] && v_note[i] == n;
   f = 440 * 2 ^ ((n - 69) / 12) * ins_note_detune();
-  ns = n <= 32 ? 1 : 2;
-  // stiffness: inharmonicity B rises towards both ends of the keyboard (lowest around the tenor break);
-  // the upright's short bass strings are much stiffer
-  k = n < 40 ? -4.3 + 0.042 * (40 - n) : -4.3 + 0.03 * (n - 40);
-  model ? k += n < 40 ? 0.45 : 0.15;
-  a = disp_a(f, 10 ^ k * (0.1 + 2.4 * stiff ^ 1.5));
-  // loss pole: how fast the top of each note dies against its fundamental
-  p = min(0.5, max(0.01, (model ? 0.26 : 0.16) * (0.4 + 1.2 * (1 - tone_s)) * 2 ^ (-(n - 60) / 24)));
+  ns = n <= 28 ? 1 : n < 48 ? 2 : 3;
+  nap = n < 48 ? 4 : 2;
+  // stiffness: inharmonicity B is lowest around the tenor break and rises to both ends; the upright's short
+  // bass strings are much stiffer
+  kk = n < 40 ? -4.3 + 0.042 * (40 - n) : -4.3 + 0.03 * (n - 40);
+  model ? kk += n < 40 ? 0.45 : 0.15;
+  B = 10 ^ kk * (0.1 + 2.4 * stiff ^ 1.5);
+  a = disp_a(f, B, nap);
+  // losses: how fast the top of each note dies against its fundamental; sustain and damping by key
+  pp = min(0.5, max(0.01, (model ? 0.26 : 0.16) * (0.4 + 1.2 * (1 - tone_s)) * 2 ^ (-(n - 60) / 24)));
   t60 = max(0.35, sus_t * 17 * 2 ^ (-(n - 21) / 23) * (model ? 0.65 : 1));
   trel = n >= 89 ? t60 : max(0.04, dmp_t * 0.55 * 2 ^ (-(n - 21) / 34));
-  det = uni_c * (0.6 + 0.8 * (n / 108));                      // unison spread in cents, wider up the keyboard
-  s = 2 * i;
-  ns == 1 ? (
-    str_set(s, f, a, p, t60, trel); s_w[s] = 1; s_w[s + 1] = 0;
-  ) : (
-    jit = (rand(2) - 1) * 0.15;
-    str_set(s,     f * 2 ^ (( det * 0.5 + jit) / 1200), a, p, t60, trel);
-    str_set(s + 1, f * 2 ^ ((-det * 0.5 + jit) / 1200), a, p, t60 * 1.15, trel);
-    s_w[s] = 0.5; s_w[s + 1] = 0.5;
+  beta = model ? 1 / 9 : 1 / 8;
+  det = uni_c * (0.6 + 0.8 * (n / 108));                      // unison spread in cents
+  s = MS * i;
+  kk = 0;
+  loop(MS,
+    kk < ns ? (
+      jit = ns == 1 ? 0 : (rand(2) - 1) * 0.15;
+      str_set(s + kk, f * 2 ^ (((ns == 1 ? 0 : det * (kk / (ns - 1) - 0.5)) + jit) / 1200), a, nap, pp,
+              t60 * (1 + 0.12 * kk), trel, beta);
+      s_w[s + kk] = 1 / ns;
+    ) : s_w[s + kk] = 0;
+    !rstk ? str_clear(s + kk);
+    s_g[s + kk] = s_gh[s + kk];
+    kk += 1;
   );
-  !restrike ? (
-    k = 0; loop(2, memset(BUF + (s + k) * SZ, 0, SZ); s_wp[s + k] = 0; s_tx[s + k] = s_ty[s + k] = 0;
-      s_ax[s + k] = s_ay[s + k] = s_bx[s + k] = s_by[s + k] = s_lp[s + k] = 0; k += 1; );
-    v_env[i] = 0;
-  );
-  s_g[s] = s_gh[s]; s_g[s + 1] = s_gh[s + 1];
-  // hammer: velocity curve, pulse length, strike point
+  !rstk ? v_env[i] = 0;
+  // hammer: speed from velocity; felt hardness, exponent and hysteresis from HAMMER and the key
   vel = vel / 127;
-  vA = vel ^ (0.55 + 1.7 * dyn);
-  hv = min(1.2, ham * 0.7 + vel * 0.65) * (soft_pedal ? 0.6 : 1);
-  th = min(4.5, max(0.12, (2.2 - 1.6 * hv) * 2 ^ (-(n - 21) / 34)));     // ms
-  v_en[i] = max(3, floor(th * 0.001 * srate));
-  strike = model ? 1 / 9 : 1 / 8;
-  v_eb[i] = max(1, floor(strike * srate / f + 0.5));
-  // force normalised so every key and pulse length sounds roughly as loud for the same velocity
-  v_ea[i] = vA * (soft_pedal ? 0.8 : 1) * 0.16 / sqrt(v_en[i] * f / srate + 0.02) * (0.25 + 0.75 * (f / 260) ^ 0.15) * 2 ^ ((n - 21) / 40);
-  v_et[i] = 0;
-  v_ka[i] = vA * 0.05 * (model ? 1.3 : 1); v_kl[i] = 0;
+  v_sil[i] = vel < 0.03;                     // velocity 1 - 3: the key goes down silently (dampers up)
+  v0 = vel ^ (0.6 + 1.6 * dyn) * (soft_pedal ? 0.85 : 1);
+  mr = 0.06 * 2 ^ ((n - 21) / 24);           // hammer : string mass, the treble hammer outweighs its strings
+  tc = srate * 0.001 * 2.6 * 2 ^ (-(n - 21) / 32) * (1.45 - 0.9 * ham) * (soft_pedal ? 1.35 : 1);
+  tc = max(tc, max(6, 0.00015 * srate));
+  pw = 2.2 + (n - 21) / 87 + 0.4 * ham;      // felt stiffening exponent
+  h_im[i] = 1 / (mr * 2 * s_N[s] * ns);
+  h_pw[i] = pw;
+  h_K[i] = (1 / h_im[i]) * (3.2 * 0.5 ^ ((1 - pw) / (pw + 1)) / tc) ^ (pw + 1);
+  h_al[i] = srate * 0.00001 * (2 + 4 * (1 - ham));
+  h_y[i] = 0; h_ys[i] = 0; h_v[i] = v0; h_cp[i] = 0; h_fr[i] = 0;
+  h_on[i] = !v_sil[i];
+  v_t[i] = 0;
+  v_ka[i] = v_sil[i] ? 0 : v0 * 0.012 * (model ? 1.3 : 1); v_kl[i] = 0;
   // pan: bass left, treble right
   pan = min(1, max(-1, (n - 64) / 44 * spread));
   v_pl[i] = cos((pan + 1) * $pi / 4); v_pr[i] = sin((pan + 1) * $pi / 4);
-  v_act[i] = 1; v_note[i] = n; v_held[i] = 1; v_sus[i] = 0; v_ns[i] = ns; v_live[i] = 0;
-  v_nd[i] = n >= 89;                         // no damper on the top keys
+  v_gn[i] = 1.2 * 2 ^ ((n - 21) / 45);       // output level by key (the treble strings carry less energy)
+  v_act[i] = 1; v_note[i] = n; v_held[i] = 1; v_sus[i] = 0; v_ns[i] = ns;
+  v_nd[i] = n >= 89;                         // the top keys have no dampers
   agec += 1; v_age[i] = agec;
   ins_midi_hit();
 );
-function note_damp(i) local(s) ( s = 2 * i; s_g[s] = s_gr[s]; s_g[s + 1] = s_gr[s + 1]; );
+function note_damp(i) local(s, kk) ( s = MS * i; kk = 0; loop(MS, s_g[s + kk] = s_gr[s + kk]; kk += 1; ); );
 function note_off(n) local(i) (
   i = 0;
   loop(NV,
@@ -194,28 +250,25 @@ function note_off(n) local(i) (
 );
 function all_off() local(i) ( i = 0; loop(NV, v_held[i] = 0; v_sus[i] = 0; v_act[i] ? note_damp(i); i += 1; ); );
 
-// ---------- shared filters ----------
-// RBJ band-pass, 0 dB peak (coefficients into c[0..4])
+// ---------- soundboard: 16 plate modes, constant Q so the high modes decay fastest ----------
 function bp_set(c, f, q) local(w, al, a0) (
   w = TP * min(f, srate * 0.45) / srate; al = sin(w) / (2 * q); a0 = 1 + al;
   c[0] = al / a0; c[1] = 0; c[2] = -al / a0; c[3] = -2 * cos(w) / a0; c[4] = (1 - al) / a0;
 );
-function bq(x, c, s) local(y) (
-  y = c[0] * x + c[1] * s[0] + c[2] * s[1] - c[3] * s[2] - c[4] * s[3];
-  s[1] = s[0]; s[0] = x; s[3] = s[2]; s[2] = y; y;
+function bq(x, c) local(y) (
+  y = c[0] * x + c[1] * c[5] + c[2] * c[6] - c[3] * c[7] - c[4] * c[8];
+  c[6] = c[5]; c[5] = x; c[8] = c[7]; c[7] = y; y;
 );
-BM = 3000; memset(BM, 0, 6 * 9);          // six body modes: coefficients (5) + state (4)
-function body_setup(m) local(i, f, q) (
-  i = 0;
-  loop(6,
-    f = m ? (i == 0 ? 118 : i == 1 ? 186 : i == 2 ? 292 : i == 3 ? 455 : i == 4 ? 690 : 1080)
-          : (i == 0 ? 86 : i == 1 ? 138 : i == 2 ? 212 : i == 3 ? 330 : i == 4 ? 505 : 770);
-    q = m ? 4.5 : 3.2;
-    bp_set(BM + i * 9, f, q);
-    i += 1;
+function body_setup(m) local(kk, f0, f1, f) (
+  f0 = m ? 85 : 52; f1 = m ? 4200 : 3200;
+  kk = 0;
+  loop(16,
+    f = f0 * (f1 / f0) ^ (kk / 15) * (1 + 0.07 * sin(kk * 2.7 + m));
+    bp_set(BM + kk * 9, f, m ? 8 : 11);
+    bm_g[kk] = 1 / (1 + 0.18 * kk);
+    kk += 1;
   );
 );
-bmg0 = 1.0; bmg1 = 0.8; bmg2 = 0.65; bmg3 = 0.5; bmg4 = 0.38; bmg5 = 0.28;
 
 // ---------- patches (Drift and Volume stay as they are) ----------
 function setp(m, hm, dy, st, un, su, dm, bo, to, pr, ro, sp) (
@@ -245,35 +298,39 @@ function patch_name(p) (
 );
 
 // ---------- parameters ----------
-function update() local(t) (
+function update() (
   model = slider2 > 0.5;
   model != last_model ? ( body_setup(model); last_model = model; );
   ham = slider3 / 100; dyn = slider4 / 100; stiff = slider5 / 100;
   uni_c = (slider6 / 100) ^ 1.6 * 28;                         // 0 .. 28 cents (honky-tonk at the top)
   sus_t = 0.25 + 1.5 * (slider7 / 100) ^ 1.3;
   dmp_t = 0.25 + 2.75 * (slider8 / 100) ^ 1.5;
-  body = (slider9 / 100) * 0.9;
+  body = slider9 / 100;
   tone_s = slider10 / 100; tilt = (tone_s - 0.5) * 1.1;
-  pres = slider11 / 100; room = slider12 / 100; spread = slider13 / 100;
+  res = slider11 / 100; room = slider12 / 100; spread = slider13 / 100;
+  // bridge impedance (in string impedances): a lighter bridge couples the strings more strongly
+  // The bridge takes a little energy whenever a key's strings swing together (the prompt sound), not when
+  // they swing against each other (the aftersound): that is the piano's two-stage decay.
+  zb = res > 0.005 ? 900 + 4000 * (1 - res) ^ 2 : 1000000000;
   drift = slider14 / 100;
   vol_t = 10 ^ (slider15 / 20);
-  // room: T60 0.5 .. 1.3 s; resonance halo: long with the pedal down, short with it up
-  rm_g = 10 ^ (-3 * 0.015 / (0.5 + 0.8 * room));
+  rm_g = 10 ^ (-3 * 0.015 / (0.5 + 0.8 * room));             // room T60 0.5 .. 1.3 s
   ins_output_setup(16); ins_stereo_setup(22);
 );
 last_model = -1;
 tlc = 1 - exp(-TP * 900 / srate);
 klc = 1 - exp(-TP * 700 / srate);
-kdec = exp(-1 / (0.014 * srate));
-hpc = 1 - exp(-TP * 35 / srate);
-rlp = 1 - exp(-TP * 2600 / srate); mlp = 1 - exp(-TP * 6500 / srate);
+kdec = exp(-1 / (0.012 * srate));
+hpc = 1 - exp(-TP * 30 / srate);
+mlp = 1 - exp(-TP * 6500 / srate);
 envc = 1 - exp(-1 / (0.02 * srate));
+symc = 1 - exp(-1 / (0.05 * srate));
 sm = 1 - exp(-1 / (0.03 * srate));
-// reverb line lengths (ms) and their loop gains are set in @block from srate
-rl0 = floor(0.0137 * srate); rl1 = floor(0.0193 * srate); rl2 = floor(0.0239 * srate); rl3 = floor(0.0291 * srate);
+h_tmax = floor(0.06 * srate);
 ml0 = floor(0.0073 * srate); ml1 = floor(0.0119 * srate); ml2 = floor(0.0171 * srate); ml3 = floor(0.0217 * srate);
+OUTG = 0.5;                                // output calibration
 update();
-vol_s = vol_t; res_gs = 0;
+vol_s = vol_t;
 !ui_dflt ? ( ui_thm = 9; ui_hw = 1; );                     // fixed black-lacquer-and-brass faceplate
 last_patch = -1;
 ui_dflt = 1;
@@ -286,96 +343,147 @@ update();
 update();
 while (midirecv(mofs, m1, m2, m3)) (
   st = m1 & 0xF0;
-  st == 0x90 && m3 > 0 ? note_on(m2, m3) :
+  st == 0x90 && m3 > 0 ? ( m2 >= 21 && m2 <= 108 ? note_on(m2, m3); ) :     // the 88 keys, A0 - C8
   st == 0x80 || (st == 0x90 && m3 == 0) ? note_off(m2) :
   st == 0xB0 && m2 == 64 ? (
     sus_pedal = m3 >= 64;
-    !sus_pedal ? ( i = 0; loop(NV, v_act[i] && !v_held[i] && !v_nd[i] ? note_damp(i); v_sus[i] = 0; i += 1; ); );
+    sus_pedal ? sym_on = 1 : (
+      i = 0; loop(NV, v_act[i] && !v_held[i] && !v_nd[i] ? note_damp(i); v_sus[i] = 0; i += 1; );
+    );
   ) :
   st == 0xB0 && m2 == 67 ? soft_pedal = m3 >= 64 :
   st == 0xB0 && (m2 == 123 || m2 == 120) ? ( all_off(); sus_pedal = 0; );
   midisend(mofs, m1, m2, m3);
 );
 ins_drift_block(drift, samplesblock);
-// the resonance halo rings long only while the pedal is down
-res_gt = sus_pedal ? 10 ^ (-3 * 0.021 / 3.2) : 10 ^ (-3 * 0.021 / 0.35);
 
 @sample
-// ---------- strings ----------
-sL = sR = 0;
+sL = sR = 0; bsum = 0; bsy = 0; nj = 0;
+wr = gw & RM;
+// ---------- keys, pass 1: hammer, then each string's wave arriving at the bridge ----------
 i = 0;
 loop(NV,
   v_act[i] ? (
-    // hammer force for this sample: pulse minus its reflection from the strike point (the comb)
-    t = v_et[i];
-    t < v_en[i] + v_eb[i] ? (
-      e1 = t < v_en[i] ? 0.5 - 0.5 * cos(TP * t / v_en[i]) : 0;
-      t2 = t - v_eb[i];
-      e2 = t2 >= 0 && t2 < v_en[i] ? 0.5 - 0.5 * cos(TP * t2 / v_en[i]) : 0;
-      exc = (e1 - e2) * v_ea[i];
-    ) : exc = 0;
-    v_et[i] = t + 1;
+    ns = v_ns[i]; s0 = MS * i;
+    // hammer against the string: compression of the felt, force, both bodies move
+    dvh = 0;
+    h_on[i] ? (
+      vs = 0; s = s0;
+      loop(ns, rb = RAIL + s * RS2; hh = s_h[s];
+        vs += rb[(gw - hh) & RM] + rb[RS + ((gw - s_N[s] + hh) & RM)];
+        s += 1; );
+      // felt compression solved implicitly against the string's own reaction (its impedance, 2 x strings),
+      // so even a stiff treble felt stays stable: c = c0 + (vh - vs_in) - F(c) / Zt, a few Newton steps
+      vin = vs / ns; cn = h_y[i] - h_ys[i]; u = h_v[i] - vin;
+      cmp = cn + u; pw = h_pw[i]; kz = h_K[i] / (2 * ns);
+      cmp > 0 ? (
+        loop(4,
+          cpw = cmp ^ pw;
+          cmp = max(0.0000000001, cmp - (cmp - cn - u + kz * cpw) / (1 + kz * pw * cpw / cmp));
+        );
+        cpw = cmp ^ pw;
+      ) : cpw = 0;
+      hfc = max(0, h_K[i] * (cpw + h_al[i] * (cpw - h_cp[i]))); h_cp[i] = cpw;
+      h_ys[i] += vin + hfc / (2 * ns);
+      h_y[i] += h_v[i];
+      h_v[i] -= hfc * h_im[i];
+      dvh = hfc * 0.5 / ns;                  // the force launches a velocity wave both ways on each string
+      hfc > 0 ? h_fr[i] = 0 : h_fr[i] += 1;
+      (h_fr[i] > 64 && h_v[i] < 0) || v_t[i] > h_tmax ? h_on[i] = 0;
+    );
+    v_dv[i] = dvh;
     vo = 0;
-    s = 2 * i;
-    loop(v_ns[i],
-      bp = BUF + s * SZ;
-      wp = s_wp[s];
-      rp = wp - s_L[s]; rp < 0 ? rp += SZ;
-      x = bp[rp];
-      // Thiran fractional tuner
-      e = s_eta[s]; y = e * x + s_tx[s] - e * s_ty[s]; s_tx[s] = x; s_ty[s] = y;
-      // stiffness: two dispersion all-passes
+    s = s0;
+    loop(ns,
+      rb = RAIL + s * RS2;
+      ri = (gw - s_N[s]) & RM;
+      oR = rb[ri]; s_ol[s] = rb[RS + ri];
+      // towards the bridge: fractional tuner, stiffness dispersion, losses
+      e = s_eta[s]; y = e * oR + s_tx[s] - e * s_ty[s]; s_tx[s] = oR; s_ty[s] = y;
       a = s_a[s];
-      o = a * y + s_ax[s] - a * s_ay[s]; s_ax[s] = y; s_ay[s] = o;
-      y = a * o + s_bx[s] - a * s_by[s]; s_bx[s] = o; s_by[s] = y;
-      // losses
-      p = s_p[s]; lp = (1 - p) * y + p * s_lp[s]; s_lp[s] = lp;
-      w = s_g[s] * lp + exc;
-      bp[wp] = w;
-      wp += 1; wp >= SZ ? wp = 0; s_wp[s] = wp;
-      vo += w * s_w[s];
+      o = a * y + s_x1[s] - a * s_y1[s]; s_x1[s] = y; s_y1[s] = o;
+      y = a * o + s_x2[s] - a * s_y2[s]; s_x2[s] = o; s_y2[s] = y;
+      s_nap[s] > 2 ? (
+        o = a * y + s_x3[s] - a * s_y3[s]; s_x3[s] = y; s_y3[s] = o;
+        y = a * o + s_x4[s] - a * s_y4[s]; s_x4[s] = o; s_y4[s] = y;
+      );
+      pp = s_p[s]; lp = (1 - pp) * y + pp * s_lp[s]; s_lp[s] = lp;
+      y = s_g[s] * lp; s_yi[s] = y; bsy += y; nj += 1;
+      vo += oR * s_w[s];
       s += 1;
     );
-    // action knock (low thump), decaying fast
-    v_ka[i] > 0.000001 ? ( v_kl[i] += ((rand(2) - 1) * v_ka[i] - v_kl[i]) * klc; v_ka[i] *= kdec; vo += v_kl[i]; );
-    sL += vo * v_pl[i]; sR += vo * v_pr[i];
-    // retire a key once it has died away (after the hammer has struck)
+    // action knock
+    v_ka[i] > 0.0000001 ? ( v_kl[i] += ((rand(2) - 1) * v_ka[i] - v_kl[i]) * klc; v_ka[i] *= kdec; ) : v_kl[i] = 0;
+    vx = (vo + v_kl[i]) * v_gn[i];
+    bsum += vx;
+    sL += vx * v_pl[i]; sR += vx * v_pr[i];
     v_env[i] += (abs(vo) - v_env[i]) * envc;
-    v_et[i] > 2000 ? (
-      v_live[i] = 1;
-      (v_env[i] < 0.00002 && !v_held[i] && !v_sus[i]) || v_env[i] < 0.000002 ? v_act[i] = 0;
+  );
+  i += 1;
+);
+// ---------- open strings (pedal down), pass 1 ----------
+ysum = 0;
+sym_on ? (
+  j = 0;
+  loop(NY,
+    x = YB[j * YS + ((gw - y_L[j]) & YM)];
+    e = y_eta[j]; y = e * x + y_tx[j] - e * y_ty[j]; y_tx[j] = x; y_ty[j] = y;
+    pp = y_p[j]; lp = (1 - pp) * y + pp * y_lp[j]; y_lp[j] = lp;
+    y = -(sus_pedal ? y_g[j] : y_gd[j]) * lp; y_yi[j] = y; bsy += y; nj += 1;
+    ysum += x;
+    j += 1;
+  );
+);
+// ---------- the bridge: every string meets it at one junction ----------
+// force balance  Zb vb = sum Z (v_in - v_out),  v_out = vb - v_in  ->  vb = 2 sum v_in / (Zb + N)
+// lossless scattering into a resistive bridge: energy is only ever shared or lost, so any number of
+// coupled strings stays stable. Strings with their dampers up ring in sympathy through it.
+vb = 2 * bsy / (zb + nj);
+// ---------- pass 2: reflections, hammer forces, retire silent keys ----------
+i = 0;
+loop(NV,
+  v_act[i] ? (
+    ns = v_ns[i]; s = MS * i; dvh = v_dv[i];
+    loop(ns,
+      rb = RAIL + s * RS2;
+      rb[wr] = -s_ol[s];                     // agraffe: inverting reflection
+      rb[RS + wr] = vb - s_yi[s];            // bridge junction
+      dvh != 0 ? ( hh = s_h[s]; rb[(gw - hh) & RM] += dvh; rb[RS + ((gw - s_N[s] + hh) & RM)] += dvh; );
+      s += 1;
+    );
+    v_t[i] += 1;
+    v_t[i] > 2000 && !h_on[i] ? (
+      ((v_env[i] < 0.00001 && !v_held[i] && !v_sus[i]) || (v_env[i] < 0.0000005 && !v_sil[i])) ? v_act[i] = 0;
     );
   );
   i += 1;
 );
-sL *= 0.35; sR *= 0.35;
+sym_on ? (
+  wy = gw & YM;
+  j = 0; loop(NY, YB[j * YS + wy] = vb - y_yi[j]; j += 1; );
+  sym_env += (abs(ysum) - sym_env) * symc;
+  !sus_pedal && sym_env < 0.000001 ? ( sym_on = 0; memset(YB, 0, NY * YS); memset(y_tx, 0, NY); memset(y_ty, 0, NY); memset(y_lp, 0, NY); );
+);
+gw = (gw + 1) & 1048575;
 
-// ---------- soundboard ----------
-m = 0.5 * (sL + sR);
+// ---------- soundboard: the bridge drives the plate modes ----------
+m = (bsum + 0.5 * ysum) * OUTG;
 hpz += (m - hpz) * hpc; mh = m - hpz;
-b0 = bq(mh, BM, BM + 5) * bmg0; b1 = bq(mh, BM + 9, BM + 14) * bmg1; b2 = bq(mh, BM + 18, BM + 23) * bmg2;
-b3 = bq(mh, BM + 27, BM + 32) * bmg3; b4 = bq(mh, BM + 36, BM + 41) * bmg4; b5 = bq(mh, BM + 45, BM + 50) * bmg5;
-xL = sL + body * (b0 + b2 + b4 + 0.6 * (b1 + b3 + b5));
-xR = sR + body * (b1 + b3 + b5 + 0.6 * (b0 + b2 + b4));
+bo = 0; be = 0; kk = 0;
+loop(8,
+  bo += bq(mh, BM + kk * 18) * bm_g[kk * 2];
+  be += bq(mh, BM + kk * 18 + 9) * bm_g[kk * 2 + 1];
+  kk += 1;
+);
+xL = (sL + 0.5 * ysum * 0.7) * OUTG * (1 - 0.4 * body) + body * 1.6 * (bo + 0.5 * be);
+xR = (sR + 0.5 * ysum * 0.7) * OUTG * (1 - 0.4 * body) + body * 1.6 * (be + 0.5 * bo);
 // ---------- tone (tilt about 900 Hz) ----------
 tzL += (xL - tzL) * tlc; xL += tilt * (xL - 2 * tzL);
 tzR += (xR - tzR) * tlc; xR += tilt * (xR - 2 * tzR);
+// ---------- room (4-line feedback delay network) ----------
 mm = 0.5 * (xL + xR);
-
-// ---------- pedal resonance halo + room (4-line feedback delay networks) ----------
-res_gs += (res_gt - res_gs) * 0.0005;
-r0 = FRB[(f_wp - rl0) & (FSZ - 1)]; r1 = FRB[FSZ + ((f_wp - rl1) & (FSZ - 1))];
-r2 = FRB[2 * FSZ + ((f_wp - rl2) & (FSZ - 1))]; r3 = FRB[3 * FSZ + ((f_wp - rl3) & (FSZ - 1))];
-rz0 += (r0 - rz0) * rlp; rz1 += (r1 - rz1) * rlp; rz2 += (r2 - rz2) * rlp; rz3 += (r3 - rz3) * rlp;
-rin = mm * pres * (sus_pedal ? 0.35 : 0.04);
-FRB[f_wp]           = rin + 0.5 * res_gs * (rz0 + rz1 + rz2 + rz3);
-FRB[FSZ + f_wp]     = rin + 0.5 * res_gs * (rz0 - rz1 + rz2 - rz3);
-FRB[2 * FSZ + f_wp] = rin + 0.5 * res_gs * (rz0 + rz1 - rz2 - rz3);
-FRB[3 * FSZ + f_wp] = rin + 0.5 * res_gs * (rz0 - rz1 - rz2 + rz3);
-xL += pres * (rz0 - rz2) * 0.9; xR += pres * (rz1 - rz3) * 0.9;
-
-q0 = FRM[(f_wp - ml0) & (FSZ - 1)]; q1 = FRM[FSZ + ((f_wp - ml1) & (FSZ - 1))];
-q2 = FRM[2 * FSZ + ((f_wp - ml2) & (FSZ - 1))]; q3 = FRM[3 * FSZ + ((f_wp - ml3) & (FSZ - 1))];
+q0 = FRM[(f_wp - ml0) & FM]; q1 = FRM[FSZ + ((f_wp - ml1) & FM)];
+q2 = FRM[2 * FSZ + ((f_wp - ml2) & FM)]; q3 = FRM[3 * FSZ + ((f_wp - ml3) & FM)];
 qz0 += (q0 - qz0) * mlp; qz1 += (q1 - qz1) * mlp; qz2 += (q2 - qz2) * mlp; qz3 += (q3 - qz3) * mlp;
 qin = mm * room * 0.6;
 FRM[f_wp]           = qin + 0.5 * rm_g * (qz0 + qz1 + qz2 + qz3);
@@ -383,7 +491,7 @@ FRM[FSZ + f_wp]     = qin + 0.5 * rm_g * (qz0 - qz1 + qz2 - qz3);
 FRM[2 * FSZ + f_wp] = qin + 0.5 * rm_g * (qz0 + qz1 - qz2 - qz3);
 FRM[3 * FSZ + f_wp] = qin + 0.5 * rm_g * (qz0 - qz1 - qz2 + qz3);
 xL += room * (qz0 - qz2) * 0.7; xR += room * (qz1 - qz3) * 0.7;
-f_wp = (f_wp + 1) & (FSZ - 1);
+f_wp = (f_wp + 1) & FM;
 
 // ---------- volume + output stage ----------
 vol_s += (vol_t - vol_s) * sm;
@@ -397,9 +505,9 @@ spl1 = ost_r;
 file_var(0, ui_sz);
 file_var(0, edited);
 
-@gfx 860 400
+@gfx 860 368
 ui_thm = 9; ui_hw = 1;
-ui_begin(860, 400);
+ui_begin(860, 368);
 INK = 0xE8D9B4; GOLD = 0xC9A043; GOLDL = 0xE8C66A; FELT = 0x5A1418;
 // ---------- helpers ----------
 function lbl(x, y, s, a) ( gfx_setfont(4); ui_cola(INK, a); ui_text(x * sc, y * sc, s); );
@@ -424,7 +532,7 @@ function pbtn(x, y, w, h) local(hit, inb) (
 );
 
 // ---------- cabinet: piano-black lacquer with a felt strip and brass pinstripe ----------
-fh = 384;
+fh = 352;
 ui_col(0x070707); gfx_rect(0, 0, gfx_w, gfx_h);
 ui_cola(0x000000, 0.6); ui_rrect(10 * sc, 12 * sc, 844 * sc, fh * sc, 7 * sc);
 ui_col(0x1A1718); ui_rrect(8 * sc, 8 * sc, 844 * sc, fh * sc, 7 * sc);
@@ -462,7 +570,7 @@ drag_id >= 3 && drag_id <= 15 ? (
   drag_id == 8  ? sprintf(#l2, "DAMPER     %3.0f%%", slider8) :
   drag_id == 9  ? sprintf(#l2, "BODY       %3.0f%%", slider9) :
   drag_id == 10 ? sprintf(#l2, "TONE      %+4.0f", slider10 - 50) :
-  drag_id == 11 ? sprintf(#l2, "PEDAL RES  %3.0f%%", slider11) :
+  drag_id == 11 ? sprintf(#l2, "RESONANCE  %3.0f%%", slider11) :
   drag_id == 12 ? sprintf(#l2, "ROOM       %3.0f%%", slider12) :
   drag_id == 13 ? sprintf(#l2, "SPREAD     %3.0f%%", slider13) :
   drag_id == 14 ? sprintf(#l2, "DRIFT      %3.0f%%", slider14) :
@@ -523,41 +631,17 @@ ui_knob(510 * sc, 196 * sc, 9, 0, 100, 55, 0, "BODY", "%.0f%%");
 ui_knob(580 * sc, 196 * sc, 10, 0, 100, 50, 0, "TONE", "%.0f");
 divider(620);
 stitle(700, "SPACE");
-ui_knob(665 * sc, 196 * sc, 11, 0, 100, 35, 0, "PEDAL RES", "%.0f%%");
+ui_knob(665 * sc, 196 * sc, 11, 0, 100, 35, 0, "RESONANCE", "%.0f%%");
 ui_knob(735 * sc, 196 * sc, 12, 0, 100, 25, 0, "ROOM", "%.0f%%");
 ui_knob(805 * sc, 196 * sc, 13, 0, 100, 60, 0, "SPREAD", "%.0f%%");
 drag_id >= 3 && drag_id <= 13 ? edited = 1;
 
-// ---------- keyboard strip: the keys that are sounding ----------
-kx0 = 24; ky0 = 312; kw = 560 / 52;                       // 52 white keys, A0 .. C8
-ui_col(0x0A0A0A); gfx_rect((kx0 - 2) * sc, (ky0 - 2) * sc, (52 * kw + 4) * sc, 34 * sc);
-wk = 0; nn = 21;
-loop(88,
-  pc = nn % 12; blk = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
-  !blk ? (
-    on = 0; j = 0; loop(NV, v_act[j] && v_note[j] == nn && (v_held[j] || v_sus[j]) ? on = 1; j += 1; );
-    ui_col(on ? GOLDL : 0xE9E4D6); gfx_rect((kx0 + wk * kw) * sc, ky0 * sc, (kw - 1) * sc, 30 * sc);
-    wk += 1;
-  );
-  nn += 1;
-);
-wk = 0; nn = 21;
-loop(88,
-  pc = nn % 12; blk = pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10;
-  blk ? (
-    on = 0; j = 0; loop(NV, v_act[j] && v_note[j] == nn && (v_held[j] || v_sus[j]) ? on = 1; j += 1; );
-    ui_col(on ? GOLD : 0x151313); gfx_rect((kx0 + wk * kw - kw * 0.32) * sc, ky0 * sc, kw * 0.64 * sc, 18 * sc);
-  ) : wk += 1;
-  nn += 1;
-);
-ui_col(FELT); gfx_rect((kx0 - 2) * sc, (ky0 - 3) * sc, (52 * kw + 4) * sc, 2 * sc);
-
 // ---------- master + IN / OUT strip ----------
 C_INK = INK; ui_section(2);
-ui_kmini = 1; ui_knob(616 * sc, 324 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%"); ui_kmini = 0;
-lbl(616, 340, "DRIFT", 0.9);
-ui_kmini = 1; ui_knob(656 * sc, 324 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB"); ui_kmini = 0;
-lbl(656, 340, "VOLUME", 0.9);
-ins_io(684, 311, 16, INK);
-ins_stereo_mini(770, 311, 22, INK);
+ui_kmini = 1; ui_knob(300 * sc, 320 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%"); ui_kmini = 0;
+lbl(300, 336, "DRIFT", 0.9);
+ui_kmini = 1; ui_knob(350 * sc, 320 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB"); ui_kmini = 0;
+lbl(350, 336, "VOLUME", 0.9);
+ins_io(390, 307, 16, INK);
+ins_stereo_mini(500, 307, 22, INK);
 ui_end();
