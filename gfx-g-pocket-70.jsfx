@@ -18,7 +18,8 @@ desc:GFX G Pocket 70
 // DRIFT       a digital box: only a tiny tuning scatter on each note.
 // MIDI CCs    0 / 32 bank, 1 mod wheel, 5 porta time, 7 volume, 10 pan, 11 expression, 64 sustain, 65 porta,
 //             71 resonance, 72 release, 73 attack, 74 cutoff, 91 reverb, 93 chorus, 120 / 123 off, 121 reset.
-// The mini keyboard plays the selected part. The part settings are saved with the project.
+// The mini keyboard plays the selected part. FOLLOW (on by default): the selected part jumps to whichever MIDI
+// channel is playing, so the edit pages always show the part you hear. The part settings are saved with the project.
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -563,6 +564,7 @@ ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 sm = 1 - exp(-1/(0.03*srate));
 vage = 0; qcount = 0; chph = 0; kb_held = -1; kb_on = kb_off = 0;
 !ui_dflt ? ( ui_sz = 2; p70_part = 0; p70_page = 0; p70_cur = 0; p70_oct = 0; );
+!p70_fset ? ( p70_follow = 1; p70_fset = 1; );   // FOLLOW starts on (older projects too)
 update(); vol_s = vol_t;
 ui_dflt = 1;
 
@@ -574,7 +576,7 @@ update();
 qcount = 0;
 while (midirecv(mofs, m1, m2, m3)) (
   st = m1 & 0xF0; c = m1 & 0x0F; z = PT + c*32; zc = CH + c*8;
-  st == 0x90 && m3 > 0 ? ( q_push(mofs, 1, m2, m3, c); ins_midi_hit(); midi_part = c; midi_t = time_precise(); ) :
+  st == 0x90 && m3 > 0 ? ( q_push(mofs, 1, m2, m3, c); ins_midi_hit(); midi_part = c; midi_t = time_precise(); p70_follow ? p70_part = c; ) :
   st == 0x80 || st == 0x90 ? q_push(mofs, 0, m2, 0, c) :
   st == 0xE0 ? zc[3] = ((m3*128 + m2) - 8192)/8192 :
   st == 0xC0 ? ( !z[1] ? z[0] = m2; ) :
@@ -609,6 +611,7 @@ file_var(0, p70_init);
 file_var(0, p70_part);
 file_var(0, p70_page);
 file_mem(0, PT, 16*32);
+file_avail(0) != 0 ? file_var(0, p70_follow);
 
 @sample
 while (eqi < qcount && EQO[eqi] <= spos) (
@@ -618,7 +621,7 @@ while (eqi < qcount && EQO[eqi] <= spos) (
 );
 spos += 1;
 
-dL = dR = sR = sC = 0;
+dL = dR = rvsnd = chsnd = 0;
 vi = 0;
 loop(NV,
   vb = VS + vi*64;
@@ -627,17 +630,17 @@ loop(NV,
     vb[49] < 0 ? ( (vb[24] -= 1) <= 0 ? ( vb[24] = 32; vctl(vb, vi); ); );
     vd = vy*vb[36];
     dL += vd*vb[32]; dR += vd*vb[33];
-    sR += vy*vb[34]*(vb[32] + vb[33]); sC += vy*vb[35]*(vb[32] + vb[33]);
+    rvsnd += vy*vb[34]*(vb[32] + vb[33]); chsnd += vy*vb[35]*(vb[32] + vb[33]);
   );
   vi += 1;
 );
 // reverb: four combs and two all-passes a side
-rin = sR*0.5;
+rin = rvsnd*0.5;
 rL = comb(0, rin) + comb(1, rin) + comb(2, rin) + comb(3, rin);
 rR = comb(4, rin) + comb(5, rin) + comb(6, rin) + comb(7, rin);
 rL = allp(1, allp(0, rL)); rR = allp(3, allp(2, rR));
 // chorus: one line, two modulated taps
-CHB[chw] = sC; chw = (chw + 1) & 4095;
+CHB[chw] = chsnd; chw = (chw + 1) & 4095;
 chph += 0.6/srate; chph -= floor(chph);
 cdl = (0.012 + 0.004*ch_dep*sin(2*$pi*chph))*srate; cdr = (0.012 + 0.004*ch_dep*cos(2*$pi*chph))*srate;
 p_ = chw - cdl; p_ < 0 ? p_ += 4096; i_ = floor(p_); f_ = p_ - i_; cL = CHB[i_ & 4095]*(1 - f_) + CHB[(i_ + 1) & 4095]*f_;
@@ -659,7 +662,7 @@ spl1 = ost_r;
 // =====================================================================
 ui_begin(900, 645);
 qs = sc*0.75;
-gfx_setfont(8, "Arial", 12*qs, 'b');
+gfx_setfont(15, "Arial", 12*qs, 'b');
 gfx_setfont(9, "Courier New", 24*qs, 'b');
 gfx_setfont(10, "Arial", 15*qs, 'b');
 gfx_setfont(11, "Arial", 12.5*qs, 'b');
@@ -772,7 +775,7 @@ ui_col(0x3D6FB6); gfx_circle(58*qs, 44*qs, 20*qs, 1, 1);
 gfx_setfont(2); ui_col(0xFFFFFF); ui_text(58*qs, 37*qs, "GFX");
 gfx_setfont(12); ui_col(0x26292C); TX(88, 22, "G POCKET 70");
 gfx_setfont(11); ui_col(0x4A4E53); TX(300, 36, "16-PART TONE GENERATOR");
-gfx_setfont(8, "Trebuchet MS", 13*qs, 'b'); ui_size_picker(1070*qs, 26*qs);
+ui_size_picker(1070*qs, 26*qs);
 
 // ---- LCD ----
 ui_col(0x26292C); RR(176, 70, 848, 560, 12);
@@ -990,6 +993,8 @@ bkey(100, 220, 50, 34, "+") ? p70_oct = min(p70_oct + 1, 3);
 gfx_setfont(11); ui_col(0x2E3134); TC(95, 290, "MIDI IN");
 rd_led(95*0.75, 320*0.75, 7*0.75, ins_midi_lit(), 0x46D86A);
 time_precise() - midi_t < 0.15 ? ( gfx_setfont(11); ui_col(0x2E3134); sprintf(#mp, "PART %d", midi_part + 1); TC(95, 336, #mp); );
+bkey(55, 352, 80, 26, "FOLLOW") ? p70_follow = !p70_follow;
+rd_led(95*0.75, 392*0.75, 4*0.75, p70_follow, 0xFFB030);
 // ---- right: cursor and value keys ----
 gfx_setfont(11); ui_col(0x2E3134); TC(1105, 110, "CURSOR");
 bkey(1080, 130, 50, 34, "^") ? p70_page == 0 ? p70_cur = p70_cur >= 9 ? max(p70_cur - 9, 0) : p70_cur;
@@ -1005,9 +1010,9 @@ p70_page == 0 ? (
 // ---- the slider row: drift, reverb, chorus, master, output stage ----
 gfx_setfont(14); ui_col(0x2E3134);
 dy_kst = 7; dy_ink = 0x2E3134; dy_ntick = 11;
-TC(60, 400, "REVERB"); dy_knob(60*0.75, 440*0.75, 18*0.75, 3, 0, 100, 45, 0, 0x9DA2A8, "TIME", "");
-dy_knob(130*0.75, 440*0.75, 18*0.75, 4, 0, 100, 70, 0, 0x9DA2A8, "LEVEL", "");
-TC(95, 500, "CHORUS"); dy_knob(95*0.75, 540*0.75, 18*0.75, 5, 0, 100, 50, 0, 0x9DA2A8, "DEPTH", "");
+TC(60, 420, "REVERB"); dy_knob(60*0.75, 460*0.75, 18*0.75, 3, 0, 100, 45, 0, 0x9DA2A8, "TIME", "");
+dy_knob(130*0.75, 460*0.75, 18*0.75, 4, 0, 100, 70, 0, 0x9DA2A8, "LEVEL", "");
+TC(95, 520, "CHORUS"); dy_knob(95*0.75, 560*0.75, 18*0.75, 5, 0, 100, 50, 0, 0x9DA2A8, "DEPTH", "");
 gfx_setfont(14); ui_col(0x2E3134); TC(1105, 400, "MASTER");
 dy_knob(1070*0.75, 440*0.75, 18*0.75, 1, -24, 6, 0, 0, 0x9DA2A8, "VOLUME", "");
 dy_knob(1140*0.75, 440*0.75, 18*0.75, 2, 0, 100, 10, 0, 0x8A6BD8, "DRIFT", "");
