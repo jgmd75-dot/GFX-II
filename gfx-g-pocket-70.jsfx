@@ -18,7 +18,9 @@ desc:GFX G Pocket 70
 // DRIFT       a digital box: only a tiny tuning scatter on each note.
 // MIDI CCs    0 / 32 bank, 1 mod wheel, 5 porta time, 7 volume, 10 pan, 11 expression, 64 sustain, 65 porta,
 //             71 resonance, 72 release, 73 attack, 74 cutoff, 91 reverb, 93 chorus, 120 / 123 off, 121 reset.
-// The mini keyboard plays the selected part. FOLLOW (on by default): the selected part jumps to whichever MIDI
+// PAGES       LIST: every program - click a name to give it to the selected part.  EDIT: the part's voice,
+//             filter, envelope, vibrato and mix, plus the reverb / chorus effects.
+// FOLLOW (on by default): the selected part jumps to whichever MIDI
 // channel is playing, so the edit pages always show the part you hear. The part settings are saved with the project.
 
 import gfx-drift.jsfx-inc
@@ -654,404 +656,192 @@ ost_out(oL, oR);
 spl0 = ost_l;
 spl1 = ost_r;
 
-@gfx 900 645
+@gfx 960 570
 // =====================================================================
-// GUI - the handheld box: silver body, the backlit LCD (VOICE EDIT / MIXER / TUNE pages), the F-keys under it,
-// part and octave keys on the left, cursor and -1 / +1 keys on the right, a two-octave mini keyboard below.
-// Design space 1200 x 860 at qs = 0.75 * sc (900 x 645 at size M).
+// GUI - the house rack layout: a top bar with the backlit LCD, the 16 part keys underneath, then
+// page 1 (every program, click a name to give it to the selected part) or page 2 (EDIT: the selected part's
+// voice, envelope, vibrato and mix, plus the effects). Design space 1280 x 760 at qs = 0.75 * sc.
 // =====================================================================
-ui_begin(900, 645);
+ui_begin(960, 570);
 qs = sc*0.75;
-gfx_setfont(15, "Arial", 12*qs, 'b');
 gfx_setfont(9, "Courier New", 24*qs, 'b');
-gfx_setfont(10, "Arial", 15*qs, 'b');
-gfx_setfont(11, "Arial", 12.5*qs, 'b');
-gfx_setfont(12, "Trebuchet MS", 32*qs, 'b');
-gfx_setfont(13, "Courier New", 17*qs, 'b');
-gfx_setfont(14, "Arial", 11*qs, 'b');
-LK = 0x161A1B; LB = 0xC8D3C0; LM = 0x8F9A88;     // LCD ink, glass, mid
-BODY = 0xBCC0C3; BODY2 = 0xA9AEB2; KEYC = 0x3A3D41; KEYT = 0xE8E8E6;
+gfx_setfont(10, "Courier New", 17*qs, 'b');
+gfx_setfont(11, "Trebuchet MS", 15*qs, 'b');
+gfx_setfont(12, "Trebuchet MS", 40*qs, 'b');
+gfx_setfont(13, "Trebuchet MS", 17*qs, 'b');
+gfx_setfont(14, "Trebuchet MS", 18*qs, 'b');
+gfx_setfont(15, "Courier New", 16*qs, 'b');
+gfx_setfont(16, "Trebuchet MS", 13*qs, 'b');
+BG = 0xB9BDC1; BG2 = 0xC9CCCF; BG3 = 0xA7ABB0; INK = 0x22262A; INK2 = 0x51575D; ACC = 0x2F6FB8;
+LB = 0xBFD0C4; LK = 0x16201C; KC = 0x6A6F76;
 
 function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
-function RO(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs), 0); );
 function RR(x, y, w, h, r) ( rd_rr(x*qs, y*qs, w*qs, h*qs, r*qs); );
-function LN(x1, y1, x2, y2) ( gfx_line(x1*qs, y1*qs, x2*qs, y2*qs, 1); );
 function TX(x, y, t) ( gfx_x = x*qs; gfx_y = y*qs; gfx_drawstr(t); );
 function TC(cx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = cx*qs - w*0.5; gfx_y = y*qs; gfx_drawstr(t); );
 function TR(rx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = rx*qs - w; gfx_y = y*qs; gfx_drawstr(t); );
 function inbox(x, y, w, h) ( mouse_x >= x*qs && mouse_x < (x + w)*qs && mouse_y >= y*qs && mouse_y < (y + h)*qs; );
 function hitbox(x, y, w, h) local(h_) ( h_ = pressed && drag_id == 0 && inbox(x, y, w, h); h_ ? drag_id = -1; h_; );
-function lcol() ( ui_col(LK); );
 function pz() ( PT + p70_part*32; );
-
-// ---- the edit-page parameters: part index, range, default, names ----
-CTP = 148100; CMN = 148130; CMX = 148160; CDF = 148190;
-function cdef(i, p, lo, hi, d) ( CTP[i] = p; CMN[i] = lo; CMX[i] = hi; CDF[i] = d; );
-cdef(0, 2, 0, 1, 0); cdef(1, 3, 0, 16, 2); cdef(2, 4, 0, 127, 64); cdef(3, 5, 0, 127, 64); cdef(4, 6, 0, 1, 0);
-cdef(5, 7, 0, 127, 0); cdef(6, 8, 0, 127, 10); cdef(7, 9, 0, 127, 0); cdef(8, 10, 0, 127, 0);
-cdef(9, 11, -64, 63, 0); cdef(10, 12, -64, 63, 0); cdef(11, 13, -64, 63, 0); cdef(12, 14, -64, 63, 0); cdef(13, 15, -64, 63, 0);
-cdef(14, 16, -64, 63, 0); cdef(15, 17, -64, 63, 0); cdef(16, 18, -64, 63, 0); cdef(17, 19, -24, 24, 2); cdef(18, 20, 0, 127, 127);
-// mixer / tune (ids 20..)
-cdef(20, 21, 0, 127, 100); cdef(21, 22, -64, 63, 0); cdef(22, 23, 0, 127, 40); cdef(23, 24, 0, 127, 0); cdef(24, 25, -24, 24, 0); cdef(25, 26, -64, 63, 0);
-function cname(i) (
-  i == 0 ? "Mono/Poly" : i == 1 ? "Elem Reserve" : i == 2 ? "VelSens Depth" : i == 3 ? "VelSens Offset" : i == 4 ? "Portamento Sw" :
-  i == 5 ? "Porta Time" : i == 6 ? "MW Pitch Mod" : i == 7 ? "MW Filter Mod" : i == 8 ? "MW Amp Mod" : i == 9 ? "Cutoff" :
-  i == 10 ? "Resonance" : i == 11 ? "EG Attack" : i == 12 ? "EG Decay" : i == 13 ? "EG Release" : i == 14 ? "Vibrato Rate" :
-  i == 15 ? "Vibrato Depth" : i == 16 ? "Vibrato Delay" : i == 17 ? "Pitch Bend" : i == 18 ? "Dry Level" : i == 20 ? "Volume" :
-  i == 21 ? "Pan" : i == 22 ? "Reverb Send" : i == 23 ? "Chorus Send" : i == 24 ? "Note Shift" : "Detune";
-);
-function cval(i, v) (
-  i == 0 ? (v ? "Mono" : "Poly") : i == 4 ? (v ? "On" : "Off") :
-  i == 21 ? (v == 0 ? "C" : v < 0 ? sprintf(#cv, "L%d", -v) : sprintf(#cv, "R%d", v)) :
-  CMN[i] < 0 ? sprintf(#cv, v > 0 ? "+%d" : "%d", v) : sprintf(#cv, "%d", v);
-);
-// drag / wheel / double-click on one parameter of one part
-function lpar(i, p, x, y, w, h) local(z, hov, v, did) (
-  z = PT + p*32 + CTP[i]; did = 3000 + i*16 + p;
-  hov = inbox(x, y, w, h);
-  pressed && hov && drag_id == 0 ? (
-    p70_part = p; p70_cur = i;
-    time_precise() - lp_t < 0.35 && lp_id == did ? ( z[0] = CDF[i]; drag_id = -1; lp_t = 0; ) : (
-      CMX[i] - CMN[i] <= 1 ? ( z[0] = z[0] ? CMN[i] : CMX[i]; drag_id = -1; ) : ( drag_id = did; lp_y = mouse_y; lp_v = z[0]; );
-      lp_t = time_precise(); lp_id = did;
-    );
-  );
-  drag_id == did ? (
-    v = lp_v + (lp_y - mouse_y)/((mouse_cap & 8 ? 6 : 1.5)*sc)*(CMX[i] - CMN[i])/127;
-    z[0] = min(max(floor(v + 0.5), CMN[i]), CMX[i]);
-    p70_cur = i; p70_part = p;
-  );
-  hov && mouse_wheel != 0 && drag_id == 0 ? ( z[0] = min(max(z[0] + sign(mouse_wheel), CMN[i]), CMX[i]); mouse_wheel = 0; p70_cur = i; p70_part = p; );
-  hov || drag_id == did ? ( strcpy(#dn, cname(i)); strcpy(#dv, cval(i, z[0])); dshow = 1; );
-);
-function frac(i, v) ( (v - CMN[i])/(CMX[i] - CMN[i]); );
-// LCD knob and slider
-function lknob(cx, cy, r, f, sel) local(a) (
-  sel ? ( lcol(); gfx_circle(cx*qs, cy*qs, (r + 3)*qs, 1, 1); ui_col(LB); ) : lcol();
-  gfx_circle(cx*qs, cy*qs, r*qs, 0, 1); gfx_circle(cx*qs, cy*qs, (r - 1)*qs, 0, 1);
-  a = (-0.75 + 1.5*f)*$pi;
-  LN(cx + sin(a)*r*0.25, cy - cos(a)*r*0.25, cx + sin(a)*r*0.95, cy - cos(a)*r*0.95);
-  LN(cx + sin(a)*r*0.25 + 1, cy - cos(a)*r*0.25, cx + sin(a)*r*0.95 + 1, cy - cos(a)*r*0.95);
-);
-function lslider(cx, y, h, f, sel) local(k, hy) (
-  lcol(); R(cx - 1, y, 2, h);
-  k = 0; loop(9, R(cx - 9, y + k*h/8, 5, 1); R(cx + 5, y + k*h/8, 5, 1); k += 1; );
-  hy = y + (1 - f)*h;
-  sel ? ( lcol(); R(cx - 12, hy - 8, 24, 16); ui_col(LB); R(cx - 9, hy - 1, 18, 2); )
-      : ( ui_col(LB); R(cx - 11, hy - 7, 22, 14); lcol(); RO(cx - 11, hy - 7, 22, 14); R(cx - 9, hy - 1, 18, 2); );
-);
-function lhead(x, y, w, t, sel) ( sel ? ( lcol(); R(x, y, w, 20); ui_col(LB); ) : lcol(); gfx_setfont(11); TC(x + w*0.5, y + 3, t); );
-// a physical key on the body
-function bkey(x, y, w, h, t) local(hov, hit) (
-  hov = inbox(x, y, w, h); hit = hitbox(x, y, w, h);
-  ui_cola(0x000000, 0.35); RR(x + 1, y + 2, w, h, 5);
-  ui_col(hov ? 0x4A4E53 : KEYC); RR(x, y, w, h, 5);
-  ui_cola(0xFFFFFF, 0.12); R(x + 4, y + 2, w - 8, 1);
-  gfx_setfont(14); ui_col(KEYT); TC(x + w*0.5, y + h*0.5 - 6, t);
+function key(x, y, w, h, on, c, cap) local(hit) (
+  rd_sqbg = 0x55595E;
+  hit = rd_sq(x*0.75, y*0.75, w*0.75, h*0.75, on, c, "");
+  gfx_setfont(11); ui_col(INK); TC(x + w*0.5, y + h + 5, cap);
   hit;
 );
-function prog_menu(x, y) local(k, c, j, s) (
-  #pm = ""; c = 0;
-  loop(16,
-    strcat(#pm, ">"); strcat(#pm, cat_name(c)); strcat(#pm, "|");
-    j = 0; loop(8, s = c*8 + j; j == 7 ? strcat(#pm, "<");
-      (pz())[0] == s && !(pz())[1] ? strcat(#pm, "!");
-      sprintf(#pe, "%03d  %s", s + 1, pnm(s)); strcat(#pm, #pe); strcat(#pm, "|"); j += 1; );
-    c += 1;
-  );
-  strcat(#pm, (pz())[1] ? "!Drum Kit" : "Drum Kit");
-  gfx_x = x*qs; gfx_y = y*qs; k = gfx_showmenu(#pm);
-  k > 0 && k <= 128 ? ( (pz())[0] = k - 1; (pz())[1] = 0; ) : k == 129 ? (pz())[1] = 1;
+function sect(x, y, w, h, t) (
+  ui_col(BG3); RR(x, y, w, h, 6); ui_col(BG2); RR(x + 2, y + 2, w - 4, h - 4, 5);
+  gfx_setfont(13); ui_col(ACC); TX(x + 12, y + 8, t);
 );
+// a knob on a part setting (memory, not a slider): drag, wheel, double-click resets; value on hover only
+function pknob(off, cx, cy, r, lo, hi, def, cap, label, fmt) local(z, did, hov, f, a, v, i, t) (
+  z = pz() + off; did = 5000 + off;
+  hov = (mouse_x - cx*qs)^2 + (mouse_y - cy*qs)^2 <= ((r + 6)*qs)^2;
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - pk_t < 0.35 && pk_id == did ? ( z[0] = def; drag_id = -1; pk_t = 0; ) :
+    ( drag_id = did; pk_y = mouse_y; pk_v = z[0]; pk_t = time_precise(); pk_id = did; );
+  );
+  drag_id == did ? ( v = pk_v + (pk_y - mouse_y)/((mouse_cap & 8 ? 6 : 1.4)*sc)*(hi - lo)/127; z[0] = min(max(floor(v + 0.5), lo), hi); );
+  hov && mouse_wheel != 0 && drag_id == 0 ? ( z[0] = min(max(z[0] + sign(mouse_wheel), lo), hi); mouse_wheel = 0; );
+  f = (z[0] - lo)/(hi - lo); a = (-0.75 + 1.5*f)*$pi;
+  i = 0; loop(11, t = (-0.75 + 1.5*i/10)*$pi; ui_cola(INK, 0.7);
+    gfx_line((cx + sin(t)*(r + 4))*qs, (cy - cos(t)*(r + 4))*qs, (cx + sin(t)*(r + 9))*qs, (cy - cos(t)*(r + 9))*qs, 1); i += 1; );
+  ui_cola(0x000000, 0.35); gfx_circle((cx + 1.5)*qs, (cy + 2.5)*qs, r*qs, 1, 1);
+  ui_col(0x16181B); gfx_circle(cx*qs, cy*qs, r*qs, 1, 1);
+  ui_col(cap); gfx_circle(cx*qs, cy*qs, r*0.72*qs, 1, 1);
+  ui_cola(0xFFFFFF, 0.25); gfx_circle((cx - r*0.2)*qs, (cy - r*0.25)*qs, r*0.3*qs, 1, 1);
+  ui_kline(cx*qs, cy*qs, a, r*0.15*qs, r*0.95*qs, 2.4, 0xF2F2EE);
+  (hov || drag_id == did) ? ( ui_cola(0xFFFFFF, 0.15); gfx_circle(cx*qs, cy*qs, (r + 3)*qs, 0, 1); );
+  gfx_setfont(11); ui_col(INK); TC(cx, cy + r + 12, label);
+  hov || drag_id == did ? ( sprintf(#pkv, fmt, z[0]); gfx_setfont(10); ui_col(INK); TC(cx, cy + r + 30, #pkv); );
+);
+function prog_name(z) ( z[1] ? "Drum Kit" : pnm(z[0]); );
 
 // ---------------------------------------------------------------------
-ui_col(0x0E0F10); gfx_rect(0, 0, gfx_w, gfx_h);
-// ---- body ----
-ui_cola(0x000000, 0.5); RR(14, 16, 1176, 838, 34);
-ui_col(BODY2); RR(10, 10, 1180, 840, 34);
-ui_col(BODY); RR(14, 14, 1172, 832, 31);
-gfx_gradrect(14*qs, 14*qs, 1172*qs, 300*qs, 1, 1, 1, 0.16, 0, 0, 0, 0, 0, 0, 0, -0.16/(300*qs));
-ui_col(0x3D6FB6); gfx_circle(58*qs, 44*qs, 20*qs, 1, 1);
-gfx_setfont(2); ui_col(0xFFFFFF); ui_text(58*qs, 37*qs, "GFX");
-gfx_setfont(12); ui_col(0x26292C); TX(88, 22, "G POCKET 70");
-gfx_setfont(11); ui_col(0x4A4E53); TX(300, 36, "16-PART TONE GENERATOR");
-ui_size_picker(1070*qs, 26*qs);
+ui_col(BG); gfx_rect(0, 0, gfx_w, gfx_h);
+z_ = pz();
 
-// ---- LCD ----
-ui_col(0x26292C); RR(176, 70, 848, 560, 12);
-ui_col(0x111314); RR(186, 80, 828, 540, 8);
-ui_col(LB); R(196, 88, 808, 524);
-gfx_gradrect(196*qs, 88*qs, 808*qs, 524*qs, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06/(524*qs));
-X0 = 206; Y0 = 96; W = 788;
-z_ = pz(); dshow = 0;
+// ---- top bar ----
+ui_col(0x2A2E33); R(0, 0, 1280, 150);
+gfx_gradrect(0, 0, 1280*qs, 60*qs, 1, 1, 1, 0.05, 0, 0, 0, 0, 0, 0, 0, -0.05/(60*qs));
+ui_col(ACC); gfx_circle(48*qs, 56*qs, 22*qs, 1, 1);
+gfx_setfont(2); ui_col(0xFFFFFF); ui_text(48*qs, 49*qs, "GFX");
+gfx_setfont(12); ui_col(0xEDEDEA); TX(82, 30, "G POCKET 70");
+gfx_setfont(11); ui_col(0xA6ACB2); TX(84, 82, "16-PART TONE GENERATOR");
+// the backlit LCD: part, program number and name
+ui_col(0x101214); R(360, 18, 470, 114);
+ui_col(LB); R(366, 24, 458, 102);
+gfx_gradrect(366*qs, 24*qs, 458*qs, 102*qs, 1, 1, 1, 0.08, 0, 0, 0, 0, 0, 0, 0, -0.08/(102*qs));
+ui_col(LK); gfx_setfont(10);
+sprintf(#l1, "PART %02d   CH %02d   %s", p70_part + 1, p70_part + 1, z_[1] ? "DRUM" : cat_name(floor(z_[0]/8))); TX(378, 32, #l1);
+gfx_setfont(9); z_[1] ? strcpy(#l2, "--- ") : sprintf(#l2, "%03d ", z_[0] + 1); strcat(#l2, prog_name(z_)); TX(378, 62, #l2);
+gfx_setfont(10); time_precise() - midi_t < 0.15 ? ( sprintf(#l3, "MIDI IN  CH %d", midi_part + 1); TX(378, 98, #l3); );
+ui_button(842*qs, 26*qs, 42*qs, 98*qs, "<", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 127) % 128; );
+ui_button(888*qs, 26*qs, 42*qs, 98*qs, ">", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 1) % 128; );
+rd_sqbg = 0x55595E; rd_sq(952*0.75, 24*0.75, 74*0.75, 32*0.75, p70_page == 0, ACC, "LIST") ? p70_page = 0;
+rd_sq(1034*0.75, 24*0.75, 74*0.75, 32*0.75, p70_page != 0, 0xFFB030, "EDIT") ? p70_page = 1;
+rd_sq(952*0.75, 82*0.75, 74*0.75, 28*0.75, p70_follow, 0x46D86A, "FOLLOW") ? p70_follow = !p70_follow;
+rd_led(1050*0.75, 97*0.75, 6*0.75, ins_midi_lit(), 0x46D86A);
+gfx_setfont(11); ui_col(0xA6ACB2); TX(1062, 90, "MIDI");
+dy_kst = 7; dy_ink = 0xD8D8D2; dy_ntick = 11;
+sprintf(#mv, "%+.1f dB", slider1); dy_knob(1172*0.75, 58*0.75, 24*0.75, 1, -24, 6, 0, 0, 0x9DA2A8, "VOLUME", #mv);
+ui_size_picker(1124*qs, 120*qs);
 
-// row 1: page bar
-lcol(); R(X0, Y0, W, 30);
-gfx_setfont(13); ui_col(LB);
-TX(X0 + 8, Y0 + 5, p70_page == 0 ? "VOICE -- VOICE EDIT --" : p70_page == 1 ? "VOICE -- MIXER --" : "VOICE -- TUNE --");
-sprintf(#pt, "PART=%02d", p70_part + 1); TR(X0 + W - 8, Y0 + 5, #pt);
-// row 2: transport icons, CAT / PGM / BANK / name, octave box
-k = 0; loop(3, lcol(); RO(X0 + k*30, Y0 + 36, 26, 26); RO(X0 + k*30 + 1, Y0 + 37, 24, 24); k += 1; );
-lcol(); gfx_circle((X0 + 13)*qs, (Y0 + 49)*qs, 6*qs, 1, 1); R(X0 + 37, Y0 + 43, 12, 12);
-gfx_triangle((X0 + 67)*qs, (Y0 + 42)*qs, (X0 + 67)*qs, (Y0 + 56)*qs, (X0 + 79)*qs, (Y0 + 49)*qs);
-lcol(); RO(X0 + 94, Y0 + 34, 560, 30);
-gfx_setfont(14); TX(X0 + 100, Y0 + 38, "CAT"); k = 0; loop(5, RO(X0 + 126 + k*5, Y0 + 39, 5, 10); k += 1; ); R(X0 + 129, Y0 + 39, 2, 6); R(X0 + 134, Y0 + 39, 2, 6); R(X0 + 144, Y0 + 39, 2, 6);
-TX(X0 + 100, Y0 + 50, "PGM");
-gfx_setfont(9);
-z_[1] ? ( TX(X0 + 156, Y0 + 37, "001"); gfx_setfont(14); TX(X0 + 220, Y0 + 40, "BANK"); gfx_setfont(9); TX(X0 + 256, Y0 + 37, "127"); TX(X0 + 330, Y0 + 37, "Std.Kit"); )
-      : ( sprintf(#pg_, "%03d", z_[0] + 1); TX(X0 + 156, Y0 + 37, #pg_); gfx_setfont(14); TX(X0 + 220, Y0 + 40, "BANK"); gfx_setfont(9); TX(X0 + 256, Y0 + 37, "000");
-          TX(X0 + 330, Y0 + 37, pnm(z_[0])); gfx_setfont(14); TX(X0 + 470, Y0 + 40, cat_abbr(floor(z_[0]/8))); );
-hitbox(X0 + 94, Y0 + 34, 560, 30) ? prog_menu(X0 + 156, Y0 + 66);
-lcol(); RO(X0 + 664, Y0 + 34, 124, 30); gfx_setfont(13); sprintf(#oc, "OCT %+d", p70_oct); TC(X0 + 726, Y0 + 40, #oc);
-
-// row 4: parts
-lcol(); R(X0, Y0 + 108, 30, 20); ui_col(LB); R(X0 + 3, Y0 + 111, 24, 14); lcol(); k = 0; loop(4, R(X0 + 5 + k*6, Y0 + 113, 3, 3); R(X0 + 5 + k*6, Y0 + 120, 3, 3); k += 1; );
-gfx_setfont(11); TX(X0 + 36, Y0 + 110, "PART");
+// ---- the 16 part keys ----
 k = 0;
 loop(16,
-  px_ = X0 + 90 + k*43;
-  lcol(); RO(px_, Y0 + 106, 38, 22);
-  k == p70_part ? ( R(px_, Y0 + 106, 38, 22); ui_col(LB); gfx_setfont(13); sprintf(#pn_, "%d", k + 1); TC(px_ + 19, Y0 + 108, #pn_); ) : (
-    part_count(k) > 0 ? ( lcol(); R(px_ + 4, Y0 + 110, 30, 14); ) : (PT + k*32)[27] ? ( lcol(); LN(px_ + 4, Y0 + 110, px_ + 34, Y0 + 124); );
-    (PT + k*32)[1] ? ( lcol(); gfx_setfont(14); TC(px_ + 19, Y0 + 110, "DR"); );
-  );
-  hitbox(px_, Y0 + 106, 38, 22) ? p70_part = k;
+  px_ = 12 + k*79; zz_ = PT + k*32; on_ = k == p70_part; act_ = part_count(k) > 0;
+  ui_col(on_ ? ACC : zz_[27] ? 0x8A8E93 : 0x3A3E43); RR(px_, 158, 74, 52, 6);
+  act_ ? ( ui_col(0x46D86A); gfx_circle((px_ + 64)*qs, (168)*qs, 4*qs, 1, 1); );
+  gfx_setfont(13); ui_col(0xFFFFFF); sprintf(#pn_, "%d", k + 1); TX(px_ + 8, 162, #pn_);
+  gfx_setfont(16); ui_col(on_ ? 0xFFFFFF : 0xC9CDD2); TX(px_ + 6, 188, zz_[1] ? "Drums" : pnm(zz_[0]));
+  hitbox(px_, 158, 74, 52) ? p70_part = k;
   k += 1;
 );
 
 p70_page == 0 ? (
-  // ---- VOICE EDIT ----
-  y5 = Y0 + 134;
-  // MONO / POLY
-  lcol(); RO(X0, y5, 112, 96);
-  lhead(X0, y5, 112, "MONO/POLY", p70_cur == 0);
-  lcol(); RO(X0 + 42, y5 + 28, 30, 14); z_[2] ? R(X0 + 44, y5 + 30, 13, 10) : R(X0 + 57, y5 + 30, 13, 10);
-  gfx_setfont(14); lcol(); TC(X0 + 28, y5 + 58, "MONO"); TC(X0 + 84, y5 + 58, "POLY");
-  z_[2] ? R(X0 + 8, y5 + 74, 40, 3) : R(X0 + 64, y5 + 74, 40, 3);
-  lpar(0, p70_part, X0, y5, 112, 96);
-  // ELEM RSRV
-  lcol(); RO(X0 + 114, y5, 60, 96);
-  gfx_setfont(11); lhead(X0 + 114, y5, 60, "ELEM", p70_cur == 1); lcol(); TC(X0 + 144, y5 + 22, "RSRV");
-  gfx_setfont(9); sprintf(#er, "%02d", z_[3]); p70_cur == 1 ? ( R(X0 + 120, y5 + 50, 48, 28); ui_col(LB); ) : lcol(); TC(X0 + 144, y5 + 52, #er);
-  lpar(1, p70_part, X0 + 114, y5, 60, 96);
-  // VELCTY SENS
-  lcol(); RO(X0 + 176, y5, 140, 96); lhead(X0 + 176, y5, 140, "VELCTY SENS", 0);
-  gfx_setfont(14); lcol(); TC(X0 + 211, y5 + 26, "DEPTH"); TC(X0 + 281, y5 + 26, "OFFST");
-  lknob(X0 + 211, y5 + 66, 16, frac(2, z_[4]), p70_cur == 2); lpar(2, p70_part, X0 + 178, y5 + 22, 68, 72);
-  lknob(X0 + 281, y5 + 66, 16, frac(3, z_[5]), p70_cur == 3); lpar(3, p70_part, X0 + 248, y5 + 22, 68, 72);
-  // PORTAMENT
-  lcol(); RO(X0 + 318, y5, 140, 96); lhead(X0 + 318, y5, 140, "PORTAMENT", 0);
-  gfx_setfont(14); lcol(); TC(X0 + 353, y5 + 26, "SW"); TC(X0 + 423, y5 + 26, "TIME");
-  p70_cur == 4 ? ( R(X0 + 330, y5 + 44, 46, 22); ui_col(LB); ) : lcol();
-  RO(X0 + 336, y5 + 48, 34, 12); z_[6] ? R(X0 + 353, y5 + 50, 15, 8) : R(X0 + 338, y5 + 50, 15, 8);
-  lcol(); TC(X0 + 342, y5 + 70, "OFF"); TC(X0 + 366, y5 + 70, "ON");
-  lpar(4, p70_part, X0 + 320, y5 + 22, 66, 72);
-  lknob(X0 + 423, y5 + 66, 16, frac(5, z_[7]), p70_cur == 5); lpar(5, p70_part, X0 + 390, y5 + 22, 66, 72);
-  // MW LFO DEPTH
-  lcol(); RO(X0 + 460, y5, W - 460, 96); lhead(X0 + 460, y5, W - 460, "MW LFO DEPTH", 0);
-  k = 0;
-  loop(3,
-    cx_ = X0 + 460 + (W - 460)*(k + 0.5)/3;
-    gfx_setfont(14); lcol(); TC(cx_, y5 + 26, k == 0 ? "P.MOD" : k == 1 ? "F.MOD" : "A.MOD");
-    lknob(cx_, y5 + 66, 16, frac(6 + k, z_[8 + k]), p70_cur == 6 + k);
-    lpar(6 + k, p70_part, cx_ - 50, y5 + 22, 100, 72);
-    k += 1;
-  );
-
-  // FILTER / EG / VIBRATO / BEND / DRY
-  y6 = Y0 + 236;
-  pw_ = 232;
-  k = 0;
-  loop(3,
-    gx_ = X0 + k*(pw_ + 2);
-    lcol(); RO(gx_, y6, pw_, 250);
-    lhead(gx_, y6, pw_, k == 0 ? "FILTER" : k == 1 ? "EG" : "VIBRATO", 0);
-    lcol(); R(gx_, y6 + 112, pw_, 1);
-    k += 1;
-  );
-  // filter graph: flat, resonant bump at the cutoff, then the fall
-  q_ = PG + z_[0]*16;
-  fcx_ = X0 + 30 + 150*min(max((log(max(q_[2], 30)*2^(z_[11]/16))/log(2) - 5)/9.5, 0), 1);
-  rh_ = 10 + 50*min(max(q_[3] + z_[12]/128, 0), 0.95);
-  lcol(); LN(X0 + 10, y6 + 80, fcx_ - 20, y6 + 80); LN(fcx_ - 20, y6 + 80, fcx_ - 6, y6 + 80 - rh_); LN(fcx_ - 6, y6 + 80 - rh_, fcx_ + 2, y6 + 80 - rh_);
-  LN(fcx_ + 2, y6 + 80 - rh_, fcx_ + 24, y6 + 106); LN(fcx_ - 6, y6 + 80 - rh_ - 1, fcx_ + 2, y6 + 80 - rh_ - 1);
-  ui_col(LM); LN(fcx_ - 14, y6 + 80, fcx_ + 40, y6 + 106);
-  // EG graph
-  ex_ = X0 + pw_ + 2;
-  ea_ = 8 + 36*min(max((log(max(q_[6], 1)*2^(z_[13]/16))/log(10))/3.5, 0), 1);
-  ed_ = 10 + 46*min(max((log(max(q_[7], 1)*2^(z_[14]/16))/log(10))/4, 0), 1);
-  er_ = 10 + 50*min(max((log(max(q_[9], 1)*2^(z_[15]/16))/log(10))/4, 0), 1);
-  es_ = z_[1] ? 0 : q_[8];
-  sy_ = y6 + 100 - es_*70;
-  lcol(); LN(ex_ + 10, y6 + 100, ex_ + 10 + ea_, y6 + 30); LN(ex_ + 10 + ea_, y6 + 30, ex_ + 10 + ea_ + ed_, sy_);
-  LN(ex_ + 10 + ea_ + ed_, sy_, ex_ + pw_ - 20 - er_, sy_); LN(ex_ + pw_ - 20 - er_, sy_, ex_ + pw_ - 20, y6 + 100);
-  LN(ex_ + 10, y6 + 101, ex_ + 10 + ea_, y6 + 31); LN(ex_ + 10 + ea_, y6 + 31, ex_ + 10 + ea_ + ed_, sy_ + 1);
-  LN(ex_ + 10 + ea_ + ed_, sy_ + 1, ex_ + pw_ - 20 - er_, sy_ + 1); LN(ex_ + pw_ - 20 - er_, sy_ + 1, ex_ + pw_ - 20, y6 + 101);
-  // vibrato graph: delay, then the wave (rate and depth)
-  vx_ = X0 + 2*(pw_ + 2);
-  vdl_ = 10 + 60*(z_[18] + 64)/127; vdp_ = 6 + 30*(z_[17] + 64)/127; vrt_ = 2 + 6*(z_[16] + 64)/127;
-  lcol(); LN(vx_ + 8, y6 + 70, vx_ + 8 + vdl_, y6 + 70);
-  ui_col(LM); LN(vx_ + 8, y6 + 72, vx_ + pw_ - 8, y6 + 72);
-  lcol(); px_ = vx_ + 8 + vdl_; py_ = y6 + 70;
-  j = 0; loop(60, xx_ = vx_ + 8 + vdl_ + j*(pw_ - 16 - vdl_)/59; yy_ = y6 + 70 - sin(j/59*vrt_*2*$pi)*vdp_*min(1, j/12);
-    LN(px_, py_, xx_, yy_); px_ = xx_; py_ = yy_; j += 1; );
-  // sliders
-  sy0_ = y6 + 140; sh_ = 96;
-  k = 0;
+  // ---- page 1: all 128 programs (two categories a column) and the drum kit - click a name to load it ----
+  c_ = 0;
   loop(8,
-    gi_ = k < 2 ? 9 + k : k < 5 ? 11 + (k - 2) : 14 + (k - 5);
-    cx_ = k < 2 ? X0 + 58 + k*116 : k < 5 ? X0 + pw_ + 2 + 40 + (k - 2)*76 : X0 + 2*(pw_ + 2) + 40 + (k - 5)*76;
-    gfx_setfont(14); lcol();
-    TC(cx_, y6 + 118, k == 0 ? "CUTOFF" : k == 1 ? "RESNANCE" : k == 2 ? "ATTCK" : k == 3 ? "DECAY" : k == 4 ? "RLESE" : k == 5 ? "RATE" : k == 6 ? "DEPTH" : "DELAY");
-    lslider(cx_, sy0_, sh_, frac(gi_, z_[CTP[gi_]]), p70_cur == gi_);
-    lpar(gi_, p70_part, cx_ - 30, sy0_ - 14, 60, sh_ + 28);
-    k += 1;
+    cx_ = 12 + c_*158;
+    j = 0;
+    loop(2,
+      ct_ = c_*2 + j; y_ = 222 + j*240;
+      gfx_setfont(14); ui_col(ACC); TX(cx_ + 4, y_, cat_name(ct_)); ui_cola(ACC, 0.5); R(cx_ + 4, y_ + 22, 148, 1);
+      i = 0;
+      loop(8,
+        pg_ = ct_*8 + i; ty_ = y_ + 26 + i*25.5;
+        on_ = !z_[1] && z_[0] == pg_; hv_ = inbox(cx_, ty_, 152, 24);
+        on_ ? ( ui_col(ACC); RR(cx_, ty_, 152, 24, 4); ) : hv_ ? ( ui_col(BG3); RR(cx_, ty_, 152, 24, 4); );
+        gfx_setfont(15); ui_col(on_ ? 0xFFFFFF : INK2); sprintf(#pe, "%03d", pg_ + 1); TX(cx_ + 4, ty_ + 3, #pe);
+        gfx_setfont(14); ui_col(on_ ? 0xFFFFFF : INK); TX(cx_ + 42, ty_ + 2, pnm(pg_));
+        hitbox(cx_, ty_, 152, 24) ? ( z_[0] = pg_; z_[1] = 0; );
+        i += 1;
+      );
+      j += 1;
+    );
+    c_ += 1;
   );
-  // BEND CNTRL and DRY LEVEL columns
-  bx_ = X0 + 3*(pw_ + 2); bw_ = (W - 3*(pw_ + 2) - 2)/2;
-  lcol(); RO(bx_, y6, bw_, 250); RO(bx_ + bw_ + 2, y6, bw_, 250);
-  gfx_setfont(14); lcol(); TC(bx_ + bw_*0.5, y6 + 4, "BEND"); TC(bx_ + bw_*0.5, y6 + 16, "CNTRL");
-  TC(bx_ + bw_*1.5 + 2, y6 + 4, "DRY"); TC(bx_ + bw_*1.5 + 2, y6 + 16, "LEVEL");
-  lslider(bx_ + bw_*0.5, y6 + 46, 180, frac(17, z_[19]), p70_cur == 17); lpar(17, p70_part, bx_, y6 + 30, bw_, 210);
-  lslider(bx_ + bw_*1.5 + 2, y6 + 46, 180, frac(18, z_[20]), p70_cur == 18); lpar(18, p70_part, bx_ + bw_ + 2, y6 + 30, bw_, 210);
-) : p70_page == 1 ? (
-  // ---- MIXER: pan, reverb, chorus, volume, mute for the 16 parts ----
-  y5 = Y0 + 134; cw_ = 45.5; lx_ = X0 + 60;
-  gfx_setfont(14); lcol();
-  TX(X0, y5 + 6, "PGM"); TX(X0, y5 + 46, "PAN"); TX(X0, y5 + 96, "REV"); TX(X0, y5 + 146, "CHO"); TX(X0, y5 + 196, "VOL"); TX(X0, y5 + 332, "MUTE");
-  k = 0;
-  loop(16,
-    zz_ = PT + k*32; cx_ = lx_ + (k + 0.5)*cw_;
-    k == p70_part ? ( ui_col(LM); R(lx_ + k*cw_ + 1, y5, cw_ - 2, 344); );
-    lcol(); gfx_setfont(14); zz_[1] ? TC(cx_, y5 + 6, "DRM") : ( sprintf(#pg_, "%03d", zz_[0] + 1); TC(cx_, y5 + 6, #pg_); );
-    gfx_setfont(14); TC(cx_, y5 + 20, zz_[1] ? "Kit" : cat_abbr(floor(zz_[0]/8)));
-    lknob(cx_, y5 + 58, 13, frac(21, zz_[22]), 0); lpar(21, k, cx_ - 22, y5 + 40, 44, 38);
-    lknob(cx_, y5 + 108, 13, frac(22, zz_[23]), 0); lpar(22, k, cx_ - 22, y5 + 90, 44, 38);
-    lknob(cx_, y5 + 158, 13, frac(23, zz_[24]), 0); lpar(23, k, cx_ - 22, y5 + 140, 44, 38);
-    lslider(cx_, y5 + 196, 120, frac(20, zz_[21]), 0); lpar(20, k, cx_ - 20, y5 + 186, 40, 140);
-    lcol(); RO(cx_ - 12, y5 + 330, 24, 14); zz_[27] ? R(cx_ - 10, y5 + 332, 20, 10);
-    hitbox(cx_ - 14, y5 + 328, 28, 18) ? ( zz_[27] = !zz_[27]; p70_part = k; zz_[27] ? all_off(k); );
-    k += 1;
-  );
+  // the drum kit, along the bottom
+  on_ = z_[1]; hv_ = inbox(12, 706, 300, 30);
+  ui_col(on_ ? 0xFFB030 : hv_ ? BG3 : BG2); RR(12, 706, 300, 30, 5);
+  gfx_setfont(14); ui_col(INK); TX(24, 711, on_ ? "DRUM KIT  (GM MAP)  - ON" : "DRUM KIT  (GM MAP)");
+  hitbox(12, 706, 300, 30) ? z_[1] = !z_[1];
+  gfx_setfont(11); ui_col(INK2); TX(330, 714, "Click a name to give it to the selected part.  Each part plays on its own MIDI channel; channel 10 starts as drums.");
 ) : (
-  // ---- TUNE: note shift and detune for the 16 parts ----
-  y5 = Y0 + 134; cw_ = 45.5; lx_ = X0 + 60;
-  gfx_setfont(14); lcol(); TX(X0, y5 + 6, "PART"); TX(X0, y5 + 60, "NOTE"); TX(X0, y5 + 72, "SHIFT"); TX(X0, y5 + 180, "DETUNE");
-  k = 0;
-  loop(16,
-    zz_ = PT + k*32; cx_ = lx_ + (k + 0.5)*cw_;
-    k == p70_part ? ( ui_col(LM); R(lx_ + k*cw_ + 1, y5, cw_ - 2, 344); );
-    lcol(); gfx_setfont(13); sprintf(#pn_, "%d", k + 1); TC(cx_, y5 + 4, #pn_);
-    lknob(cx_, y5 + 76, 15, frac(24, zz_[25]), 0); lpar(24, k, cx_ - 22, y5 + 56, 44, 44);
-    gfx_setfont(14); lcol(); TC(cx_, y5 + 98, cval(24, zz_[25]));
-    lknob(cx_, y5 + 196, 15, frac(25, zz_[26]), 0); lpar(25, k, cx_ - 22, y5 + 176, 44, 44);
-    gfx_setfont(14); lcol(); TC(cx_, y5 + 218, cval(25, zz_[26]));
-    k += 1;
-  );
-  gfx_setfont(14); lcol(); TX(X0, y5 + 300, "DETUNE: 1 STEP = 0.2 CENT.  NOTE SHIFT: SEMITONES.  CC / PROGRAM CHANGES FOLLOW THE MIDI CHANNEL OF EACH PART.");
-);
+  // ---- page 2: EDIT the selected part, and the effects ----
+  sect(12, 222, 300, 236, "VOICE");
+  key(30, 262, 74, 30, z_[2], ACC, "MONO") ? z_[2] = !z_[2];
+  key(122, 262, 74, 30, z_[6], ACC, "GLIDE") ? z_[6] = !z_[6];
+  key(214, 262, 74, 30, z_[27], 0xD0503C, "MUTE") ? ( z_[27] = !z_[27]; z_[27] ? all_off(p70_part); );
+  pknob(7, 70, 376, 24, 0, 127, 0, KC, "GLIDE TIME", "%d");
+  pknob(4, 160, 376, 24, 0, 127, 64, KC, "VELOCITY", "%d");
+  pknob(25, 250, 376, 24, -24, 24, 0, KC, "TRANSPOSE", "%+d st");
 
-// row 3: data display (what the cursor or the mouse is on)
-lcol(); RO(X0 + 94, Y0 + 68, 560, 34);
-!dshow ? ( p70_page == 0 ? ( strcpy(#dn, cname(p70_cur)); strcpy(#dv, cval(p70_cur, z_[CTP[p70_cur]])); )
-                         : ( strcpy(#dn, p70_page == 1 ? "Mixer" : "Tune"); sprintf(#dv, "Part %d", p70_part + 1); ); );
-gfx_setfont(9); TX(X0 + 110, Y0 + 72, #dn); TR(X0 + 640, Y0 + 72, #dv);
-// row 7: tabs
-ty_ = Y0 + 492;
-k = 0;
-loop(3,
-  tx_ = X0 + k*118; on_ = (k == 0 && p70_page == 1) || (k == 1 && p70_page == 2) || (k == 2 && p70_page == 0);
-  lcol(); on_ ? R(tx_, ty_, 112, 26) : RO(tx_, ty_, 112, 26);
-  gfx_setfont(10); on_ ? ui_col(LB) : lcol(); TC(tx_ + 56, ty_ + 4, k == 0 ? "Mixer" : k == 1 ? "Tune" : "VoicEdit");
-  hitbox(tx_, ty_, 112, 26) ? p70_page = k == 0 ? 1 : k == 1 ? 2 : 0;
-  k += 1;
-);
-lcol(); RO(X0 + W - 112, ty_, 112, 26); gfx_setfont(10); TC(X0 + W - 56, ty_ + 4, "PT1~16");
+  sect(322, 222, 270, 236, "FILTER");
+  pknob(11, 392, 330, 30, -64, 63, 0, 0x3D70CC, "CUTOFF", "%+d");
+  pknob(12, 522, 330, 30, -64, 63, 0, 0x3D70CC, "RESONANCE", "%+d");
+  gfx_setfont(11); ui_col(INK2); TC(457, 412, "relative to the voice");
 
-// ---- keys under the LCD ----
-fy_ = 640;
-k = 0;
-loop(9,
-  fx_ = 196 + k*91;
-  bkey(fx_, fy_, 80, 24, k == 0 || k == 7 ? "SHIFT" : k == 8 ? "EXIT" : sprintf(#fk, "F%d", k)) ? (
-    k == 1 ? p70_page = 1 : k == 2 ? p70_page = 2 : k == 3 ? p70_page = 0 :
-    k == 4 ? p70_part = (p70_part + 15) % 16 : k == 5 ? p70_part = (p70_part + 1) % 16 :
-    k == 6 ? ( (pz())[1] = !(pz())[1]; ) : k == 8 ? panic_req = 1;
-  );
-  k += 1;
-);
-gfx_setfont(14); ui_col(0x4A4E53);
-TC(287, 668, "MIXER"); TC(378, 668, "TUNE"); TC(469, 668, "VOICE"); TC(560, 668, "PART -"); TC(651, 668, "PART +"); TC(742, 668, "DRUM"); TC(924, 668, "PANIC");
+  sect(602, 222, 360, 236, "ENVELOPE");
+  pknob(13, 660, 330, 30, -64, 63, 0, 0x33A052, "ATTACK", "%+d");
+  pknob(14, 782, 330, 30, -64, 63, 0, 0x33A052, "DECAY", "%+d");
+  pknob(15, 904, 330, 30, -64, 63, 0, 0x33A052, "RELEASE", "%+d");
+  // the envelope shape
+  q_ = PG + z_[0]*16;
+  ea_ = 10 + 60*min(max((log(max(q_[6], 1)*2^(z_[13]/16))/log(10))/3.5, 0), 1);
+  ed_ = 10 + 70*min(max((log(max(q_[7], 1)*2^(z_[14]/16))/log(10))/4, 0), 1);
+  er_ = 10 + 70*min(max((log(max(q_[9], 1)*2^(z_[15]/16))/log(10))/4, 0), 1);
+  es_ = z_[1] ? 0 : q_[8]; gx_ = 640; gy_ = 448; gh_ = 40;
+  ui_col(ACC);
+  gfx_line(gx_*qs, gy_*qs, (gx_ + ea_)*qs, (gy_ - gh_)*qs, 1);
+  gfx_line((gx_ + ea_)*qs, (gy_ - gh_)*qs, (gx_ + ea_ + ed_)*qs, (gy_ - es_*gh_)*qs, 1);
+  gfx_line((gx_ + ea_ + ed_)*qs, (gy_ - es_*gh_)*qs, (gx_ + 300 - er_)*qs, (gy_ - es_*gh_)*qs, 1);
+  gfx_line((gx_ + 300 - er_)*qs, (gy_ - es_*gh_)*qs, (gx_ + 300)*qs, gy_*qs, 1);
 
-// ---- left: part / octave keys, MIDI lamp ----
-gfx_setfont(11); ui_col(0x2E3134); TC(95, 110, "PART");
-bkey(40, 130, 50, 34, "-") ? p70_part = (p70_part + 15) % 16;
-bkey(100, 130, 50, 34, "+") ? p70_part = (p70_part + 1) % 16;
-gfx_setfont(11); ui_col(0x2E3134); TC(95, 200, "OCTAVE");
-bkey(40, 220, 50, 34, "-") ? p70_oct = max(p70_oct - 1, -3);
-bkey(100, 220, 50, 34, "+") ? p70_oct = min(p70_oct + 1, 3);
-gfx_setfont(11); ui_col(0x2E3134); TC(95, 290, "MIDI IN");
-rd_led(95*0.75, 320*0.75, 7*0.75, ins_midi_lit(), 0x46D86A);
-time_precise() - midi_t < 0.15 ? ( gfx_setfont(11); ui_col(0x2E3134); sprintf(#mp, "PART %d", midi_part + 1); TC(95, 336, #mp); );
-bkey(55, 352, 80, 26, "FOLLOW") ? p70_follow = !p70_follow;
-rd_led(95*0.75, 392*0.75, 4*0.75, p70_follow, 0xFFB030);
-// ---- right: cursor and value keys ----
-gfx_setfont(11); ui_col(0x2E3134); TC(1105, 110, "CURSOR");
-bkey(1080, 130, 50, 34, "^") ? p70_page == 0 ? p70_cur = p70_cur >= 9 ? max(p70_cur - 9, 0) : p70_cur;
-bkey(1050, 170, 50, 34, "<") ? p70_page == 0 ? p70_cur = max(p70_cur - 1, 0) : p70_part = (p70_part + 15) % 16;
-bkey(1110, 170, 50, 34, ">") ? p70_page == 0 ? p70_cur = min(p70_cur + 1, 18) : p70_part = (p70_part + 1) % 16;
-bkey(1080, 210, 50, 34, "v") ? p70_page == 0 ? p70_cur = min(p70_cur + 9, 18);
-gfx_setfont(11); ui_col(0x2E3134); TC(1105, 290, "VALUE");
-p70_page == 0 ? (
-  bkey(1040, 310, 60, 34, "-1/NO") ? ( zp_ = pz() + CTP[p70_cur]; zp_[0] = max(zp_[0] - 1, CMN[p70_cur]); );
-  bkey(1110, 310, 60, 34, "+1/YES") ? ( zp_ = pz() + CTP[p70_cur]; zp_[0] = min(zp_[0] + 1, CMX[p70_cur]); );
-) : ( bkey(1040, 310, 60, 34, "-1/NO"); bkey(1110, 310, 60, 34, "+1/YES"); );
+  sect(972, 222, 296, 236, "VIBRATO");
+  pknob(16, 1022, 330, 24, -64, 63, 0, 0x8A6BD8, "RATE", "%+d");
+  pknob(17, 1120, 330, 24, -64, 63, 0, 0x8A6BD8, "DEPTH", "%+d");
+  pknob(18, 1218, 330, 24, -64, 63, 0, 0x8A6BD8, "DELAY", "%+d");
+  pknob(8, 1120, 410, 18, 0, 127, 10, 0x8A6BD8, "MOD WHEEL", "%d");
 
-// ---- the slider row: drift, reverb, chorus, master, output stage ----
-gfx_setfont(14); ui_col(0x2E3134);
-dy_kst = 7; dy_ink = 0x2E3134; dy_ntick = 11;
-TC(60, 420, "REVERB"); dy_knob(60*0.75, 460*0.75, 18*0.75, 3, 0, 100, 45, 0, 0x9DA2A8, "TIME", "");
-dy_knob(130*0.75, 460*0.75, 18*0.75, 4, 0, 100, 70, 0, 0x9DA2A8, "LEVEL", "");
-TC(95, 520, "CHORUS"); dy_knob(95*0.75, 560*0.75, 18*0.75, 5, 0, 100, 50, 0, 0x9DA2A8, "DEPTH", "");
-gfx_setfont(14); ui_col(0x2E3134); TC(1105, 400, "MASTER");
-dy_knob(1070*0.75, 440*0.75, 18*0.75, 1, -24, 6, 0, 0, 0x9DA2A8, "VOLUME", "");
-dy_knob(1140*0.75, 440*0.75, 18*0.75, 2, 0, 100, 10, 0, 0x8A6BD8, "DRIFT", "");
-ins_io(1062*0.75, 520*0.75, 6, 0x2E3134);
+  sect(12, 468, 620, 270, "MIX  -  THIS PART");
+  pknob(21, 90, 580, 30, 0, 127, 100, 0x9DA2A8, "VOLUME", "%d");
+  pknob(22, 230, 580, 30, -64, 63, 0, 0x9DA2A8, "PAN", "%+d");
+  pknob(23, 370, 580, 30, 0, 127, 40, 0xC8862A, "REVERB", "%d");
+  pknob(24, 510, 580, 30, 0, 127, 0, 0x2FB3A8, "CHORUS", "%d");
+  pknob(19, 160, 680, 18, 0, 24, 2, 0x9DA2A8, "BEND RANGE", "%d st");
+  pknob(26, 440, 680, 18, -64, 63, 0, 0x9DA2A8, "DETUNE", "%+d");
 
-// ---- mini keyboard (two octaves and a C), plays the selected part ----
-kx0 = 196; ky0 = 690; kw_ = 808/15; kh_ = 140;
-ui_col(0x26292C); RR(kx0 - 8, ky0 - 8, 824, kh_ + 16, 8);
-kdown_ = -1;
-mdown && mouse_y >= ky0*qs && mouse_y < (ky0 + kh_)*qs && mouse_x >= kx0*qs && mouse_x < (kx0 + 808)*qs && (drag_id == 0 || drag_id == 9000) ? (
-  drag_id = 9000;
-  wi_ = floor((mouse_x/qs - kx0)/kw_);
-  kdown_ = floor(wi_/7)*12 + (wi_ % 7 == 0 ? 0 : wi_ % 7 == 1 ? 2 : wi_ % 7 == 2 ? 4 : wi_ % 7 == 3 ? 5 : wi_ % 7 == 4 ? 7 : wi_ % 7 == 5 ? 9 : 11);
-  mouse_y < (ky0 + kh_*0.6)*qs ? (
-    j = 0; loop(14, (j % 7) != 2 && (j % 7) != 6 ? ( bx2_ = kx0 + (j + 1)*kw_ - kw_*0.3;
-      mouse_x >= bx2_*qs && mouse_x < (bx2_ + kw_*0.6)*qs ? kdown_ = floor(j/7)*12 + (j % 7 == 0 ? 1 : j % 7 == 1 ? 3 : j % 7 == 3 ? 6 : j % 7 == 4 ? 8 : 10); ); j += 1; );
-  );
+  sect(642, 468, 626, 270, "EFFECTS  -  ALL PARTS");
+  dy_kst = 7; dy_ink = INK; dy_ntick = 11;
+  sprintf(#e3, "%d%%", slider3); dy_knob(720*0.75, 580*0.75, 30*0.75, 3, 0, 100, 45, 0, 0xC8862A, "REVERB TIME", #e3);
+  sprintf(#e4, "%d%%", slider4); dy_knob(860*0.75, 580*0.75, 30*0.75, 4, 0, 100, 70, 0, 0xC8862A, "REVERB LEVEL", #e4);
+  sprintf(#e5, "%d%%", slider5); dy_knob(1000*0.75, 580*0.75, 30*0.75, 5, 0, 100, 50, 0, 0x2FB3A8, "CHORUS DEPTH", #e5);
+  sprintf(#e2, "%d%%", slider2); dy_knob(1140*0.75, 580*0.75, 24*0.75, 2, 0, 100, 10, 0, 0x8A6BD8, "DRIFT", #e2);
+  ins_io(1000*0.75, 668*0.75, 6, INK);
+  gfx_setfont(11); ui_col(INK2); TX(670, 684, "OUTPUT STAGE");
 );
-kdown_ != kb_held ? (
-  kb_held >= 0 ? kb_off = 48 + p70_oct*12 + kb_held + 1;
-  kdown_ >= 0 ? kb_on = 48 + p70_oct*12 + kdown_ + 1;
-  kb_held = kdown_;
-);
-j = 0;
-loop(15,
-  ui_col(0xF2F2EE); R(kx0 + j*kw_ + 1, ky0, kw_ - 2, kh_);
-  wn_ = floor(j/7)*12 + (j % 7 == 0 ? 0 : j % 7 == 1 ? 2 : j % 7 == 2 ? 4 : j % 7 == 3 ? 5 : j % 7 == 4 ? 7 : j % 7 == 5 ? 9 : 11);
-  wn_ == kb_held ? ( ui_col(0x8FB4D8); R(kx0 + j*kw_ + 1, ky0 + kh_ - 30, kw_ - 2, 30); );
-  j += 1;
-);
-j = 0;
-loop(14,
-  (j % 7) != 2 && (j % 7) != 6 ? (
-    bn_ = floor(j/7)*12 + (j % 7 == 0 ? 1 : j % 7 == 1 ? 3 : j % 7 == 3 ? 6 : j % 7 == 4 ? 8 : 10);
-    ui_col(bn_ == kb_held ? 0x3D6FB6 : 0x1A1B1D); R(kx0 + (j + 1)*kw_ - kw_*0.3, ky0, kw_*0.6, kh_*0.6);
-  );
-  j += 1;
-);
-gfx_setfont(14); ui_col(0x2E3134); sprintf(#kc, "C%d", 3 + p70_oct); TX(kx0 + 4, ky0 + kh_ - 16, #kc);
 
 pk_end();
 ui_end();
