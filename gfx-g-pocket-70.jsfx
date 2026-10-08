@@ -333,6 +333,8 @@ function part_reset(p) local(z) (
   z[1] = p == 9; z[3] = p == 9 ? 4 : 2; z[4] = 64; z[5] = 64; z[8] = 10; z[19] = 2; z[20] = 127;
   z[21] = 100; z[23] = 40;
 );
+// a new program on a part starts from the voice as it was made: clear the filter / EG / vibrato edits
+function prog_set(z, n) ( z[0] = n; z[1] = 0; memset(z + 11, 0, 8); );
 function ctl_reset(c) local(z) ( z = CH + c*8; z[0] = 0; z[1] = 1; z[2] = 0; z[3] = 0; );
 !p70_init ? ( k = 0; loop(16, part_reset(k); k += 1; ); p70_init = 1; );
 k = 0; loop(16, ctl_reset(k); k += 1; );
@@ -582,7 +584,7 @@ while (midirecv(mofs, m1, m2, m3)) (
 
   st == 0x80 || st == 0x90 ? q_push(mofs, 0, m2, 0, c) :
   st == 0xE0 ? zc[3] = ((m3*128 + m2) - 8192)/8192 :
-  st == 0xC0 ? ( !z[1] ? z[0] = m2; ) :
+  st == 0xC0 ? ( !z[1] ? prog_set(z, m2); ) :
   st == 0xB0 ? (
     m2 == 0 ? z[1] = (m3 == 127 || m3 == 126) ? 1 : (c == 9 && m3 == 0 ? 1 : 0) :
     m2 == 1 ? zc[0] = m3/127 :
@@ -717,6 +719,40 @@ function pknob(off, cx, cy, r, lo, hi, def, cap, label, fmt) local(z, did, hov, 
   hov || drag_id == did ? ( sprintf(#pkv, fmt, z[0]); gfx_setfont(10); ui_col(INK); TC(cx, cy + r + 30, #pkv); );
 );
 function prog_name(z) ( z[1] ? "Drum Kit" : pnm(z[0]); );
+// a knob that shows the part's real value (the voice's own setting with the edit applied) and stores the edit:
+// value = bl + edit*st, drawn across lo .. hi; kind picks the readout
+function aknob(off, cx, cy, r, cap, label, bl, st, lo, hi, kind) local(z, did, hov, f, a, v, i, t, av) (
+  z = pz() + off; did = 5000 + off;
+  hov = (mouse_x - cx*qs)^2 + (mouse_y - cy*qs)^2 <= ((r + 6)*qs)^2;
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - pk_t < 0.35 && pk_id == did ? ( z[0] = 0; drag_id = -1; pk_t = 0; ) :
+    ( drag_id = did; pk_y = mouse_y; pk_f = min(max((bl + z[0]*st - lo)/(hi - lo), 0), 1); pk_t = time_precise(); pk_id = did; );
+  );
+  drag_id == did ? (
+    pk_f = min(max(pk_f + (pk_y - mouse_y)/((mouse_cap & 8 ? 900 : 220)*sc), 0), 1); pk_y = mouse_y;
+    z[0] = min(max(floor((lo + pk_f*(hi - lo) - bl)/st + 0.5), -64), 63);
+  );
+  hov && mouse_wheel != 0 && drag_id == 0 ? ( z[0] = min(max(z[0] + sign(mouse_wheel)*2, -64), 63); mouse_wheel = 0; );
+  av = bl + z[0]*st; f = min(max((av - lo)/(hi - lo), 0), 1); a = (-0.75 + 1.5*f)*$pi;
+  i = 0; loop(11, t = (-0.75 + 1.5*i/10)*$pi; ui_cola(INK, 0.7);
+    gfx_line((cx + sin(t)*(r + 4))*qs, (cy - cos(t)*(r + 4))*qs, (cx + sin(t)*(r + 9))*qs, (cy - cos(t)*(r + 9))*qs, 1); i += 1; );
+  ui_cola(0x000000, 0.35); gfx_circle((cx + 1.5)*qs, (cy + 2.5)*qs, r*qs, 1, 1);
+  ui_col(0x16181B); gfx_circle(cx*qs, cy*qs, r*qs, 1, 1);
+  ui_col(cap); gfx_circle(cx*qs, cy*qs, r*0.72*qs, 1, 1);
+  ui_cola(0xFFFFFF, 0.25); gfx_circle((cx - r*0.2)*qs, (cy - r*0.25)*qs, r*0.3*qs, 1, 1);
+  ui_kline(cx*qs, cy*qs, a, r*0.15*qs, r*0.95*qs, 2.4, 0xF2F2EE);
+  z[0] != 0 ? ( ui_col(0xFFB030); gfx_circle((cx + r*0.8)*qs, (cy - r*0.8)*qs, 3*qs, 1, 1); );   // edited from the voice
+  (hov || drag_id == did) ? ( ui_cola(0xFFFFFF, 0.15); gfx_circle(cx*qs, cy*qs, (r + 3)*qs, 0, 1); );
+  gfx_setfont(11); ui_col(INK); TC(cx, cy + r + 12, label);
+  hov || drag_id == did ? (
+    kind == 0 ? ( v = 2^av; v >= 1000 ? sprintf(#pkv, "%.1f kHz", v/1000) : sprintf(#pkv, "%d Hz", v); ) :
+    kind == 1 ? sprintf(#pkv, "%d%%", av*100) :
+    kind == 2 ? ( v = 2^av; v >= 1000 ? sprintf(#pkv, "%.2f s", v/1000) : sprintf(#pkv, "%d ms", v); ) :
+    kind == 3 ? sprintf(#pkv, "%d cents", av) :
+    kind == 4 ? sprintf(#pkv, "%.1f Hz", 2^av) : sprintf(#pkv, "%.2f s", max(av, 0));
+    gfx_setfont(10); ui_col(INK); TC(cx, cy + r + 30, #pkv);
+  );
+);
 
 // ---------------------------------------------------------------------
 ui_col(BG); gfx_rect(0, 0, gfx_w, gfx_h);
@@ -737,8 +773,8 @@ ui_col(LK); gfx_setfont(10);
 sprintf(#l1, "PART %02d   CH %02d   %s", p70_part + 1, p70_part + 1, z_[1] ? "DRUM" : cat_name(floor(z_[0]/8))); TX(378, 32, #l1);
 gfx_setfont(9); z_[1] ? strcpy(#l2, "--- ") : sprintf(#l2, "%03d ", z_[0] + 1); strcat(#l2, prog_name(z_)); TX(378, 62, #l2);
 gfx_setfont(10); time_precise() - midi_t < 0.15 ? ( sprintf(#l3, "MIDI IN  CH %d", midi_part + 1); TX(378, 98, #l3); );
-ui_button(842*qs, 24*qs, 42*qs, 48*qs, "<", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 127) % 128; );
-ui_button(888*qs, 24*qs, 42*qs, 48*qs, ">", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 1) % 128; );
+ui_button(842*qs, 24*qs, 42*qs, 48*qs, "<", 0, 1) ? ( !z_[1] ? prog_set(z_, (z_[0] + 127) % 128); );
+ui_button(888*qs, 24*qs, 42*qs, 48*qs, ">", 0, 1) ? ( !z_[1] ? prog_set(z_, (z_[0] + 1) % 128); );
 ui_button(842*qs, 78*qs, 42*qs, 48*qs, "-", 0, 1) ? p70_part = (p70_part + 15) % 16;
 ui_button(888*qs, 78*qs, 42*qs, 48*qs, "+", 0, 1) ? p70_part = (p70_part + 1) % 16;
 gfx_setfont(11); ui_col(0xA6ACB2); TC(886, 6, "PGM"); TC(886, 130, "PART");
@@ -768,7 +804,7 @@ p70_page == 0 ? (
         on_ ? ( ui_col(ACC); RR(cx_, ty_, 154, 30, 4); ) : hv_ ? ( ui_col(BG3); RR(cx_, ty_, 154, 30, 4); );
         gfx_setfont(15); ui_col(on_ ? 0xFFFFFF : INK2); sprintf(#pe, "%03d", pg_ + 1); TX(cx_ + 3, ty_ + 5, #pe);
         gfx_setfont(14); ui_col(on_ ? 0xFFFFFF : INK); TX(cx_ + 44, ty_ + 3, pnm(pg_));
-        hitbox(cx_, ty_, 154, 30) ? ( z_[0] = pg_; z_[1] = 0; );
+        hitbox(cx_, ty_, 154, 30) ? prog_set(z_, pg_);
         i += 1;
       );
       j += 1;
@@ -788,14 +824,15 @@ p70_page == 0 ? (
   pknob(25, 250, 376, 24, -24, 24, 0, KC, "TRANSPOSE", "%+d st");
 
   sect(322, 222, 270, 236, "FILTER");
-  pknob(11, 392, 330, 30, -64, 63, 0, 0x3D70CC, "CUTOFF", "%+d");
-  pknob(12, 522, 330, 30, -64, 63, 0, 0x3D70CC, "RESONANCE", "%+d");
-  gfx_setfont(11); ui_col(INK2); TC(457, 412, "relative to the voice");
+  q_ = PG + z_[0]*16;
+  aknob(11, 392, 330, 30, 0x3D70CC, "CUTOFF", log(max(q_[2], 30))/log(2), 1/16, log(30)/log(2), log(18000)/log(2), 0);
+  aknob(12, 522, 330, 30, 0x3D70CC, "RESONANCE", q_[3], 1/128, 0, 0.95, 1);
+  gfx_setfont(11); ui_col(INK2); TC(457, 412, "dot = edited from the voice");
 
   sect(602, 222, 360, 236, "ENVELOPE");
-  pknob(13, 660, 330, 30, -64, 63, 0, 0x33A052, "ATTACK", "%+d");
-  pknob(14, 782, 330, 30, -64, 63, 0, 0x33A052, "DECAY", "%+d");
-  pknob(15, 904, 330, 30, -64, 63, 0, 0x33A052, "RELEASE", "%+d");
+  aknob(13, 660, 330, 30, 0x33A052, "ATTACK", log(max(q_[6], 1))/log(2), 1/16, 0, log(10000)/log(2), 2);
+  aknob(14, 782, 330, 30, 0x33A052, "DECAY", log(max(q_[7], 1))/log(2), 1/16, log(20)/log(2), log(10000)/log(2), 2);
+  aknob(15, 904, 330, 30, 0x33A052, "RELEASE", log(max(q_[9], 1))/log(2), 1/16, log(20)/log(2), log(10000)/log(2), 2);
   // the envelope shape
   q_ = PG + z_[0]*16;
   ea_ = 10 + 60*min(max((log(max(q_[6], 1)*2^(z_[13]/16))/log(10))/3.5, 0), 1);
@@ -809,9 +846,9 @@ p70_page == 0 ? (
   gfx_line((gx_ + 300 - er_)*qs, (gy_ - es_*gh_)*qs, (gx_ + 300)*qs, gy_*qs, 1);
 
   sect(972, 222, 296, 236, "VIBRATO");
-  pknob(16, 1022, 330, 24, -64, 63, 0, 0x8A6BD8, "RATE", "%+d");
-  pknob(17, 1120, 330, 24, -64, 63, 0, 0x8A6BD8, "DEPTH", "%+d");
-  pknob(18, 1218, 330, 24, -64, 63, 0, 0x8A6BD8, "DELAY", "%+d");
+  aknob(16, 1022, 330, 24, 0x8A6BD8, "RATE", log(5.5)/log(2), 1/32, log(1.4)/log(2), log(21)/log(2), 4);
+  aknob(17, 1120, 330, 24, 0x8A6BD8, "DEPTH", q_[14], 0.8, 0, 60, 3);
+  aknob(18, 1218, 330, 24, 0x8A6BD8, "DELAY", 0, 2/127, 0, 1, 5);
   pknob(8, 1120, 410, 18, 0, 127, 10, 0x8A6BD8, "MOD WHEEL", "%d");
 
   sect(12, 468, 620, 270, "MIX  -  THIS PART");
