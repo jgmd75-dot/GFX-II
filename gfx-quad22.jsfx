@@ -475,7 +475,7 @@ function tape(x, y, t) local(tw, th) (
     ui_col(TAPET); gfx_x = x*qs + 8*qs; gfx_y = (y + 11)*qs - th*0.5; gfx_drawstr(t);
   ) : (
     ui_col(AMB); gfx_rect(x*qs, (y + 5)*qs, 3*qs, 12*qs);
-    ui_col(NTX); gfx_x = (x + 10)*qs; gfx_y = (y + 11)*qs - th*0.5; gfx_drawstr(t);
+    ui_col(TTXT); gfx_x = (x + 10)*qs; gfx_y = (y + 11)*qs - th*0.5; gfx_drawstr(t);
   );
 );
 
@@ -582,13 +582,13 @@ function lcd(x, y, w, h) (
   hw ? (
     ui_cola(0x000000, 0.5); gfx_rect((x + 1)*qs, (y + 3)*qs, w*qs, h*qs);
     ui_col(0x0C0C0D); R(x, y, w, h);
-    ui_col(0x140C04); R(x + 4, y + 4, w - 8, h - 8);
+    ui_col(LCDBG); R(x + 4, y + 4, w - 8, h - 8);
     gfx_gradrect((x + 4)*qs, (y + 4)*qs, (w - 8)*qs, (h - 8)*qs*0.5, 1, 1, 1, 0.07, 0, 0, 0, 0, 0, 0, 0, -0.07/((h - 8)*qs*0.5));
   ) : (
     n_well(x, y, w, h, 10);
-    ui_col(0x120B04); RR(x + 6, y + 6, w - 12, h - 12, 6);
+    ui_col(LCDBG); RR(x + 6, y + 6, w - 12, h - 12, 6);
   );
-  ui_col(0xFFAE2A);
+  ui_col(LCDTX);
   time_precise() - lcd_t < 1.5 ? (
     gfx_setfont(10); TX(x + 16, y + 10, #lcdn);
     gfx_setfont(9); TX(x + 16, y + 32, #lcdv);
@@ -648,6 +648,12 @@ hw ? ( PNL = 0xC9CCD0; CHS = 0x2E3034; INK = 0x15161A; INK2 = 0x3C4048; TAPE = 0
 cr ? ( NB = 0xD0D3D8; NL = 0xF2F4F7; ND = 0xA6ABB4; NW = 0xC3C7CE; NTX = 0x4A5260; NVX = 0x1E232B; )
    : ( NB = 0x1D2433; NL = 0x2B3447; ND = 0x10141D; NW = 0x182030; NTX = 0x9AA8C4; NVX = 0xE6ECF8; );
 LFT = 0xE0503C; EXPC = 0x46C05A;
+// accents: warm amber on the aluminium hardware, teal on light grey, ice blue on dark blue
+ACC = hw ? 0xF59E1F : cr ? 0x0D8585 : 0x5C99FF;
+hw ? ( AMB = ACC; TAPE = ACC; TAPET = 0x141414; LCDBG = 0x140C04; LCDTX = 0xFFAE2A; ) : (
+  AMB = ACC; TTXT = ACC;
+  cr ? ( LCDBG = 0x0B1A1A; LCDTX = 0x4DEBCC; ) : ( LCDBG = 0x0A1020; LCDTX = 0x8CCCFF; NTX = 0x94A1BD; NVX = 0xEBF0FA; );
+);
 
 function go_preset(n) local(b) (
   slider6 = n; apply_preset(n); lastPreset = n; lcd_t = 0;
@@ -703,7 +709,7 @@ hw ? (
 ) : (
   ui_col(0xC8402A); CIRC(56, 49, 23, 1);
   gfx_setfont(2); ui_col(0xFFFFFF); ui_text(56*qs, 42*qs, "GFX");
-  gfx_setfont(12); ui_col(NVX); TX(92, 18, "QUAD22");
+  gfx_setfont(12); ui_col(ACC); TX(92, 18, "QUAD22");
   gfx_setfont(8); ui_col(NTX); TX(94, 60, "4-BAND COMPANDER");
 );
 
@@ -740,6 +746,7 @@ b_ = 0;
 loop(4,
   base = 10 + b_*10; x0 = 8 + b_*232; st = slider(base);
   plate(x0, 110, 226, 482);
+  hw ? ( ui_col(0x141518); R(x0 + 1, 111, 224, 7); ui_col(ACC); R(x0 + 1, 117, 224, 2); ) : ( ui_col(ACC); RR(x0 + 18, 113, 190, 5, 2.5); );
   tape(x0 + 16, 122, b_ == 0 ? "BAND 1" : b_ == 1 ? "BAND 2" : b_ == 2 ? "BAND 3" : "BAND 4");
   gfx_setfont(8); ui_col(hw ? INK2 : NTX);
   TX(x0 + 18, 152, b_ == 0 ? "< 80 Hz  SUB" : b_ == 1 ? "80 Hz - 3 kHz  BODY" : b_ == 2 ? "3 - 9 kHz  PRESENCE" : "> 9 kHz  BREATH");
@@ -755,7 +762,7 @@ loop(4,
     k += 1;
   );
   gfx_setfont(8); ui_col(hw ? INK2 : NTX); TC(x0 + 113, 208, "SATURATION");
-  mknob(base + 1, x0 + 60, 262, 24, 0, 100, 0, 0, CAP_GRY, "DRIVE", fpct(slider(base + 1))); touch(base + 1, "DRIVE", fpct(slider(base + 1)));
+  mknob(base + 1, x0 + 60, 262, 24, 0, 100, 0, 0, ACC, "DRIVE", fpct(slider(base + 1))); touch(base + 1, "DRIVE", fpct(slider(base + 1)));
   mknob(base + 3, x0 + 166, 262, 24, -12, 12, 0, 0, CAP_BLU, b_ == 0 ? "LO SHELF" : b_ == 3 ? "HI SHELF" : "BELL", fdb(slider(base + 3)));
   touch(base + 3, b_ == 0 ? "LOW SHELF 50 Hz" : b_ == 1 ? "BELL 800 Hz" : b_ == 2 ? "BELL 5 kHz" : "HIGH SHELF 12 kHz", fdb(slider(base + 3)));
   // compand (centre detent)
@@ -767,15 +774,16 @@ loop(4,
   // meter
   hmeter(x0 + 18, 498, 190, 12, mtr[b_]);
   // solo / bypass
-  mkey(x0 + 14, 544, 96, 32, "SOLO", slider(base + 8) > 0.5, YEL) ? ( tog(base + 8); setmsg("SOLO", slider(base + 8) > 0.5 ? "ON" : "OFF"); );
+  mkey(x0 + 14, 544, 96, 32, "SOLO", slider(base + 8) > 0.5, ACC) ? ( tog(base + 8); setmsg("SOLO", slider(base + 8) > 0.5 ? "ON" : "OFF"); );
   mkey(x0 + 116, 544, 96, 32, "BYPASS", slider(base + 9) > 0.5, RED) ? ( tog(base + 9); setmsg("BYPASS", slider(base + 9) > 0.5 ? "ON" : "OFF"); );
   b_ += 1;
 );
 
 // ---- master ----
 plate(938, 110, 254, 482);
+hw ? ( ui_col(0x141518); R(939, 111, 252, 7); ui_col(ACC); R(939, 117, 252, 2); ) : ( ui_col(ACC); RR(958, 113, 214, 5, 2.5); );
 tape(954, 122, "MASTER");
-mknob(5, 1002, 214, 26, 0, 100, 100, 0, CAP_GRY, "MIX", fpct(slider5)); touch(5, "DRY / WET MIX", fpct(slider5));
+mknob(5, 1002, 214, 26, 0, 100, 100, 0, ACC, "MIX", fpct(slider5)); touch(5, "DRY / WET MIX", fpct(slider5));
 mknob(2, 1002, 340, 26, -24, 24, 0, 0, CAP_BLU, "TRIM", fdb(slider2)); touch(2, "MASTER TRIM", fdb(slider2));
 mknob(3, 1002, 466, 26, -12, 0, -0.3, 0, CAP_RED, "CEILING", fdb(slider3)); touch(3, "CEILING", fdb(slider3));
 // vertical output meter, -48 .. +3 dB
