@@ -142,19 +142,6 @@ function pc(base, t, r, a, rl, au, g, de, f, sp, lm) (
   slider(base + 5) = au; slider(base + 6) = g; slider(base + 7) = de; slider(base + 8) = f; slider(base + 9) = sp; slider(base + 10) = lm;
 );
 function pm(md, lk, mx) ( slider23 = md; slider24 = lk; slider25 = mx; );
-function pname(p) (
-  p == 1 ? "Gentle Stereo Bus" :
-  p == 2 ? "Vocal Compressor" :
-  p == 3 ? "De-esser (split)" :
-  p == 4 ? "Broadcast Voice" :
-  p == 5 ? "Dual Mono Pair" :
-  p == 6 ? "M-S Glue" :
-  p == 7 ? "M-S Widen + Tame Sides" :
-  p == 8 ? "Brickwall Safety" :
-  p == 9 ? "Parallel Drums" :
-  p == 10 ? "Bass Leveller" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1  ? ( pm(0, 1, 100); pc(1, -24, 2, 10, 300, 1, 3, 0, 6000, 1, 0);  pc(12, -24, 2, 10, 300, 1, 3, 0, 6000, 1, 0); ) :      // Gentle Stereo Bus
   p == 2  ? ( pm(0, 1, 100); pc(1, -28, 3, 5, 180, 0, 5, 0, 6000, 1, -3);  pc(12, -28, 3, 5, 180, 0, 5, 0, 6000, 1, -3); ) :      // Vocal Compressor
@@ -183,7 +170,6 @@ P1.lg = 1; P2.lg = 1;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
 PNL = 0xA9ACA7; INKD = 0x1C201E; GRN = 0x2E7A4C; GRND = 0x1E5A36;          // grey panel, black print, green
 CAP_C = 0xF2F2EE; CAP_G = 0xF2F2EE; CAP_D = 0x2FC46A; CAP_L = 0xE8402E;   // pointer colours: compressor, gain, de-ess, limit
-cur_preset = 1;
 update();
 mix_s = mix_t;
 GANG = 60000;   // LINK ganging: last seen values of the two channels
@@ -274,26 +260,11 @@ ui_col(dy_ink); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(dy_ink); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("DUPLEX");
 gfx_setfont(4); ui_cola(dy_ink, 0.6); gfx_x = 176 * sc; gfx_y = 30 * sc; gfx_drawstr("DUAL COMPRESSOR  -  DE-ESSER  -  PEAK LIMITER");
-ui_button(528 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(556 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
   gfx_x = 590 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("Gentle Stereo Bus|Vocal Compressor|De-esser (split)|Broadcast Voice|Dual Mono Pair|M-S Glue|M-S Widen + Tame Sides|Brickwall Safety|Parallel Drums|Bass Leveller|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Gentle Stereo Bus|Vocal Compressor|De-esser (split)|Broadcast Voice|Dual Mono Pair|M-S Glue|M-S Widen + Tame Sides|Brickwall Safety|Parallel Drums|Bass Leveller|Reset all to defaults"));
 );
 ui_size_picker(700 * sc, 22 * sc);
-pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_col(GRN); gfx_rect(14 * sc, 60 * sc, 872 * sc, 4 * sc);
 ui_col(INKD); gfx_rect(14 * sc, 64 * sc, 872 * sc, 1 * sc);
 

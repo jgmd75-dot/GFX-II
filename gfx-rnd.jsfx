@@ -1,0 +1,278 @@
+desc:GFX RND
+//tags: compressor levelling amplifier vca opto rnc rnla
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn, gfx-faceplate and gfx-instrument (.jsfx-inc) in the same folder
+// (gfx-instrument is used for the shared output stage setup).
+//
+// RND - Really Nice Duo. A half-rack compressor with two characters (personal use; the sound is designed
+// from scratch, in the spirit of the classic half-rack "really nice" pair).
+//   RNC   - clean, transparent VCA compressor with true RMS detection.
+//           SUPER NICE: three compressors in series in the sidechain (fast / medium / slow), each doing a
+//           third of the ratio, their reductions summed - smoother on dense material, no pumping.
+//           DRIFT: the attack and release times wander slowly.
+//   RNLA  - levelling amplifier: softer onset, two-stage optical-style release (a quick first part, then
+//           a slow tail that lengthens the longer it has been compressing), gentle asymmetric saturation
+//           and a little top-end softening that grow with the reduction (2x oversampled).
+//           LOG RELEASE: on = exponential release, off = linear (constant dB per second).
+//           DRIFT: the saturation and the "glue" (knee width and release memory) wander slowly.
+// THRESHOLD is in dBu (0 dBu = -18 dBFS). Both channels are linked to the louder side.
+// MIX blends in the dry signal; in RNLA it is sent through the same oversampling filters as the saturated
+// path, so the two stay in phase (no comb filtering at partial mix).
+// IN / OUT (row 2): TRIM with the GUARD key, SAT and the OUT stage (OFF / CLIP / LIM). DRIFT: one dial, 50% = the drift settings.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+slider1:0<0,1,1{RNC,RNLA}>-Mode
+slider2:0<-40,20,0.1>-Threshold (dBu)
+slider3:3<1,25,0.01>-Ratio
+slider4:10<0.2,200,0.01>-Attack (ms)
+slider5:0.3<0.05,5,0.001>-Release (s)
+slider6:0<0,15,0.1>-Gain (dB)
+slider7:0<0,1,1{Off,On}>-Super Nice (RNC)
+slider8:1<0,1,1{Lin,Log}>-Release curve (RNLA)
+slider9:0<-24,12,0.1>-Input trim (dB)
+slider10:1<0,1,1{Off,On}>-Input guard
+slider11:25<0,100,1>-Drift amount (%)
+slider12:0.25<0.02,2,0.01>-Drift speed (Hz)
+slider13:0<0,100,1>-Band sat (%)
+slider14:30<0,100,1>-Bias (%)
+slider15:120<40,400,1>-Sat low band (Hz)
+slider16:6000<2000,16000,10>-Sat high band (Hz)
+slider17:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider19:100<0,100,1>-Mix (%)
+slider20:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-rnd";                                  // the ? pop-up links to this manual
+
+function tc(ms) ( 1 - exp(-1 / (max(ms, 0.02) * 0.001 * srate)); );
+
+// soft-knee curve: gain reduction (dB, positive) for level lv, threshold t, ratio r, knee k
+function curve(lv, t, r, k) local(o) (
+  o = lv - t;
+  o <= -k * 0.5 ? 0 : o >= k * 0.5 ? o * (1 - 1 / r) : (1 - 1 / r) * (o + k * 0.5) ^ 2 / (2 * k);
+);
+
+// ---------- RNLA saturation, 2x oversampled ----------
+function bq_lp(f, q, fs) instance(b0, b1, b2, a1, a2) local(w0, cw, al, n) (
+  w0 = 2 * $pi * min(f, fs * 0.45) / fs; cw = cos(w0); al = sin(w0) / (2 * q); n = 1 + al;
+  b0 = (1 - cw) * 0.5 / n; b1 = (1 - cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
+);
+function bq_run(x) instance(b0, b1, b2, a1, a2, x1, x2, y1, y2) local(y) (
+  y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+  x2 = x1; x1 = x; y2 = y1; y1 = y;
+  y;
+);
+function os_init() instance(u1, u2, u3, u4, d1, d2, d3, d4) local(fc, fs2) (
+  fs2 = 2 * srate; fc = min(0.42 * srate, 20000);
+  u1.bq_lp(fc, 0.5098, fs2); u2.bq_lp(fc, 0.6013, fs2); u3.bq_lp(fc, 0.9000, fs2); u4.bq_lp(fc, 2.5629, fs2);
+  d1.bq_lp(fc, 0.5098, fs2); d2.bq_lp(fc, 0.6013, fs2); d3.bq_lp(fc, 0.9000, fs2); d4.bq_lp(fc, 2.5629, fs2);
+);
+function sat(x, k, b) local(tb) ( tb = ost_tanh(b); (ost_tanh(k * x + b) - tb) / (k * (1 - tb * tb)); );
+function os_sat(x, k, b) instance(u1, u2, u3, u4, d1, d2, d3, d4) local(z) (
+  z = u4.bq_run(u3.bq_run(u2.bq_run(u1.bq_run(x * 2))));
+  d4.bq_run(d3.bq_run(d2.bq_run(d1.bq_run(sat(z, k, b)))));
+  z = u4.bq_run(u3.bq_run(u2.bq_run(u1.bq_run(0))));
+  d4.bq_run(d3.bq_run(d2.bq_run(d1.bq_run(sat(z, k, b))))) * 2;
+);
+// the same up / down filters with no curve: the dry signal for MIX goes through this, so it keeps the
+// exact phase of the saturated path (otherwise blending the two comb-filters the top end)
+function os_lin(x) instance(u1, u2, u3, u4, d1, d2, d3, d4) local(z) (
+  z = u4.bq_run(u3.bq_run(u2.bq_run(u1.bq_run(x * 2))));
+  d4.bq_run(d3.bq_run(d2.bq_run(d1.bq_run(z))));
+  z = u4.bq_run(u3.bq_run(u2.bq_run(u1.bq_run(0))));
+  d4.bq_run(d3.bq_run(d2.bq_run(d1.bq_run(z)))) * 2;
+);
+
+function update() (
+  mode = slider1;
+  thr = slider2 - 18;
+  ratio = slider3;
+  att_ms = slider4; rel_ms = slider5 * 1000;
+  gain_t = 10 ^ (slider6 / 20);
+  mix_t = slider19 / 100;
+  snice = slider7; logrel = slider8;
+  drift_macro(slider20);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
+  drift = slider11 / 100 * dm_a; dspd = slider12 * dm_s;
+  in_setup(slider9, slider10);
+  ins_output_setup(13);
+);
+
+crms = tc(8);                                       // true RMS window
+osL.os_init(); osR.os_init(); odL.os_init(); odR.os_init();
+dA.drift_init(0.8 + rand(0.5)); dR.drift_init(0.8 + rand(0.5));
+dSL.drift_init(0.8 + rand(0.5)); dSR.drift_init(0.8 + rand(0.5)); dG.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+sm = tc(30);
+eL = 0; eR = 0; gr = 0; g1 = 0; g2 = 0; g3 = 0; grpk = 0; hold = 0; tsm = 0; lpL = 0; lpR = 0; grd = 0;
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;   // fixed faceplates: off-white (RNC), mustard (RNLA)
+!ui_dflt ? ui_kstyle = 0;
+AMBL = 0xFFB030;
+update();
+gain_s = gain_t; mix_s = mix_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+dinc = dspd * samplesblock / srate;
+vA = dA.drift_tick(dinc); vR = dR.drift_tick(dinc);
+vSL = dSL.drift_tick(dinc); vSR = dSR.drift_tick(dinc); vG = dG.drift_tick(dinc);
+// RNC drift: attack and release times wander (up to about +/- 60%)
+att_d = att_ms * 2 ^ (0.7 * drift * vA);
+rel_d = rel_ms * 2 ^ (0.7 * drift * vR);
+catt = tc(att_d); crel = tc(rel_d);
+// super nice: three stages, each a third of the ratio, staggered timing
+r3 = ratio ^ (1 / 3);
+ca1 = tc(att_d * 0.25); cr1 = tc(rel_d * 0.5);
+ca2 = tc(att_d);        cr2 = tc(rel_d);
+ca3 = tc(att_d * 4);    cr3 = tc(rel_d * 2.5);
+// RNLA drift: saturation drive / asymmetry and the "glue" (knee width, release memory) wander
+knee_la = 10 * (1 + 0.4 * drift * vG);
+mem_la = 2 * (1 + 0.5 * drift * vG);
+kdL = 1 + 0.5 * drift * vSL; kdR = 1 + 0.5 * drift * vSR;
+bdL = 0.06 * drift * vSL;    bdR = 0.06 * drift * vSR;
+lin_rate = 20 / max(rel_ms * 0.001, 0.05) / srate;  // linear release: 20 dB per release time
+
+@serialize
+file_var(0, ui_sz);
+
+@sample
+in_process(spl0, spl1);
+xL = in_l; xR = in_r;
+
+// detector: true RMS per side, linked to the louder side
+eL += (xL * xL - eL) * crms; eR += (xR * xR - eR) * crms;
+lv = 10 * log10(max(max(eL, eR), 0.000000000001)) + 3;
+
+mode == 0 ? (
+  // ---------- RNC ----------
+  snice ? (
+    t1 = curve(lv, thr + 6, r3, 4);          t1 > g1 ? g1 += (t1 - g1) * ca1 : g1 += (t1 - g1) * cr1;
+    t2 = curve(lv - g1, thr, r3, 6);         t2 > g2 ? g2 += (t2 - g2) * ca2 : g2 += (t2 - g2) * cr2;
+    t3 = curve(lv - g1 - g2, thr - 4, r3, 8); t3 > g3 ? g3 += (t3 - g3) * ca3 : g3 += (t3 - g3) * cr3;
+    gr = g1 + g2 + g3;
+  ) : (
+    tgt = curve(lv, thr, ratio, ratio > 4 ? 3 : 6);
+    tgt > gr ? gr += (tgt - gr) * catt : gr += (tgt - gr) * crel;
+    g1 = gr; g2 = 0; g3 = 0;
+  );
+  g = 10 ^ (-gr / 20);
+  yL = xL * g; yR = xR * g;
+) : (
+  // ---------- RNLA ----------
+  tgt = curve(lv, thr, ratio, knee_la);
+  tsm += (tgt - tsm) * tc(3);                    // softer onset
+  hold += (gr - hold) * tc(1500);
+  tsm > gr ? ( gr += (tsm - gr) * tc(att_ms * 1.5); grpk = gr; ) : (
+    logrel ? (
+      // two stages: the first 40% lets go quickly, then a slow tail with memory
+      gr += (tsm - gr) * tc(gr > grpk * 0.6 ? rel_ms * 0.25 : rel_ms * (1 + mem_la * min(hold / 6, 1)));
+    ) : (
+      gr = max(gr - lin_rate * (1 + mem_la * 0.5 * min(hold / 6, 1)) ^ -1, tsm);
+    );
+  );
+  g = 10 ^ (-gr / 20);
+  // saturation and top-end softening grow with the reduction
+  sk = (0.8 + 0.06 * gr); sb = 0.03 + 0.004 * gr;
+  yL = osL.os_sat(xL * g * 0.5, sk * kdL, sb + bdL);         // the oversampler already restores the 0.5
+  yR = osR.os_sat(xR * g * 0.5, sk * kdR, sb + bdR);
+  lpc = 1 - exp(-2 * $pi * max(20000 * 2 ^ (-gr / 12), 6000) / srate);
+  lpL += (yL - lpL) * lpc; lpR += (yR - lpR) * lpc;
+  yL = lpL; yR = lpR;
+);
+// dry for MIX: phase-matched to the RNLA path (kept running in RNC too, so a mode change is clean)
+dxL = odL.os_lin(xL * 0.5); dxR = odR.os_lin(xR * 0.5);   // (the chain has a gain of 2, as in os_sat)
+mode == 0 ? ( dxL = xL; dxR = xR; );
+grd = max(grd, gr);
+
+gain_s += (gain_t - gain_s) * sm;
+mix_s += (mix_t - mix_s) * sm;
+// MIX: the dry signal under the compressed one (GAIN is make-up for the compressed side)
+oL = dxL + (yL * gain_s - dxL) * mix_s; oR = dxR + (yR * gain_s - dxR) * mix_s;
+oL = ostL.ost_band(oL); oR = ostR.ost_band(oR);
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+
+@gfx 640 264
+ui_begin(640, 264);
+
+// ---------- panel: off-white RNC / mustard RNLA ----------
+PNL = slider1 ? 0xD3A52E : 0xE8E4D9;
+INKP = slider1 ? 0x2A2210 : 0x2B2A28;
+LEDC = slider1 ? 0x3ADF6A : 0xFF3A2A;
+SHA = ui_mix(PNL, 0x000000, 0.10); SHB = ui_mix(PNL, 0x000000, 0.16);
+fh = 248;
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 8 * sc, 624 * sc, fh * sc, PNL);
+pk_screw(20 * sc, 20 * sc); pk_screw(620 * sc, 20 * sc); pk_screw(20 * sc, (fh - 4) * sc); pk_screw(620 * sc, (fh - 4) * sc);
+C_INK = INKP;
+
+// header: name + gain-reduction LEDs
+ui_col(INKP); gfx_circle(46 * sc, 36 * sc, 13 * sc, 1, 1);
+gfx_setfont(4); ui_col(PNL); ui_text(46 * sc, 31 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 26 * sc, 'b'); ui_col(INKP); gfx_x = 68 * sc; gfx_y = 20 * sc; gfx_drawstr("RND");
+gfx_setfont(4); ui_cola(INKP, 0.75); gfx_x = 128 * sc; gfx_y = 31 * sc; gfx_drawstr("REALLY NICE DUO");
+ui_size_picker(250 * sc, 26 * sc);
+gfx_setfont(4); ui_col(INKP); gfx_x = 336 * sc; gfx_y = 26 * sc; gfx_drawstr("GR");
+gi = 0;
+loop(10,
+  gv = gi == 0 ? 1 : gi == 1 ? 2 : gi == 2 ? 3 : gi == 3 ? 4 : gi == 4 ? 6 : gi == 5 ? 8 : gi == 6 ? 10 : gi == 7 ? 12 : gi == 8 ? 15 : 20;
+  gx = (372 + gi * 24) * sc;
+  pk_led(gx, 30 * sc, 4.5 * sc, mgr >= gv, LEDC);
+  sprintf(#gv, "%d", gv); ui_cola(INKP, 0.8); ui_text(gx, 40 * sc, #gv);
+  gi += 1;
+);
+mgr = max(grd, mgr * 0.85); grd = 0;
+pk_line(18 * sc, 62 * sc, 622 * sc, 62 * sc, INKP, 0.35);
+
+// main knobs
+ui_section(0);
+ui_knob(66 * sc,  112 * sc, 2, -40, 20, 0, 0, "THRESHOLD", "%+.1f dBu");
+ui_knob(164 * sc, 112 * sc, 3, 1, 25, 3, 1, "RATIO", "%.1f:1");
+ui_knob(262 * sc, 112 * sc, 4, 0.2, 200, 10, 1, "ATTACK", "%.1f ms");
+ui_knob(360 * sc, 112 * sc, 5, 0.05, 5, 0.3, 1, "RELEASE", "%.2f s");
+ui_knob(458 * sc, 112 * sc, 6, 0, 15, 0, 0, "GAIN", "+%.1f dB");
+ui_knob(556 * sc, 112 * sc, 19, 0, 100, 100, 0, "MIX", "%.0f%%");
+pk_line(18 * sc, 166 * sc, 622 * sc, 166 * sc, INKP, 0.35);
+
+// mode + the mode's special switch
+pk_ledbtn(28 * sc, 182 * sc, 40 * sc, 30 * sc, slider1 == 0, LEDC) ? ( slider1 = 0; slider_automate(1); );
+pk_ledbtn(76 * sc, 182 * sc, 40 * sc, 30 * sc, slider1 == 1, LEDC) ? ( slider1 = 1; slider_automate(1); );
+slider1 == 0 ? (
+  pk_ledbtn(140 * sc, 182 * sc, 40 * sc, 30 * sc, slider7, LEDC) ? ( slider7 = 1 - slider7; slider_automate(64); );
+) : (
+  pk_ledbtn(140 * sc, 182 * sc, 40 * sc, 30 * sc, slider8, LEDC) ? ( slider8 = 1 - slider8; slider_automate(128); );
+);
+gfx_setfont(4); ui_col(INKP);
+ui_text(48 * sc, 218 * sc, "RNC"); ui_text(96 * sc, 218 * sc, "RNLA");
+ui_text(160 * sc, 218 * sc, slider1 == 0 ? "SUPER NICE" : "LOG RELEASE");
+ui_cola(INKP, 0.6); ui_text(72 * sc, 232 * sc, "MODE");
+
+// DRIFT (its job depends on the mode: timing on the RNC, saturation + glue on the RNLA) and IN / OUT
+ui_section(1); C_INK = INKP;
+ui_knob(274 * sc, 202 * sc, 20, 0, 100, 50, 0, "DRIFT", "%.0f%%");
+pk_line(338 * sc, 180 * sc, 338 * sc, 236 * sc, INKP, 0.25);
+gfx_setfont(4); ui_cola(INKP, 0.6); ui_text(487 * sc, 172 * sc, "IN / OUT");
+ui_io(392, 176, 9, 10, 13, 18);
+
+pk_end();
+ui_end();

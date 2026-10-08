@@ -173,17 +173,6 @@ function update() local(i, a, any) (
 // ---------- presets (track levels, pans, mutes and solos are left alone) ----------
 // model, nr, drive, wow, hiss, age
 function pp(m, n, d, w, h, a) ( slider1 = m; slider2 = n; slider3 = d; slider4 = w; slider5 = h; slider6 = a; );
-function pname(p) (
-  p == 1 ? "Bedroom Demo (15)" :
-  p == 2 ? "Hot and Woolly (15)" :
-  p == 3 ? "No NR, Old Tape (15)" :
-  p == 4 ? "Worn-out Cassette (15)" :
-  p == 5 ? "Clean Double Speed (44)" :
-  p == 6 ? "Pumping Compander (44)" :
-  p == 7 ? "Squashed Tape (44)" :
-  p == 8 ? "44 without NR" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? pp(0, 1, 0, 30, 50, 10) :       // Bedroom Demo (15)
   p == 2 ? pp(0, 1, 6, 45, 60, 30) :       // Hot and Woolly (15)
@@ -207,7 +196,6 @@ sm = 1 - exp(-1 / (0.02 * srate));
 vuc = 1 - exp(-1 / (0.3 * srate));
 dr_r = 1 - exp(-1 / (0.03 * srate));
 wpos = 0; drop_g = 1; drop_t = 1;
-cur_preset = 1;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
 update();
 i = 0; loop(4, TG[i] = TGT[i]; i += 1; );
@@ -268,26 +256,11 @@ gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INK); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("CASSETTE 4");
 gfx_setfont(4); ui_col(ACC); gfx_x = 246 * sc; gfx_y = 30 * sc;
 gfx_drawstr(model ? "MODEL 44" : "MODEL 15");
-ui_button(388 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 9 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(416 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 9 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 ui_button(450 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
   gfx_x = 450 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("Bedroom Demo (15)|Hot and Woolly (15)|No NR, Old Tape (15)|Worn-out Cassette (15)|Clean Double Speed (44)|Pumping Compander (44)|Squashed Tape (44)|44 without NR|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Bedroom Demo (15)|Hot and Woolly (15)|No NR, Old Tape (15)|Worn-out Cassette (15)|Clean Double Speed (44)|Pumping Compander (44)|Squashed Tape (44)|44 without NR|Reset all to defaults"));
 );
 ui_size_picker(560 * sc, 22 * sc);
-pk_lcd(620 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 626 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 626 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_col(ACC); gfx_rect(14 * sc, 60 * sc, 732 * sc, 3 * sc);
 
 // ---------- the mixer: four tracks ----------

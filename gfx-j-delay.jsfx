@@ -106,19 +106,6 @@ function setp(m, tl, tr, sy, dl, dr, fbk, xfd, lc, hc, md, mr, pt, ck, bt, hd, m
   slider1 = m; slider2 = tl; slider3 = tr; slider4 = sy; slider5 = dl; slider6 = dr; slider7 = fbk; slider8 = xfd; slider9 = lc; slider10 = hc;
   slider12 = md; slider13 = mr; slider14 = pt; slider18 = ck; slider19 = bt; slider17 = hd; slider23 = mx;
 );
-function pname(p) (
-  p == 1 ? "80s Chorus Delay" :
-  p == 2 ? "Lead Guitar Echo" :
-  p == 3 ? "Dimension Wide" :
-  p == 4 ? "Octave Cascade" :
-  p == 5 ? "Fifth Spiral" :
-  p == 6 ? "Octave Drop" :
-  p == 7 ? "Dark Vocal Echo" :
-  p == 8 ? "Compact Slap" :
-  p == 9 ? "Stutter Loop (press HOLD)" :
-  p == 10 ? "10-Bit Grit" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? setp(0, 300, 390, 0, 8, 4, 30, 0, 100, 9000, 1.8, 0.7, 0, 0, 1, 0, 30) :          // 80s Chorus Delay
   p == 2 ? setp(0, 375, 375, 1, 8, 8, 40, 10, 150, 6500, 0.6, 0.5, 0, 0, 1, 0, 25) :         // Lead Guitar Echo
@@ -170,7 +157,6 @@ in_init();
 sm = 1 - exp(-1 / (0.03 * srate));
 dk_a = 1 - exp(-1 / (0.005 * srate));
 pkL = pkR = 0; piL = piR = 0; dk_e = 0; dk_g = 1; lph = 0;
-cur_preset = 1;
 update();
 mix_s = mix_t; out_s = out_t; pL = tLs; pR = tRs;
 
@@ -330,7 +316,6 @@ gfx_setfont(6, "Arial", 11 * sc, 'b'); ui_col(ui_mix(CAS, INK, 0.75)); gfx_x = 1
 gfx_drawstr(mdl == 0 ? "DIGITAL DELAY  -  VINTAGE DIGITAL" : mdl == 1 ? "12-BIT PITCH SHIFT DELAY" : mdl == 2 ? "COMPACT DIGITAL DELAY" : "SAMPLING DELAY  -  14-BIT HOLD");
 ui_size_picker(1120 * sc, 12 * sc);
 
-
 // ---------- programs and status keys ----------
 rkey(26, 54, 104, 30, "VINTAGE DIG", mdl == 0) ? ( slider1 = 0; ui_auto(1); update(); );
 rkey(136, 54, 104, 30, "PITCH 12", mdl == 1) ? ( slider1 = 1; ui_auto(1); update(); );
@@ -358,27 +343,13 @@ gi = 0; loop(18, gd_ = -54 + gi * 3;
   ui_col(20 * log10(max(vi_, 0.000001)) >= gd_ ? (gi >= 16 ? RED : gi >= 13 ? ORN : GRN) : 0x1A1C20); gfx_rect((830 + gi * 13) * sc, 56 * sc, 10 * sc, 10 * sc);
   ui_col(20 * log10(max(vd_, 0.000001)) >= gd_ ? (gi >= 16 ? RED : gi >= 13 ? ORN : GRN) : 0x1A1C20); gfx_rect((830 + gi * 13) * sc, 84 * sc, 10 * sc, 10 * sc);
   gi += 1; );
-rkey(730, 110, 92, 30, sprintf(#bt, "BITS %d", slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16), -1) ? ( slider19 = (slider19 + 1) % 4; ui_auto(19); update(); );
-rkey(828, 110, 24, 30, "<", -1) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-rkey(854, 110, 24, 30, ">", -1) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
+rkey(786, 110, 92, 30, sprintf(#bt, "BITS %d", slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16), -1) ? ( slider19 = (slider19 + 1) % 4; ui_auto(19); update(); );
 rkey(884, 110, 92, 30, "PRESETS", -1) ? (
   gfx_x = 884 * sc; gfx_y = 140 * sc;
-  cur_preset = gfx_showmenu("80s Chorus Delay|Lead Guitar Echo|Dimension Wide|Octave Cascade|Fifth Spiral|Octave Drop|Dark Vocal Echo|Compact Slap|Stutter Loop (press HOLD)|10-Bit Grit|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("80s Chorus Delay|Lead Guitar Echo|Dimension Wide|Octave Cascade|Fifth Spiral|Octave Drop|Dark Vocal Echo|Compact Slap|Stutter Loop (press HOLD)|10-Bit Grit|Reset all to defaults"));
 );
 ui_col(WIN); lz_rr(982, 110, 70, 30, 4);
 seg_str(990 * sc, 116 * sc, 10 * sc, 18 * sc, 3, lastp > 0 ? sprintf(#pn, "P%d", lastp) : "P--", ORN, 0x1E1004);
-pk_lcd(1058 * sc, 110 * sc, 132 * sc, 30 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 1064 * sc; gfx_y = 114 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 1064 * sc; gfx_y = 128 * sc; gfx_drawstr(pname(cur_preset));
 
 // ---------- the knobs: every parameter on the panel ----------
 ui_col(0x16181C); gfx_rect(24 * sc, 168 * sc, 1152 * sc, 1 * sc);

@@ -50,7 +50,6 @@ slider23:1<0,1,1{Off,On}>-Input guard
 slider24:0<-50,50,0.1>-Detune left (cents)
 slider25:0<-50,50,0.1>-Detune right (cents)
 slider26:50<0,100,1>-Drift (%)
-slider27:1<0,10,0.1>-Detune drift (cents)
 
 in_pin:left input
 in_pin:right input
@@ -125,46 +124,34 @@ function update() local(w0, cw, al, q0) (
   in_setup(slider22, slider23);
   ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, slider21);
   // detune follows the side each copy sits on
-  cA_t = sideA < 0 ? slider24 : slider25; cB_t = sideA < 0 ? slider25 : slider24;
-  cddrift = slider27 * dm_a;   // same DRIFT macro that scales the time/pan/level wander
-  onA = abs(cA_t) >= 0.05; onB = abs(cB_t) >= 0.05;
+  cA = sideA < 0 ? slider24 : slider25; cB = sideA < 0 ? slider25 : slider24;
+  rtA = 1 - 2 ^ (cA / 1200); rtB = 1 - 2 ^ (cB / 1200);
+  onA = abs(cA) >= 0.05; onB = abs(cB) >= 0.05;
   mode == 0 ? ( dA_t = 0; dB_t = base; ) : ( dA_t = base; dB_t = base * rmult; );
 );
 
 // ---------- presets (leave Dry, Swap, Input, Output, Mono check alone) ----------
-function setp(m, d, x, lv, lc, w, td, pd, ld, sp, dtL, dtR, dd) (
+function setp(m, d, x, lv, lc, w, td, pd, ld, sp) (
   slider1 = m; slider2 = d; slider3 = x; slider5 = lv; slider6 = lc;
   slider7 = w; slider8 = td; slider9 = pd; slider10 = ld; slider11 = sp;
-  slider24 = dtL; slider25 = dtR; slider27 = dd;
-);
-function pname(p) (
-  p == 1 ? "Short" :
-  p == 2 ? "Med" :
-  p == 3 ? "Long" :
-  p == 4 ? "Classic Haas" :
-  p == 5 ? "Wide Spread" :
-  p == 6 ? "Super Wobble" :
-  p == 7 ? "John Lennon (ADT)" :
-  p == 8 ? "Mono Safe" :
-  "Reset all to defaults";
 );
 function load_preset(p) (
-  p == 1 ? setp(1,  6, 0, -3, 150, 100, 0.2,  5, 0.3, 0.2,  -3,  3, 0.5) :   // Short
-  p == 2 ? setp(1, 12, 0,  0, 150, 100, 0.5, 15, 0.5, 0.25, -5,  5, 1  ) :   // Med
-  p == 3 ? setp(1, 20, 0, -4, 200, 100, 0.8, 15, 0.5, 0.2,  -7,  7, 1.5) :   // Long
-  p == 4 ? setp(0, 18, 0,  0, 120, 100, 0,    0, 0,   0.25,  0,  0, 0  ) :   // Classic Haas
-  p == 5 ? setp(2, 12, 0,  0, 100, 100, 0.6, 20, 0.5, 0.3,  -9,  9, 1.5) :   // Wide Spread
-  p == 6 ? setp(2, 12, 1,  0, 120, 100, 4,   60, 3,   1.5, -12, 12, 4  ) :   // Super Wobble
-  p == 7 ? setp(0, 22, 0, -1,  80,  70, 2.5,  0, 1,   0.7,  -4,  4, 0.5) :   // John Lennon (ADT)
-  p == 8 ? setp(1,  8, 1, -6, 300,  70, 0.3, 10, 0.3, 0.2,   0,  0, 0  );    // Mono Safe
-  p >= 1 && p <= 8 ? slider_automate(92276727);   // sliders 1,2,3,5-11,24,25,27
+  p == 1 ? setp(1,  6, 0, -3, 150, 100, 0.2,  5, 0.3, 0.2 ) :   // Short
+  p == 2 ? setp(1, 12, 0,  0, 150, 100, 0.5, 15, 0.5, 0.25) :   // Med
+  p == 3 ? setp(1, 20, 0, -4, 200, 100, 0.8, 15, 0.5, 0.2 ) :   // Long
+  p == 4 ? setp(0, 18, 0,  0, 120, 100, 0,    0, 0,   0.25) :   // Classic Haas
+  p == 5 ? setp(2, 12, 0,  0, 100, 100, 0.6, 20, 0.5, 0.3 ) :   // Wide Spread
+  p == 6 ? setp(2, 12, 1,  0, 120, 100, 4,   60, 3,   1.5 ) :   // Super Wobble
+  p == 7 ? setp(0, 22, 0, -1,  80,  70, 2.5,  0, 1,   0.7 ) :   // John Lennon (ADT)
+  p == 8 ? setp(1,  8, 1, -6, 300,  70, 0.3, 10, 0.3, 0.2 );    // Mono Safe
+  p >= 1 && p <= 8 ? slider_automate(2039);   // sliders 1,2,3,5-11
   p == 9 ? (                                   // Reset all to defaults
     slider1 = 1; slider2 = 12; slider3 = 0; slider4 = 0; slider5 = 0;
     slider6 = 150; slider7 = 100; slider8 = 0.5; slider9 = 15; slider10 = 0.5;
     slider11 = 0.25; slider12 = 0; slider13 = 0; slider14 = 0; slider15 = 1;
     slider16 = 0; slider17 = 30; slider18 = 120; slider19 = 6000; slider20 = -0.3; slider21 = 1;
-    slider22 = 0; slider23 = 1; slider24 = 0; slider25 = 0; slider26 = 50; slider27 = 1;
-    slider_automate(8388607); slider_automate(125829120);   // sliders 1-23, 24-27
+    slider22 = 0; slider23 = 1; slider24 = 0; slider25 = 0; slider26 = 50;
+    slider_automate(8388607); slider_automate(58720256);   // sliders 1-23, 24-26
   );
 );
 
@@ -180,7 +167,6 @@ psm = 1 - exp(-1 / (0.02 * srate));
 tdA.drift_init(0.8 + rand(0.5)); tdB.drift_init(0.8 + rand(0.5));
 pdA.drift_init(0.8 + rand(0.5)); pdB.drift_init(0.8 + rand(0.5));
 ldA.drift_init(0.8 + rand(0.5)); ldB.drift_init(0.8 + rand(0.5));
-cdA.drift_init(0.8 + rand(0.5)); cdB.drift_init(0.8 + rand(0.5));
 hpA.z1 = 0; hpA.z2 = 0; hpB.z1 = 0; hpB.z2 = 0;
 
 ost_init(300000); ostL.ost_ch_init(); ostR.ost_ch_init();
@@ -190,10 +176,8 @@ vuc = 1 - exp(-1 / (0.01 * srate)); vu_ms = 0;
 lastHP = -1;
 update();
 dA_s = dA_t * msr; dB_s = dB_t * msr;
-cA_s = cA_t; cB_s = cB_t;
 dbl_s = dbl_t; out_s = out_t; wid_s = wid_t; dry_s = dryon;
 pkL = 0; pkR = 0;
-cur_preset = 1;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
@@ -220,7 +204,6 @@ dinc = dspeed / srate;
 tA = tdA.drift_tick(dinc); tB = tdB.drift_tick(dinc);
 pA = pdA.drift_tick(dinc); pB = pdB.drift_tick(dinc);
 lA = ldA.drift_tick(dinc); lB = ldB.drift_tick(dinc);
-cdA_v = cdA.drift_tick(dinc); cdB_v = cdB.drift_tick(dinc);
 
 // parameter smoothing
 dbl_s += (dbl_t - dbl_s) * sm;
@@ -231,11 +214,6 @@ dA_s  += ((dA_t + tdrift * tA) * msr - dA_s) * sm;
 dB_s  += ((dB_t + tdrift * tB) * msr - dB_s) * sm;
 dA = min(max(dA_s, 2), bufsize - 4);
 dB = min(max(dB_s, 2), bufsize - 4);
-// detune wanders the same way the delay time does, scaled by the same DRIFT macro
-cA_s += ((cA_t + cddrift * cdA_v) - cA_s) * sm;
-cB_s += ((cB_t + cddrift * cdB_v) - cB_s) * sm;
-rtA = 1 - 2 ^ (cA_s / 1200);
-rtB = 1 - 2 ^ (cB_s / 1200);
 
 // voices
 mode == 0 ? (
@@ -283,27 +261,12 @@ ui_header("DOUBLER");
 
 // ---------- header controls ----------
 ui_noled = 1;
-ui_button(136 * sc, 10 * sc, 24 * sc, 24 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 9 : cur_preset - 1;
-  load_preset(cur_preset);
+ui_button(136 * sc, 10 * sc, 56 * sc, 24 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 136 * sc; gfx_y = 34 * sc;
+  load_preset(gfx_showmenu("Short|Med|Long|Classic Haas|Wide Spread|Super Wobble|John Lennon (ADT)|Mono Safe|Reset all to defaults"));
 );
-ui_button(162 * sc, 10 * sc, 24 * sc, 24 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 9 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
-ui_button(194 * sc, 10 * sc, 56 * sc, 24 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 194 * sc; gfx_y = 34 * sc;
-  cur_preset = gfx_showmenu("Short|Med|Long|Classic Haas|Wide Spread|Super Wobble|John Lennon (ADT)|Mono Safe|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
-);
-ui_theme_picker(258 * sc, 17 * sc);
+ui_theme_picker(200 * sc, 17 * sc);
 ui_size_picker(312 * sc, 13 * sc);
-pk_lcd(372 * sc, 7 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 378 * sc; gfx_y = 10 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 378 * sc; gfx_y = 24 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_hw_toggle(372 * sc, 13 * sc);
 
 ui_button(410 * sc, 10 * sc, 70 * sc, 24 * sc, "L/R",    slider1 == 0, 1) ? ( slider1 = 0; slider_automate(slider1); );

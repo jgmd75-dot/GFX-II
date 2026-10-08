@@ -150,19 +150,6 @@ function reg(a, b, c, d, e, f, g, h, i, pon, ph, pv, pd, vib, clv, drv) (
   slider1 = a; slider2 = b; slider3 = c; slider4 = d; slider5 = e; slider6 = f; slider7 = g; slider8 = h; slider9 = i;
   slider10 = pon; slider11 = ph; slider12 = pv; slider13 = pd; slider14 = vib; slider15 = clv; slider16 = drv;
 );
-function pname(p) (
-  p == 1 ? "Soul Jazz" :
-  p == 2 ? "Memphis Groove" :
-  p == 3 ? "Full Organ" :
-  p == 4 ? "Gospel" :
-  p == 5 ? "Modern Jazz" :
-  p == 6 ? "Jazz Ballad" :
-  p == 7 ? "Rock Overdrive" :
-  p == 8 ? "Reggae Bubble" :
-  p == 9 ? "Flute" :
-  p == 10 ? "Slow Perc" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? reg(8,8,8,0,0,0,0,0,0, 1,1,0,0, 6, 40, 15) :     // Soul Jazz
   p == 2 ? reg(8,8,8,8,0,0,0,0,0, 0,1,0,0, 6, 30, 25) :     // Memphis Groove
@@ -271,7 +258,6 @@ RMB = 200000; RCL = 210000; RCR = 220000; RAL = 230000; RAR = 232000; RMSK = 819
 memset(RMB, 0, 40000); rm_w = 0; rm_aw = 0; rm_ll = 0; rm_lr = 0;
 sm = 1 - exp(-1 / (0.03 * srate));
 pkL = 0; pkR = 0; evn = 0; spos = 0; midi_led = 0;
-cur_preset = 1;
 !ui_dflt ? ui_thm = 9; !ui_dflt ? ui_hw = 1;   // fixed walnut-and-ivory faceplate
 !ui_dflt ? ui_kstyle = 0;           // GFX standard knobs
 IVR = 0xF1EAD8; INKD = 0x3A2A1E; REDL = 0xFF3A2A; AMB = 0xE8A33A;
@@ -417,25 +403,12 @@ ui_col(INKD); gfx_circle(44 * sc, 24 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(IVR); ui_text(44 * sc, 19 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 20 * sc, 'b'); ui_col(INKD); gfx_x = 66 * sc; gfx_y = 12 * sc; gfx_drawstr("TONEWHEEL");
 gfx_setfont(4); ui_cola(INKD, 0.7); gfx_x = 216 * sc; gfx_y = 20 * sc; gfx_drawstr("DRAWBAR ORGAN");
-pk_ledbtn(304 * sc, 8 * sc, 20 * sc, 28 * sc, 0, AMB) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
+pk_ledbtn(330 * sc, 8 * sc, 32 * sc, 28 * sc, 0, AMB) ? (
+  gfx_x = 330 * sc; gfx_y = 38 * sc;
+  load_preset(gfx_showmenu("Soul Jazz|Memphis Groove|Full Organ|Gospel|Modern Jazz|Jazz Ballad|Rock Overdrive|Reggae Bubble|Flute|Slow Perc|Reset all to defaults"));
 );
-pk_ledbtn(326 * sc, 8 * sc, 20 * sc, 28 * sc, 0, AMB) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
-pk_ledbtn(352 * sc, 8 * sc, 32 * sc, 28 * sc, 0, AMB) ? (
-  gfx_x = 352 * sc; gfx_y = 38 * sc;
-  cur_preset = gfx_showmenu("Soul Jazz|Memphis Groove|Full Organ|Gospel|Modern Jazz|Jazz Ballad|Rock Overdrive|Reggae Bubble|Flute|Slow Perc|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
-);
-gfx_setfont(4); ui_col(INKD); gfx_x = 390 * sc; gfx_y = 17 * sc; gfx_drawstr("PRESETS");
+gfx_setfont(4); ui_col(INKD); gfx_x = 368 * sc; gfx_y = 17 * sc; gfx_drawstr("PRESETS");
 ui_size_picker(440 * sc, 13 * sc);
-pk_lcd(430 * sc, 38 * sc, 190 * sc, 12 * sc, 0);
-pk_lcdfont(9, 8 * sc); ui_col(pk_lcdc);
-gfx_x = 436 * sc; gfx_y = 39 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
-
 pk_ledbtn(512 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;
 gfx_setfont(4); ui_col(INKD); gfx_x = 550 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
 

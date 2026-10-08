@@ -293,19 +293,6 @@ function p_cmp(on, thr, ratio, knee, rect, mk, mix) ( slider15 = on; slider16 = 
 function p_hf(on, thr) ( slider22 = on; slider23 = thr; );
 function p_clip(mode, drv) ( slider24 = mode; slider25 = drv; mode > 0 ? clip_last = mode; );
 function p_lim(on, ceil, rel, out) ( slider26 = on; slider27 = ceil; slider28 = rel; slider29 = out; );
-function pname(p) (
-  p == 1 ? "Transparent" :
-  p == 2 ? "Warm Glue" :
-  p == 3 ? "Loud & Punchy" :
-  p == 4 ? "Vintage Tape" :
-  p == 5 ? "Bright Pop" :
-  p == 6 ? "Bass Heavy" :
-  p == 7 ? "Acoustic / Classical" :
-  p == 8 ? "Podcast / Voice" :
-  p == 9 ? "Parallel Punch" :
-  p == 10 ? "Streaming Safe (-1 dBTP)" :
-  "Reset to defaults";
-);
 function load_preset(p) (
   p == 1 ? (        // TRANSPARENT: gentle glue and a safe ceiling, nothing coloured
     p_in(0, 1); p_tube(0, -3, 1); p_tone(1, 0, 0, 0, 0, 0); p_st(1, 30, 100); p_cmp(1, -16, 1.5, 8, 1, 1, 100);
@@ -374,7 +361,6 @@ function update() (
 );
 
 clip_last = 1;
-cur_preset = 1;
 !ui_dflt ? ui_thm = 1; !ui_dflt ? ui_hw = 0;                  // defaults for new instances: Ice, flat
 update();
 in_s = in_t; tmix = tmix_t; tk = tk_t; tmk = tmk_t; tb = bias_b; ttb = tanh(tb); eq_s = eq_t; out_s = out_t;
@@ -523,28 +509,13 @@ opL = max(opL, abs(spl0)); opR = max(opR, abs(spl1));
 ui_begin(1120, 422);
 ui_header("MASTERSUITE");
 ui_noled = 1;
-ui_button(380 * sc, 10 * sc, 26 * sc, 24 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(408 * sc, 10 * sc, 26 * sc, 24 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
-ui_button(442 * sc, 10 * sc, 76 * sc, 24 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 442 * sc; gfx_y = 34 * sc;
-  cur_preset = gfx_showmenu("Transparent|Warm Glue|Loud & Punchy|Vintage Tape|Bright Pop|Bass Heavy|Acoustic / Classical|Podcast / Voice|Parallel Punch|Streaming Safe (-1 dBTP)|Reset to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+ui_button(400 * sc, 10 * sc, 76 * sc, 24 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 400 * sc; gfx_y = 34 * sc;
+  load_preset(gfx_showmenu("Transparent|Warm Glue|Loud & Punchy|Vintage Tape|Bright Pop|Bass Heavy|Acoustic / Classical|Podcast / Voice|Parallel Punch|Streaming Safe (-1 dBTP)|Reset to defaults"));
 );
 ui_noled = 0;
 ui_theme_picker(176 * sc, 15 * sc);
 ui_size_picker(280 * sc, 13 * sc);
-pk_lcd(524 * sc, 7 * sc, 180 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 530 * sc; gfx_y = 10 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 530 * sc; gfx_y = 24 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_hw_toggle(340 * sc, 13 * sc);
 gfx_setfont(4); ui_col(C_INK);
 sprintf(#lat, "LATENCY %d SMP  (%.1f ms)", lat_t, lat_t / srate * 1000);

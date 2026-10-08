@@ -1,0 +1,218 @@
+desc:GFX Smooth
+//tags: compressor optical opto smooth parallel
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-headsmooth (.jsfx-inc)
+// in the same folder (gfx-headsmooth draws the faceplate, shared with GFX Headsmoother).
+//
+// Smooth, clean compressor in the spirit of the classic one-knob software compressors (personal use; the
+// sound is designed from scratch).
+//   COMPRESS - lowers the threshold (0 - 10 = 0 to -30 dB): turn it up for more compression.
+//   OUTPUT   - make-up gain.
+//   ATTACK / RELEASE - SLOW / MEDIUM / FAST. Optical-style timing: the release lets go quickly at first,
+//              then more slowly the longer the compression has been held.
+//   LIMIT    - off: a soft, wide-knee 3:1 curve (transparent). On: a hard 20:1 curve with faster attack.
+//   BLEND    - dry / compressed mix for parallel compression.
+// The detector ignores the deep lows (no bass pumping) and the gain is applied evenly across the spectrum,
+// so the top end - the "air" - stays intact. A gentle valve-style colour stage follows the compressor.
+// DRIFT: the colour stage's drive and asymmetry wander slowly, independently on each side.
+// The oxblood strip below holds DRIFT (one dial: 50% = the drift settings) and IN / OUT (TRIM + GUARD, SAT, OUT stage).
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-headsmooth.jsfx-inc
+
+slider1:3<0,10,0.01>-Compress
+slider2:0<-12,24,0.1>-Output (dB)
+slider3:1<0,2,1{Slow,Medium,Fast}>-Attack
+slider4:1<0,2,1{Slow,Medium,Fast}>-Release
+slider5:0<0,1,1{Off,On}>-Limit
+slider6:100<0,100,1>-Blend (%)
+slider7:0<-24,12,0.1>-Input trim (dB)
+slider8:1<0,1,1{Off,On}>-Input guard
+slider9:25<0,100,1>-Drift amount (%)
+slider10:0.25<0.02,2,0.01>-Drift speed (Hz)
+slider11:0<0,100,1>-Band sat (%)
+slider12:30<0,100,1>-Bias (%)
+slider13:120<40,400,1>-Sat low band (Hz)
+slider14:6000<2000,16000,10>-Sat high band (Hz)
+slider15:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider17:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-smooth";                                  // the ? pop-up links to this manual
+
+function hp_set(f) instance(b0, b1, b2, a1, a2) local(w0, cw, al, n) (
+  w0 = 2 * $pi * f / srate; cw = cos(w0); al = sin(w0) / (2 * 0.70710678); n = 1 + al;
+  b0 = (1 + cw) * 0.5 / n; b1 = -(1 + cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
+);
+function bq_run(x) instance(b0, b1, b2, a1, a2, x1, x2, y1, y2) local(y) (
+  y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+  x2 = x1; x1 = x; y2 = y1; y1 = y;
+  y;
+);
+function tc(ms) ( 1 - exp(-1 / (max(ms, 0.05) * 0.001 * srate)); );
+
+// static curve with soft knee: gain reduction (dB, positive) for a level (dB)
+function gr_curve(lv) local(o) (
+  o = lv - thr;
+  o <= -kn * 0.5 ? 0 :
+  o >= kn * 0.5 ? o * (1 - 1 / ratio) :
+  (1 - 1 / ratio) * (o + kn * 0.5) ^ 2 / (2 * kn);
+);
+
+// colour stage: asymmetric tanh, small-signal gain 1
+function colour(x, k, b) local(tb) (
+  tb = ost_tanh(b);
+  (ost_tanh(k * x + b) - tb) / (k * (1 - tb * tb));
+);
+
+function update() (
+  thr = -slider1 * 3;
+  out_t = 10 ^ (slider2 / 20);
+  lim = slider5;
+  ratio = lim ? 20 : 3; kn = lim ? 2 : 12;
+  att_ms = (slider3 == 0 ? 25 : slider3 == 1 ? 8 : 1.5) * (lim ? 0.5 : 1);
+  rel_ms = slider4 == 0 ? 900 : slider4 == 1 ? 350 : 90;
+  catt = tc(att_ms);
+  blend_t = slider6 / 100;
+  drift_macro(slider17);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
+  drift = slider9 / 100 * dm_a; dspd = slider10 * dm_s;
+  in_setup(slider7, slider8);
+  ins_output_setup(11);
+);
+
+scL.hp_set(80); scR.hp_set(80);
+crms = tc(5); chold = tc(1500);
+dKL.drift_init(0.8 + rand(0.5)); dKR.drift_init(0.8 + rand(0.5));
+dBL.drift_init(0.8 + rand(0.5)); dBR.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+sm = tc(30);
+env = 0; gr = 0; grpk = 0; hold = 0; grdisp = 0; mpk = 0;
+!ui_dflt ? ui_thm = 1; !ui_dflt ? ui_hw = 1;   // fixed blue and silver faceplate
+!ui_dflt ? ui_kstyle = 0;
+update();
+out_s = out_t; blend_s = blend_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+dinc = dspd * samplesblock / srate;
+vkL = dKL.drift_tick(dinc); vkR = dKR.drift_tick(dinc);
+vbL = dBL.drift_tick(dinc); vbR = dBR.drift_tick(dinc);
+// colour drive and asymmetry, wandering with DRIFT
+kL = 1.2 * (1 + 0.6 * drift * vkL); kR = 1.2 * (1 + 0.6 * drift * vkR);
+bL = 0.05 + 0.08 * drift * vbL;     bR = 0.05 + 0.08 * drift * vbR;
+
+@serialize
+file_var(0, ui_sz);
+
+@sample
+in_process(spl0, spl1);
+xL = in_l; xR = in_r;
+
+// detector: stereo-linked RMS of the signal without its deep lows
+dL = scL.bq_run(xL); dR = scR.bq_run(xR);
+env += (0.5 * (dL * dL + dR * dR) - env) * crms;
+lv = 10 * log10(max(env, 0.000000000001)) + 3;
+tgt = gr_curve(lv);
+// optical-style timing, two stages: the first 40% of the reduction lets go quickly, the rest slowly -
+// and the longer the reduction has been held, the slower that second stage
+hold += (gr - hold) * chold;
+tgt > gr ? ( gr += (tgt - gr) * catt; grpk = gr; )
+         : gr += (tgt - gr) * tc(gr > grpk * 0.6 ? rel_ms * 0.3 : rel_ms * (1 + 2 * min(hold / 6, 1)));
+g = 10 ^ (-gr / 20);
+grdisp = max(grdisp, gr);
+
+// compressed path with colour, then blend
+yL = colour(xL * g * 0.5, kL, bL) * 2;
+yR = colour(xR * g * 0.5, kR, bR) * 2;
+blend_s += (blend_t - blend_s) * sm;
+out_s += (out_t - out_s) * sm;
+oL = (xL + (yL - xL) * blend_s) * out_s;
+oR = (xR + (yR - xR) * blend_s) * out_s;
+oL = ostL.ost_band(oL); oR = ostR.ost_band(oR);
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+mpk = max(mpk, max(abs(spl0), abs(spl1)));
+
+@gfx 780 250
+ui_begin(780, 250);
+function sm_face(T, i_comp, i_out, i_att, i_rel, i_lim, i_blend, grdb, lvl, on)
+  local(mx, my, mw, mh, mcx, mcy, mr, i, v, a) (
+  ui_theme(1);
+  hs_unit(T, HS_SH, HS_BLU);
+  gfx_gradrect(10 * sc, (T + 2) * sc, 760 * sc, (HS_SH - 4) * sc, 0.6, 0.75, 1, 0.07, 0, 0, 0, -0.07 / (760 * sc), 0, 0, 0, 0);
+  hs_badge(40, T + 8, "SMOOTH", "OPTICAL COMPRESSOR", HS_NAV);
+  pk_ink = HS_INK; pk_bg = HS_BLU; pk_nut = 1; pk_rsc = 0.72;
+  pk_bigknob(164 * sc, (T + 100) * sc, 28 * sc, i_comp, 0, 10, 3, 11, 0, 1, "COMPRESS", "%.1f");
+  ui_section(2); C_INK = HS_INK;
+  ui_knob(246 * sc, (T + 182) * sc, i_blend, 0, 100, 100, 0, "BLEND", "%.0f%%");
+  // gain-reduction meter
+  mx = 284 * sc; my = (T + 56) * sc; mw = 232 * sc; mh = 58 * sc;
+  ui_col(0x0A0F1C); ui_rrect(mx - 3 * sc, my - 3 * sc, mw + 6 * sc, mh + 6 * sc, 6 * sc);
+  gfx_gradrect(mx, my, mw, mh, 0.93, 0.90, 0.80, 1, 0, 0, 0, 0, -0.18 / mh, -0.18 / mh, -0.16 / mh, 0);
+  mcx = mx + mw * 0.5; mr = 98 * sc; mcy = my + mh + 60 * sc;
+  gfx_setfont(4);
+  i = 0;
+  loop(8,
+    v = i == 0 ? 0 : i == 1 ? 1 : i == 2 ? 2 : i == 3 ? 4 : i == 4 ? 6 : i == 5 ? 10 : i == 6 ? 15 : 20;
+    a = 0.55 - v / 20 * 1.1;
+    ui_col(v >= 10 ? 0xB0302A : HS_NAV);
+    gfx_line(mcx + sin(a) * (mr - 7 * sc), mcy - cos(a) * (mr - 7 * sc), mcx + sin(a) * mr, mcy - cos(a) * mr, 1);
+    sprintf(#hs_mv, "%d", v); ui_text(mcx + sin(a) * (mr + 8 * sc), mcy - cos(a) * (mr + 8 * sc) - 5 * sc, #hs_mv);
+    i += 1;
+  );
+  ui_col(HS_NAV); i = 0; loop(2, gfx_arc(mcx, mcy, mr - i, -0.55, 0.55, 1); i += 1; );
+  ui_cola(HS_NAV, 0.75); ui_text(mcx, my + mh - 16 * sc, "GAIN REDUCTION  dB");
+  hs_mgr += (min(grdb, 20) - hs_mgr) * 0.45;
+  a = 0.55 - hs_mgr / 20 * 1.1;
+  ui_cola(0x000000, 0.25); gfx_line(mcx + sin(a) * 72 * sc + 2 * sc, mcy - cos(a) * 72 * sc, mcx + sin(a) * (mr - 2 * sc) + 2 * sc, mcy - cos(a) * (mr - 2 * sc), 1);
+  ui_col(0x16181C); gfx_line(mcx + sin(a) * 72 * sc, mcy - cos(a) * 72 * sc, mcx + sin(a) * (mr - 2 * sc), mcy - cos(a) * (mr - 2 * sc), 1);
+  gfx_gradrect(mx, my, mw, 8 * sc, 0, 0, 0, 0.25, 0, 0, 0, 0, 0, 0, 0, -0.25 / (8 * sc));
+  // ATTACK / LIMIT / RELEASE
+  pk_rotsel(338 * sc, (T + 172) * sc, i_att, "SLOW", "MEDIUM", "FAST");
+  pk_rotsel(470 * sc, (T + 172) * sc, i_rel, "SLOW", "MEDIUM", "FAST");
+  gfx_setfont(6, "Trebuchet MS", 13 * sc, 'b'); ui_col(HS_INK);
+  ui_text(338 * sc, (T + 194) * sc, "ATTACK"); ui_text(470 * sc, (T + 194) * sc, "RELEASE");
+  pk_ledbtn(390 * sc, (T + 158) * sc, 28 * sc, 26 * sc, slider(i_lim), HS_RED) ? ( slider(i_lim) = 1 - slider(i_lim); slider_automate(2 ^ (i_lim - 1)); );
+  gfx_setfont(4); ui_col(HS_INK); ui_text(404 * sc, (T + 190) * sc, "LIMIT");
+  // OUTPUT + LEVEL
+  pk_bigknob(598 * sc, (T + 100) * sc, 28 * sc, i_out, -12, 24, 0, 13, -12, 3, "OUTPUT", "%+.1f dB");
+  hs_lvs = max(lvl, hs_lvs * 0.8);
+  hs_leds(598, T + 184, hs_lvs, HS_INK);
+  !on ? ( ui_cola(0x000000, 0.35); gfx_rect(10 * sc, (T + 40) * sc, 760 * sc, (HS_SH - 46) * sc); );
+);
+
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+// ---------- one blue unit: DRIFT + INPUT TRIM | COMPRESS + BLEND | GR meter, ATTACK / LIMIT / RELEASE | OUTPUT | SAT + OUT ----------
+T = 8;
+sm_face(T, 1, 2, 3, 4, 5, 6, grdisp, mpk, 1); grdisp = 0; mpk = 0;
+ui_size_picker(600 * sc, (T + 11) * sc);
+dy_ink = HS_INK; dy_bg = HS_BLU; dy_kst = 20; dy_nov = 1;
+sprintf(#dv, "%.0f%%", slider17); dy_knob(60, T + 74, 13, 17, 0, 100, 50, 0, HS_SLV, "DRIFT", #dv);
+sprintf(#dv, "%+.1f dB", slider7); dy_knob(60, T + 138, 13, 7, -24, 12, 0, 0, 0x2A2A2E, "IN TRIM", #dv);
+ui_guardclick(1600 + 7, 8, 60, T + 138, 22);   // click IN TRIM for GUARD
+sprintf(#dv, "%.0f%%", slider11); dy_knob(706, T + 74, 13, 11, 0, 100, 0, 0, 0xD8B040, "SAT", #dv);
+ui_outkeys(682, T + 116, 48, 12, 3, 16);
+dy_nov = 0; dy_kst = 7;
+
+pk_end();
+ui_end();

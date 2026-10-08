@@ -1,0 +1,410 @@
+desc:GFX Preamp
+//tags: preamp drive saturation overdrive eq boost
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
+//
+// Signal path: input (guard) -> EQ BOOST (optional) -> sag (gentle program-dependent
+// compression) -> voicing -> tone -> mix -> output stage.
+// Voicings:
+//   CLEAN - no drive (use with EQ BOOST as a clean boost preamp)
+//   VIBE  - the Univibe preamp: low-mid weight, asymmetric soft saturation, rounded top
+//   ZEN   - gentle symmetrical diode-style saturation, smooth amp-like breakup
+//   TRANS - single-transistor drive: asymmetric, bites earlier, furrier when pushed
+// Drift: BIAS (asymmetry wanders) and COMP (sag depth breathes).
+// The cream strip holds DRIFT (one dial: 50% = the bias / comp drift settings) and IN / OUT (TRIM + GUARD, SAT, OUT stage).
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:1<0,3,1{Clean,Vibe,Zen,Transistor}>-Voicing
+slider2:40<0,100,1>-Drive (%)
+slider3:50<0,100,1>-Tone (%)
+slider4:0<0,1,1{Off,On}>-EQ boost
+slider5:1<0,2,1{30/300/3k,50/500/5k,70/700/7k}>-EQ frequencies
+slider6:1<0,2,1{+1 dB,+3 dB,+6 dB}>-EQ amount
+slider7:10<0,50,1>-Bias drift (%)
+slider8:10<0,50,1>-Comp drift (%)
+slider9:0.25<0.02,2,0.01>-Drift speed (Hz)
+slider10:100<0,100,1>-Mix (%)
+slider11:0<-24,12,0.1>-Output (dB)
+slider12:0<0,100,1>-Band sat (%)
+slider13:30<0,100,1>-Bias (%)
+slider14:120<40,400,1>-Sat low band (Hz)
+slider15:6000<2000,16000,10>-Sat high band (Hz)
+slider16:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider17:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider18:0<-24,12,0.1>-Input trim (dB)
+slider19:1<0,1,1{Off,On}>-Input guard
+slider20:50<0,100,1>-Drift (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-preamp";                                  // the ? pop-up links to this manual
+
+// ---------- static shaping for the current voicing (zero output at zero input) ----------
+function pre_shape(x, b) local(u, u0) (
+  voice == 1 ? (
+    x + pre_wet * (ost_curve(x, pre_d, pre_b + b) - x);
+  ) : voice == 2 ? (
+    u = zg * x + 3 * b; u0 = 3 * b;
+    (u / sqrt(1 + u * u) - u0 / sqrt(1 + u0 * u0)) * zn;
+  ) : voice == 3 ? (
+    u = tg * x + tb0 + 4 * b; u0 = tb0 + 4 * b;
+    ((u > 0 ? ost_tanh(u) : -0.6 * ost_tanh(-u / 0.6))
+      - (u0 > 0 ? ost_tanh(u0) : -0.6 * ost_tanh(-u0 / 0.6))) * tn;
+  ) : x;
+);
+
+// ---------- RBJ peaking EQ coefficients ----------
+function peak_set(f, gdb) instance(b0, b1, b2, a1, a2) local(amp, w0, cw, alq, n) (
+  amp = 10 ^ (gdb / 40);
+  w0 = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w0); alq = sin(w0) / (2 * 0.8);
+  n = 1 + alq / amp;
+  b0 = (1 + alq * amp) / n; b1 = -2 * cw / n; b2 = (1 - alq * amp) / n;
+  a1 = -2 * cw / n;       a2 = (1 - alq / amp) / n;
+);
+
+// drawing-only copies (the screen runs alongside the audio, so it must not share the audio's functions)
+function d_tanh(x) local(e) ( x = min(max(x, -20), 20); e = exp(2 * x); (e - 1) / (e + 1) );
+function d_shape(x, b) local(u, u0, tb, s) (
+  dvo == 1 ? (
+    tb = d_tanh(dpd * (dpb + b)); s = dpd * (1 - tb * tb);
+    x + dpw * ((d_tanh(dpd * (x + dpb + b)) - tb) / s - x);
+  ) : dvo == 2 ? (
+    u = dzg * x + 3 * b; u0 = 3 * b;
+    (u / sqrt(1 + u * u) - u0 / sqrt(1 + u0 * u0)) * dzn;
+  ) : dvo == 3 ? (
+    u = dtg * x + 0.3 + 4 * b; u0 = 0.3 + 4 * b;
+    ((u > 0 ? d_tanh(u) : -0.6 * d_tanh(-u / 0.6)) - (u0 > 0 ? d_tanh(u0) : -0.6 * d_tanh(-u0 / 0.6))) * dtn;
+  ) : x;
+);
+function d_peak_set(f, gdb) instance(b0, b1, b2, a1, a2) local(amp, w0, cw, alq, n) (
+  amp = 10 ^ (gdb / 40);
+  w0 = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w0); alq = sin(w0) / (2 * 0.8);
+  n = 1 + alq / amp;
+  b0 = (1 + alq * amp) / n; b1 = -2 * cw / n; b2 = (1 - alq * amp) / n;
+  a1 = -2 * cw / n;       a2 = (1 - alq / amp) / n;
+);
+
+function biq_mag(w, b0, b1, b2, a1, a2) local(nr, ni, dr, di) (
+  nr = b0 + b1 * cos(w) + b2 * cos(2 * w); ni = -(b1 * sin(w) + b2 * sin(2 * w));
+  dr = 1 + a1 * cos(w) + a2 * cos(2 * w);  di = -(a1 * sin(w) + a2 * sin(2 * w));
+  sqrt((nr * nr + ni * ni) / (dr * dr + di * di));
+);
+
+// ---------- per-channel processing ----------
+function ch_proc(x, b, sagk)
+  instance(q1x1, q1x2, q1y1, q1y2, q2x1, q2x2, q2y1, q2y2, q3x1, q3x2, q3y1, q3y2,
+           env, lp1, tl, dcx, dcy) local(y) (
+  // EQ boost in front of the drive
+  eq_on ? (
+    y = eqA.b0 * x + eqA.b1 * q1x1 + eqA.b2 * q1x2 - eqA.a1 * q1y1 - eqA.a2 * q1y2;
+    q1x2 = q1x1; q1x1 = x; q1y2 = q1y1; q1y1 = y; x = y;
+    y = eqB.b0 * x + eqB.b1 * q2x1 + eqB.b2 * q2x2 - eqB.a1 * q2y1 - eqB.a2 * q2y2;
+    q2x2 = q2x1; q2x1 = x; q2y2 = q2y1; q2y1 = y; x = y;
+    y = eqC.b0 * x + eqC.b1 * q3x1 + eqC.b2 * q3x2 - eqC.a1 * q3y1 - eqC.a2 * q3y2;
+    q3x2 = q3x1; q3x1 = x; q3y2 = q3y1; q3y1 = y; x = y;
+  );
+  // sag: gentle program-dependent compression
+  env += (abs(x) - env) * (abs(x) > env ? sag_a : sag_r);
+  x /= (1 + sagk * env);
+  // voicing
+  voice == 1 ? ( lp1 += (x - lp1) * pre_lsc; x += pre_shk * lp1; );
+  y = pre_shape(x, b);
+  voice == 1 ? ( tl += (y - tl) * pre_tc; y = tl; )
+             : voice >= 2 ? ( tl += (y - tl) * tlc; y = tl; );
+  // DC blocker (bias creates offset)
+  dcy = y - dcx + 0.9995 * dcy; dcx = y;
+  dcy;
+);
+
+function update() local(drv, fc, f1, f2, f3, gb) (
+  voice = slider1;
+  drv = slider2 / 100;
+  eq_on = slider4;
+  drift_macro(slider20);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
+  bdr = slider7 / 100 * dm_a;
+  cdr = slider8 / 100 * dm_a;
+  dspd = slider9 * dm_s;
+  mix_t = slider10 / 100;
+  out_t = 10 ^ (slider11 / 20);
+
+  // VIBE (as the Univibe preamp)
+  pre_shk = 10 ^ (3 * drv / 20) - 1;
+  pre_d = 1 + 3 * drv;
+  pre_b = 0.15 * drv;
+  pre_wet = min(drv * 2, 1);
+  fc = 18000 * (7000 / 18000) ^ drv;
+  pre_tc = drv > 0.001 ? 1 - exp(-2 * $pi * min(fc, srate * 0.45) / srate) : 1;
+  // ZEN
+  zg = 1 + 20 * drv * drv; zn = 1 / sqrt(zg);
+  // TRANS
+  tg = 1 + 30 * drv * drv; tn = 1 / sqrt(tg); tb0 = 0.3;
+  // tone (ZEN / TRANS): 1.2 kHz .. 14 kHz
+  fc = 1200 * (14000 / 1200) ^ (slider3 / 100);
+  tlc = 1 - exp(-2 * $pi * min(fc, srate * 0.45) / srate);
+  // sag depth grows with drive
+  sag_base = voice == 0 ? 0 : 0.3 + 2.5 * drv;
+
+  // EQ boost
+  f1 = slider5 == 0 ? 30 : slider5 == 1 ? 50 : 70;
+  gb = slider6 == 0 ? 1 : slider6 == 1 ? 3 : 6;
+  eqA.peak_set(f1, gb); eqB.peak_set(f1 * 10, gb); eqC.peak_set(f1 * 100, gb);
+
+  in_setup(slider18, slider19);
+  ost_setup(slider12 / 100, slider13 / 100, slider14, slider15, slider16, slider17);
+);
+
+// ---------- presets (leave Drift speed, Output and the I/O rows alone) ----------
+function setp(v, d, t, eo, eg, ea, b_, c_, mx) (
+  slider1 = v; slider2 = d; slider3 = t; slider4 = eo; slider5 = eg; slider6 = ea;
+  slider7 = b_; slider8 = c_; slider10 = mx;
+);
+function load_preset(p) (
+  p == 1 ? setp(1, 35, 50, 0, 1, 1, 10, 10, 100) :   // Vibe Warm
+  p == 2 ? setp(1, 85, 50, 0, 1, 1, 15, 15, 100) :   // Vibe Driven
+  p == 3 ? setp(2, 35, 55, 0, 1, 1, 10, 10, 100) :   // Zen Edge
+  p == 4 ? setp(2, 70, 60, 0, 1, 1, 10, 15, 100) :   // Zen Crunch
+  p == 5 ? setp(3, 50, 45, 0, 1, 1, 15, 10, 100) :   // Transistor Grit
+  p == 6 ? setp(3, 95, 35, 0, 1, 1, 20, 20, 100) :   // Transistor Fuzz
+  p == 7 ? setp(0,  0, 50, 1, 2, 1,  0,  0, 100) :   // Console Lift
+  p == 8 ? setp(2, 55, 55, 1, 1, 1, 10, 10, 100) :   // Mid Push into Zen
+  p == 9 ? setp(1, 55, 50, 0, 1, 1, 40, 40, 100);    // Breathing Valve
+  p >= 1 && p <= 9 ? slider_automate(767);   // sliders 1-8, 10
+  p == 10 ? (                                   // Reset all to defaults
+    slider1 = 1; slider2 = 40; slider3 = 50; slider4 = 0; slider5 = 1; slider6 = 1;
+    slider7 = 10; slider8 = 10; slider9 = 0.25; slider10 = 100; slider11 = 0;
+    slider12 = 0; slider13 = 30; slider14 = 120; slider15 = 6000; slider16 = -0.3; slider17 = 1;
+    slider18 = 0; slider19 = 1;
+    slider_automate(524287);
+  );
+);
+
+// ---------- state ----------
+sm = 1 - exp(-1 / (0.03 * srate));
+pre_lsc = 1 - exp(-2 * $pi * 250 / srate);
+sag_a = 1 - exp(-1 / (0.005 * srate));
+sag_r = 1 - exp(-1 / (0.15 * srate));
+
+drB.drift_init(0.8 + rand(0.5));
+drC.drift_init(0.8 + rand(0.5));
+
+ost_init(1000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+vuc = 1 - exp(-1 / (0.01 * srate)); vu_ms = 0;
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;   // fixed faceplate
+pkL = 0; pkR = 0;
+dispBias = 0;
+
+update();
+mix_s = mix_t; out_s = out_t;
+ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+
+@slider
+update();
+
+@block
+update();
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+
+@sample
+// input stage: DC block, trim, guard
+in_process(spl0, spl1);
+inL = in_l; inR = in_r;
+vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
+
+// drift: bias wanders, sag depth breathes
+dinc = dspd / srate;
+vB = drB.drift_tick(dinc);
+vC = drC.drift_tick(dinc);
+bnow = bdr * 0.15 * vB;
+sagk = max(sag_base * (1 + cdr * 1.5 * vC), 0);
+
+mix_s += (mix_t - mix_s) * sm;
+out_s += (out_t - out_s) * sm;
+
+yL = chL.ch_proc(inL, bnow, sagk);
+yR = chR.ch_proc(inR, bnow, sagk);
+
+oL = inL * (1 - mix_s) + yL * mix_s;
+oR = inR * (1 - mix_s) + yR * mix_s;
+
+// output stage: band saturation -> output gain -> clipper / limiter
+oL = ostL.ost_band(oL) * out_s;
+oR = ostR.ost_band(oR) * out_s;
+ost_out(oL, oR);
+spl0 = ost_l;
+spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+dispBias = bnow; dispSag = sagk;
+
+@gfx 900 366
+ui_begin(900, 366);
+ui_thm = 5; ui_hw = 1; ui_theme(5);
+PBLU = 0x2448AA; PFRM = 0x7896DC; CRMP = 0xE9E2D0; BRKT = 0x2A5FC0; YCAP = 0xF2C21B; WHT = 0xF2F4FA; INKP = 0x1A1C20;
+dy_ink = WHT; dy_bg = PBLU;
+pk_shad = 0.2; pk_shoff = 0.6;                  // soft knob shadows on this faceplate
+
+function fnt(sz) ( gfx_setfont(6, "Arial", sz * sc, 'b'); );
+function txt(x, y, s, sz, col, a) ( fnt(sz); ui_cola(col, a); ui_text(x * sc, y * sc, s); );
+// a light-blue rounded frame round a section, its name tucked into the top edge
+function frame(x, y, w, h, s) local(tw, th) (
+  ui_col(PFRM); ui_rrect(x * sc, y * sc, w * sc, h * sc, 9 * sc);
+  ui_col(PBLU); ui_rrect((x + 3) * sc, (y + 3) * sc, (w - 6) * sc, (h - 6) * sc, 7 * sc);
+  fnt(15); gfx_measurestr(s, tw, th);
+  ui_col(PBLU); gfx_rect((x + 16) * sc - 5 * sc, (y - 2) * sc, tw + 10 * sc, 8 * sc);
+  ui_col(WHT); gfx_x = (x + 16) * sc; gfx_y = (y - 9) * sc; gfx_drawstr(s);
+);
+// a round push button with a coloured lamp cap; returns 1 when clicked
+function lamp(cx, cy, on, col, s) local(hit) (
+  hit = pressed && drag_id == 0 && (mouse_x - cx * sc) ^ 2 + (mouse_y - cy * sc) ^ 2 < (18 * sc) ^ 2;
+  hit ? drag_id = -1;
+  ui_col(0x0E0F12); gfx_circle(cx * sc, cy * sc, 17 * sc, 1, 1);
+  ui_col(0x3A3C42); gfx_circle(cx * sc, cy * sc, 15 * sc, 1, 1);
+  ui_col(on ? col : ui_mix(col, 0x101114, 0.7)); gfx_circle(cx * sc, cy * sc, 12 * sc, 1, 1);
+  on ? ( ui_cola(col, 0.28); gfx_circle(cx * sc, cy * sc, 20 * sc, 1, 1); ui_cola(0xFFFFFF, 0.6); gfx_circle((cx - 4) * sc, (cy - 4) * sc, 3.5 * sc, 1, 1); )
+     : ( ui_cola(0xFFFFFF, 0.14); gfx_circle((cx - 4) * sc, (cy - 4) * sc, 3.5 * sc, 1, 1); );
+  txt(cx, cy + 22, s, 12, WHT, 0.95);
+  hit;
+);
+// a lit key with its caption underneath
+function key(x, y, on, s) local(h) (
+  h = pk_ledbtn(x * sc, y * sc, 62 * sc, 20 * sc, on, 0xFFB030);
+  txt(x + 31, y + 22, s, 11, WHT, 0.9);
+  h;
+);
+// a knob with its name in the panel's own larger lettering, its value small underneath
+function kn(cx, cy, r, idx, lo, hi, def, lg, cap, nm, val, col) (
+  dy_knob(cx, cy, r, idx, lo, hi, def, lg, cap, "", "");
+  txt(cx, cy + r + 10, nm, 13, col, 1);
+  txt(cx, cy + r + 25, val, 10, col, 0.65);
+);
+// blue bracket label over a group of knobs on the cream strip
+function bracket(x0, x1, y, s) local(tw, th, cx) (
+  fnt(14); gfx_measurestr(s, tw, th); cx = (x0 + x1) * 0.5 * sc;
+  ui_col(BRKT); gfx_x = cx - tw * 0.5; gfx_y = y * sc - th * 0.5; gfx_drawstr(s);
+  gfx_rect(x0 * sc, y * sc, cx - tw * 0.5 - 6 * sc - x0 * sc, 2 * sc); gfx_rect(cx + tw * 0.5 + 6 * sc, y * sc, x1 * sc - cx - tw * 0.5 - 6 * sc, 2 * sc);
+  gfx_rect(x0 * sc, y * sc, 2 * sc, 8 * sc); gfx_rect((x1 - 2) * sc, y * sc, 2 * sc, 8 * sc);
+);
+// the warm VU meter (dB, 0 = -18 dBFS)
+function vu(x, y, w, h, db) local(cx, cy, r, i, a, d, n, t) (
+  ui_col(0x0C0D10); ui_rrect((x - 5) * sc, (y - 5) * sc, (w + 10) * sc, (h + 10) * sc, 7 * sc);
+  gfx_gradrect(x * sc, y * sc, w * sc, h * sc, 0.96, 0.82, 0.50, 1, 0, 0, 0, 0, -0.0016 / sc, -0.0022 / sc, -0.0026 / sc, 0);
+  t = 0; loop(14, ui_cola(0xFFF2C8, 0.045); a = 1 - t / 14;
+    gfx_rect((x + w * 0.5 - w * 0.48 * a) * sc, (y + h - h * 0.9 * a) * sc, w * 0.96 * a * sc, h * 0.9 * a * sc); t += 1; );
+  cx = x + w * 0.5; cy = y + h * 1.18; r = h * 0.98;
+  i = 0;
+  loop(9, d = i == 0 ? -20 : i == 1 ? -10 : i == 2 ? -7 : i == 3 ? -5 : i == 4 ? -3 : i == 5 ? -1 : i == 6 ? 0 : i == 7 ? 1 : 3;
+    n = (d + 20) / 23; a = -0.62 + n * 1.24;
+    ui_col(d > 0 ? 0xB82A1E : 0x2A1C10);
+    gfx_line((cx + sin(a) * r) * sc, (cy - cos(a) * r) * sc, (cx + sin(a) * (r - 10)) * sc, (cy - cos(a) * (r - 10)) * sc, 1);
+    gfx_line((cx + sin(a) * r + 0.8) * sc, (cy - cos(a) * r) * sc, (cx + sin(a) * (r - 10) + 0.8) * sc, (cy - cos(a) * (r - 10)) * sc, 1);
+    sprintf(#vl, "%d", abs(d)); fnt(12); ui_text((cx + sin(a) * (r + 11)) * sc, (cy - cos(a) * (r + 11) - 7) * sc, #vl);
+    i += 1; );
+  ui_col(0x2A1C10); t = 0; loop(40, a = -0.62 + t / 40 * 1.24 * (20 / 23); gfx_rect((cx + sin(a) * (r - 2)) * sc, (cy - cos(a) * (r - 2)) * sc, 1.8 * sc, 1.8 * sc); t += 1; );
+  ui_col(0xB82A1E); t = 0; loop(12, a = -0.62 + (20 + t / 12 * 3) / 23 * 1.24; gfx_rect((cx + sin(a) * (r - 2)) * sc, (cy - cos(a) * (r - 2)) * sc, 2.4 * sc, 2.4 * sc); t += 1; );
+  fnt(20); ui_col(0x2A1C10); ui_text(cx * sc, (y + h * 0.5) * sc, "VU");
+  txt(x + 30, y + h - 18, "INPUT", 11, 0x2A1C10, 0.85);
+  n = min(max((db + 20) / 23, -0.05), 1.06); a = -0.62 + n * 1.24;
+  ui_col(0x141414); t = -1;
+  loop(3, gfx_line((cx + t * 0.6 + sin(a) * h * 0.3) * sc, (cy - cos(a) * h * 0.3) * sc, (cx + t * 0.6 + sin(a) * (r - 4)) * sc, (cy - cos(a) * (r - 4)) * sc, 1); t += 1; );
+  ui_col(0x0C0D10); gfx_rect(x * sc, (y + h - 6) * sc, w * sc, 6 * sc);
+);
+
+// ---------- chassis: black cheeks, blue faceplate over a cream strip ----------
+fh = 358;
+ui_col(0x0B0B0C); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(0x16171A); ui_rrect(6 * sc, 4 * sc, 888 * sc, fh * sc, 8 * sc);
+ui_col(PBLU); gfx_rect(26 * sc, 8 * sc, 848 * sc, 224 * sc);
+gfx_gradrect(26 * sc, 8 * sc, 848 * sc, 224 * sc, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06 / (224 * sc));
+ui_col(CRMP); gfx_rect(26 * sc, 232 * sc, 848 * sc, (fh - 236) * sc);
+ui_cola(0x000000, 0.3); gfx_rect(26 * sc, 232 * sc, 848 * sc, 2 * sc);
+gi = 0; loop(4, gx_ = gi % 2 ? 884 : 16; gy_ = gi < 2 ? 24 : fh - 16;
+  ui_col(0x8A8D93); gfx_circle(gx_ * sc, gy_ * sc, 5.5 * sc, 1, 1); ui_col(0x3A3C40); gfx_line((gx_ - 3.5) * sc, (gy_ + 1) * sc, (gx_ + 3.5) * sc, (gy_ - 1) * sc, 1); gi += 1; );
+
+// header (on the blue)
+ui_col(WHT); gfx_circle(54 * sc, 30 * sc, 15 * sc, 1, 1); gfx_setfont(5); ui_col(PBLU); ui_text(54 * sc, 24 * sc, "GFX");
+gfx_setfont(6, "Arial", 28 * sc, 'b'); ui_col(WHT); gfx_x = 80 * sc; gfx_y = 14 * sc; gfx_drawstr("PREAMP");
+txt(290, 23, "FOUR VOICINGS", 12, WHT, 0.75);
+ui_button(560 * sc, 16 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
+  gfx_x = 560 * sc; gfx_y = 44 * sc;
+  load_preset(gfx_showmenu("Vibe Warm|Vibe Driven|Zen Edge|Zen Crunch|Transistor Grit|Transistor Fuzz|Console Lift|Mid Push into Zen|Breathing Valve|Reset all to defaults"));
+);
+ui_size_picker(670 * sc, 20 * sc);
+
+// ---------- VOICE: four lit buttons, then the EQ boost ----------
+frame(40, 62, 276, 160, "VOICE");
+lamp(80, 98, slider1 == 0, 0xF2F4FA, "CLEAN") ? ( slider1 = 0; ui_auto(1); );
+lamp(145, 98, slider1 == 1, 0xFFB030, "VIBE") ? ( slider1 = 1; ui_auto(1); );
+lamp(210, 98, slider1 == 2, 0x46D86A, "ZEN") ? ( slider1 = 2; ui_auto(1); );
+lamp(275, 98, slider1 == 3, 0xFF3A2A, "TRANS") ? ( slider1 = 3; ui_auto(1); );
+ui_cola(PFRM, 0.7); gfx_rect(52 * sc, 140 * sc, 252 * sc, 2 * sc);
+lamp(80, 172, slider4, 0xFFB030, "BOOST") ? ( slider4 = 1 - slider4; ui_auto(4); );
+gi = 0; loop(3,
+  key(110 + gi * 66, 144, slider5 == gi, gi == 0 ? "30/300/3K" : gi == 1 ? "50/500/5K" : "70/700/7K") ? ( slider5 = gi; ui_auto(5); );
+  gi += 1; );
+gi = 0; loop(3,
+  key(110 + gi * 66, 180, slider6 == gi, gi == 0 ? "+1 dB" : gi == 1 ? "+3 dB" : "+6 dB") ? ( slider6 = gi; ui_auto(6); );
+  gi += 1; );
+
+// ---------- the VU, in the middle ----------
+vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18;
+vud = vud + (vdb - vud) * 0.35;
+vu(336, 66, 240, 134, vud);
+txt(456, 210, slider1 == 0 ? "CLEAN  -  NO DRIVE" : slider1 == 1 ? (slider2 < 35 ? "VIBE  -  WARM" : slider2 < 70 ? "VIBE  -  PUSHED" : "VIBE  -  SATURATED") :
+    slider1 == 2 ? (slider2 < 35 ? "ZEN  -  WARM" : slider2 < 70 ? "ZEN  -  PUSHED" : "ZEN  -  SATURATED") :
+    (slider2 < 35 ? "TRANS  -  WARM" : slider2 < 70 ? "TRANS  -  PUSHED" : "TRANS  -  SATURATED"), 13, WHT, 0.95);
+
+// ---------- DRIVE: the yellow knobs, and the output LEDs ----------
+frame(596, 62, 264, 160, "DRIVE");
+dy_kst = 7; dy_num = 1; dy_numc = WHT;
+sprintf(#v, "%.0f%%", slider2); kn(666, 124, 33, 2, 0, 100, 40, 0, YCAP, "DRIVE", #v, WHT);
+sprintf(#v, "%.0f%%", slider3); kn(762, 130, 26, 3, 0, 100, 50, 0, YCAP, "TONE", #v, WHT);
+dy_num = 0;
+pko = max(pkL, pkR); pkL *= 0.85; pkR *= 0.85;
+gi = 0; loop(6, gd_ = gi == 0 ? 3 : gi == 1 ? 0 : gi == 2 ? -6 : gi == 3 ? -12 : gi == 4 ? -24 : -36;
+  pk_led(840 * sc, (86 + gi * 21) * sc, 5 * sc, 20 * log10(max(pko, 0.0000001)) >= gd_, gi == 0 ? 0xFF3A2A : gi < 3 ? 0xFFB030 : 0x46D86A);
+  sprintf(#gl, gd_ > 0 ? "+%d" : "%d", gd_); txt(818, 80 + gi * 21, #gl, 10, WHT, 0.8); gi += 1; );
+txt(840, 204, "OUT", 11, WHT, 0.85);
+
+// ---------- the cream strip: legend, name plate, DRIFT, MASTER ----------
+gfx_setfont(6, "Georgia", 16 * sc, 'i'); ui_col(INKP);
+gfx_x = 46 * sc; gfx_y = 262 * sc; gfx_drawstr("Colour Preamp");
+ui_col(0x7E8086); ui_rrect(46 * sc, 300 * sc, 112 * sc, 38 * sc, 4 * sc);
+ui_col(0xA2A5AB); ui_rrect(48 * sc, 302 * sc, 108 * sc, 34 * sc, 3 * sc);
+gfx_setfont(6, "Arial", 19 * sc, 'b'); ui_col(0x24262A);
+ui_text(102 * sc, 310 * sc, slider1 == 0 ? "Clean" : slider1 == 1 ? "Vibe" : slider1 == 2 ? "Zen" : "Trans");
+dy_ink = INKP; dy_kst = 0; dy_num = 1; dy_numc = INKP;
+bracket(180, 232, 246, "DRIFT");
+sprintf(#v, "%.0f%%", slider20); kn(206, 296, 17, 20, 0, 100, 50, 0, 0xF2F4FA, "DRIFT", #v, INKP);
+bracket(252, 506, 246, "IN / OUT");
+dy_num = 0; dy_ink = INKP; dy_bg = CRMP; rd_iok = 20; rd_ioc1 = 0x2A2C30; rd_ioc2 = YCAP; rd_ioc3 = 0xD8392B;
+rd_io(266, 274, 18, 19, 12, 17);
+dy_kst = 0; dy_num = 1; dy_numc = INKP;
+bracket(530, 742, 246, "MASTER");
+sprintf(#v, "%.0f%%", slider10); kn(574, 296, 19, 10, 0, 100, 100, 0, 0xF2F4FA, "MIX", #v, INKP);
+sprintf(#v, "%+.1f dB", slider11); kn(698, 296, 19, 11, -24, 12, 0, 0, 0xF2F4FA, "OUTPUT", #v, INKP);
+dy_num = 0; dy_ink = WHT;
+gfx_setfont(6, "Arial", 13 * sc, 'bi'); ui_col(INKP); gfx_x = 772 * sc; gfx_y = 304 * sc; gfx_drawstr("G F X   A U D I O");
+ui_col(BRKT); gfx_rect(772 * sc, 324 * sc, 92 * sc, 2 * sc);
+
+pk_shad = 0.45; pk_shoff = 1;
+
+pk_end();
+ui_end();

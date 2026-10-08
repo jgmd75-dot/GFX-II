@@ -139,17 +139,6 @@ function pp(dv, ir, sg, ct, t, r, a, rl, mu, au, ci, tr) (
   slider1 = dv; slider2 = ir; slider3 = sg; slider9 = ct; slider4 = t; slider5 = r; slider6 = a; slider7 = rl;
   slider8 = mu; slider12 = au; slider11 = ci; slider10 = tr;
 );
-function pname(p) (
-  p == 1 ? "Clean Sum" :
-  p == 2 ? "Warm Console" :
-  p == 3 ? "Driven Desk" :
-  p == 4 ? "Broadcast Glue" :
-  p == 5 ? "Heavy Iron" :
-  p == 6 ? "Punch Bus" :
-  p == 7 ? "Stressed Rail" :
-  p == 8 ? "Straight Sum (no colour)" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? pp(0, 0.1, 0.03, -60, -12, 2, 5, 200, 0, 0, 0, 0) :        // Clean Sum
   p == 2 ? pp(3, 0.3, 0.06, -54, -14, 2, 10, 250, 1, 0, 1, -1) :       // Warm Console
@@ -180,7 +169,6 @@ PNL = 0x74777C; INKW = 0xF4F2EA; YEL = 0xF2D04A; KDK = 0x3A3C40;
 update();
 i = 0; loop(8, SG[i] = SGT[i]; i += 1; );
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
-cur_preset = 1;
 
 @slider
 update();
@@ -265,26 +253,11 @@ ui_col(INKW); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKW); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("M-SUM");
 gfx_setfont(4); ui_col(YEL); gfx_x = 160 * sc; gfx_y = 30 * sc; gfx_drawstr("BROADCAST CONSOLE SUMMING BUS");
-ui_button(528 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 9 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(556 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 9 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
   gfx_x = 590 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("Clean Sum|Warm Console|Driven Desk|Broadcast Glue|Heavy Iron|Punch Bus|Stressed Rail|Straight Sum (no colour)|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Clean Sum|Warm Console|Driven Desk|Broadcast Glue|Heavy Iron|Punch Bus|Stressed Rail|Straight Sum (no colour)|Reset all to defaults"));
 );
 ui_size_picker(700 * sc, 22 * sc);
-pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_col(YEL); gfx_rect(14 * sc, 60 * sc, 872 * sc, 2 * sc);
 
 // ---------- STEMS ----------

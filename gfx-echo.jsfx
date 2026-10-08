@@ -150,18 +150,6 @@ function setp(m, sy, tm, dv, f, drp, lc, hc, dk, pp, w, flp, mx) (
   slider1 = m; slider2 = sy; slider3 = tm; slider4 = dv; slider5 = f; slider6 = drp; slider7 = lc; slider8 = hc;
   slider9 = dk; slider10 = pp; slider12 = w; slider13 = flp; slider15 = mx; slider11 = 0;
 );
-function pname(p) (
-  p == 1 ? "Tape Dotted Eighth" :
-  p == 2 ? "Slapback" :
-  p == 3 ? "Dub Siren" :
-  p == 4 ? "Bucket Ping-Pong" :
-  p == 5 ? "Memory Lane" :
-  p == 6 ? "Vocal Quarter (ducked)" :
-  p == 7 ? "Digital Triplet Ping" :
-  p == 8 ? "Ambient Wash" :
-  p == 9 ? "Runaway Tape" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? setp(0, 1, 375, 10, 40, 30, 120, 6000, 0,  0, 20, 15, 35) :     // Tape Dotted Eighth
   p == 2 ? setp(0, 0, 110, 10, 20, 40, 150, 5000, 0,  0, 15, 20, 30) :     // Slapback
@@ -193,7 +181,6 @@ vuc = 1 - exp(-1 / (0.01 * srate));
 dk_a = 1 - exp(-1 / (0.005 * srate)); dk_r = 1 - exp(-1 / (0.25 * srate));
 pkL = 0; pkR = 0; vu_ms = 0; denv = 0; fph = 0; cph = 0;
 vt_m = -1;
-cur_preset = 1;
 !ui_dflt ? ui_thm = 0; !ui_dflt ? ui_hw = 1;  // defaults for new instances: Studio theme, hardware
 update();
 t_s = t_ms * 0.001 * srate;
@@ -302,24 +289,11 @@ rd_sub(170, 30, "STEREO DELAY LINE", DIM, 1);
 rd_sq(400, 20, 66, 24, slider1 == 0, BLU, "TAPE")    ? setv(1, 0);
 rd_sq(470, 20, 66, 24, slider1 == 1, BLU, "BUCKET")  ? setv(1, 1);
 rd_sq(540, 20, 66, 24, slider1 == 2, BLU, "DIGITAL") ? setv(1, 2);
-rd_sq(758, 20, 26, 24, 0, 0x6A7484, "<") ? (
-  cur_preset = cur_preset <= 1 ? 10 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-rd_sq(786, 20, 26, 24, 0, 0x6A7484, ">") ? (
-  cur_preset = cur_preset >= 10 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 rd_sq(820, 20, 80, 24, 0, 0x6A7484, "PRESETS") ? (
   gfx_x = 820 * sc; gfx_y = 44 * sc;
-  cur_preset = gfx_showmenu("Tape Dotted Eighth|Slapback|Dub Siren|Bucket Ping-Pong|Memory Lane|Vocal Quarter (ducked)|Digital Triplet Ping|Ambient Wash|Runaway Tape|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Tape Dotted Eighth|Slapback|Dub Siren|Bucket Ping-Pong|Memory Lane|Vocal Quarter (ducked)|Digital Triplet Ping|Ambient Wash|Runaway Tape|Reset all to defaults"));
 );
 ui_size_picker(930 * sc, 22 * sc);
-pk_lcd(820 * sc, 47 * sc, 224 * sc, 16 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 826 * sc; gfx_y = 50 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
-
 
 // ---------- readout + repeat ladder ----------
 ui_col(0x0B0B0C); rd_rr(44 * sc, 78 * sc, 290 * sc, 112 * sc, 5 * sc);

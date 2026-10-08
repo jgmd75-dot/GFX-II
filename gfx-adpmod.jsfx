@@ -163,12 +163,6 @@ function update() (
   ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, slider21);
 );
 
-function pname(p) (
-  p == 1 ? "Vocal Ring (Classic)" :
-  p == 2 ? "Sub Tremolo" :
-  p == 3 ? "Metallic Chaos" :
-  "Subtle Saturation Mod";
-);
 function load_preset(p) (
   p == 1 ? ( slider1 = 0; slider3 = 440; slider5 = 0; slider6 = 2; slider7 = 100; slider8 = 30; slider9 = 2500; slider10 = 70; ) :
   p == 2 ? ( slider1 = 1; slider3 = 6.5; slider5 = 1; slider6 = 5; slider7 = 80; slider8 = 60; slider9 = 1500; slider10 = 50; ) :
@@ -190,7 +184,6 @@ ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 in_init();
 pkL = 0; pkR = 0; vu_ms = 0;
 phaseL = 0; phaseR = 0;
-cur_preset = 1;
 
 !ui_dflt ? ui_thm = 0; !ui_dflt ? ui_hw = 0;
 update();
@@ -339,24 +332,11 @@ rd_led(475, 12, 2.5, slider1 == 0, GOLD);
 rd_led(529, 12, 2.5, slider1 == 1, GOLD); 
 rd_led(583, 12, 2.5, slider1 == 2, GOLD);
 
-rd_sq(665, 18, 15, 26, 0, GOLD, "<") ? (
-  cur_preset = cur_preset <= 1 ? 4 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-rd_sq(682, 18, 15, 26, 0, GOLD, ">") ? (
-  cur_preset = cur_preset >= 4 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 rd_sq(700, 18, 80, 26, 0, GOLD, "PRESETS") ? (
   gfx_x = 700 * sc; gfx_y = 44 * sc;
-  cur_preset = gfx_showmenu("Vocal Ring (Classic)|Sub Tremolo|Metallic Chaos|Subtle Saturation Mod");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Vocal Ring (Classic)|Sub Tremolo|Metallic Chaos|Subtle Saturation Mod"));
 );
 ui_size_picker(800 * sc, 21 * sc);
-pk_lcd(700 * sc, 47 * sc, 184 * sc, 16 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 706 * sc; gfx_y = 50 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
-
 // ---------- Animated Scope Display Window ----------
 ui_col(0x000000); rd_rr(40 * sc, 74 * sc, 300 * sc, 130 * sc, 6 * sc); // Increased height from 100 to 130
 ui_col(0x111100); gfx_rect(44 * sc, 78 * sc, 292 * sc, 122 * sc, 6 * sc); // Increased height from 92 to 122

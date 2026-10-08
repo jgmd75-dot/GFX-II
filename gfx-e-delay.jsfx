@@ -108,19 +108,6 @@ function setp(m, tl, tr, sy, dl, dr, fbk, xfd, lc, hc, md, mr, pt, dk, dr_, tp, 
   slider1 = m; slider2 = tl; slider3 = tr; slider4 = sy; slider5 = dl; slider6 = dr; slider7 = fbk; slider8 = xfd; slider9 = lc; slider10 = hc;
   slider12 = md; slider13 = mr; slider14 = pt; slider15 = dk; slider16 = dr_; slider17 = tp; slider23 = mx;
 );
-function pname(p) (
-  p == 1 ? "Slapback" :
-  p == 2 ? "Quarter Note Echo" :
-  p == 3 ? "Ping-Pong Eighths" :
-  p == 4 ? "Dynamic Vocal Echo" :
-  p == 5 ? "Wide Stereo Doubler" :
-  p == 6 ? "Rhythm Taps" :
-  p == 7 ? "Tap Chorus" :
-  p == 8 ? "Shimmer Up" :
-  p == 9 ? "Falling Echoes" :
-  p == 10 ? "Endless Wash" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? setp(0, 95, 110, 0, 8, 4, 10, 0, 120, 7000, 0, 0.8, 0, 0, 400, 6, 25) :          // Slapback
   p == 2 ? setp(0, 375, 500, 1, 4, 4, 35, 0, 100, 8000, 0, 0.8, 0, 0, 400, 6, 25) :          // Quarter Note Echo
@@ -173,7 +160,6 @@ in_init();
 sm = 1 - exp(-1 / (0.03 * srate));
 dk_a = 1 - exp(-1 / (0.005 * srate));
 pkL = pkR = 0; piL = piR = 0; dk_e = 0; dk_g = 1; lph = 0;
-cur_preset = 1;
 update();
 mix_s = mix_t; out_s = out_t; pL = tLs; pR = tRs;
 
@@ -359,7 +345,6 @@ gfx_setfont(6, "Arial", 11 * sc, 'b'); ui_col(ui_mix(ALU, INK, 0.75)); gfx_x = 1
 gfx_drawstr(mdl == 0 ? "DIGITAL DELAY LINE  -  CRYSTAL" : mdl == 1 ? "DYNAMIC DELAY  -  DUCKING" : mdl == 2 ? "STEREO MULTI-TAP DELAY" : "AUDIO TIME PROCESSOR  -  PITCH LOOP");
 ui_size_picker(1360 * sc, 14 * sc);
 
-
 // ---------- meters, models, keys ----------
 group(16, 50, 290, 244, "DELAY PROCESSOR");
 vdi = 20 * log10(max(max(piL, piR), 0.000001)) + 18; vin += (vdi - vin) * 0.3;
@@ -371,27 +356,13 @@ lbtn(28, 192, 128, 30, "MULTI-TAP", mdl == 2) ? ( slider1 = 2; ui_auto(1); updat
 lbtn(166, 192, 128, 30, "TIME STRETCH", mdl == 3) ? ( slider1 = 3; ui_auto(1); update(); );
 lbtn(28, 230, 128, 26, "SYNC", slider4) ? ( slider4 = 1 - slider4; ui_auto(4); update(); );
 lbtn(166, 230, 128, 26, "VINTAGE", slider18) ? ( slider18 = 1 - slider18; ui_auto(18); update(); );
-lbtn(28, 262, 20, 26, "<", 0) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
+lbtn(28, 262, 84, 26, "PRESETS", 0) ? (
+  gfx_x = 28 * sc; gfx_y = 288 * sc;
+  load_preset(gfx_showmenu("Slapback|Quarter Note Echo|Ping-Pong Eighths|Dynamic Vocal Echo|Wide Stereo Doubler|Rhythm Taps|Tap Chorus|Shimmer Up|Falling Echoes|Endless Wash|Reset all to defaults"));
 );
-lbtn(50, 262, 20, 26, ">", 0) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
-lbtn(78, 262, 60, 26, "PRESETS", 0) ? (
-  gfx_x = 78 * sc; gfx_y = 288 * sc;
-  cur_preset = gfx_showmenu("Slapback|Quarter Note Echo|Ping-Pong Eighths|Dynamic Vocal Echo|Wide Stereo Doubler|Rhythm Taps|Tap Chorus|Shimmer Up|Falling Echoes|Endless Wash|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
-);
-ui_col(WIN); lz_rr(145, 262, 149, 26, 3);
-gfx_setfont(6, "Courier New", 15 * sc, 'b'); ui_col(CHR); gfx_x = 152 * sc; gfx_y = 267 * sc;
+ui_col(WIN); lz_rr(119, 262, 175, 26, 3);
+gfx_setfont(6, "Courier New", 15 * sc, 'b'); ui_col(CHR); gfx_x = 126 * sc; gfx_y = 267 * sc;
 lastp > 0 ? gfx_printf("P%d %s", lastp, slider4 ? "SYNC" : "FREE") : gfx_drawstr(slider4 ? "P-- SYNC" : "P-- FREE");
-pk_lcd(304 * sc, 262 * sc, 150 * sc, 26 * sc, 0);
-pk_lcdfont(9, 8 * sc); ui_col(pk_lcdc);
-gfx_x = 310 * sc; gfx_y = 265 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 8 * sc); ui_col(pk_lcdc);
-gfx_x = 310 * sc; gfx_y = 276 * sc; gfx_drawstr(pname(cur_preset));
 txt(196, 34, slider4 ? sprintf(#tb, "TEMPO %.1f BPM", tempo) : "TIME IN MILLISECONDS", 9, 0.7);
 
 // ---------- the displays ----------

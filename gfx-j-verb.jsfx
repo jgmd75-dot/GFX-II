@@ -167,19 +167,6 @@ function setp(m, erd, erl, rvd, rvl, t, hi, lo, vol, dn, df, lc, hc, dr, ck, bt,
   slider1 = m; slider2 = erd; slider3 = erl; slider4 = rvd; slider5 = rvl; slider6 = t; slider7 = hi; slider8 = lo; slider9 = vol;
   slider10 = dn; slider11 = df; slider12 = lc; slider13 = hc; slider14 = dr; slider15 = ck; slider16 = bt; slider17 = wd; slider20 = mx;
 );
-function pname(p) (
-  p == 1 ? "Massive Hall" :
-  p == 2 ? "Vocal Hall" :
-  p == 3 ? "Synth Pad Space" :
-  p == 4 ? "3D Scoring Stage" :
-  p == 5 ? "Film Room" :
-  p == 6 ? "Studio Room 40" :
-  p == 7 ? "Acoustic Guitar (vintage)" :
-  p == 8 ? "80s Vocal Plate" :
-  p == 9 ? "Drum Room 12-Bit" :
-  p == 10 ? "Synthwave Wash" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? setp(0, 14, -10, 40, 0, 4.5, 0.5, 1.2, 8000, 60, 80, 50, 10000, 0, 0, 1, 130, 30) :     // Massive Hall
   p == 2 ? setp(0, 10, -8, 30, 0, 2.6, 0.6, 1.0, 3000, 60, 70, 100, 13000, 0, 0, 1, 120, 25) :     // Vocal Hall
@@ -237,7 +224,6 @@ ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 in_init();
 sm = 1 - exp(-1 / (0.03 * srate));
 pkL = pkR = 0; piL = piR = 0;
-cur_preset = 1;
 update();
 mix_s = mix_t; out_s = out_t;
 
@@ -395,7 +381,6 @@ gfx_setfont(6, "Arial", 11 * sc, 'b'); ui_col(ui_mix(S_FACE, S_INK, 0.8)); gfx_x
 gfx_drawstr(mdl == 0 ? "MODULAR DIGITAL HALL SYSTEM" : mdl == 1 ? "DIGITAL BROADCAST REVERBERATOR  -  3D" : mdl == 2 ? "DIGITAL REVERBERATOR  -  40 REFLECTIONS" : "DIGITAL REVERBERATOR  -  PCM 12-BIT");
 ui_size_picker(1360 * sc, 12 * sc);
 
-
 // headroom (input) and reverb LEDs
 cap(26, 52, 180, "HEADROOM");
 gi = 0; loop(4, gd_ = gi == 0 ? -30 : gi == 1 ? -20 : gi == 2 ? -10 : 0;
@@ -413,26 +398,12 @@ key(120, 166, 86, 46, S_KM, "D  12-BIT", "", mdl == 3, 0) ? ( slider1 = 3; ui_au
 key(26, 224, 86, 38, S_KG, "VINTAGE", "CLOCK", slider15 || mdl == 3, 0) ? ( slider15 = 1 - slider15; ui_auto(15); update(); );
 key(120, 224, 86, 38, S_KG, "BITS", slider16 == 0 ? "12" : slider16 == 1 ? "16" : "24", -1, 0) ? ( slider16 = (slider16 + 1) % 3; ui_auto(16); update(); );
 // presets and the last one recalled
-key(26, 274, 22, 34, S_KN, "<", "", -1, 0) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
+key(26, 274, 86, 34, S_KN, "READ", "PRESETS", -1, 0) ? (
+  gfx_x = 26 * sc; gfx_y = 308 * sc;
+  load_preset(gfx_showmenu("Massive Hall|Vocal Hall|Synth Pad Space|3D Scoring Stage|Film Room|Studio Room 40|Acoustic Guitar (vintage)|80s Vocal Plate|Drum Room 12-Bit|Synthwave Wash|Reset all to defaults"));
 );
-key(50, 274, 22, 34, S_KN, ">", "", -1, 0) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
-key(76, 274, 72, 34, S_KN, "READ", "PRESETS", -1, 0) ? (
-  gfx_x = 76 * sc; gfx_y = 308 * sc;
-  cur_preset = gfx_showmenu("Massive Hall|Vocal Hall|Synth Pad Space|3D Scoring Stage|Film Room|Studio Room 40|Acoustic Guitar (vintage)|80s Vocal Plate|Drum Room 12-Bit|Synthwave Wash|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
-);
-ui_col(S_WIN); lz_rr(152, 274, 72, 34, 4);
-seg_str(162 * sc, 280 * sc, 11 * sc, 22 * sc, 3, lastp > 0 ? sprintf(#pn, "P%d", lastp) : "P--", S_ON, ui_mix(S_WIN, S_OFF, 0.4));
-pk_lcd(234 * sc, 274 * sc, 140 * sc, 34 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 240 * sc; gfx_y = 278 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 240 * sc; gfx_y = 292 * sc; gfx_drawstr(pname(cur_preset));
+ui_col(S_WIN); lz_rr(120, 274, 86, 34, 4);
+seg_str(130 * sc, 280 * sc, 11 * sc, 22 * sc, 3, lastp > 0 ? sprintf(#pn, "P%d", lastp) : "P--", S_ON, ui_mix(S_WIN, S_OFF, 0.4));
 
 // ---------- the lamp rows: quick settings ----------
 lamps(230, 52, "LOW CUT FREQ", 10, 30, 50, 100, 200, "30", "50", "100", "200");

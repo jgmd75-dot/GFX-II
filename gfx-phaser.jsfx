@@ -119,19 +119,6 @@ function setp(v, st, sh, sy, fr, dv, ce, de, fb, sp, mx, r_, d_, c_, mo) (
   slider7 = ce; slider8 = de; slider9 = fb; slider10 = sp; slider11 = mx;
   slider12 = r_; slider13 = d_; slider14 = c_; slider17 = mo;
 );
-function pname(p) (
-  p == 1 ? "90 Script" :
-  p == 2 ? "90 Block" :
-  p == 3 ? "90 Slow Swell" :
-  p == 4 ? "Opto Lush" :
-  p == 5 ? "Opto Square Throb" :
-  p == 6 ? "Opto Stereo Swirl" :
-  p == 7 ? "Opto Vibrato" :
-  p == 8 ? "Hand Tape Phasing" :
-  p == 9 ? "Tape Jet" :
-  p == 10 ? "Through-Zero Sweep" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1  ? setp(0, 1, 1, 0, 0.6,  2, 50, 80,   0,   0,  50,  5,  5,  5, 1) :
   p == 2  ? setp(0, 1, 1, 0, 0.6,  2, 50, 80,  40,   0,  50,  5,  5,  5, 1) :
@@ -184,7 +171,6 @@ in_init();
 vuc = 1 - exp(-1 / (0.01 * srate)); vu_ms = 0;
 !ui_dflt ? ui_thm = 4; !ui_dflt ? ui_hw = 1;
 pkL = 0; pkR = 0;
-cur_preset = 1;
 
 update();
 cent_s = cent_t; depth_s = depth_t; fb_s = fb_t; mix_s = mix_t; out_s = out_t;
@@ -332,24 +318,11 @@ rd_sq(400, 22, 56, 26, slider1 == 0, C90, "90")   ? setv(1, 0);
 rd_sq(462, 22, 56, 26, slider1 == 1, COPT, "OPTO") ? setv(1, 1);
 rd_sq(524, 22, 56, 26, slider1 == 2, CTAP, "TAPE") ? setv(1, 2);
 rd_lbl(490, 52, "VOICING", DIM, 1);
-rd_sq(758, 22, 26, 26, 0, 0x8A8D92, "<") ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-rd_sq(786, 22, 26, 26, 0, 0x8A8D92, ">") ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 rd_sq(820, 22, 80, 26, 0, 0x8A8D92, "PRESETS") ? (
   gfx_x = 820 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("90 Script|90 Block|90 Slow Swell|Opto Lush|Opto Square Throb|Opto Stereo Swirl|Opto Vibrato|Hand Tape Phasing|Tape Jet|Through-Zero Sweep|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("90 Script|90 Block|90 Slow Swell|Opto Lush|Opto Square Throb|Opto Stereo Swirl|Opto Vibrato|Hand Tape Phasing|Tape Jet|Through-Zero Sweep|Reset all to defaults"));
 );
 ui_size_picker(930 * sc, 24 * sc);
-pk_lcd(820 * sc, 51 * sc, 224 * sc, 16 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 826 * sc; gfx_y = 54 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
-
 
 ui_col(0x050505); ui_rrect(44 * sc, 84 * sc, 290 * sc, 108 * sc, 4 * sc);
 ui_col(ui_mix(ORG, 0x000000, 0.84)); gfx_rect(48 * sc, 88 * sc, 282 * sc, 100 * sc);

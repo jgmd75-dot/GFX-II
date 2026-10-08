@@ -112,19 +112,6 @@ function pc(on, t, r, a, rl, g, lm, xm, lk, mx) (
   slider1 = on; slider2 = t; slider3 = r; slider4 = a; slider5 = rl; slider6 = g; slider7 = lm;
   slider13 = xm; slider14 = lk; slider15 = mx;
 );
-function pname(p) (
-  p == 1 ? "Desk Glue" :
-  p == 2 ? "Presenter Voice" :
-  p == 3 ? "Tight Drums (gated)" :
-  p == 4 ? "Kick / Snare Gate" :
-  p == 5 ? "Parallel Squash" :
-  p == 6 ? "Transmitter Limit" :
-  p == 7 ? "Acoustic Clean-up" :
-  p == 8 ? "Bass DI" :
-  p == 9 ? "Transformer Only" :
-  p == 10 ? "Gentle Programme Bus" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1  ? ( pg(0, -50, 20, 200, 1); pc(1, -20, 2.5, 5, 300, 3, 0, 1, 1, 100); ) :      // Desk Glue
   p == 2  ? ( pg(1, -55, 12, 250, 1); pc(1, -26, 4, 2, 150, 6, -2, 1, 1, 100); ) :      // Presenter Voice
@@ -156,7 +143,6 @@ sm = 1 - exp(-1 / (0.03 * srate));
 L.lg = 1; R.lg = 1;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
 PNL = 0x2C2C2E; INKC = 0xEDE6D8; BRN = 0x5C3A22; BRNL = 0x7A4E2E; ORG = 0xE8782A; YEL = 0xF0C030;
-cur_preset = 1;
 update();
 mix_s = mix_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
@@ -222,26 +208,11 @@ ui_col(ORG); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKC); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("CONSOLE");
 gfx_setfont(4); ui_col(YEL); gfx_x = 210 * sc; gfx_y = 30 * sc; gfx_drawstr("BROADCAST DESK DYNAMICS");
-ui_button(528 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(556 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
   gfx_x = 590 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("Desk Glue|Presenter Voice|Tight Drums (gated)|Kick / Snare Gate|Parallel Squash|Transmitter Limit|Acoustic Clean-up|Bass DI|Transformer Only|Gentle Programme Bus|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Desk Glue|Presenter Voice|Tight Drums (gated)|Kick / Snare Gate|Parallel Squash|Transmitter Limit|Acoustic Clean-up|Bass DI|Transformer Only|Gentle Programme Bus|Reset all to defaults"));
 );
 ui_size_picker(700 * sc, 22 * sc);
-pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_col(ORG); gfx_rect(14 * sc, 60 * sc, 580 * sc, 4 * sc);
 ui_col(YEL); gfx_rect(594 * sc, 60 * sc, 292 * sc, 4 * sc);
 

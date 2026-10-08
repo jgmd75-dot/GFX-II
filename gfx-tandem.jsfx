@@ -126,20 +126,6 @@ function grit(x, gr) instance(dcx, dcy) local(u, k2, y) (
 function p1(on, t, c, o, hd, dc, ky) ( slider1 = on; slider2 = t; slider3 = c; slider4 = o; slider5 = hd; slider6 = dc; slider7 = ky; );
 // stage 2: in, threshold, compression, output, hard, grit; then SC HPF and MIX
 function p2(on, t, c, o, hd, gr, hp, mx) ( slider8 = on; slider9 = t; slider10 = c; slider11 = o; slider12 = hd; slider13 = gr; slider14 = hp; slider15 = mx; );
-function pname(p) (
-  p == 1 ? "Gentle Glue" :
-  p == 2 ? "Vocal Leveller" :
-  p == 3 ? "Vocal Upfront" :
-  p == 4 ? "Drum Bus Stack" :
-  p == 5 ? "Parallel Crush" :
-  p == 6 ? "Bass Even" :
-  p == 7 ? "Acoustic Guitar" :
-  p == 8 ? "Peak Catcher" :
-  p == 9 ? "Negative Pump" :
-  p == 10 ? "Reverse Swell" :
-  p == 11 ? "Ducker (ext key)" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1  ? ( p1(1, -24, 0.33, 1, 0, 0, 0); p2(1, -14, 0.5,  1, 0, 0, 0,   100); ) :   // Gentle Glue
   p == 2  ? ( p1(1, -30, 0.5,  3, 0, 0, 0); p2(1, -16, 0.8,  2, 0, 0, 80,  100); ) :   // Vocal Leveller
@@ -180,7 +166,6 @@ sm = 1 - exp(-1 / (0.03 * srate));
 PNL = 0x1F2023; INK = 0xE8E6E0;
 CAP_T = 0xD8392B; CAP_R = 0xE8C22E; CAP_O = 0x2F7FD0; CAP_M = 0xB8BCC2;   // knob caps: threshold, ratio, output, master
 REDL = 0xFF3A2A; AMBL = 0xFFB030; GRNL = 0x46D86A; BLUL = 0x4AA8FF;
-cur_preset = 1;
 update();
 mix_s = mix_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
@@ -340,26 +325,11 @@ ui_col(INK); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INK); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("TANDEM");
 gfx_setfont(4); ui_cola(INK, 0.6); gfx_x = 186 * sc; gfx_y = 30 * sc; gfx_drawstr("TWO-STAGE RMS COMPRESSOR");
-ui_button(526 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 12 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(554 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 12 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
   gfx_x = 590 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("Gentle Glue|Vocal Leveller|Vocal Upfront|Drum Bus Stack|Parallel Crush|Bass Even|Acoustic Guitar|Peak Catcher|Negative Pump|Reverse Swell|Ducker (ext key)|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Gentle Glue|Vocal Leveller|Vocal Upfront|Drum Bus Stack|Parallel Crush|Bass Even|Acoustic Guitar|Peak Catcher|Negative Pump|Reverse Swell|Ducker (ext key)|Reset all to defaults"));
 );
 ui_size_picker(700 * sc, 22 * sc);
-pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-
 // the colour stripe under the header: the three cap colours
 ui_col(CAP_T); gfx_rect(14 * sc, 60 * sc, 290 * sc, 3 * sc);
 ui_col(CAP_R); gfx_rect(304 * sc, 60 * sc, 290 * sc, 3 * sc);

@@ -1,0 +1,832 @@
+desc:gfx-quad22
+// gfx-quad22 - Dolby A-Style 4-Band Compander / Saturator / EQ
+//tags: dynamics multiband saturation eq
+//author: Emergent (inspired by the Dolby Model 361 + Cat. No. 22 card)
+//
+// A modern rebuild of the Dolby A "Cat 22" idea as a 4-band channel strip.
+// Splits audio at 80 Hz / 3 kHz / 9 kHz with phase-coherent Linkwitz-Riley (LR4)
+// crossovers, then runs each band through Saturation -> EQ -> Compander -> Gain,
+// sums the bands, blends with the phase-aligned dry signal (Mix), then master trim + ceiling limiter.
+// Compander: left = Dolby-encode-style upward lift, right = Dolby-decode-style downward expansion.
+
+slider2:0<-24,24,0.1>-Master Trim (dB)
+slider3:-0.3<-12,0,0.1>-Ceiling (dB)
+slider4:0<0,1,1{Light Grey,Dark Blue}>-Theme
+slider5:100<0,100,1>-Dry/Wet Mix (%)
+slider6:0<0,7,1{Init,Dolby Air,Gentle Glue,Tape Master,Vocal Presence,Low-End Control,Analog Sheen,Loudness Push}>-Preset
+
+slider10:2<0,3,1{Off,Transformer,Tape,Transistor}>-B1 Sat Type
+slider11:0<0,100,1>-B1 Drive
+slider13:0<-12,12,0.1>-B1 Low Shelf 50 Hz (dB)
+slider14:0<-100,100,1>-B1 Compand (<0 Comp / >0 Exp)
+slider17:0<-24,24,0.1>-B1 Gain (dB)
+slider18:0<0,1,1{Off,On}>-B1 Solo
+slider19:0<0,1,1{Off,On}>-B1 Bypass
+
+slider20:1<0,3,1{Off,Transformer,Tape,Transistor}>-B2 Sat Type
+slider21:0<0,100,1>-B2 Drive
+slider23:0<-12,12,0.1>-B2 Bell 800 Hz (dB)
+slider24:0<-100,100,1>-B2 Compand (<0 Comp / >0 Exp)
+slider27:0<-24,24,0.1>-B2 Gain (dB)
+slider28:0<0,1,1{Off,On}>-B2 Solo
+slider29:0<0,1,1{Off,On}>-B2 Bypass
+
+slider30:2<0,3,1{Off,Transformer,Tape,Transistor}>-B3 Sat Type
+slider31:0<0,100,1>-B3 Drive
+slider33:0<-12,12,0.1>-B3 Bell 5 kHz (dB)
+slider34:0<-100,100,1>-B3 Compand (<0 Comp / >0 Exp)
+slider37:0<-24,24,0.1>-B3 Gain (dB)
+slider38:0<0,1,1{Off,On}>-B3 Solo
+slider39:0<0,1,1{Off,On}>-B3 Bypass
+
+slider40:0<0,3,1{Off,Transformer,Tape,Transistor}>-B4 Sat Type
+slider41:0<0,100,1>-B4 Drive
+slider43:0<-12,12,0.1>-B4 High Shelf 12 kHz (dB)
+slider44:0<-100,100,1>-B4 Compand (<0 Comp / >0 Exp)
+slider47:0<-24,24,0.1>-B4 Gain (dB)
+slider48:0<0,1,1{Off,On}>-B4 Solo
+slider49:0<0,1,1{Off,On}>-B4 Bypass
+
+@init
+nextmem = 0;
+function alloc(n) local(ptr) ( ptr = nextmem; nextmem += n; ptr; );
+
+// Standard Butterworth Q
+compass_q = 0.70710678;
+
+// ---- biquad (coeffs in p[0..4], state in p[5..8]) ----
+function bq(x, p) local(y) (
+  y = p[0]*x + p[1]*p[5] + p[2]*p[6] - p[3]*p[7] - p[4]*p[8];
+  p[6] = p[5]; p[5] = x; p[8] = p[7]; p[7] = y;
+  y;
+);
+
+function setLP(p, f) local(w,c,s,al,a0) (
+  w = 2*$pi*f/srate; c = cos(w); s = sin(w); al = s/(2*compass_q); a0 = 1+al;
+  p[0] = ((1-c)*0.5)/a0; p[1] = (1-c)/a0; p[2] = ((1-c)*0.5)/a0;
+  p[3] = (-2*c)/a0; p[4] = (1-al)/a0;
+  p[5]=0; p[6]=0; p[7]=0; p[8]=0;
+);
+
+function setHP(p, f) local(w,c,s,al,a0) (
+  w = 2*$pi*f/srate; c = cos(w); s = sin(w); al = s/(2*compass_q); a0 = 1+al;
+  p[0] = ((1+c)*0.5)/a0; p[1] = -(1+c)/a0; p[2] = ((1+c)*0.5)/a0;
+  p[3] = (-2*c)/a0; p[4] = (1-al)/a0;
+  p[5]=0; p[6]=0; p[7]=0; p[8]=0;
+);
+
+// ---- All-Pass Filter Coefficient Calculator (2nd Order, Q=0.7071) ----
+function setAP(p, f) local(w,c,s,al,a0) (
+  w = 2*$pi*f/srate; c = cos(w); s = sin(w); al = s/(2*compass_q); a0 = 1+al;
+  p[0] = (1 - al) / a0;
+  p[1] = (-2 * c) / a0;
+  p[2] = (1 + al) / a0;
+  p[3] = (-2 * c) / a0;
+  p[4] = (1 - al) / a0;
+  p[5]=0; p[6]=0; p[7]=0; p[8]=0;
+);
+
+// Allocate 18 slots each (9 floats per channel: ch 0=0..8, ch 1=9..17)
+lp80a = alloc(18); lp80b = alloc(18); hp80a = alloc(18); hp80b = alloc(18);
+lp3a  = alloc(18); lp3b  = alloc(18); hp3a  = alloc(18); hp3b  = alloc(18);
+lp9a  = alloc(18); lp9b  = alloc(18); hp9a  = alloc(18); hp9b  = alloc(18);
+
+// LR4 crossover alignment: an LR4 low/high pair sums to ONE 2nd-order all-pass (Q 0.7071)
+a13a = alloc(18); // Band 1 phase correction for 3 kHz split
+a19a = alloc(18); // Band 1 phase correction for 9 kHz split
+a29a = alloc(18); // Band 2 phase correction for 9 kHz split
+
+// Clean direct path allpass chain for perfect phase alignment with LR4 crossover
+adir1a = alloc(18); // 80 Hz
+adir2a = alloc(18); // 3 kHz
+adir3a = alloc(18); // 9 kHz
+
+F1 = 80; F2 = 3000; F3 = 9000;
+function setupCh(co) (
+  setLP(lp80a+co, F1); setLP(lp80b+co, F1); setHP(hp80a+co, F1); setHP(hp80b+co, F1);
+  setLP(lp3a+co,  F2); setLP(lp3b+co,  F2); setHP(hp3a+co,  F2); setHP(hp3b+co,  F2);
+  setLP(lp9a+co,  F3); setLP(lp9b+co,  F3); setHP(hp9a+co,  F3); setHP(hp9b+co,  F3);
+  
+  // Alignment all-passes: one 2nd-order stage per crossover
+  setAP(a13a+co, F2);
+  setAP(a19a+co, F3);
+  setAP(a29a+co, F3);
+
+  // Direct path alignment (80 Hz, 3 kHz, 9 kHz)
+  setAP(adir1a+co, F1);
+  setAP(adir2a+co, F2);
+  setAP(adir3a+co, F3);
+);
+setupCh(0); setupCh(9);
+
+// ---- Per-band EQ: RBJ biquads (coeffs only; state is NOT reset so gain moves don't click) ----
+function setLowShelf(p, f, gdb) local(A,w,c,s,al,sa,a0) (
+  A = 10^(gdb/40); w = 2*$pi*f/srate; c = cos(w); s = sin(w);
+  al = s/2*sqrt(2); sa = 2*sqrt(A)*al;            // shelf slope S = 1
+  a0 = (A+1) + (A-1)*c + sa;
+  p[0] = A*((A+1) - (A-1)*c + sa)/a0;
+  p[1] = 2*A*((A-1) - (A+1)*c)/a0;
+  p[2] = A*((A+1) - (A-1)*c - sa)/a0;
+  p[3] = -2*((A-1) + (A+1)*c)/a0;
+  p[4] = ((A+1) + (A-1)*c - sa)/a0;
+);
+
+function setHighShelf(p, f, gdb) local(A,w,c,s,al,sa,a0) (
+  A = 10^(gdb/40); w = 2*$pi*f/srate; c = cos(w); s = sin(w);
+  al = s/2*sqrt(2); sa = 2*sqrt(A)*al;
+  a0 = (A+1) - (A-1)*c + sa;
+  p[0] = A*((A+1) + (A-1)*c + sa)/a0;
+  p[1] = -2*A*((A-1) + (A+1)*c)/a0;
+  p[2] = A*((A+1) + (A-1)*c - sa)/a0;
+  p[3] = 2*((A-1) - (A+1)*c)/a0;
+  p[4] = ((A+1) - (A-1)*c - sa)/a0;
+);
+
+function setBell(p, f, gdb, q) local(A,w,c,s,al,a0) (
+  A = 10^(gdb/40); w = 2*$pi*f/srate; c = cos(w); s = sin(w);
+  al = s/(2*q);
+  a0 = 1 + al/A;
+  p[0] = (1 + al*A)/a0;
+  p[1] = (-2*c)/a0;
+  p[2] = (1 - al*A)/a0;
+  p[3] = (-2*c)/a0;
+  p[4] = (1 - al/A)/a0;
+);
+
+// 18 slots per band (ch 0 = 0..8, ch 1 = 9..17)
+eq1 = alloc(18); eq2 = alloc(18); eq3 = alloc(18); eq4 = alloc(18);
+memset(eq1, 0, 18); memset(eq2, 0, 18); memset(eq3, 0, 18); memset(eq4, 0, 18);
+
+// B1 = low shelf 50 Hz, B2 = bell 800 Hz, B3 = bell 5 kHz, B4 = high shelf 12 kHz (bell Q 0.7)
+function updEQ() (
+  setLowShelf(eq1, 50, slider13);      setLowShelf(eq1+9, 50, slider13);
+  setBell(eq2, 800, slider23, 0.7);    setBell(eq2+9, 800, slider23, 0.7);
+  setBell(eq3, 5000, slider33, 0.7);   setBell(eq3+9, 5000, slider33, 0.7);
+  setHighShelf(eq4, 12000, slider43);  setHighShelf(eq4+9, 12000, slider43);
+  lg1 = slider13; lg2 = slider23; lg3 = slider33; lg4 = slider43;
+);
+updEQ();
+
+// compander envelope coefficients (Dolby Cat 22 fast-attack, dual-stage release approximation)
+atkC = 1 - exp(-1/(0.003 * srate)); // 3ms attack
+relC = 1 - exp(-1/(0.075 * srate)); // 75ms release
+relLF = 1 - exp(-1/(0.200 * srate)); // 200ms release for Band 1 (stops envelope ripple modulating sub-bass)
+
+// compander state (8)
+cmpS = alloc(8);
+
+// DC blocker state for asymmetric Transistor model (4 bands * 2 ch * 2 = 16), ~5 Hz
+dcS = alloc(16);
+dcR = 1 - 2*$pi*5/srate;
+
+// meters (4 bands + 1 master)
+mtr = alloc(5);
+drag_id = -1;
+pcap = 0;
+lastS = 0;           // forces font build on first GUI frame
+gfx_ext_retina = 1;  // sharp drawing on HiDPI screens
+
+LN10 = log(10);
+function db2g(d) ( exp(d*LN10/20); );
+
+// ---- Splits input x into globals b1..b4 and direct_aligned for channel offset co ----
+function splitBands(x, co) local(low1, hi80, b2_raw, hi3k, a13) (
+  // 80 Hz split (LR4 = 2x Butterworth cascaded)
+  low1   = bq(bq(x, lp80a+co), lp80b+co);     // < 80 Hz
+  hi80   = bq(bq(x, hp80a+co), hp80b+co);     // > 80 Hz
+
+  // 3 kHz split of hi80
+  b2_raw = bq(bq(hi80, lp3a+co), lp3b+co);    // 80 Hz - 3 kHz
+  hi3k   = bq(bq(hi80, hp3a+co), hp3b+co);    // > 3 kHz
+
+  // 9 kHz split of hi3k
+  b3     = bq(bq(hi3k, lp9a+co), lp9b+co);    // 3 kHz - 9 kHz
+  b4     = bq(bq(hi3k, hp9a+co), hp9b+co);    // > 9 kHz
+
+  // Align Band 1 phase through the 3 kHz and 9 kHz all-passes in series
+  a13    = bq(low1, a13a+co);
+  b1     = bq(a13,  a19a+co);
+
+  // Align Band 2 phase through the 9 kHz all-pass
+  b2     = bq(b2_raw, a29a+co);
+
+  // Direct clean signal phase-aligned with all 3 crossover splits (80 Hz, 3 kHz, 9 kHz)
+  direct_aligned = bq(bq(bq(x, adir1a+co), adir2a+co), adir3a+co);
+);
+
+// JSFX math helper: exact hyperbolic tangent via exp (argument clamped so exp never overflows)
+function tanh(v) ( v = max(-20, min(20, v)); 1 - 2/(exp(2*v) + 1); );
+
+// Saturation: t = 1 Transformer, 2 Tape, 3 Transistor
+// dsc = per-band drive scale for Transformer/Transistor (LF safeguard: B1 0.4, B2 0.75, B3/B4 1.0)
+function sat(x, t, drv, dsc) local(d, u, y) (
+  (t == 0 || drv <= 0) ? x : (
+    d = 1 + drv*0.09*((t == 2) ? 1 : dsc);
+    t == 1 ? (
+      // Transformer: cubic soft clip, symmetric, mostly 3rd harmonic
+      u = max(-1, min(1, x*d/1.5));
+      y = 1.5*u - 0.5*u*u*u;
+    ) : t == 2 ? (
+      // Tape: symmetrical hyperbolic saturation (unchanged)
+      y = tanh(x*d) / tanh(d);
+    ) : (
+      // Transistor: asymmetric exponential clip (+ side 1.0, - side 0.7), adds even harmonics
+      u = x*d;
+      y = u >= 0 ? (1 - exp(-u)) : -0.7*(1 - exp(u/0.7));
+    );
+    y / (0.6 + 0.4*d);
+  );
+);
+
+// One-pole DC blocker (removes offset from the asymmetric Transistor curve)
+function dcblock(x, sp) local(y) (
+  y = x - sp[0] + dcR*sp[1];
+  sp[0] = x; sp[1] = y;
+  y;
+);
+
+// Soft knee: 0 below knee, linear above, quadratic blend across width w (dB)
+function softk(o, w) (
+  o <= -w*0.5 ? 0 : o >= w*0.5 ? o : (o + w*0.5)*(o + w*0.5)/(2*w);
+);
+
+// Dolby-style single-knob compander. c = -100..+100, |c| <= 2 is flat.
+// Left  (c < 0): Dolby "encode" UPWARD compression. Lifts material below -20 dB, leaves peaks alone.
+//                Slope 0 -> 0.6 dB/dB, max lift 0 -> 15 dB, 12 dB soft knee. The fast attack lets
+//                transients through unlifted while tails and low-level detail come up: the "air/breath" trick.
+// Right (c > 0): Dolby "decode" downward expansion below threshold, threshold -50 -> -26 dB,
+//                ratio 1:1 -> 1:2, 12 dB soft knee, max 40 dB cut. Never adds gain, so it can't push overs.
+function overeasy(x, c, sp, rc) local(ax, co_c, env, envdb, a, s, T, g) (
+  ax = abs(x);
+  co_c = ax > sp[0] ? atkC : rc;
+  sp[0] = sp[0] + co_c*(ax - sp[0]);   // envelope always runs, so no jump leaving centre
+  env = sp[0];
+  envdb = env > 0.0000001 ? 20*log(env)/LN10 : -140;
+  a = max(0, min(1, (abs(c) - 2)/98));
+  a <= 0 ? x : (
+    c < 0 ? (
+      T = -20; s = 0.6*a;
+      g = min(15*a, s*softk(T - envdb, 12));
+    ) : (
+      T = -50 + 24*a; s = a;
+      g = max(-40, -s*softk(T - envdb, 12));
+    );
+    x * db2g(g);
+  );
+);
+
+function limiter(x, ceil) ( ceil * tanh(x / ceil); );
+
+// ---- Presets ----
+// pm = master (trim, ceiling, mix); pb = band (slider base, sat, drive, EQ dB, compand, gain dB)
+function pm(trim, ceil, mix) ( slider2 = trim; slider3 = ceil; slider5 = mix; );
+function pb(base, sat, drv, eq, cpd, gn) (
+  slider(base) = sat; slider(base+1) = drv; slider(base+3) = eq; slider(base+4) = cpd; slider(base+7) = gn;
+);
+// Sat: 0 Off, 1 Transformer, 2 Tape, 3 Transistor. Compand: <0 lift, >0 expand.
+function apply_preset(n) (
+  n == 0 ? ( // Init
+    pm(0, -0.3, 100); pb(10, 0, 0, 0, 0, 0); pb(20, 0, 0, 0, 0, 0); pb(30, 0, 0, 0, 0, 0); pb(40, 0, 0, 0, 0, 0);
+  ) : n == 1 ? ( // Dolby Air: lift on bands 3-4, touch of high shelf
+    pm(0, -0.3, 100); pb(10, 0, 0, 0, 0, 0); pb(20, 0, 0, 0, 0, 0); pb(30, 0, 0, 1.0, -35, 0); pb(40, 0, 0, 2.0, -50, 0);
+  ) : n == 2 ? ( // Gentle Glue: mild lift everywhere, tape on band 2
+    pm(0, -0.3, 100); pb(10, 0, 0, 0, -15, 0); pb(20, 2, 15, 0, -20, 0); pb(30, 0, 0, 0, -20, 0); pb(40, 0, 0, 0, -20, 0);
+  ) : n == 3 ? ( // Tape Master: low-drive tape on all bands, slight low shelf
+    pm(0, -0.3, 100); pb(10, 2, 20, 1.0, 0, 0); pb(20, 2, 20, 0, 0, 0); pb(30, 2, 15, 0, 0, 0); pb(40, 2, 10, -0.5, 0, 0);
+  ) : n == 4 ? ( // Vocal Presence: band 3 bell up + lift
+    pm(0, -0.3, 100); pb(10, 0, 0, 0, 0, 0); pb(20, 0, 0, -0.5, 0, 0); pb(30, 0, 0, 2.0, -30, 0); pb(40, 0, 0, 1.0, 0, 0);
+  ) : n == 5 ? ( // Low-End Control: band 1 expand + light transformer, band 2 bell trimmed
+    pm(0, -0.3, 100); pb(10, 1, 15, 0, 25, 0); pb(20, 0, 0, -1.0, 0, 0); pb(30, 0, 0, 0, 0, 0); pb(40, 0, 0, 0, 0, 0);
+  ) : n == 6 ? ( // Analog Sheen: transistor on band 4, high shelf up, lift
+    pm(0, -0.3, 100); pb(10, 0, 0, 0, 0, 0); pb(20, 0, 0, 0, 0, 0); pb(30, 0, 0, 0.5, 0, 0); pb(40, 3, 25, 2.5, -30, 0);
+  ) : ( // Loudness Push: lift on all bands, trim up
+    pm(2.0, -0.3, 100); pb(10, 1, 10, 0, -25, 0); pb(20, 2, 10, 0, -30, 0); pb(30, 0, 0, 0, -30, 0); pb(40, 0, 0, 0, -30, 0);
+  );
+);
+
+// Guards: set once per instance (variables survive @init re-runs; @serialize restores saved values)
+q_init == 0 ? (
+  lastPreset = slider6;
+  ui_sz = 2;           // new instances open in Large
+  ui_szinit = 1;
+  q_init = 1;
+);
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, ui_szinit);
+file_var(0, ui_hw);
+file_var(0, lastPreset);
+
+@slider
+// Preset chosen from REAPER's parameter list (GUI prev/next applies directly)
+slider6 != lastPreset ? ( apply_preset(slider6); lastPreset = slider6; );
+
+@block
+// Recalculate EQ coefficients only when a gain moves (covers host automation and @gfx edits)
+(slider13 != lg1 || slider23 != lg2 || slider33 != lg3 || slider43 != lg4) ? updEQ();
+
+@sample
+spl0 != spl0 ? spl0 = 0;
+spl1 != spl1 ? spl1 = 0;
+
+anySolo = slider18 || slider28 || slider38 || slider48;
+ceilL = db2g(slider3);
+trim = db2g(slider2);
+
+// bandproc: bidx = 0..3, ch = 0 (Left) or 1 (Right)
+// dsc = LF drive scale, eqp = band EQ biquad, cpd = Compand knob
+function bandproc(x, bidx, ch, stype, drv, dsc, eqp, cpd, gdb, byp, solo) local(y) (
+  byp ? y = x : (
+    y = sat(x, stype, drv, dsc);
+    stype == 3 ? (y = dcblock(y, dcS + (bidx + ch*4)*2););
+    y = bq(y, eqp + ch*9);
+    y = overeasy(y, cpd, cmpS + bidx + ch*4, bidx == 0 ? relLF : relC);
+    y = y * db2g(gdb);
+  );
+  (anySolo && !solo) ? 0 : y;
+);
+
+// ---- Left Channel ----
+splitBands(spl0, 0);
+dirL = direct_aligned;
+L1 = bandproc(b1, 0, 0, slider10,slider11,0.4, eq1,slider14,slider17,slider19,slider18);
+L2 = bandproc(b2, 1, 0, slider20,slider21,0.75,eq2,slider24,slider27,slider29,slider28);
+L3 = bandproc(b3, 2, 0, slider30,slider31,1,   eq3,slider34,slider37,slider39,slider38);
+L4 = bandproc(b4, 3, 0, slider40,slider41,1,   eq4,slider44,slider47,slider49,slider48);
+
+// ---- Right Channel ----
+splitBands(spl1, 9);
+dirR = direct_aligned;
+R1 = bandproc(b1, 0, 1, slider10,slider11,0.4, eq1,slider14,slider17,slider19,slider18);
+R2 = bandproc(b2, 1, 1, slider20,slider21,0.75,eq2,slider24,slider27,slider29,slider28);
+R3 = bandproc(b3, 2, 1, slider30,slider31,1,   eq3,slider34,slider37,slider39,slider38);
+R4 = bandproc(b4, 3, 1, slider40,slider41,1,   eq4,slider44,slider47,slider49,slider48);
+
+// Multiband strip sum
+procL = L1 + L2 + L3 + L4;
+procR = R1 + R2 + R3 + R4;
+
+// Dry/Wet Mix interpolation (aligned clean direct signal vs processed signal)
+mixFrac = slider5 * 0.01;
+dryL = dirL;
+dryR = dirR;
+outL = (dryL*(1 - mixFrac) + procL*mixFrac) * trim;
+outR = (dryR*(1 - mixFrac) + procR*mixFrac) * trim;
+
+spl0 = limiter(outL, ceilL);
+spl1 = limiter(outR, ceilL);
+
+// Peak meters with decay
+mtr[0] = max(mtr[0]*0.92, max(abs(L1), abs(R1)));
+mtr[1] = max(mtr[1]*0.92, max(abs(L2), abs(R2)));
+mtr[2] = max(mtr[2]*0.92, max(abs(L3), abs(R3)));
+mtr[3] = max(mtr[3]*0.92, max(abs(L4), abs(R4)));
+mtr[4] = max(mtr[4]*0.92, max(abs(spl0), abs(spl1)));
+
+@gfx 1170 711
+
+// =====================================================================
+// GUI — drawn in a 1300 x 790 design space. Size picker: S 60% / M 75% / L 90%
+// (shrinks further if the window is smaller). HW = Dolby 361 rack faceplate.
+// =====================================================================
+
+// ---- Theme Palette ----
+// Theme 0: Light Grey (teal accent) / Theme 1: Dark Blue (ice-blue accent)
+theme = slider4;
+theme == 0 ? (
+  c_bg_r   = 0.80; c_bg_g   = 0.81; c_bg_b   = 0.84;
+  c_card_r = 0.76; c_card_g = 0.78; c_card_b = 0.81;
+  c_pan_r  = 0.71; c_pan_g  = 0.73; c_pan_b  = 0.77;
+  c_brd_r  = 0.62; c_brd_g  = 0.64; c_brd_b  = 0.69;
+  c_txt_r  = 0.14; c_txt_g  = 0.15; c_txt_b  = 0.18;
+  c_dim_r  = 0.34; c_dim_g  = 0.37; c_dim_b  = 0.42;
+  c_kb_r   = 0.96; c_kb_g   = 0.96; c_kb_b   = 0.97;   // knob body
+  c_trk_r  = 0.62; c_trk_g  = 0.64; c_trk_b  = 0.69;   // knob arc track
+  c_acc_r  = 0.05; c_acc_g  = 0.52; c_acc_b  = 0.52;   // teal accent
+  c_ont_r  = 1.00; c_ont_g  = 1.00; c_ont_b  = 1.00;   // text on accent
+  c_off_r  = 0.78; c_off_g  = 0.80; c_off_b  = 0.84;   // button off
+  c_oft_r  = 0.20; c_oft_g  = 0.21; c_oft_b  = 0.24;   // button off text
+  c_mbg_r  = 0.58; c_mbg_g  = 0.60; c_mbg_b  = 0.65;   // meter background
+  c_lft_r  = 0.84; c_lft_g  = 0.26; c_lft_b  = 0.20;   // LIFT
+  c_exp_r  = 0.22; c_exp_g  = 0.62; c_exp_b  = 0.28;   // EXPAND
+  c_scr_r  = 0.70; c_scr_g  = 0.72; c_scr_b  = 0.75;   // screws
+) : (
+  c_bg_r   = 0.10; c_bg_g   = 0.12; c_bg_b   = 0.17;
+  c_card_r = 0.13; c_card_g = 0.15; c_card_b = 0.22;
+  c_pan_r  = 0.11; c_pan_g  = 0.13; c_pan_b  = 0.19;
+  c_brd_r  = 0.23; c_brd_g  = 0.27; c_brd_b  = 0.37;
+  c_txt_r  = 0.92; c_txt_g  = 0.94; c_txt_b  = 0.98;
+  c_dim_r  = 0.58; c_dim_g  = 0.63; c_dim_b  = 0.74;
+  c_kb_r   = 0.12; c_kb_g   = 0.14; c_kb_b   = 0.21;
+  c_trk_r  = 0.24; c_trk_g  = 0.28; c_trk_b  = 0.39;
+  c_acc_r  = 0.36; c_acc_g  = 0.60; c_acc_b  = 1.00;
+  c_ont_r  = 0.06; c_ont_g  = 0.08; c_ont_b  = 0.12;
+  c_off_r  = 0.16; c_off_g  = 0.19; c_off_b  = 0.27;
+  c_oft_r  = 0.85; c_oft_g  = 0.88; c_oft_b  = 0.94;
+  c_mbg_r  = 0.06; c_mbg_g  = 0.07; c_mbg_b  = 0.10;
+  c_lft_r  = 0.90; c_lft_g  = 0.32; c_lft_b  = 0.26;
+  c_exp_r  = 0.40; c_exp_g  = 0.85; c_exp_b  = 0.42;
+  c_scr_r  = 0.30; c_scr_g  = 0.33; c_scr_b  = 0.40;
+);
+
+// HW look: fixed Dolby 361 brushed-aluminium faceplate (theme does not apply)
+hw = ui_hw;
+hw ? (
+  c_bg_r   = 0.78; c_bg_g   = 0.79; c_bg_b   = 0.80;   // aluminium (brushed in draw)
+  c_card_r = 0.70; c_card_g = 0.71; c_card_b = 0.72;
+  c_pan_r  = 0.63; c_pan_g  = 0.64; c_pan_b  = 0.66;
+  c_brd_r  = 0.42; c_brd_g  = 0.43; c_brd_b  = 0.45;
+  c_txt_r  = 0.07; c_txt_g  = 0.07; c_txt_b  = 0.08;
+  c_dim_r  = 0.20; c_dim_g  = 0.21; c_dim_b  = 0.23;
+  c_kb_r   = 0.09; c_kb_g   = 0.09; c_kb_b   = 0.10;   // black knobs
+  c_trk_r  = 0.50; c_trk_g  = 0.51; c_trk_b  = 0.53;
+  c_acc_r  = 0.96; c_acc_g  = 0.62; c_acc_b  = 0.12;   // amber
+  c_ont_r  = 0.10; c_ont_g  = 0.07; c_ont_b  = 0.02;
+  c_off_r  = 0.27; c_off_g  = 0.28; c_off_b  = 0.30;
+  c_oft_r  = 0.90; c_oft_g  = 0.90; c_oft_b  = 0.92;
+  c_mbg_r  = 0.10; c_mbg_g  = 0.10; c_mbg_b  = 0.11;
+  c_lft_r  = 0.82; c_lft_g  = 0.18; c_lft_b  = 0.12;
+  c_exp_r  = 0.10; c_exp_g  = 0.52; c_exp_b  = 0.20;
+  c_scr_r  = 0.60; c_scr_g  = 0.61; c_scr_b  = 0.63;
+);
+
+// LCD colours: flat = accent-tinted on near-black, HW = Dolby amber on black
+hw ? ( l_bg_r = 0.06; l_bg_g = 0.04; l_bg_b = 0.02; l_tx_r = 1.00; l_tx_g = 0.66; l_tx_b = 0.15; ) :
+theme == 0 ? ( l_bg_r = 0.05; l_bg_g = 0.09; l_bg_b = 0.09; l_tx_r = 0.30; l_tx_g = 0.92; l_tx_b = 0.80; ) :
+             ( l_bg_r = 0.04; l_bg_g = 0.06; l_bg_b = 0.11; l_tx_r = 0.55; l_tx_g = 0.80; l_tx_b = 1.00; );
+
+// ---- Scaling ----
+szf = ui_sz == 1 ? 0.6 : ui_sz == 2 ? 0.9 : 0.75;
+S  = min(szf, min(gfx_w/1300, gfx_h/790));
+ox = floor((gfx_w - 1300*S)*0.5);
+oy = floor((gfx_h - 790*S)*0.5);
+mx = (mouse_x - ox)/S;
+my = (mouse_y - oy)/S;
+
+// Fonts rebuilt only when the scale changes
+S != lastS ? (
+  gfx_setfont(1, "Arial Bold", max(10, 46*S));   // QUAD 22
+  gfx_setfont(2, "Arial Bold", max(8, 18*S));   // subtitle
+  gfx_setfont(3, "Arial Bold", max(9, 23*S));   // band title
+  gfx_setfont(4, "Arial Bold", max(8, 17*S));   // band range
+  gfx_setfont(5, "Arial Bold", max(8, 16*S));   // section / knob labels / big buttons
+  gfx_setfont(6, "Arial Bold", max(8, 15*S));   // values / small buttons
+  gfx_setfont(7, "Arial Bold", max(7, 12*S));   // legend / badges
+  gfx_setfont(8, "Arial Bold", max(7, 11*S));   // meter scale
+  gfx_setfont(9,  "Courier New", max(9, 24*S), 'b');   // LCD preset name
+  gfx_setfont(10, "Courier New", max(7, 13*S), 'b');   // LCD top line
+  lastS = S;
+);
+
+// ---- Drawing helpers (all coordinates in design space) ----
+function col(r, g, b) ( gfx_r = r; gfx_g = g; gfx_b = b; );
+function cbg()   ( col(c_bg_r,   c_bg_g,   c_bg_b);   );
+function ccard() ( col(c_card_r, c_card_g, c_card_b); );
+function cpan()  ( col(c_pan_r,  c_pan_g,  c_pan_b);  );
+function cbrd()  ( col(c_brd_r,  c_brd_g,  c_brd_b);  );
+function ctxt()  ( col(c_txt_r,  c_txt_g,  c_txt_b);  );
+function cdim()  ( col(c_dim_r,  c_dim_g,  c_dim_b);  );
+function cacc()  ( col(c_acc_r,  c_acc_g,  c_acc_b);  );
+function clft()  ( col(c_lft_r,  c_lft_g,  c_lft_b);  );
+function cexp()  ( col(c_exp_r,  c_exp_g,  c_exp_b);  );
+
+function R(x, y, w, h)  ( gfx_rect(ox + x*S, oy + y*S, max(1, w*S), max(1, h*S)); );
+function RO(x, y, w, h) local(t, k) (
+  t = max(1, floor(2*S + 0.5)); k = 0;
+  loop(t, gfx_rect(ox + x*S + k, oy + y*S + k, max(1, w*S - 2*k), max(1, h*S - 2*k), 0); k += 1; );
+);
+// Bevel: inset = 1 -> recessed (dark top/left, light bottom/right), 0 -> raised
+function bevel(x, y, w, h, inset) (
+  inset ? col(0.38, 0.39, 0.41) : col(0.93, 0.94, 0.95);
+  R(x, y, w, 2); R(x, y, 2, h);
+  inset ? col(0.93, 0.94, 0.95) : col(0.38, 0.39, 0.41);
+  R(x, y + h - 2, w, 2); R(x + w - 2, y, 2, h);
+);
+
+function TX(x, y, txt) ( gfx_x = ox + x*S; gfx_y = oy + y*S; gfx_drawstr(txt); );
+function TC(cx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + cx*S - w*0.5; gfx_y = oy + y*S; gfx_drawstr(txt); );
+function TR(rx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + rx*S - w; gfx_y = oy + y*S; gfx_drawstr(txt); );
+
+function clicked(x, y, w, h) (
+  (mouse_cap & 1) && !(pcap & 1) && mx >= x && mx <= x+w && my >= y && my <= y+h;
+);
+
+function screw(x, y) local(sx, sy, r) (
+  sx = ox + x*S; sy = oy + y*S; r = 11*S;
+  col(c_scr_r, c_scr_g, c_scr_b); gfx_circle(sx, sy, r, 1, 1);
+  cbrd(); gfx_circle(sx, sy, r, 0, 1);
+  cdim(); gfx_line(sx - r*0.6, sy + r*0.6, sx + r*0.6, sy - r*0.6, 1);
+  gfx_line(sx - r*0.6 + 1, sy + r*0.6, sx + r*0.6 + 1, sy - r*0.6, 1);
+);
+
+// Button: fills accent when on. fnt = font id. Returns 1 on click.
+function btn(x, y, w, h, lbl, on, fnt) local(sw, sh) (
+  on ? cacc() : col(c_off_r, c_off_g, c_off_b);
+  R(x, y, w, h);
+  hw ? bevel(x, y, w, h, 0) : ( cbrd(); RO(x, y, w, h); );
+  on ? col(c_ont_r, c_ont_g, c_ont_b) : col(c_oft_r, c_oft_g, c_oft_b);
+  gfx_setfont(fnt);
+  gfx_measurestr(lbl, sw, sh);
+  gfx_x = ox + (x + w*0.5)*S - sw*0.5;
+  gfx_y = oy + (y + h*0.5)*S - sh*0.5;
+  gfx_drawstr(lbl);
+  clicked(x, y, w, h);
+);
+
+// Two-line button (theme toggle)
+function btn2(x, y, w, h, l1, l2, on) local(sw, sh) (
+  on ? cacc() : col(c_off_r, c_off_g, c_off_b);
+  R(x, y, w, h);
+  cbrd(); RO(x, y, w, h);
+  on ? col(c_ont_r, c_ont_g, c_ont_b) : col(c_oft_r, c_oft_g, c_oft_b);
+  gfx_setfont(5);
+  gfx_measurestr(l1, sw, sh);
+  TC(x + w*0.5, y + h*0.5 - sh/S, l1);
+  TC(x + w*0.5, y + h*0.5, l2);
+  clicked(x, y, w, h);
+);
+
+// Knob. kind: 0 = unipolar, 1 = bipolar, 2 = COMPAND (bipolar, centre detent, LIFT/EXPAND colours)
+// def = default value: double-click or Ctrl-click resets to it.
+function knob(id, cx, cy, rad, v, vmin, vmax, kind, def) local(dx, dy, frac, a0, ang, sx, sy, sr, n, k, t, ca, sa, fa) (
+  dx = mx - cx; dy = my - cy;
+  (mouse_cap & 1) && !(pcap & 1) && drag_id == -1 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
+    ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? (
+      v = def; kc_t = 0;                       // reset
+    ) : (
+      drag_id = id; drag_sy = my; drag_sv = v;
+      kc_id = id; kc_t = time_precise();
+    );
+  );
+  drag_id == id ? (
+    (mouse_cap & 1) ? (
+      v = drag_sv + (drag_sy - my) * (vmax - vmin) / 180;
+      v = max(vmin, min(vmax, v));
+      (kind == 2 && abs(v) < 3) ? v = 0;   // centre detent
+    ) : drag_id = -1;
+  );
+
+  sx = ox + cx*S; sy = oy + cy*S; sr = rad*S;
+  n = max(3, floor(7*S + 0.5));            // arc thickness in pixels
+
+  // Track
+  col(c_trk_r, c_trk_g, c_trk_b);
+  k = 0; loop(n, gfx_arc(sx, sy, sr + 3*S + k, -0.75*$pi, 0.75*$pi, 1); k += 1; );
+
+  // Value arc
+  frac = (v - vmin) / (vmax - vmin);
+  ang = (-0.75 + frac*1.5) * $pi;
+  a0 = kind > 0 ? 0 : -0.75*$pi;
+  kind == 2 ? (v < 0 ? clft() : cexp()) : cacc();
+  abs(ang - a0) > 0.001 ? (
+    k = 0; loop(n, gfx_arc(sx, sy, sr + 3*S + k, min(a0, ang), max(a0, ang), 1); k += 1; );
+  );
+
+  // Body
+  col(c_kb_r, c_kb_g, c_kb_b); gfx_circle(sx, sy, sr, 1, 1);
+  hw ? (
+    // Black fluted knob: ridges round the skirt, slightly lighter cap
+    col(0.24, 0.24, 0.26); k = 0;
+    loop(20,
+      fa = k * 2*$pi/20;
+      gfx_line(sx + sin(fa)*sr*0.78, sy - cos(fa)*sr*0.78, sx + sin(fa)*(sr - 1), sy - cos(fa)*(sr - 1), 1);
+      k += 1;
+    );
+    col(0.15, 0.15, 0.16); gfx_circle(sx, sy, sr*0.68, 1, 1);
+    col(0.30, 0.30, 0.32); gfx_circle(sx, sy, sr*0.68, 0, 1);
+    col(0.02, 0.02, 0.02); gfx_circle(sx, sy, sr, 0, 1);
+  ) : (
+    cbrd(); gfx_circle(sx, sy, sr, 0, 1); gfx_circle(sx, sy, sr - 1, 0, 1);
+  );
+
+  // Pointer (white on black knobs in HW)
+  hw ? col(0.96, 0.96, 0.96) : kind == 2 && v != 0 ? (v < 0 ? clft() : cexp()) : cacc();
+  sa = sin(ang); ca = cos(ang);
+  t = max(2, floor(4*S + 0.5)); k = 0;
+  loop(t,                                   // thick pointer: parallel lines offset across its width
+    gfx_line(sx + sa*sr*0.12 + ca*(k - t*0.5), sy - ca*sr*0.12 + sa*(k - t*0.5),
+             sx + sa*(sr - 4*S) + ca*(k - t*0.5), sy - ca*(sr - 4*S) + sa*(k - t*0.5), 1);
+    k += 1;
+  );
+  v;
+);
+
+// Label + value under a knob
+function klab(cx, y, lbl, val) (
+  gfx_setfont(5); cdim(); TC(cx, y, lbl);
+  gfx_setfont(6); ctxt(); TC(cx, y + 24, val);
+);
+
+function dbstr(v) local(r) (
+  r = floor(v*10 + 0.5)/10;
+  r > 0 ? sprintf(#vt, "+%.1f dB", r) : r < 0 ? sprintf(#vt, "%.1f dB", r) : strcpy(#vt, "0.0 dB");
+  #vt;
+);
+
+function pctstr(v) ( sprintf(#vt, "%d%%", floor(v + 0.5)); #vt; );
+
+// Meter colour by dB: green -> yellow (-18..-6) -> red (-6..0)
+function mcol(d) local(t) (
+  d < -18 ? col(0.36, 0.78, 0.40) :
+  d < -6  ? ( t = (d + 18)/12; col(0.36 + t*0.59, 0.78, 0.40 - t*0.20); ) :
+            ( t = min(1, (d + 6)/6); col(0.95 - t*0.07, 0.78 - t*0.52, 0.20 - t*0.04); );
+);
+
+// Horizontal meter, -48 .. +3 dB
+function hmeter(x, y, w, h, lin) local(db, p, k, n, f, d) (
+  db = lin > 0.0000001 ? 20*log10(lin) : -100;
+  p = max(0, min(1, (db + 48)/51));
+  col(c_mbg_r, c_mbg_g, c_mbg_b); R(x, y, w, h);
+  hw ? (
+    // LED ladder: 24 segments, green / amber (-6..0) / red (> 0), unlit LEDs dimmed
+    n = 24; k = 0;
+    loop(n,
+      f = (k + 0.5)/n; d = -48 + 51*f;
+      d > 0 ? col(0.95, 0.18, 0.12) : d > -6 ? col(1.0, 0.68, 0.10) : col(0.30, 0.90, 0.30);
+      f > p ? ( gfx_r *= 0.22; gfx_g *= 0.22; gfx_b *= 0.22; );
+      R(x + 2 + (w - 4)*k/n, y + 3, (w - 4)/n - 2, h - 6);
+      k += 1;
+    );
+    bevel(x, y, w, h, 1);
+  ) : (
+    n = 48; k = 0;
+    loop(n,
+      f = (k + 0.5)/n;
+      f <= p ? ( mcol(-48 + 51*f); R(x + w*k/n, y, w/n + 0.6, h); );
+      k += 1;
+    );
+    cbrd(); RO(x, y, w, h);
+  );
+  gfx_setfont(8); cdim();
+  TX(x,                   y + h + 4, "-48");
+  TC(x + w*30/51,         y + h + 4, "-18");
+  TC(x + w*42/51,         y + h + 4, "-6");
+  TC(x + w*48/51,         y + h + 4, "0");
+  TR(x + w,               y + h + 4, "+3");
+);
+
+// =====================================================================
+// Draw
+// =====================================================================
+
+// Background (whole window)
+cbg(); gfx_rect(0, 0, gfx_w, gfx_h);
+hw ? (
+  // Brushed aluminium: fine horizontal streaks of pseudo-random brightness
+  by_ = 0;
+  loop(gfx_h/2,
+    hv = sin(by_*12.9898)*43758.5453; hv -= floor(hv);
+    col(c_bg_r + (hv - 0.5)*0.06, c_bg_g + (hv - 0.5)*0.06, c_bg_b + (hv - 0.5)*0.06);
+    gfx_line(0, by_, gfx_w, by_);
+    by_ += 2;
+  );
+);
+
+// Screws
+screw(10, 20); screw(1290, 20); screw(10, 772); screw(1290, 772);
+
+// Title
+hw ? ctxt() : cacc(); gfx_setfont(1);
+TX(32, 38, "QUAD");
+TX(32, 92, "22");
+cdim(); gfx_setfont(2);
+TX(192, 58, "CAT 22 DOLBY A 4-BAND");
+TX(192, 84, "ARCHITECTURE");
+
+// Theme toggle (flat look only; the HW faceplate is fixed)
+hw ? (
+  bevel(441, 53, 182, 60, 1);
+  ctxt(); gfx_setfont(5); TC(532, 64, "MODEL 361");
+  cdim(); gfx_setfont(7); TC(532, 88, "CAT. NO. 22  4-BAND");
+) : (
+  cpan(); R(441, 53, 182, 60); cbrd(); RO(441, 53, 182, 60);
+  btn2(447, 58, 84, 50, "LIGHT", "GREY", slider4 == 0) ? slider4 = 0;
+  btn2(535, 58, 82, 50, "DARK",  "BLUE", slider4 == 1) ? slider4 = 1;
+);
+
+// Size picker + HW toggle (state in ui_sz / ui_hw, same variables as gfx-ui.jsfx-inc)
+btn(441, 122, 40, 24, "S", ui_sz == 1, 6) ? ui_sz = 1;
+btn(485, 122, 40, 24, "M", ui_sz == 0, 6) ? ui_sz = 0;
+btn(529, 122, 40, 24, "L", ui_sz == 2, 6) ? ui_sz = 2;
+btn(579, 122, 44, 24, "HW", ui_hw, 6) ? ui_hw = !ui_hw;
+
+// Preset LCD with prev / next
+btn(648, 56, 36, 54, "◄", 0, 5) ? ( slider6 = (slider6 + 7) % 8; apply_preset(slider6); lastPreset = slider6; );
+btn(946, 56, 36, 54, "►", 0, 5) ? ( slider6 = (slider6 + 1) % 8; apply_preset(slider6); lastPreset = slider6; );
+col(l_bg_r, l_bg_g, l_bg_b); R(690, 56, 250, 54);
+hw ? bevel(688, 54, 254, 58, 1) : ( cbrd(); RO(690, 56, 250, 54); );
+col(l_tx_r, l_tx_g, l_tx_b);
+gfx_setfont(10); sprintf(#lcd1, "PRESET %02d/08", slider6 + 1); TX(702, 62, #lcd1);
+gfx_setfont(9);
+TX(702, 80, slider6 == 0 ? "INIT" : slider6 == 1 ? "DOLBY AIR" : slider6 == 2 ? "GENTLE GLUE" : slider6 == 3 ? "TAPE MASTER" :
+            slider6 == 4 ? "VOCAL PRESENCE" : slider6 == 5 ? "LOW-END CONTROL" : slider6 == 6 ? "ANALOG SHEEN" : "LOUDNESS PUSH");
+
+// Master knobs
+slider5 = knob(899, 1040, 60, 24, slider5,   0, 100, 0, 100);  klab(1040, 98, "MIX %", pctstr(slider5));
+slider2 = knob(900, 1121, 60, 24, slider2, -24,  24, 1, 0);  klab(1121, 98, "TRIM",  dbstr(slider2));
+slider3 = knob(901, 1202, 60, 24, slider3, -12,   0, 0, -0.3);  klab(1202, 98, "CEIL",  dbstr(slider3));
+
+// Master output meter (vertical, -48 .. +3 dB)
+mdb = mtr[4] > 0.0000001 ? 20*log10(mtr[4]) : -100;
+mp = max(0, min(1, (mdb + 48)/51));
+col(c_mbg_r, c_mbg_g, c_mbg_b); R(1254, 50, 18, 70);
+hw ? (
+  k = 0;
+  loop(10,
+    f = (k + 0.5)/10; d = -48 + 51*f;
+    d > 0 ? col(0.95, 0.18, 0.12) : d > -6 ? col(1.0, 0.68, 0.10) : col(0.30, 0.90, 0.30);
+    f > mp ? ( gfx_r *= 0.22; gfx_g *= 0.22; gfx_b *= 0.22; );
+    R(1257, 50 + 70 - 3 - (k + 1)*6.4, 12, 5);
+    k += 1;
+  );
+  bevel(1254, 50, 18, 70, 1);
+) : (
+  cacc(); R(1254, 50 + 70*(1 - mp), 18, 70*mp);
+  cbrd(); RO(1254, 50, 18, 70);
+);
+
+// Header separator
+cbrd(); R(15, 154, 1270, 3);
+
+// ---- Four Band Cards ----
+b_idx = 0;
+loop(4,
+  base = 10 + b_idx*10;
+  cx = 15 + b_idx*323;
+  st = slider(base);
+
+  // Card
+  ccard(); R(cx, 178, 303, 595);
+  hw ? ( bevel(cx, 178, 303, 595, 1); col(0.10, 0.10, 0.11); R(cx + 2, 180, 299, 8); ) :
+       ( cbrd(); RO(cx, 178, 303, 595); cacc(); R(cx, 178, 303, 8); );
+
+  // Title & range
+  hw ? ctxt() : cacc(); gfx_setfont(3);
+  TX(cx + 18, 196, b_idx==0 ? "BAND 1" : b_idx==1 ? "BAND 2" : b_idx==2 ? "BAND 3" : "BAND 4");
+  cdim(); gfx_setfont(4);
+  TX(cx + 18, 226, b_idx==0 ? "< 80 Hz SUB" : b_idx==1 ? "80 Hz - 3 kHz" : b_idx==2 ? "3 kHz - 9 kHz" : "> 9 kHz AIR");
+
+  // Badge (Band 1 "LF SAFE" lights while Transformer/Transistor drive is engaged)
+  bdg = b_idx==0 ? "LF SAFE" : b_idx==1 ? "BODY" : b_idx==2 ? "PRESENCE" : "BREATH";
+  lit = b_idx == 0 && (st == 1 || st == 3) && slider(base+1) > 0;
+  gfx_setfont(7);
+  gfx_measurestr(bdg, bw_, bh_);
+  bwd = bw_/S + 16;
+  lit ? cacc() : cpan(); R(cx + 285 - bwd, 206, bwd, 24);
+  lit ? cacc() : cbrd(); RO(cx + 285 - bwd, 206, bwd, 24);
+  lit ? col(c_ont_r, c_ont_g, c_ont_b) : cdim(); TC(cx + 285 - bwd*0.5, 211, bdg);
+
+  // Divider
+  cbrd(); R(cx + 18, 252, 267, 2);
+
+  // ---- SATURATION panel ----
+  cpan(); R(cx + 18, 266, 267, 192); hw ? bevel(cx + 18, 266, 267, 192, 1) : ( cbrd(); RO(cx + 18, 266, 267, 192); );
+  gfx_setfont(5); cdim(); TX(cx + 28, 278, "SATURATION");
+
+  k = 0;
+  loop(4,
+    btn(cx + 28 + k*63, 303, 58, 30, k==0 ? "OFF" : k==1 ? "XFRM" : k==2 ? "TAPE" : "XSTR", st == k, 6) ? slider(base) = k;
+    k += 1;
+  );
+
+  slider(base+1) = knob(base*10 + 1, cx + 85,  376, 25, slider(base+1),   0, 100, 0, 0);
+  klab(cx + 85, 414, "DRIVE", pctstr(slider(base+1)));
+
+  slider(base+3) = knob(base*10 + 3, cx + 218, 376, 25, slider(base+3), -12,  12, 1, 0);
+  klab(cx + 218, 414, b_idx==0 ? "LOW SHELF" : b_idx==3 ? "HI SHELF" : "BELL EQ", dbstr(slider(base+3)));
+
+  // ---- OVEREASY COMPAND panel ----
+  cpan(); R(cx + 18, 470, 267, 192); hw ? bevel(cx + 18, 470, 267, 192, 1) : ( cbrd(); RO(cx + 18, 470, 267, 192); );
+  gfx_setfont(5); cdim(); TX(cx + 28, 482, "OVEREASY COMPAND");
+
+  cv = slider(base+4) = knob(base*10 + 4, cx + 105, 550, 31, slider(base+4), -100, 100, 2, 0);
+  rv = floor(cv + 0.5);
+  gfx_setfont(5); cdim(); TC(cx + 105, 594, "COMPAND");
+  gfx_setfont(6);
+  rv < 0 ? ( clft(); sprintf(#cvs, "%d%% LIFT", rv); ) :
+  rv > 0 ? ( cexp(); sprintf(#cvs, "+%d%% EXPAND", rv); ) :
+           ( cdim(); strcpy(#cvs, "FLAT"); );
+  TC(cx + 105, 618, #cvs);
+
+  slider(base+7) = knob(base*10 + 7, cx + 218, 556, 24, slider(base+7), -24, 24, 1, 0);
+  klab(cx + 218, 594, "GAIN", dbstr(slider(base+7)));
+
+  gfx_setfont(7);
+  clft(); TX(cx + 28, 641, "← LIFT");
+  cdim(); TC(cx + 152, 641, "FLAT");
+  cexp(); TR(cx + 275, 641, "EXPAND →");
+
+  // ---- Meter ----
+  hmeter(cx + 18, 674, 267, 18, mtr[b_idx]);
+
+  // ---- Solo / Bypass ----
+  so = slider(base+8);
+  by = slider(base+9);
+  btn(cx + 18,  720, 128, 44, "SOLO",   so > 0, 5) ? slider(base+8) = !so;
+  btn(cx + 157, 720, 128, 44, "BYPASS", by > 0, 5) ? slider(base+9) = !by;
+
+  b_idx += 1;
+);
+
+pcap = mouse_cap;

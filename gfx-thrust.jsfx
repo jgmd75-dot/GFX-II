@@ -101,19 +101,6 @@ function pp(t, a, r, rl, kn, th, ty, lk, lf, mu, mx) (
   slider1 = 1; slider2 = t; slider3 = a; slider4 = r; slider5 = rl; slider7 = kn; slider8 = th; slider9 = ty;
   slider10 = lk; slider11 = lf; slider12 = mu; slider13 = mx;
 );
-function pname(p) (
-  p == 1 ? "Mix Bus Glue" :
-  p == 2 ? "Big Mix (loud thrust)" :
-  p == 3 ? "Drum Bus Punch" :
-  p == 4 ? "Drum Smash (parallel)" :
-  p == 5 ? "Vintage Feedback" :
-  p == 6 ? "Vocal Bus" :
-  p == 7 ? "Wide Stereo (independent)" :
-  p == 8 ? "Bus Limiter" :
-  p == 9 ? "Bass Control" :
-  p == 10 ? "Room Pump" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1  ? pp(-14, 4, 1, 4, 2, 1, 0, 100, 1, 2, 100) :      // Mix Bus Glue
   p == 2  ? pp(-18, 4, 3, 3, 1, 2, 0, 100, 1, 4, 100) :      // Big Mix (Loud thrust)
@@ -140,7 +127,6 @@ sm = 1 - exp(-1 / (0.03 * srate));
 vuc = 1 - exp(-1 / (0.3 * srate));
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
 PNL = 0x141416; INKW = 0xF2F2EE; YEL = 0xF2C21B; BLU = 0x2F7FE0; LGRY = 0xD2D4D8; DGRY = 0x6C6F76;   // knob caps
-cur_preset = 1;
 update();
 mix_s = mix_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
@@ -192,26 +178,11 @@ ui_col(INKW); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 26 * sc, 'b'); ui_col(INKW); gfx_x = 62 * sc; gfx_y = 18 * sc; gfx_drawstr("THRUST");
 gfx_setfont(4); ui_col(YEL); gfx_x = 200 * sc; gfx_y = 30 * sc; gfx_drawstr("STEREO BUS COMPRESSOR");
-ui_button(528 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 11 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(556 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 11 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
   gfx_x = 590 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("Mix Bus Glue|Big Mix (loud thrust)|Drum Bus Punch|Drum Smash (parallel)|Vintage Feedback|Vocal Bus|Wide Stereo (independent)|Bus Limiter|Bass Control|Room Pump|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Mix Bus Glue|Big Mix (loud thrust)|Drum Bus Punch|Drum Smash (parallel)|Vintage Feedback|Vocal Bus|Wide Stereo (independent)|Bus Limiter|Bass Control|Room Pump|Reset all to defaults"));
 );
 ui_size_picker(700 * sc, 22 * sc);
-pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_col(YEL); gfx_rect(14 * sc, 60 * sc, 520 * sc, 4 * sc);
 ui_col(BLU); gfx_rect(534 * sc, 60 * sc, 352 * sc, 4 * sc);
 

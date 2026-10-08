@@ -142,16 +142,6 @@ function update() local(i, any, a, d) (
 // ---------- presets (stems are left alone) ----------
 // drive, density, colour, air, weight, transformer
 function pp(dv, dn, cl, ai, wt, tx) ( slider1 = dv; slider2 = dn; slider3 = cl; slider4 = ai; slider5 = wt; slider6 = tx; );
-function pname(p) (
-  p == 1 ? "Console Sheen" :
-  p == 2 ? "Warm and Round (even)" :
-  p == 3 ? "Forward and Firm (odd)" :
-  p == 4 ? "Driven Desk" :
-  p == 5 ? "Open Top (air)" :
-  p == 6 ? "Low-Mid Weight" :
-  p == 7 ? "Straight Sum (transformer out)" :
-  "Reset all to defaults";
-);
 function load_preset(p) (
   p == 1 ? pp(0, 30, 0, 1, 1, 1) :          // Console Sheen
   p == 2 ? pp(4, 50, -60, 2, 2, 1) :        // Warm and Round (even)
@@ -175,7 +165,6 @@ lm_c = 1 - exp(-2 * $pi * 400 / srate); hp_c = 1 - exp(-2 * $pi * 60 / srate);
 vuc = 1 - exp(-1 / (0.3 * srate));
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
 PNL = 0xE6DDC6; INK = 0x3E2818; BRN = 0x6E4428; AMB = 0xC8862E; CRM = 0xF4EEDC;
-cur_preset = 1;
 update();
 i = 0; loop(8, SG[i] = SGT[i]; i += 1; );
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
@@ -219,26 +208,11 @@ ui_col(CRM); gfx_circle(40 * sc, 33 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(BRN); ui_text(40 * sc, 28 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(CRM); gfx_x = 62 * sc; gfx_y = 19 * sc; gfx_drawstr("LUSTRE");
 gfx_setfont(4); ui_col(0xE8B868); gfx_x = 172 * sc; gfx_y = 29 * sc; gfx_drawstr("TRANSFORMER CONSOLE SUMMING");
-ui_button(528 * sc, 20 * sc, 26 * sc, 28 * sc, "<", 0, 1) ? (
-  cur_preset = cur_preset <= 1 ? 7 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-ui_button(556 * sc, 20 * sc, 26 * sc, 28 * sc, ">", 0, 1) ? (
-  cur_preset = cur_preset >= 7 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
 ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
   gfx_x = 590 * sc; gfx_y = 48 * sc;
-  cur_preset = gfx_showmenu("Console Sheen|Warm and Round (even)|Forward and Firm (odd)|Driven Desk|Open Top (air)|Low-Mid Weight|Straight Sum (transformer out)|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
+  load_preset(gfx_showmenu("Console Sheen|Warm and Round (even)|Forward and Firm (odd)|Driven Desk|Open Top (air)|Low-Mid Weight|Straight Sum (transformer out)|Reset all to defaults"));
 );
 ui_size_picker(700 * sc, 22 * sc);
-pk_lcd(760 * sc, 16 * sc, 120 * sc, 32 * sc, 0);
-pk_lcdfont(9, 9 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 19 * sc; gfx_drawstr("PATCH");
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 766 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-
 ui_col(AMB); gfx_rect(10 * sc, 60 * sc, 880 * sc, 2 * sc);
 
 // ---------- stems ----------

@@ -154,24 +154,6 @@ function setp(m, sy, tm, dv, f, drp, lc, hc, dk, pp, w, flp, mx, drf) (
   slider1 = m; slider2 = sy; slider3 = tm; slider4 = dv; slider5 = f; slider6 = drp; slider7 = lc; slider8 = hc;
   slider9 = dk; slider10 = pp; slider12 = w; slider13 = flp; slider15 = mx; slider27 = drf; slider11 = 0;
 );
-function pname(p) (
-  p == 1 ? "1. Tape: Worn Space Echo" :
-  p == 2 ? "2. Tape: Slapback Saturation" :
-  p == 3 ? "3. Tape: Dub Siren Oscillation" :
-  p == 4 ? "4. Bucket: Memory Lane Ping-Pong" :
-  p == 5 ? "5. Bucket: Dark Analog Crunch" :
-  p == 6 ? "6. Echorder: Maplin EC-444 Drive" :
-  p == 7 ? "7. Echorder: Realistic Slap & Crunch" :
-  p == 8 ? "8. Digital: Clean Ducked Vocal" :
-  p == 9 ? "9. Digital: Crystal Stereo Triplet" :
-  p == 10 ? "10. Tape: Ambient Flutter Wash" :
-  p == 11 ? "11. Echorder: Self-Oscillating Synth" :
-  p == 12 ? "12. Echorder: Deep Dub Echo" :
-  p == 13 ? "13. Echorder: Modern Dub Wash" :
-  p == 14 ? "14. Echorder: Chaos Dub Grit" :
-  p == 15 ? "15. Echorder: Heavyweight Dub Bass" :
-  "Reset Defaults";
-);
 function load_preset(p) (
   p == 1  ? setp(0, 1, 375, 10, 50, 50, 120, 6000, 0,  0, 45, 30, 40, 70) :  // 1. TAPE: Worn Space Echo
   p == 2  ? setp(0, 0, 110, 10, 30, 60, 150, 5000, 0,  0, 25, 20, 35, 50) :  // 2. TAPE: Slapback Saturation
@@ -336,10 +318,6 @@ rd_sq(820, 20, 80, 24, 0, 0x6A7484, "PRESETS") ? (
   cur_preset > 0 ? load_preset(cur_preset);
 );
 ui_size_picker(930 * sc, 22 * sc);
-pk_lcd(820 * sc, 47 * sc, 224 * sc, 16 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 826 * sc; gfx_y = 50 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
-
 
 // ---------- READOUT + REPEAT LADDER ----------
 ui_col(0x0B0B0C); rd_rr(44 * sc, 78 * sc, 290 * sc, 112 * sc, 5 * sc);

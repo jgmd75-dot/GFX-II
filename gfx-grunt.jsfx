@@ -44,23 +44,8 @@ out_pin:right output
 in_init();
 ost_init(16384); ostL.ost_ch_init(); ostR.ost_ch_init();
 pkL = 0; pkR = 0;   // stereo output meter peaks
-cur_preset = 1;
 ui_thm = 15; ui_hw = 1;   // "Waka" skin is fixed (Ember: burnt orange / warm brown) - no theme picker on this panel
 pk_kstyle = 4;            // ivory bakelite cap (used for the GAIN knob overlay only)
-
-function pname(p) (
-  p == 1 ? "Default" :
-  p == 2 ? "Warm Console" :
-  p == 3 ? "American Crunch" :
-  "British Punch";
-);
-function load_preset(p) (
-  p == 1 ? ( slider1 = 0; slider2 = 0;   slider3 = 0.5; slider4 = 0.2; slider5 = 0.5; slider6 = 0;  slider7 = 1; ) :
-  p == 2 ? ( slider1 = 6; slider2 = 100; slider3 = 0.3; slider4 = 0.4; slider5 = 0.7; slider6 = -2; slider7 = 2; ) :
-  p == 3 ? ( slider1 = 9; slider2 = 100; slider3 = 0.8; slider4 = 0.1; slider5 = 0.3; slider6 = -4; slider7 = 1; ) :
-  p == 4 ? ( slider1 = 4; slider2 = 0;   slider3 = 0.6; slider4 = 0.5; slider5 = 0.8; slider6 = -1; slider7 = 2; );
-  p > 0 ? slider_automate(127);   // sliders 1-7
-);
 
 // one-pole lowpass, used to split out the sub-140Hz band so it can bypass the gain/grunt stage
 function lp140_set(freq) instance(a) (
@@ -185,17 +170,13 @@ gfx_gradrect(0, 0, gfx_w, gfx_h, 0.62, 0.22, 0.08, 0.16, 0, 0, 0, 0, 0.14 / gfx_
 ui_header("GRUNT");
 
 // Presets dropdown menu with working preset assignments
-ui_button(177 * sc, 12 * sc, 24 * sc, 20 * sc, "<", 0, 1) ? (
-    cur_preset = cur_preset <= 1 ? 4 : cur_preset - 1;
-    load_preset(cur_preset);
-);
-ui_button(203 * sc, 12 * sc, 24 * sc, 20 * sc, ">", 0, 1) ? (
-    cur_preset = cur_preset >= 4 ? 1 : cur_preset + 1;
-    load_preset(cur_preset);
-);
 ui_button(235 * sc, 12 * sc, 72 * sc, 20 * sc, "PRESETS", 0, 1) ? (
-    cur_preset = gfx_showmenu("Default|Warm Console|American Crunch|British Punch");
-    cur_preset > 0 ? load_preset(cur_preset);
+    preset = gfx_showmenu("Default|Warm Console|American Crunch|British Punch");
+    preset == 1 ? ( slider1 = 0; slider2 = 0;   slider3 = 0.5; slider4 = 0.2; slider5 = 0.5; slider6 = 0;  slider7 = 1; );
+    preset == 2 ? ( slider1 = 6; slider2 = 100; slider3 = 0.3; slider4 = 0.4; slider5 = 0.7; slider6 = -2; slider7 = 2; );
+    preset == 3 ? ( slider1 = 9; slider2 = 100; slider3 = 0.8; slider4 = 0.1; slider5 = 0.3; slider6 = -4; slider7 = 1; );
+    preset == 4 ? ( slider1 = 4; slider2 = 0;   slider3 = 0.6; slider4 = 0.5; slider5 = 0.8; slider6 = -1; slider7 = 2; );
+    preset > 0 ? slider_automate(127);   // sliders 1-7
 );
 
 // Size picker & help (no theme picker - this panel's "Waka" skin is fixed)
@@ -203,10 +184,6 @@ ui_button(235 * sc, 12 * sc, 72 * sc, 20 * sc, "PRESETS", 0, 1) ? (
 // to fit a smaller window), so the panel content stops growing once the host window is
 // dragged bigger - it just leaves the warm gradient background around it instead of stretching.
 ui_size_picker(400 * sc, 13 * sc);
-pk_lcd(309 * sc, 12 * sc, 86 * sc, 20 * sc, 0);
-pk_lcdfont(9, 7 * sc); ui_col(pk_lcdc);
-gfx_x = 313 * sc; gfx_y = 18 * sc; gfx_drawstr(pname(cur_preset));
-
 
 // --- Second Row: Gain // Boost // Grunt // Sag ---
 y2 = 98 * sc;
