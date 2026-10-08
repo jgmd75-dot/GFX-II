@@ -1,4 +1,4 @@
-desc:GFX Harbour Keys
+desc:GFX G Harbour Keys
 //tags: instrument piano electric-piano rompler vaporwave physical-modeling chorus delay
 //author: JGWizrad / Garden FX (GFX)
 //
@@ -83,7 +83,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-harbour-keys";                                   // the ? pop-up links to this manual
+#ui_man = "gfx-g-harbour-keys";                                   // the ? pop-up links to this manual
 
 // ---------- memory (allocated with nextmem, clear of the output stage at 20000) ----------
 nextmem = 30000;
@@ -826,9 +826,9 @@ ui_cola(0xFFFFFF, 0.10); gfx_line(16 * sc, 9 * sc, 844 * sc, 9 * sc);
 ui_col(0xB8923A); gfx_circle(50 * sc, 58 * sc, 18 * sc, 1, 1);
 ui_cola(0xFFFFFF, 0.25); gfx_circle(45 * sc, 52 * sc, 8 * sc, 1, 1);
 gfx_setfont(2); ui_col(0x1A1408); ui_text(50 * sc, 51 * sc, "GFX");
-gfx_setfont(6, "Georgia", 30 * sc, 'bi');
-k_ = 0; loop(8, ui_cola(TGLO, 0.08); gfx_x = (80 + 2.5 * cos(k_ * 0.785)) * sc; gfx_y = (34 + 2.5 * sin(k_ * 0.785)) * sc; gfx_drawstr("Harbour Keys"); k_ += 1;);
-ui_col(TCORE); gfx_x = 80 * sc; gfx_y = 34 * sc; gfx_drawstr("Harbour Keys");
+gfx_setfont(6, "Georgia", 26 * sc, 'bi');
+k_ = 0; loop(8, ui_cola(TGLO, 0.08); gfx_x = (80 + 2.5 * cos(k_ * 0.785)) * sc; gfx_y = (34 + 2.5 * sin(k_ * 0.785)) * sc; gfx_drawstr("G Harbour Keys"); k_ += 1;);
+ui_col(TCORE); gfx_x = 80 * sc; gfx_y = 34 * sc; gfx_drawstr("G Harbour Keys");
 gfx_setfont(4); ui_cola(STC, 0.85); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("SYNTHETIC PIANO WITH MODULATION");
 
 // ---------- patch display ----------
