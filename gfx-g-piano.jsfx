@@ -508,14 +508,22 @@ file_var(0, edited);
 @gfx 860 368
 ui_thm = 9; ui_hw = 1;
 ui_begin(860, 368);
-INK = 0xE8D9B4; GOLD = 0xC9A043; GOLDL = 0xE8C66A; FELT = 0x5A1418;
+// faceplate by model: GRAND in Ascot Grey, UPRIGHT in an aged Chiffon White
+grand = slider2 < 0.5;
+grand ? (
+  P_TOP = 0x8F9294; P_BOT = 0x75787B; INK = 0x1C1D1F; GOLD = 0x7E5E1A; TITC = 0xF4F2EC; FELT = 0x5A1418;
+) : (
+  P_TOP = 0xEDE5CC; P_BOT = 0xD9CBA8; INK = 0x3A2F22; GOLD = 0x87652A; TITC = 0x3A2F22; FELT = 0x6E2C27;
+);
+GOLDL = 0xE8C66A;                                         // amber of the display and LEDs
 // ---------- helpers ----------
 function lbl(x, y, s, a) ( gfx_setfont(4); ui_cola(INK, a); ui_text(x * sc, y * sc, s); );
 function stitle(cx, s) ( gfx_setfont(4); ui_col(GOLD); ui_text(cx * sc, 150 * sc, s); );
 function divider(x) (
-  ui_cola(0x000000, 0.55); gfx_line(x * sc, 150 * sc, x * sc, 296 * sc);
-  ui_cola(0xFFFFFF, 0.06); gfx_line(x * sc + 1, 150 * sc, x * sc + 1, 296 * sc);
+  ui_cola(0x000000, 0.28); gfx_line(x * sc, 150 * sc, x * sc, 296 * sc);
+  ui_cola(0xFFFFFF, 0.35); gfx_line(x * sc + 1, 150 * sc, x * sc + 1, 296 * sc);
 );
+function hexf(c, k) ( ((c >> (16 - 8 * k)) & 255) / 255; );
 // brass-ringed LED key: returns 1 when clicked
 function lkey(x, y, w, h, on, s) local(hit) (
   hit = pk_ledbtn(x * sc, y * sc, w * sc, h * sc, on, GOLDL);
@@ -531,28 +539,51 @@ function pbtn(x, y, w, h) local(hit, inb) (
   hit;
 );
 
-// ---------- cabinet: piano-black lacquer with a felt strip and brass pinstripe ----------
+// ---------- cabinet: painted steel faceplate with a felt strip and a brass pinstripe ----------
 fh = 352;
-ui_col(0x070707); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(0x0B0B0C); gfx_rect(0, 0, gfx_w, gfx_h);
 ui_cola(0x000000, 0.6); ui_rrect(10 * sc, 12 * sc, 844 * sc, fh * sc, 7 * sc);
-ui_col(0x1A1718); ui_rrect(8 * sc, 8 * sc, 844 * sc, fh * sc, 7 * sc);
-gfx_gradrect(9 * sc, 9 * sc, 842 * sc, (fh - 2) * sc, 0.10, 0.09, 0.095, 1, 0, 0, 0, 0, -0.07 / ((fh - 2) * sc), -0.065 / ((fh - 2) * sc), -0.065 / ((fh - 2) * sc), 0);
-// lacquer sheen: a soft diagonal band
-ui_cola(0xFFFFFF, 0.035); gfx_triangle(140 * sc, 9 * sc, 330 * sc, 9 * sc, 150 * sc, (fh + 6) * sc, -40 * sc, (fh + 6) * sc);
-ui_cola(0xFFFFFF, 0.14); gfx_line(16 * sc, 9 * sc, 844 * sc, 9 * sc);
+ui_col(ui_mix(P_BOT, 0x000000, 0.45)); ui_rrect(8 * sc, 8 * sc, 844 * sc, fh * sc, 7 * sc);
+gh_ = (fh - 2) * sc;
+gfx_gradrect(9 * sc, 9 * sc, 842 * sc, gh_, hexf(P_TOP, 0), hexf(P_TOP, 1), hexf(P_TOP, 2), 1, 0, 0, 0, 0,
+             (hexf(P_BOT, 0) - hexf(P_TOP, 0)) / gh_, (hexf(P_BOT, 1) - hexf(P_TOP, 1)) / gh_, (hexf(P_BOT, 2) - hexf(P_TOP, 2)) / gh_, 0);
+grand ? (
+  // satin paint: a soft diagonal sheen
+  ui_cola(0xFFFFFF, 0.06); gfx_triangle(140 * sc, 9 * sc, 330 * sc, 9 * sc, 150 * sc, (fh + 6) * sc, -40 * sc, (fh + 6) * sc);
+) : (
+  // age: nicotine yellowing towards the edges, speckled wear, a scuffed lower edge
+  gfx_gradrect(9 * sc, 9 * sc, 842 * sc, 60 * sc, 0.55, 0.40, 0.15, 0.10, 0, 0, 0, 0, 0, 0, 0, -0.10 / (60 * sc));
+  gfx_gradrect(9 * sc, (fh - 60) * sc, 842 * sc, 60 * sc, 0.45, 0.32, 0.12, 0, 0, 0, 0, 0, 0, 0, 0, 0.16 / (60 * sc));
+  gfx_gradrect(9 * sc, 9 * sc, 70 * sc, gh_, 0.50, 0.36, 0.12, 0.12, 0, 0, 0, -0.12 / (70 * sc), 0, 0, 0, 0);
+  gfx_gradrect(781 * sc, 9 * sc, 70 * sc, gh_, 0.50, 0.36, 0.12, 0, 0, 0, 0, 0.12 / (70 * sc), 0, 0, 0, 0);
+  k_ = 0;
+  loop(260,
+    ax_ = 14 + 832 * ui_hash(k_ * 3.17 + 1); ay_ = 14 + (fh - 12) * ui_hash(k_ * 7.31 + 2);
+    ui_cola(ui_hash(k_ * 1.91) > 0.3 ? 0x5A4020 : 0xFFFFFF, 0.05 + 0.08 * ui_hash(k_ * 5.03));
+    gfx_circle(ax_ * sc, ay_ * sc, (0.4 + 1.3 * ui_hash(k_ * 2.77)) * sc, 1, 1);
+    k_ += 1;
+  );
+  k_ = 0;
+  loop(40,
+    ax_ = 20 + 820 * ui_hash(k_ * 4.13 + 9);
+    ui_cola(0x6A5A40, 0.10 + 0.10 * ui_hash(k_ * 6.1)); gfx_line(ax_ * sc, (fh + 4) * sc, (ax_ + 4 + 10 * ui_hash(k_)) * sc, (fh + 2 - 4 * ui_hash(k_ * 3)) * sc, 1);
+    k_ += 1;
+  );
+);
+ui_cola(0xFFFFFF, grand ? 0.25 : 0.4); gfx_line(16 * sc, 9 * sc, 844 * sc, 9 * sc);
 // felt strip
 ui_col(FELT); gfx_rect(16 * sc, 12 * sc, 828 * sc, 6 * sc);
 ui_cola(0x000000, 0.35); gfx_rect(16 * sc, 17 * sc, 828 * sc, 1 * sc);
 // brass pinstripe
 ui_col(GOLD); gfx_rect(20 * sc, 126 * sc, 820 * sc, 1 * sc);
-ui_cola(GOLD, 0.45); gfx_rect(20 * sc, 300 * sc, 820 * sc, 1 * sc);
+ui_cola(GOLD, 0.6); gfx_rect(20 * sc, 300 * sc, 820 * sc, 1 * sc);
 
 // ---------- brand ----------
-ui_col(GOLD); gfx_circle(50 * sc, 58 * sc, 18 * sc, 1, 1);
+ui_col(0xB8923A); gfx_circle(50 * sc, 58 * sc, 18 * sc, 1, 1);
 ui_cola(0xFFFFFF, 0.25); gfx_circle(45 * sc, 52 * sc, 8 * sc, 1, 1);
 gfx_setfont(2); ui_col(0x1A1408); ui_text(50 * sc, 51 * sc, "GFX");
-gfx_setfont(6, "Georgia", 30 * sc, 'b'); ui_col(GOLDL); gfx_x = 80 * sc; gfx_y = 36 * sc; gfx_drawstr("G Piano");
-gfx_setfont(4); ui_cola(INK, 0.7); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("PHYSICAL MODEL GRAND & UPRIGHT");
+gfx_setfont(6, "Georgia", 30 * sc, 'b'); ui_col(TITC); gfx_x = 80 * sc; gfx_y = 36 * sc; gfx_drawstr("G Piano");
+gfx_setfont(4); ui_cola(INK, 0.8); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("PHYSICAL MODEL GRAND & UPRIGHT");
 
 // ---------- patch display ----------
 ui_col(0x050505); ui_rrect(300 * sc, 34 * sc, 210 * sc, 56 * sc, 4 * sc);
@@ -598,7 +629,7 @@ pressed && drag_id == 0 && mouse_x >= 300 * sc && mouse_x < 510 * sc && mouse_y 
 ui_col(GOLDL); gfx_triangle(494 * sc, 78 * sc, 502 * sc, 78 * sc, 498 * sc, 83 * sc);
 pbtn(518, 34, 34, 26) ? load_patch(slider1 >= 11 ? 0 : slider1 + 1);
 pbtn(518, 64, 34, 26) ? load_patch(slider1 <= 0 ? 11 : slider1 - 1);
-ui_col(INK);
+ui_col(0xE8E2D4);                                         // arrows on the dark patch keys
 gfx_line(529 * sc, 49 * sc, 535 * sc, 43 * sc, 1); gfx_line(535 * sc, 43 * sc, 541 * sc, 49 * sc, 1);
 gfx_line(529 * sc, 74 * sc, 535 * sc, 80 * sc, 1); gfx_line(535 * sc, 80 * sc, 541 * sc, 74 * sc, 1);
 lbl(535, 96, "PATCH", 0.6);
