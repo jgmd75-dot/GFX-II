@@ -247,7 +247,8 @@ gfx_setfont(9, "Arial", 11*qs, 'b');                       // meter numerals
 gfx_setfont(10, "Arial", 54*qs, 'bi');                     // TS-7
 gfx_setfont(11, "Courier New", 15*qs, 'b');                // preset readout
 
-hw ? ( PB = 0x121214; INK = 0xEDEDE8; INK2 = 0xB8B8B2; ) : ( NB = 0xE3E5E9; NL = 0xFFFFFF; ND = 0xB6BAC2; NW = 0xD7DADF; INK = 0x2A2D33; INK2 = 0x6A707A; );
+// HW: charcoal grey; flat: calcaire (limestone) white
+hw ? ( PB = 0x2D2F33; INK = 0xEDEDE8; INK2 = 0xBDBDB7; ) : ( NB = 0xE8E3D8; NL = 0xFBF9F3; ND = 0xBDB5A5; NW = 0xDCD6C9; INK = 0x3A352D; INK2 = 0x7A7266; );
 GRN = 0x3CDC5A; YEL = 0xF4D23C; RED = 0xFF3A2A; AMB = 0xFFA530;
 
 function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
@@ -301,7 +302,7 @@ function wkey(x, y, w, h) local(hov, hit, dn) (
   ) : (
     dn ? n_well(x, y, w, h, 5) : (
       n_raised(x, y, w, h, 5, 3);
-      ui_col(0xFAFBFC); RR(x + 3, y + 3, w - 6, h - 7, 4);
+      ui_col(0xFCFAF4); RR(x + 3, y + 3, w - 6, h - 7, 4);
     );
   );
   hit;
@@ -345,10 +346,10 @@ function wknob(idx, cx, cy, r, lo, hi, def, label, fmt) local(v, n, a, ca, sa, i
     ui_cola(0x000000, 0.12); CIRC(cx, cy, r*0.8, 0); CIRC(cx, cy, r*0.36, 0);
   ) : (
     n_circ_shadow(cx, cy, r, 5);
-    ui_col(0xF7F8FA); CIRC(cx, cy, r, 1);
+    ui_col(0xFAF7F0); CIRC(cx, cy, r, 1);
     i = 0; loop(60, t = i/60*2*$pi; ui_cola(0x000000, i % 2 ? 0.04 : 0.10);
       gfx_line((cx + cos(t)*r*0.86)*qs, (cy + sin(t)*r*0.86)*qs, (cx + cos(t)*r)*qs, (cy + sin(t)*r)*qs, 1); i += 1; );
-    ui_col(0xFDFDFE); CIRC(cx, cy, r*0.82, 1);
+    ui_col(0xFDFBF6); CIRC(cx, cy, r*0.82, 1);
   );
   ui_col(0x141416); i = -1;
   loop(3, gfx_line((cx + ca*r*0.3 - sa*i*0.9)*qs, (cy + sa*r*0.3 + ca*i*0.9)*qs, (cx + ca*r*0.9 - sa*i*0.9)*qs, (cy + sa*r*0.9 + ca*i*0.9)*qs, 1); i += 1; );
@@ -376,7 +377,7 @@ function sknob(idx, cx, cy, r, lo, hi, def) local(v, n, a, ca, sa, did, dx, dy, 
   hov && mouse_wheel != 0 && drag_id == 0 ? ( slider(idx) = min(max(v + sign(mouse_wheel), lo), hi); ui_auto(idx); mouse_wheel = 0; );
   n = (slider(idx) - lo)/(hi - lo); a = (-0.75 + n*1.5)*$pi; ca = sin(a); sa = -cos(a);
   hw ? ( ui_cola(0x000000, 0.5); CIRC(cx + 2, cy + 3, r, 1); ui_col(0xC8C8C3); CIRC(cx, cy, r, 1); ui_col(0xEDEDE9); CIRC(cx, cy, r*0.78, 1); )
-     : ( n_circ_shadow(cx, cy, r, 3); ui_col(0xFAFBFC); CIRC(cx, cy, r, 1); );
+     : ( n_circ_shadow(cx, cy, r, 3); ui_col(0xFCFAF4); CIRC(cx, cy, r, 1); );
   ui_col(0x141416); gfx_line((cx + ca*r*0.25)*qs, (cy + sa*r*0.25)*qs, (cx + ca*r*0.9)*qs, (cy + sa*r*0.9)*qs, 1);
   i = 0; loop(11, a = (-0.75 + i/10*1.5)*$pi; ui_cola(INK, 0.7);
     gfx_line((cx + sin(a)*(r + 3))*qs, (cy - cos(a)*(r + 3))*qs, (cx + sin(a)*(r + 7))*qs, (cy - cos(a)*(r + 7))*qs, 1); i += 1; );
@@ -409,7 +410,7 @@ hw ? (
   gfx_gradrect(4*qs, 4*qs, 1392*qs, 150*qs, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06/(150*qs));
   ui_cola(0xFFFFFF, 0.12); R(4, 4, 1392, 1);
   // rack ears
-  ui_col(0x1A1A1D); R(4, 4, 38, 312); R(1358, 4, 38, 312);
+  ui_col(0x26282C); R(4, 4, 38, 312); R(1358, 4, 38, 312);
   ui_cola(0x000000, 0.6); R(42, 4, 2, 312); R(1356, 4, 2, 312);
   ui_col(0x020203); RR(14, 28, 18, 34, 9); RR(14, 258, 18, 34, 9); RR(1368, 28, 18, 34, 9); RR(1368, 258, 18, 34, 9);
 ) : (
@@ -488,7 +489,7 @@ wknob(3, 1282, 146, 50, -24, 12, 0, "OUTPUT", "%+.1f dB");
 // ---- bottom strip: preset, oversampling, output stage, mix ----
 gfx_setfont(6); ui_col(INK); TL(600, 238, "PRESET");
 hw ? ( ui_col(0x050506); R(600, 256, 200, 30); ) : n_well(600, 256, 200, 30, 6);
-gfx_setfont(11); ui_col(hw ? 0xF4D23C : 0x2A2D33); TL(610, 263, pname(slider1));
+gfx_setfont(11); ui_col(hw ? 0xF4D23C : 0x3A352D); TL(610, 263, pname(slider1));
 pressed && drag_id == 0 && inbox(600, 256, 200, 30) ? (
   drag_id = -1; #pm = ""; i = 0;
   loop(8, slider1 == i ? strcat(#pm, "!"); strcat(#pm, pname(i)); i < 7 ? strcat(#pm, "|"); i += 1; );
