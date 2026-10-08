@@ -190,9 +190,9 @@ ui_dflt = 1;
 
 @serialize
 file_var(0, ui_sz);
-file_var(0, ui_hw);
 file_var(0, lastPreset);
-file_var(0, gt_thm);
+// added with the house GUI: older projects end here, so they keep the defaults
+file_avail(0) != 0 ? ( file_var(0, ui_hw); file_var(0, gt_thm); );
 
 @slider
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );

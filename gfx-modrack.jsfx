@@ -247,6 +247,7 @@ ui_dflt = 1;
 
 @serialize
 file_var(0, ui_sz);
+file_var(0, ui_szinit);                       // kept so older projects load into the right places
 file_var(0, lastPreset);
 
 @slider
