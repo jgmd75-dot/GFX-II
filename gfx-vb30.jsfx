@@ -225,7 +225,7 @@ function knob(slot, row, idx, lo, hi, def, lg, s, hot, val) local(cx, cy) (
   cx = 96 + slot * 84; cy = row ? 288 : 128;
   dy_knob(cx, cy, 17, idx, lo, hi, def, lg, PTR, "", "");
   plate(cx, cy + 27, 66, s, hot);
-  dy_lbl(cx, cy + 50, val, 0.65);
+  dy_act ? dy_lbl(cx, cy + 50, val, 1);   // value on hover / drag only
 );
 // orange heading with fine bracket lines down to the knobs it covers
 function bracket(x0, x1, y, s) local(tw, th, cx) (

@@ -424,6 +424,7 @@ function btn(x, y, w, h, lbl, on, fnt) local(sw, sh) (
 function knob(id, cx, cy, rad, v, vmin, vmax, lgt, bip, def) local(dx, dy, fr, nf, ang, a0, sx, sy, sr, k, t, ca, sa, ta) (
   fr = lgt ? log(v/vmin)/log(vmax/vmin) : (v - vmin)/(vmax - vmin);
   dx = mx - cx; dy = my - cy;
+  kn_hot = drag_id == id || (dx*dx + dy*dy) < (rad*rad*1.6);   // house style: values show on hover / drag only
   pressed && drag_id == 0 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
     ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? ( v = def; kc_t = 0; k_rst = id; drag_id = -1; ) :
     ( drag_id = id; drag_sy = my; drag_sf = fr; kc_id = id; kc_t = time_precise(); );
@@ -472,7 +473,7 @@ function knob(id, cx, cy, rad, v, vmin, vmax, lgt, bip, def) local(dx, dy, fr, n
 function touch(id, name, val) (
   (drag_id == id || k_rst == id) ? ( strcpy(#lcdn, name); strcpy(#lcdv, val); lcd_t = time_precise(); k_rst == id ? k_rst = -1; );
 );
-function klab(cx, y, lbl, val) ( cink(); gfx_setfont(11); TC(cx, y, lbl); gfx_setfont(12); TC(cx, y + 18, val); );
+function klab(cx, y, lbl, val) ( cink(); gfx_setfont(11); TC(cx, y, lbl); gfx_setfont(12); (kn_hot || !kl_num) ? TC(cx, y + 18, val); kl_num = 1; );   // value on hover / drag only (kl_num = 0: a word, always shown)
 function fpct(v) ( sprintf(#vt, "%d%%", floor(v + 0.5)); #vt; );
 function fct(v) ( sprintf(#vt, v >= 0 ? "+%.1f ct" : "%.1f ct", v); #vt; );
 function fhz(v) ( v >= 1000 ? sprintf(#vt, "%.1f kHz", v/1000) : sprintf(#vt, "%d Hz", floor(v + 0.5)); #vt; );
@@ -521,7 +522,7 @@ function rank(x, y, base, title, seed, kid) local(iv, k, px_, py_, w_, yv, py0) 
   );
   // knobs
   setk(base + 1, knob(kid + 1, x + 45,  y + 162, 21, slider(base + 1), 0, 100, 0, 0, 55));
-  klab(x + 45, y + 190, "WAVE", w_ < 0.17 ? "SINE" : w_ < 0.5 ? "TRI" : w_ < 0.83 ? "SAW" : "PULSE");   // dominant wave
+  kl_num = 0; klab(x + 45, y + 190, "WAVE", w_ < 0.17 ? "SINE" : w_ < 0.5 ? "TRI" : w_ < 0.83 ? "SAW" : "PULSE");   // dominant wave
   touch(kid + 1, title, fpct(slider(base + 1)));
   setk(base + 2, knob(kid + 2, x + 122, y + 162, 21, slider(base + 2), 0, 100, 0, 0, 70));
   klab(x + 122, y + 190, "LEVEL", fpct(slider(base + 2))); touch(kid + 2, title, fpct(slider(base + 2)));

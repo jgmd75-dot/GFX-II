@@ -188,7 +188,8 @@ function dy_knob(cx, cy, r, idx, lo, hi, def, lg, cap, label, val) local(v, n, d
   dy_step = 0; dy_kf = 0;
   (hov || drag_id == did) ? ( ui_cola(0xFFFFFF, 0.08); gfx_circle(cx * sc, cy * sc, (r + 3) * sc, 1, 1); );
   gfx_setfont(5); ui_col(dy_ink); ui_text(cx * sc, (cy + r + 12) * sc, label);
-  (!dy_nov || hov || drag_id == did) ? dy_lbl(cx, cy + r + 26, val, (hov || drag_id == did) ? 1 : 0.65);
+  dy_act = hov || drag_id == did;   // wrappers that print their own value read this
+  dy_act ? dy_lbl(cx, cy + r + 26, val, 1);   // house style: the value shows on hover / drag only
 );
 function dy_btn(x, y, on, led, s) local(hit) (
   hit = pk_ledbtn(x * sc, y * sc, 40 * sc, 26 * sc, on, led);

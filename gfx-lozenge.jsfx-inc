@@ -163,7 +163,7 @@ function lz_knob(cx, cy, r, idx, lo, hi, def, lg, label, val) local(v, n, dx, dy
   lz_kind ? ( strcpy(#kf_lo, ""); strcpy(#kf_hi, ""); ui_knob_filter(cx * sc, cy * sc, r * sc, a, 0, lz_kind); )
           : lz_face_draw(cx * sc, cy * sc, r * sc, a, lz_cap);
   (hov || drag_id == did) ? ( ui_col(lz_lt); gfx_circle(cx * sc, cy * sc, (r + 3) * sc, 0, 1); );
-  strlen(val) ? lz_lcd(cx, cy + r + 10, lz_lw, val);
+  strlen(val) ? lz_lcd(cx, cy + r + 10, lz_lw, (hov || drag_id == did) ? val : "");   // house style: readout lit on hover / drag only
   lz_step = 0; lz_kind = 0; lz_cap = 0; lz_lw = 60;
 );
 // a lit square push button (x = centre, y = top): a coloured lens in a dark bezel, the name underneath.

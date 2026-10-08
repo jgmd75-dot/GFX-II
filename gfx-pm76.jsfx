@@ -233,8 +233,8 @@ function sbtn(x, y, on, col, s) local(hit, inb) (
 // a knob with a black value box above it and a tan name tag below
 function kn(cx, idx, lo, hi, def, lg, col, nm, val) (
   ui_col(0x0A0A0B); gfx_rect((cx - 28) * sc, 242 * sc, 56 * sc, 13 * sc);
-  gfx_setfont(4); ui_col(0xFFFFFF); ui_text(cx * sc, 244 * sc, val);
   dy_knob(cx, 284, 17, idx, lo, hi, def, lg, col, "", "");
+  dy_act ? ( gfx_setfont(4); ui_col(0xFFFFFF); ui_text(cx * sc, 244 * sc, val); );   // value window lit on hover / drag only
   ui_col(TAN); gfx_rect((cx - 34) * sc, 314 * sc, 68 * sc, 15 * sc);
   ui_cola(0xFFFFFF, 0.2); gfx_rect((cx - 34) * sc, 314 * sc, 68 * sc, 1 * sc);
   gfx_setfont(4); ui_col(0x3A2E1A); ui_text(cx * sc, 317 * sc, nm);

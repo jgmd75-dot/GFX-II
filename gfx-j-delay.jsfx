@@ -299,7 +299,7 @@ function rknob(k, cx, cy, r, cap, unit) local(v, n, a, did, hov, i, t, p) (
   ui_kline(cx * sc, cy * sc, a, r * 0.2 * sc, r * 0.92 * sc, 2.4, 0xE8EAEE);
   (hov || drag_id == did) ? ( ui_col(ui_mix(PNL, INK, 0.3)); gfx_circle(cx * sc, cy * sc, (r + 2) * sc, 0, 1); );
   ui_col(WIN); lz_rr(cx - 40, cy + r + 9, 80, 26, 4);
-  seg_str((cx - 22) * sc, (cy + r + 13) * sc, 9 * sc, 18 * sc, 5, pv_text(k), GRN, 0x0C2414);
+  seg_str((cx - 22) * sc, (cy + r + 13) * sc, 9 * sc, 18 * sc, 5, (hov || drag_id == did) ? pv_text(k) : "", GRN, 0x0C2414);   // readout lit on hover / drag only
   gfx_setfont(6, "Arial", 8 * sc, 'b'); ui_col(ui_mix(WIN, GRN, 0.7)); gfx_x = (cx - 37) * sc; gfx_y = (cy + r + 12) * sc; gfx_drawstr(unit);
 );
 
