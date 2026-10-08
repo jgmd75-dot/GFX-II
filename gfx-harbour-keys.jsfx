@@ -829,7 +829,7 @@ gfx_setfont(2); ui_col(0x1A1408); ui_text(50 * sc, 51 * sc, "GFX");
 gfx_setfont(6, "Georgia", 30 * sc, 'bi');
 k_ = 0; loop(8, ui_cola(TGLO, 0.08); gfx_x = (80 + 2.5 * cos(k_ * 0.785)) * sc; gfx_y = (34 + 2.5 * sin(k_ * 0.785)) * sc; gfx_drawstr("Harbour Keys"); k_ += 1;);
 ui_col(TCORE); gfx_x = 80 * sc; gfx_y = 34 * sc; gfx_drawstr("Harbour Keys");
-gfx_setfont(4); ui_cola(STC, 0.85); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("SYNTHETIC PIANO  /  ROM  /  TAPE  /  MOD RACK");
+gfx_setfont(4); ui_cola(STC, 0.85); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("SYNTHETIC PIANO WITH MODULATION");
 
 // ---------- patch display ----------
 ui_col(0x030208); ui_rrect(300 * sc, 34 * sc, 210 * sc, 56 * sc, 4 * sc);
