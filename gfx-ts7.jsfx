@@ -1,6 +1,6 @@
 desc:GFX TS-7
 // gfx-ts7 - Analog Tape Simulator & Compressor (1U, after the classic multi-stage tape/transformer boxes)
-//tags: tape saturation compressor transformer warmth spank
+//tags: tape saturation compressor transformer warmth slam
 //author: JGWizrad / Garden FX (GFX)
 //
 // CHAIN   IN -> INPUT -> [ oversampled 2x / 4x:  IRON -> WARMTH -> COMP (+ MIX) ] -> OUTPUT -> OUT stage
@@ -10,9 +10,9 @@ desc:GFX TS-7
 // WARMTH  The HF tape tamer: a side-chain watches the top (above ~3.5 kHz) and, when transients push past
 //         the threshold, pulls the top down fast and lets it back slowly, like tape compressing its own
 //         high frequencies. Six steps: each one lowers the threshold by 4 dB (and so tames more).
-// COMP    TRANNY  gentle 2:1 leveling, slow, into a saturating output transformer.
+// COMP    TX      gentle 2:1 leveling, slow, into a saturating output transformer.
 //         BUS     smooth 3:1 programme compression, transients let through, dual-stage release.
-//         SPANK   feedback topology, ultra-fast attack and release: slams transients and pumps.
+//         SLAM    feedback topology, ultra-fast attack and release: slams transients and pumps.
 //         Every mode has a dual-stage detector: a fast envelope catches the peaks, a slow one holds the
 //         body, and the deeper of the two sets the gain (a two-stage, programme-dependent release).
 //         Thresholds are fixed as on the hardware: INPUT drives the compressor. Make-up is automatic.
@@ -31,11 +31,11 @@ import gfx-panel.jsfx-inc
 import gfx-dyn.jsfx-inc
 import gfx-faceplate.jsfx-inc
 
-slider1:0<0,7,1{Init,Tape Glue Bus,Drum Spank,Vocal Tranny,Warm Master,Bass Iron,Parallel Smash,Lo-Fi Tape}>-Preset
+slider1:0<0,7,1{Init,Tape Glue Bus,Drum Slam,Vocal Tx,Warm Master,Bass Iron,Parallel Smash,Lo-Fi Tape}>-Preset
 slider2:0<-12,24,0.1>-Input (dB)
 slider3:0<-24,12,0.1>-Output (dB)
 slider4:0<0,6,1{Off,1,2,3,4,5,6}>-Warmth
-slider5:0<0,3,1{Off,Tranny,Bus,Spank}>-Comp
+slider5:0<0,3,1{Off,Tx,Bus,Slam}>-Comp
 slider6:1<0,1,1{Off,On}>-Iron
 slider7:100<0,100,1>-Mix (%)
 slider8:0<0,1,1{Off,On}>-Bypass
@@ -126,7 +126,7 @@ function proc(l, r) local(e, lev, over, gt, g, d, pl_, pr_, ms_) (
     cGr = max(cGf, cGs);
     g = db2g(-cGr);
     l *= g; r *= g;
-    cYL = l; cYR = r;                               // SPANK's feedback detector listens here (before make-up)
+    cYL = l; cYR = r;                               // SLAM's feedback detector listens here (before make-up)
     g = db2g(cMk); l *= g; r *= g;
     d = cDrv;
     l = (tanh(l*d + cBias) - tanh(cBias))/d; r = (tanh(r*d + cBias) - tanh(cBias))/d;
@@ -167,15 +167,15 @@ function pset(i, o, w, c, ir, m) ( slider2 = i; slider3 = o; slider4 = w; slider
 function apply_preset(n) (
   pset(0, 0, 0, 0, 1, 100); slider8 = 0;
   n == 1 ? pset(3, -2, 2, 2, 1, 100) :      // Tape Glue Bus
-  n == 2 ? pset(6, -4, 3, 3, 1, 100) :      // Drum Spank
-  n == 3 ? pset(4, -2, 2, 1, 1, 100) :      // Vocal Tranny
+  n == 2 ? pset(6, -4, 3, 3, 1, 100) :      // Drum Slam
+  n == 3 ? pset(4, -2, 2, 1, 1, 100) :      // Vocal Tx
   n == 4 ? pset(2, -1, 1, 2, 1, 60) :       // Warm Master
   n == 5 ? pset(8, -6, 0, 1, 1, 100) :      // Bass Iron
   n == 6 ? pset(8, -3, 2, 3, 1, 35) :       // Parallel Smash
   n == 7 ? pset(12, -8, 6, 3, 1, 100);      // Lo-Fi Tape
 );
 function pname(n) (
-  n == 0 ? "INIT" : n == 1 ? "TAPE GLUE BUS" : n == 2 ? "DRUM SPANK" : n == 3 ? "VOCAL TRANNY" :
+  n == 0 ? "INIT" : n == 1 ? "TAPE GLUE BUS" : n == 2 ? "DRUM SLAM" : n == 3 ? "VOCAL TX" :
   n == 4 ? "WARM MASTER" : n == 5 ? "BASS IRON" : n == 6 ? "PARALLEL SMASH" : "LO-FI TAPE";
 );
 
@@ -425,14 +425,14 @@ ui_size_picker(62*qs, 232*qs);
 ui_hw_toggle(140*qs, 232*qs);
 
 // ---- INPUT ----
-wknob(2, 320, 150, 64, -12, 24, 0, "INPUT", "%+.1f dB");
+wknob(2, 296, 146, 50, -12, 24, 0, "INPUT", "%+.1f dB");
 
 // ---- COMP: mode LEDs and the white key that steps through them ----
 cm = floor(slider5 + 0.5);
 gfx_setfont(6);
 led(452, 74, 5, cm == 2, GRN); ui_col(INK); TL(464, 67, "BUS");
-led(452, 102, 5, cm == 1, YEL); ui_col(INK); TL(464, 95, "TRANNY");
-led(452, 130, 5, cm == 3, RED); ui_col(INK); TL(464, 123, "SPANK");
+led(452, 102, 5, cm == 1, YEL); ui_col(INK); TL(464, 95, "TX");
+led(452, 130, 5, cm == 3, RED); ui_col(INK); TL(464, 123, "SLAM");
 wkey(436, 166, 64, 34) ? ( slider5 = cm >= 3 ? 0 : cm + 1; ui_auto(5); );
 gfx_setfont(7); ui_col(INK); TC(468, 212, "COMP");
 
@@ -473,7 +473,7 @@ wkey(1080, 166, 64, 32) ? ( slider8 = slider8 < 0.5; ui_auto(8); );
 gfx_setfont(6); ui_col(INK); TC(1112, 204, "BYPASS");
 
 // ---- OUTPUT ----
-wknob(3, 1262, 150, 64, -24, 12, 0, "OUTPUT", "%+.1f dB");
+wknob(3, 1282, 146, 50, -24, 12, 0, "OUTPUT", "%+.1f dB");
 
 // ---- bottom strip: preset, oversampling, output stage, mix ----
 gfx_setfont(6); ui_col(INK); TL(600, 238, "PRESET");
