@@ -1,19 +1,19 @@
 desc:GFX Quad22
-// gfx-quad22 - Dolby A-Style 4-Band Compander / Saturator / EQ
+// GFX Quad22 - 4-Band Compander / Saturator / EQ
 //tags: dynamics multiband saturation eq
 //author: JGWizrad / Garden FX (GFX)
 //
-// A modern rebuild of the Dolby A "Cat 22" idea as a 4-band channel strip.
+// A modern take on the classic studio noise-reduction compander idea as a 4-band channel strip.
 // Splits audio at 80 Hz / 3 kHz / 9 kHz with phase-coherent Linkwitz-Riley (LR4)
 // crossovers, then runs each band through Saturation -> EQ -> Compander -> Gain,
 // sums the bands, blends with the phase-aligned dry signal (Mix), then master trim + ceiling limiter.
-// Compander: left = Dolby-encode-style upward lift, right = Dolby-decode-style downward expansion.
+// Compander: left = encode-style upward lift, right = decode-style downward expansion.
 
 slider2:0<-24,24,0.1>-Master Trim (dB)
 slider3:-0.3<-12,0,0.1>-Ceiling (dB)
 slider4:0<0,1,1{Light Grey,Dark Blue}>-Theme
 slider5:100<0,100,1>-Dry/Wet Mix (%)
-slider6:0<0,7,1{Init,Dolby Air,Gentle Glue,Tape Master,Vocal Presence,Low-End Control,Analog Sheen,Loudness Push}>-Preset
+slider6:0<0,7,1{Init,Air Lift,Gentle Glue,Tape Master,Vocal Presence,Low-End Control,Analog Sheen,Loudness Push}>-Preset
 
 slider10:2<0,3,1{Off,Transformer,Tape,Transistor}>-B1 Sat Type
 slider11:0<0,100,1>-B1 Drive
@@ -167,7 +167,7 @@ function updEQ() (
 );
 updEQ();
 
-// compander envelope coefficients (Dolby Cat 22 fast-attack, dual-stage release approximation)
+// compander envelope coefficients (fast attack, dual-stage release)
 atkC = 1 - exp(-1/(0.003 * srate)); // 3ms attack
 relC = 1 - exp(-1/(0.075 * srate)); // 75ms release
 relLF = 1 - exp(-1/(0.200 * srate)); // 200ms release for Band 1 (stops envelope ripple modulating sub-bass)
@@ -250,11 +250,11 @@ function softk(o, w) (
   o <= -w*0.5 ? 0 : o >= w*0.5 ? o : (o + w*0.5)*(o + w*0.5)/(2*w);
 );
 
-// Dolby-style single-knob compander. c = -100..+100, |c| <= 2 is flat.
-// Left  (c < 0): Dolby "encode" UPWARD compression. Lifts material below -20 dB, leaves peaks alone.
+// Single-knob compander. c = -100..+100, |c| <= 2 is flat.
+// Left  (c < 0): "encode" UPWARD compression. Lifts material below -20 dB, leaves peaks alone.
 //                Slope 0 -> 0.6 dB/dB, max lift 0 -> 15 dB, 12 dB soft knee. The fast attack lets
 //                transients through unlifted while tails and low-level detail come up: the "air/breath" trick.
-// Right (c > 0): Dolby "decode" downward expansion below threshold, threshold -50 -> -26 dB,
+// Right (c > 0): "decode" downward expansion below threshold, threshold -50 -> -26 dB,
 //                ratio 1:1 -> 1:2, 12 dB soft knee, max 40 dB cut. Never adds gain, so it can't push overs.
 function overeasy(x, c, sp, rc) local(ax, co_c, env, envdb, a, s, T, g) (
   ax = abs(x);
@@ -287,7 +287,7 @@ function pb(base, sat, drv, eq, cpd, gn) (
 function apply_preset(n) (
   n == 0 ? ( // Init
     pm(0, -0.3, 100); pb(10, 0, 0, 0, 0, 0); pb(20, 0, 0, 0, 0, 0); pb(30, 0, 0, 0, 0, 0); pb(40, 0, 0, 0, 0, 0);
-  ) : n == 1 ? ( // Dolby Air: lift on bands 3-4, touch of high shelf
+  ) : n == 1 ? ( // Air Lift: lift on bands 3-4, touch of high shelf
     pm(0, -0.3, 100); pb(10, 0, 0, 0, 0, 0); pb(20, 0, 0, 0, 0, 0); pb(30, 0, 0, 1.0, -35, 0); pb(40, 0, 0, 2.0, -50, 0);
   ) : n == 2 ? ( // Gentle Glue: mild lift everywhere, tape on band 2
     pm(0, -0.3, 100); pb(10, 0, 0, 0, -15, 0); pb(20, 2, 15, 0, -20, 0); pb(30, 0, 0, 0, -20, 0); pb(40, 0, 0, 0, -20, 0);
@@ -388,7 +388,7 @@ mtr[4] = max(mtr[4]*0.92, max(abs(spl0), abs(spl1)));
 
 // =====================================================================
 // GUI — drawn in a 1300 x 790 design space. Size picker: S 60% / M 75% / L 90%
-// (shrinks further if the window is smaller). HW = Dolby 361 rack faceplate.
+// (shrinks further if the window is smaller). HW = vintage rack faceplate.
 // =====================================================================
 
 // ---- Theme Palette ----
@@ -430,7 +430,7 @@ theme == 0 ? (
   c_scr_r  = 0.30; c_scr_g  = 0.33; c_scr_b  = 0.40;
 );
 
-// HW look: fixed Dolby 361 brushed-aluminium faceplate (theme does not apply)
+// HW look: fixed brushed-aluminium rack faceplate (theme does not apply)
 hw = ui_hw;
 hw ? (
   c_bg_r   = 0.78; c_bg_g   = 0.79; c_bg_b   = 0.80;   // aluminium (brushed in draw)
@@ -451,7 +451,7 @@ hw ? (
   c_scr_r  = 0.60; c_scr_g  = 0.61; c_scr_b  = 0.63;
 );
 
-// LCD colours: flat = accent-tinted on near-black, HW = Dolby amber on black
+// LCD colours: flat = accent-tinted on near-black, HW = amber on black
 hw ? ( l_bg_r = 0.06; l_bg_g = 0.04; l_bg_b = 0.02; l_tx_r = 1.00; l_tx_g = 0.66; l_tx_b = 0.15; ) :
 theme == 0 ? ( l_bg_r = 0.05; l_bg_g = 0.09; l_bg_b = 0.09; l_tx_r = 0.30; l_tx_g = 0.92; l_tx_b = 0.80; ) :
              ( l_bg_r = 0.04; l_bg_g = 0.06; l_bg_b = 0.11; l_tx_r = 0.55; l_tx_g = 0.80; l_tx_b = 1.00; );
@@ -691,14 +691,14 @@ hw ? ctxt() : cacc(); gfx_setfont(1);
 TX(32, 38, "QUAD");
 TX(32, 92, "22");
 cdim(); gfx_setfont(2);
-TX(192, 58, "CAT 22 DOLBY A 4-BAND");
+TX(192, 58, "QUAD22  4-BAND COMPANDER");
 TX(192, 84, "ARCHITECTURE");
 
 // Theme toggle (flat look only; the HW faceplate is fixed)
 hw ? (
   bevel(441, 53, 182, 60, 1);
-  ctxt(); gfx_setfont(5); TC(532, 64, "MODEL 361");
-  cdim(); gfx_setfont(7); TC(532, 88, "CAT. NO. 22  4-BAND");
+  ctxt(); gfx_setfont(5); TC(532, 64, "MODEL Q22");
+  cdim(); gfx_setfont(7); TC(532, 88, "COMP / SAT / EQ");
 ) : (
   cpan(); R(441, 53, 182, 60); cbrd(); RO(441, 53, 182, 60);
   btn2(447, 58, 84, 50, "LIGHT", "GREY", slider4 == 0) ? slider4 = 0;
@@ -719,7 +719,7 @@ hw ? bevel(688, 54, 254, 58, 1) : ( cbrd(); RO(690, 56, 250, 54); );
 col(l_tx_r, l_tx_g, l_tx_b);
 gfx_setfont(10); sprintf(#lcd1, "PRESET %02d/08", slider6 + 1); TX(702, 62, #lcd1);
 gfx_setfont(9);
-TX(702, 80, slider6 == 0 ? "INIT" : slider6 == 1 ? "DOLBY AIR" : slider6 == 2 ? "GENTLE GLUE" : slider6 == 3 ? "TAPE MASTER" :
+TX(702, 80, slider6 == 0 ? "INIT" : slider6 == 1 ? "AIR LIFT" : slider6 == 2 ? "GENTLE GLUE" : slider6 == 3 ? "TAPE MASTER" :
             slider6 == 4 ? "VOCAL PRESENCE" : slider6 == 5 ? "LOW-END CONTROL" : slider6 == 6 ? "ANALOG SHEEN" : "LOUDNESS PUSH");
 
 // Master knobs
