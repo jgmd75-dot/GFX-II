@@ -745,6 +745,7 @@ hw ? (
 b_ = 0;
 loop(4,
   base = 10 + b_*10; x0 = 8 + b_*232; st = slider(base);
+  BCOL = b_ == 0 ? 0x8B5A2B : b_ == 1 ? CAP_BLU : b_ == 2 ? CAP_GRN : CAP_RED;   // COMPAND + GAIN: LF brown, LMF blue, HMF green, HF red
   plate(x0, 110, 226, 482);
   hw ? ( ui_col(0x141518); R(x0 + 1, 111, 224, 7); ui_col(ACC); R(x0 + 1, 117, 224, 2); ) : ( ui_col(ACC); RR(x0 + 18, 113, 190, 5, 2.5); );
   tape(x0 + 16, 122, b_ == 0 ? "BAND 1" : b_ == 1 ? "BAND 2" : b_ == 2 ? "BAND 3" : "BAND 4");
@@ -768,9 +769,9 @@ loop(4,
   // compand (centre detent)
   cv_ = floor(slider(base + 4) + 0.5);
   cv_ < 0 ? sprintf(#cvs, "%d%% LIFT", cv_) : cv_ > 0 ? sprintf(#cvs, "+%d%% EXP", cv_) : strcpy(#cvs, "FLAT");
-  mknob(base + 4, x0 + 66, 404, 30, -100, 100, 0, 0, cv_ < 0 ? LFT : cv_ > 0 ? EXPC : CAP_GRY, "COMPAND", #cvs); touch(base + 4, "COMPAND", #cvs);
+  mknob(base + 4, x0 + 66, 404, 30, -100, 100, 0, 0, BCOL, "COMPAND", #cvs); touch(base + 4, "COMPAND", #cvs);
   drag_id == 1600 + base + 4 && abs(slider(base + 4)) < 3 && slider(base + 4) != 0 ? slider(base + 4) = 0;
-  mknob(base + 7, x0 + 170, 410, 22, -24, 24, 0, 0, CAP_GRN, "GAIN", fdb(slider(base + 7))); touch(base + 7, "BAND GAIN", fdb(slider(base + 7)));
+  mknob(base + 7, x0 + 170, 410, 22, -24, 24, 0, 0, BCOL, "GAIN", fdb(slider(base + 7))); touch(base + 7, "BAND GAIN", fdb(slider(base + 7)));
   // meter
   hmeter(x0 + 18, 498, 190, 12, mtr[b_]);
   // solo / bypass
