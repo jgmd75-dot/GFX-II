@@ -523,7 +523,7 @@ stage(354, 8, 1, "STAGE 2");
 // ---------- MASTER ----------
 gfx_setfont(6, "Trebuchet MS", 16 * sc, 'b'); ui_col(INK); gfx_x = 692 * sc; gfx_y = 78 * sc; gfx_drawstr("MASTER");
 transfer(692, 100, 184, 88);
-cknob(722, 238, 17, 14, 0, 400, 0, CAP_M, 1, 0, 0, 0, "SC HPF", slider14 < 20 ? "OFF" : "%.0f Hz");
+cknob(722, 238, 17, 14, 0, 400, 0, 0xF2C21B, 1, 0, 0, 0, "SC HPF", slider14 < 20 ? "OFF" : "%.0f Hz");
 tick(722 * sc, 238 * sc, 17 * sc, 0, "OFF", INK); tick(722 * sc, 238 * sc, 17 * sc, 1, "400", INK);
 cknob(784, 238, 14, 47, 0, 100, 50, CAP_M, 1, 0, 0, 0, "DRIFT", "%.0f%%");
 cknob(846, 238, 17, 15, 0, 100, 100, CAP_M, 1, 0, 0, 0, "MIX", "%.0f%%");

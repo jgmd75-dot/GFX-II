@@ -434,9 +434,15 @@ function knob(id, cx, cy, rad, v, a, b, m, def, dim) local(dx, dy, fr, nf, ang, 
     k += 1;
   );
   // aluminium cap with a dark index
+  id == 11 ? (                                   // KEY HPF: house-style yellow cap
+    col(0.62, 0.50, 0.08); gfx_circle(sx, sy, sr*0.58, 1, 1);
+    col(0.95, 0.76, 0.11); gfx_circle(sx, sy, sr*0.53, 1, 1);
+    col(1.00, 0.88, 0.45); gfx_circle(sx - sr*0.16, sy - sr*0.18, sr*0.16, 1, 1);
+  ) : (
   col(0.46, 0.47, 0.49); gfx_circle(sx, sy, sr*0.58, 1, 1);
   dim ? col(0.52, 0.53, 0.55) : col(0.74, 0.75, 0.77); gfx_circle(sx, sy, sr*0.53, 1, 1);
   col(0.86, 0.87, 0.89); gfx_circle(sx - sr*0.16, sy - sr*0.18, sr*0.16, 1, 1);
+  );
   col(0.15, 0.15, 0.16);
   gfx_line(sx + sa*sr*0.12, sy - ca*sr*0.12, sx + sa*sr*0.50, sy - ca*sr*0.50, 1);
   gfx_line(sx + sa*sr*0.12 + ca, sy - ca*sr*0.12 + sa, sx + sa*sr*0.50 + ca, sy - ca*sr*0.50 + sa, 1);

@@ -587,7 +587,7 @@ function synck(id, cx, base, vmin, vmax, vdef, ddef, nm, istime) local(md, v) (
     TC(cx, 146, md == 1 ? "SYNC" : md == 2 ? "DOTTED" : "TRIPLET");
   ) : ( cink(); TC(cx, 146, istime ? "TIME" : "RATE"); );
   cink(); gfx_setfont(4);
-  TC(cx, 166, md > 0 ? fsync(slider(base + 9), md) : istime ? fms(slider(base)) : fhz(slider(base)));
+  kn_hot ? TC(cx, 166, md > 0 ? fsync(slider(base + 9), md) : istime ? fms(slider(base)) : fhz(slider(base)));   // value on hover / drag only
   clicked(cx - 35, 147, 70, 17) ? (
     setk(base + 8, (md + 1) % 4);
     strcpy(#lcdn, nm);
