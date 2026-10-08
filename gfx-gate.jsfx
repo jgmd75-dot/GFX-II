@@ -27,7 +27,7 @@ desc:GFX Gate
 //           Set THRESHOLD to 0 dB for MIDI-only triggering. MIDI is passed through.
 //
 // GUI: drag knobs (Shift = fine), double-click / Ctrl-click = reset. Click the LCD for the
-// preset list. TEXT S / M / L = text size; the panel scales to fill the window.
+// preset list. SIZE S / M / L sets the panel size (60 / 75 / 90%; smaller if the window is smaller).
 
 slider1:0<0,15,1{Init,Kick Tight,Snare Crack,Tom Cleanup,Hi-Hat Clean,Vocal Breath,Guitar Noise,Bass DI,Gentle Expander,Room Mic Tame,Dialogue Clean,Kick Duck (Ext Key),Voice-Over Duck (Ext Key),Gated Reverb 80s,MIDI Chop,Lookahead Drum}>-Preset
 slider2:0<0,1,1{Gate,Expander}>-Model
@@ -297,11 +297,12 @@ hcnt >= hstep ? (
 // =====================================================================
 // GUI - vintage rack: slate blue-grey faceplate, cream silk-screen, black/aluminium knobs,
 // lamp push-buttons, phosphor display. 1500 x 520 design space scaled to fill the window
-// (proportions kept). TEXT S / M / L sets the text size.
+// (proportions kept). SIZE S / M / L sets the panel size.
 // =====================================================================
 
-S  = min(gfx_w/1500, gfx_h/520);
-tf = ui_sz == 1 ? 0.9 : ui_sz == 2 ? 1.12 : 1.0;
+szf = ui_sz == 1 ? 0.6 : ui_sz == 2 ? 0.9 : 0.75;          // S / M / L: panel size
+S  = min(szf, min(gfx_w/1500, gfx_h/520));
+tf = 1;
 ox = floor((gfx_w - 1500*S)*0.5);
 oy = floor((gfx_h - 520*S)*0.5);
 mx = (mouse_x - ox)/S;
@@ -557,7 +558,7 @@ btn(52, 180, 58, 32, "◄", 0, 0) ? step_preset(-1);
 btn(264, 180, 58, 32, "►", 0, 0) ? step_preset(1);
 cink(); gfx_setfont(5); TC(187, 189, "PRESET");
 
-cink(); gfx_setfont(5); TX(52, 238, "TEXT");
+cink(); gfx_setfont(5); TX(52, 238, "SIZE");
 btn(110, 230, 46, 30, "S", ui_sz == 1, 0) ? ui_sz = 1;
 btn(164, 230, 46, 30, "M", ui_sz == 0, 0) ? ui_sz = 0;
 btn(218, 230, 46, 30, "L", ui_sz == 2, 0) ? ui_sz = 2;
