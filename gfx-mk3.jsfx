@@ -23,7 +23,8 @@ desc:GFX MK3
 //           RELEASE MODE: LOG = exponential recovery, LIN = constant dB-per-second recovery.
 //           PRC (peak reversion correction): restores low end lost under heavy gain reduction
 //           with a gentle shelf (up to +4 dB around 150 Hz), following the gain reduction.
-//           VOICE 2k: a wide bell at 2 kHz (about two octaves) that follows the gain reduction too,
+//           VOICE 2k: a wide bell at 2 kHz (about two octaves) ahead of the detector, so the compressor
+//           reacts to it; its depth follows the gain reduction too,
 //           0.25 dB per dB of GR up to 4 dB: LIFT raises the voice band as it compresses, DIP sinks it.
 // OUT     The GFX output stage after OUTPUT: OFF / CLIP (soft clip at -0.3 dBFS, zero latency) /
 //         LIMIT (3 ms lookahead brickwall at -0.3 dBFS, latency reported to REAPER).
@@ -177,6 +178,11 @@ function doEQ() (
   fzOn ? doFizz();
 );
 function doComp() local(pk_, lev, tg, boost, kk) (
+  vcMode ? (                                        // VOICE 2k, INTO the detector: x + k * band-pass = a bell
+    vcDb = min(4, -grS*0.25)*(vcMode == 1 ? 1 : -1);   // whose depth follows the gain reduction
+    boost = db2g(vcDb) - 1;
+    ch0 += boost*bqf(ch0, cVb, sVbL); ch1 += boost*bqf(ch1, cVb, sVbR);
+  ) : vcDb = 0;
   pk_ = max(abs(ch0), abs(ch1));
   pkE = pk_ > pkE ? pk_ : pkE*pkRel;              // crest-factor watchers
   msE += (pk_*pk_ - msE)*msC;
@@ -192,11 +198,6 @@ function doComp() local(pk_, lev, tg, boost, kk) (
     prc0 += (ch0 - prc0)*prcC; prc1 += (ch1 - prc1)*prcC;
     ch0 += boost*prc0; ch1 += boost*prc1;
   );
-  vcMode ? (                                        // VOICE 2k: x + k * band-pass = a bell whose depth follows GR
-    vcDb = min(4, -grS*0.25)*(vcMode == 1 ? 1 : -1);
-    boost = db2g(vcDb) - 1;
-    ch0 += boost*bqf(ch0, cVb, sVbL); ch1 += boost*bqf(ch1, cVb, sVbR);
-  ) : vcDb = 0;
 );
 
 // ---- presets ----
