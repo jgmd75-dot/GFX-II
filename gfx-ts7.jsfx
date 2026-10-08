@@ -19,6 +19,8 @@ desc:GFX TS-7
 // MIX     parallel compression: the uncompressed signal blended under the compressed one.
 // OS      everything non-linear runs at 2x or 4x (linear-phase halfband filters, ~80 dB image rejection);
 //         the latency is reported to REAPER.
+// DRIFT   the iron's supply is not quite steady: its drive and asymmetry wander slowly and unevenly
+//         (level stays put; only how hard the core saturates moves). Very subtle; DRIFT scales it.
 // METERS  DRIVE (level after INPUT), WARMTH (dB of HF taken), COMP (dB of gain reduction), OUTPUT.
 // GUI: drag knobs (Shift = fine), double-click = reset. The white keys step through their settings.
 // S / M / L / ? = size and help. HW = black anodised rack panel; off = soft neumorphic panel.
@@ -41,6 +43,7 @@ slider7:100<0,100,1>-Mix (%)
 slider8:0<0,1,1{Off,On}>-Bypass
 slider9:1<0,2,1{Off,Clip,Limit}>-Output stage
 slider10:1<0,1,1{2x,4x}>-Oversampling
+slider11:20<0,100,1>-Drift (%)
 
 @init
 #ui_man = "gfx-ts7";
@@ -89,8 +92,8 @@ ost_init(alloc(4096));
 function iron(x) instance(lp, env, dx, dy) local(lo, b, y) (
   env += (abs(x) - env)*(abs(x) > env ? irA : irR);
   lp += (x - lp)*irC;
-  b = 0.06 + 0.24*min(1, env);                       // the asymmetry grows with level: more even harmonics
-  lo = (tanh(lp*1.6 + b) - tanh(b))/1.6;             // the low band saturates the core first
+  b = 0.06 + 0.24*min(1, env) + irBw;                // the asymmetry grows with level (+ the supply wander)
+  lo = (tanh(lp*1.6*irDw + b) - tanh(b))/(1.6*irDw);  // the low band saturates the core first
   y = lo + (x - lp);
   y = (tanh(y*0.85 + 0.5*b) - tanh(0.5*b))/0.85;     // gentle whole-band asymmetric soft clip
   dy = y - dx + dcR*dy; dx = y;                      // the bias leaves no DC
@@ -180,6 +183,7 @@ function pname(n) (
 );
 
 TH = alloc(16); CL = alloc(16); LB = alloc(16);       // GUI tables
+irDw = 1; irBw = 0; drA = drB = 0; drSa = drSb = drTa = drTb = 0;
 bpS = 0; mIn = mOut = 0; mWm = mGr = 0;
 mDec = exp(-1/(0.3*srate));
 !ui_dflt ? ( ui_hw = 1; lastPreset = slider1; );
@@ -197,6 +201,12 @@ setup();
 
 @block
 setup();
+// DRIFT: an uneven supply under the iron - two slow random walks (drive, asymmetry), level-neutral
+drA -= samplesblock; drA <= 0 ? ( drA = srate*(0.6 + rand(1.4)); drTa = rand(2) - 1; );
+drB -= samplesblock; drB <= 0 ? ( drB = srate*(0.25 + rand(0.5)); drTb = rand(2) - 1; );
+drSa += (drTa - drSa)*min(1, samplesblock/(0.5*srate)); drSb += (drTb - drSb)*min(1, samplesblock/(0.15*srate));
+drAmt = slider11/100;
+irDw = 1 + drAmt*(0.10*drSa + 0.03*drSb); irBw = drAmt*(0.03*drSa + 0.015*drSb);
 
 @sample
 xL = spl0*inG; xR = spl1*inG;
@@ -500,6 +510,8 @@ gfx_setfont(6); ui_col(INK); TC(850, 238, slider10 > 0.5 ? "OS 4X" : "OS 2X");
 ui_outkeys(892*0.75, 236*0.75, 44*0.75, 14, 2, 9);
 gfx_setfont(6); ui_col(INK); TR(992, 262, "MIX");
 sknob(7, 1020, 270, 18, 0, 100, 100);
+gfx_setfont(6); ui_col(INK); TR(1094, 262, "DRIFT");
+sknob(11, 1122, 270, 18, 0, 100, 20);
 hw ? ( ui_cola(0xFFFFFF, 0.35); i = 0; loop(2, rd_screw((24 + i*1352)*0.75, 160*0.75); i += 1; ); );
 
 pk_end();
