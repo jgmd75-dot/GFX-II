@@ -638,8 +638,8 @@ loop(2,
   pass += 1;
 );
 // live operating point
-cl = max(-80, min(0, mLv));
-col(1.0, 0.70, 0.22); CIRC(tx_(cl), ty_((ext ? 0 : cl) + min(mGA, mGB)), 4, 1);
+gfx_mcl = max(-80, min(0, mLv));
+col(1.0, 0.70, 0.22); CIRC(tx_(gfx_mcl), ty_((ext ? 0 : gfx_mcl) + min(mGA, mGB)), 4, 1);
 gfx_setfont(9); col(0.20, 0.50, 0.30);
 TC(tX + tS*0.5, tY + tS + 4, ext ? "KEY dB" : "IN dB");
 TX(tX + 4, tY + 2, ext ? "GAIN" : "OUT");
