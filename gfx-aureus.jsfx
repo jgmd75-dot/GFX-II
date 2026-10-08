@@ -15,7 +15,7 @@ desc:GFX Aureus
 // GOLDEN RATIO (PHI = 1.618034) sets everything the knobs don't:
 //   EQ corners    Band 1 shelf F1/PHI, Band 4 shelf F3*PHI,
 //                 Bands 2/3 bells at the geometric band centres
-//   P (passive)   broad Q = 1/PHI; boosting a shelf adds a Pultec-style dip of gain/PHI^2
+//   P (program)   broad Q = 1/PHI; boosting a shelf adds a Pultec-style dip of gain/PHI^2
 //                 exactly at the band edge (F1, F3)
 //   S (console)   resonant shelves (Q = PHI); bells with proportional Q = PHI * (1 + |gain|/12)
 //   D (dynamic)   S shape whose gain follows band energy above -30 dB over a 12*PHI dB range
@@ -37,7 +37,7 @@ slider4:0<-24,24,0.1>-Input (dB)
 slider5:100<0,100,1>-Mix (%)
 slider6:2<0,4,1{34 Hz,55 Hz,70 Hz,89 Hz,144 Hz}>-Crossover F1
 
-slider10:0<0,2,1{P Passive,S Console,D Dynamic}>-B1 EQ Type
+slider10:0<0,2,1{P Program,S Console,D Dynamic}>-B1 EQ Type
 slider11:0<-12,12,0.1>-B1 EQ (dB)
 slider12:1<0,2,1{T Transistor,S Tape,X Transformer}>-B1 Drive Type
 slider13:0<0,100,1>-B1 Drive (%)
@@ -47,7 +47,7 @@ slider16:0<-12,12,0.1>-B1 Gain (dB)
 slider17:0<0,1,1{Off,On}>-B1 Solo
 slider18:0<0,1,1{Off,On}>-B1 Mute
 
-slider20:0<0,2,1{P Passive,S Console,D Dynamic}>-B2 EQ Type
+slider20:0<0,2,1{P Program,S Console,D Dynamic}>-B2 EQ Type
 slider21:0<-12,12,0.1>-B2 EQ (dB)
 slider22:1<0,2,1{T Transistor,S Tape,X Transformer}>-B2 Drive Type
 slider23:0<0,100,1>-B2 Drive (%)
@@ -57,7 +57,7 @@ slider26:0<-12,12,0.1>-B2 Gain (dB)
 slider27:0<0,1,1{Off,On}>-B2 Solo
 slider28:0<0,1,1{Off,On}>-B2 Mute
 
-slider30:0<0,2,1{P Passive,S Console,D Dynamic}>-B3 EQ Type
+slider30:0<0,2,1{P Program,S Console,D Dynamic}>-B3 EQ Type
 slider31:0<-12,12,0.1>-B3 EQ (dB)
 slider32:1<0,2,1{T Transistor,S Tape,X Transformer}>-B3 Drive Type
 slider33:0<0,100,1>-B3 Drive (%)
@@ -67,7 +67,7 @@ slider36:0<-12,12,0.1>-B3 Gain (dB)
 slider37:0<0,1,1{Off,On}>-B3 Solo
 slider38:0<0,1,1{Off,On}>-B3 Mute
 
-slider40:0<0,2,1{P Passive,S Console,D Dynamic}>-B4 EQ Type
+slider40:0<0,2,1{P Program,S Console,D Dynamic}>-B4 EQ Type
 slider41:0<-12,12,0.1>-B4 EQ (dB)
 slider42:1<0,2,1{T Transistor,S Tape,X Transformer}>-B4 Drive Type
 slider43:0<0,100,1>-B4 Drive (%)
@@ -194,7 +194,7 @@ lastX = slider6;
 function eqset(b, t, g) local(pa, pq, fc) (
   pa = eqA + b*18; pq = eqB + b*18; fc = bp[b*40 + 32];
   sUnity(pq);
-  t == 0 ? (                                                   // P: passive / Pultec-inspired
+  t == 0 ? (                                                   // P: program / Pultec-inspired
     b == 0 ? ( sLS(pa, fc, g, QBW); g > 0 ? sBell(pq, fc*PHI, -g/(PHI*PHI), IPHI); ) :
     b == 3 ? ( sHS(pa, fc, g, QBW); g > 0 ? sBell(pq, fc*IPHI, -g/(PHI*PHI), IPHI); ) :
              ( sBell(pa, fc, g, IPHI); );
@@ -785,13 +785,13 @@ loop(4,
     tsel = floor(slider(ti) + 0.5);
     cblk(); gfx_setfont(3); TX(bx + 12, y0 + 6, rw == 0 ? "EQ" : rw == 1 ? "DRIVE" : "COMP");
     // one key per row: click to step through the three types; it shows the one in use
-    btn(bx + 12, y0 + 26, 112, 28, rw == 0 ? (tsel == 0 ? "PASSIVE" : tsel == 1 ? "CONSOLE" : "DYNAMIC") :
+    btn(bx + 12, y0 + 26, 112, 28, rw == 0 ? (tsel == 0 ? "PROGRAM" : tsel == 1 ? "CONSOLE" : "DYNAMIC") :
                                    rw == 1 ? (tsel == 0 ? "TRANSISTOR" : tsel == 1 ? "TAPE" : "TRANSFORMER") :
                                              (tsel == 0 ? "OPTO" : tsel == 1 ? "VCA" : "SUPER NICE"), 1, 3, 0) ? (
       k = (tsel + 1) % 3;
       setk(ti, k);
       strcpy(#lcdn, rw == 0 ? "EQ TYPE" : rw == 1 ? "DRIVE TYPE" : "COMP TYPE");
-      strcpy(#lcdv, rw == 0 ? (k == 0 ? "PASSIVE" : k == 1 ? "CONSOLE" : "DYNAMIC") :
+      strcpy(#lcdv, rw == 0 ? (k == 0 ? "PROGRAM" : k == 1 ? "CONSOLE" : "DYNAMIC") :
                     rw == 1 ? (k == 0 ? "TRANSISTOR" : k == 1 ? "TAPE" : "TRANSFORMER") :
                               (k == 0 ? "OPTO" : k == 1 ? "VCA" : "SUPER NICE"));
       lcd_t = time_precise();
