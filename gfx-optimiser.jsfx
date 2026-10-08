@@ -334,7 +334,7 @@ d_g1 = max(d_g1, g1); d_g2 = max(d_g2, g2); d_g3 = max(d_g3, g3); d_g4 = max(d_g
 // =====================================================================
 ui_begin(900, 460);
 qs = sc*0.75;
-hw = 0; cr = op_thm;
+hw = ui_hw; op_cr = op_thm;
 
 gfx_setfont(6, "Trebuchet MS", 16*qs, 'b');                // labels / tape
 gfx_setfont(7, "Trebuchet MS", 15*qs, 'b');                // values
@@ -346,7 +346,7 @@ gfx_setfont(12, "Trebuchet MS", 40*qs, 'b');               // plugin name
 gfx_setfont(13, "Trebuchet MS", 15*qs, 'b');               // key captions
 
 // ---- palette: charcoal or cream ----
-cr ? (
+op_cr ? (
   NB = 0xE6DFD0; NL = 0xFBF8F1; ND = 0xBDB4A1; NW = 0xDAD2C1;     // neumorphic base / light / dark / well
   NTX = 0x6E665A; NVX = 0x2C2822;                                  // neumorphic label / value text
   PNL = 0xD8CEB8; CHS = 0x2E2A25;                                  // HW module enamel / chassis gap
@@ -359,10 +359,13 @@ cr ? (
   INK = 0xEDEBE4; INK2 = 0xBFC3C8;
   TAPE = 0xE6DFCB; TAPET = 0x141414;                               // HW tape (cream on charcoal)
 );
+// HW: wells and keys sit on the module enamel, the panel behind is the chassis
+hw ? ( NB = PNL; NL = ui_mix(PNL, 0xFFFFFF, 0.18); ND = ui_mix(PNL, 0x000000, 0.5); NW = ui_mix(PNL, 0x000000, 0.22);
+       NTX = INK2; NVX = INK; );
 CRM = 0xE6DFCB;
 AMB = 0xFFB030; GRN = 0x46D86A; RED = 0xFF3A2A; BLU = 0x4AA8FF; WHT = 0xEDEBE4; YEL = 0xF0C030;
 CAP_GRY = 0x9DA2A8; CAP_WHT = 0xEDEDE6; CAP_BLU = 0x3D70CC; CAP_GRN = 0x33A052; CAP_RED = 0xD02E28; CAP_YEL = 0xF2C83E;
-cr && !hw ? ( CAP_WHT = 0xFFFFFF; CAP_GRY = 0x8A8F96; );
+op_cr && !hw ? ( CAP_WHT = 0xFFFFFF; CAP_GRY = 0x8A8F96; );
 
 // ---- design-space helpers (1200 x 560 -> pixels) ----
 function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
@@ -402,7 +405,7 @@ function tape(x, y, t) local(tw, th) (
     ui_cola(0x000000, 0.35); gfx_rect((x + 1)*qs, (y + 2)*qs, tw + 16*qs, 22*qs);
     ui_col(TAPE); gfx_rect(x*qs, y*qs, tw + 16*qs, 22*qs);
     gfx_gradrect(x*qs, (y + 11)*qs, tw + 16*qs, 11*qs, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.10/(11*qs));
-    ui_cola(0xFFFFFF, cr ? 0.15 : 0.5); gfx_rect(x*qs, y*qs, tw + 16*qs, 1);
+    ui_cola(0xFFFFFF, op_cr ? 0.15 : 0.5); gfx_rect(x*qs, y*qs, tw + 16*qs, 1);
     ui_col(TAPET); gfx_x = x*qs + 8*qs; gfx_y = (y + 11)*qs - th*0.5; gfx_drawstr(t);
   ) : (
     ui_col(AMB); gfx_rect(x*qs, (y + 5)*qs, 3*qs, 12*qs);
@@ -417,7 +420,7 @@ function mkey(x, y, w, h, t, on, c) local(hit, hov, tw, th) (
     hit = rd_sq(x*0.75, y*0.75, w*0.75, h*0.75, on, c, "");
     gfx_setfont(13); gfx_measurestr(t, tw, th);
     ui_col(on ? ((((c & 255) + ((c >> 8) & 255) + ((c >> 16) & 255)) > 450) ? 0x141414 : 0xFFFFFF)
-              : (cr ? ui_mix(c, 0x000000, 0.55) : ui_mix(c, 0xDDDDDD, 0.45)));
+              : (op_cr ? ui_mix(c, 0x000000, 0.55) : ui_mix(c, 0xDDDDDD, 0.45)));
     gfx_x = (x + w*0.5)*qs - tw*0.5; gfx_y = (y + h*0.5)*qs - th*0.5; gfx_drawstr(t);
   ) : (
     hov = inbox(x, y, w, h);
@@ -428,7 +431,7 @@ function mkey(x, y, w, h, t, on, c) local(hit, hov, tw, th) (
         ui_cola(c, 0.9); gfx_circle((x + 11)*qs, (y + h*0.5)*qs, 3.2*qs, 1, 1);
         ui_cola(c, 0.25); gfx_circle((x + 11)*qs, (y + h*0.5)*qs, 6.5*qs, 1, 1);
       );
-      ui_col(cr ? ui_mix(c, 0x000000, 0.45) : ui_mix(c, 0xFFFFFF, 0.35));
+      ui_col(op_cr ? ui_mix(c, 0x000000, 0.45) : ui_mix(c, 0xFFFFFF, 0.35));
     ) : (
       n_raised(x, y, w, h, 7, 3);
       hov ? ( ui_col(ui_mix(NB, NL, 0.4)); RR(x + 1, y + 1, w - 2, h - 2, 6); );
@@ -452,7 +455,7 @@ function mknob(idx, cx, cy, r, lo, hi, def, m, cap, label, val) local(v, n, dx, 
   // Ctrl-click resets (double-click is handled by the knob itself)
   pressed && hov && drag_id == 0 && (mouse_cap & 4) ? ( slider(idx) = def; ui_auto(idx); drag_id = -1; );
   hw ? (
-    dy_kst = 7; dy_ink = cr ? 0x3A352D : 0xD8D8D2; dy_ntick = 11;
+    dy_kst = 7; dy_ink = op_cr ? 0x3A352D : 0xD8D8D2; dy_ntick = 11;
     m == 2 ? ( dy_step = hi + 1; strcpy(#mk_st, ""); i = 0; loop(hi, strcat(#mk_st, "|"); i += 1; ); dy_steps = #mk_st; );
     dy_knob(cx*0.75, cy*0.75, r*0.75, idx, lo, hi, def, m == 1, cap, "", "");
   ) : (
@@ -487,10 +490,10 @@ function mknob(idx, cx, cy, r, lo, hi, def, m, cap, label, val) local(v, n, dx, 
     i = 0; loop(49, t = (-0.75 + 1.5*i/48)*$pi;
       (m == 2 ? 0 : (lo < 0 && hi > 0 && m == 0) ? ((t >= min(a, 0) && t <= max(a, 0))) : t <= a + 0.001) ?
         ( ui_col(cap); gfx_circle((cx + sin(t)*(rr - 4.5))*qs, (cy - cos(t)*(rr - 4.5))*qs, 2.2*qs, 1, 1); ) :
-        ( ui_col(cr ? ui_mix(NW, ND, 0.5) : ui_mix(NW, NL, 0.45)); gfx_circle((cx + sin(t)*(rr - 4.5))*qs, (cy - cos(t)*(rr - 4.5))*qs, 1.1*qs, 1, 1); );
+        ( ui_col(op_cr ? ui_mix(NW, ND, 0.5) : ui_mix(NW, NL, 0.45)); gfx_circle((cx + sin(t)*(rr - 4.5))*qs, (cy - cos(t)*(rr - 4.5))*qs, 1.1*qs, 1, 1); );
       i += 1; );
     m == 2 ? ( i = 0; loop(hi + 1, t = (-0.75 + 1.5*i/hi)*$pi;
-      ui_col(i == floor(v + 0.5) ? cap : (cr ? ui_mix(NW, ND, 0.7) : ui_mix(NW, NL, 0.8)));
+      ui_col(i == floor(v + 0.5) ? cap : (op_cr ? ui_mix(NW, ND, 0.7) : ui_mix(NW, NL, 0.8)));
       gfx_circle((cx + sin(t)*(rr - 4.5))*qs, (cy - cos(t)*(rr - 4.5))*qs, (i == floor(v + 0.5) ? 3 : 2)*qs, 1, 1);
       i += 1; ); );
     // raised convex body
@@ -504,7 +507,8 @@ function mknob(idx, cx, cy, r, lo, hi, def, m, cap, label, val) local(v, n, dx, 
   );
   act = hov || drag_id == did;
   gfx_setfont(6); ui_col(hw ? INK : NTX); TC(cx, cy + r + 19, label);
-  gfx_setfont(7); hw ? ui_cola(INK, act ? 1 : 0.75) : ui_col(act ? (cr ? 0x000000 : 0xFFFFFF) : NVX); TC(cx, cy + r + 39, val);
+  // house style: the value only shows while the mouse is over the knob (or dragging it)
+  act ? ( gfx_setfont(7); ui_col(hw ? INK : (op_cr ? 0x000000 : 0xFFFFFF)); TC(cx, cy + r + 39, val); );
 );
 
 
@@ -528,7 +532,7 @@ function fms(v) (
 function fhz(v, d) ( v >= 1000 ? sprintf(d, "%.2g kHz", v/1000) : sprintf(d, "%d Hz", v); d; );
 // ---- panel screw: black on the charcoal hardware, the house silver one on cream (900-space units) ----
 function mscrew(x, y) (
-  cr ? rd_screw(x, y) : (
+  op_cr ? rd_screw(x, y) : (
     ui_cola(0x000000, 0.45); gfx_circle((x + 0.6)*sc, (y + 1)*sc, 4.6*sc, 1, 1);
     ui_col(0x0E0F10); gfx_circle(x*sc, y*sc, 4.4*sc, 1, 1);
     ui_col(0x2C2E31); gfx_circle((x - 0.6)*sc, (y - 0.7)*sc, 3.2*sc, 1, 1);
@@ -544,7 +548,7 @@ function plate(x, y, w, h) (
     ui_col(PNL); R(x + 1, y + 1, w - 2, h - 2);
     gfx_gradrect((x + 1)*qs, (y + 1)*qs, (w - 2)*qs, (h - 2)*qs*0.5, 1, 1, 1, 0.07, 0, 0, 0, 0, 0, 0, 0, -0.07/((h - 2)*qs*0.5));
     gfx_gradrect((x + 1)*qs, (y + h*0.5)*qs, (w - 2)*qs, (h*0.5 - 1)*qs, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.14/((h*0.5 - 1)*qs));
-    ui_cola(0xFFFFFF, cr ? 0.5 : 0.16); gfx_rect((x + 1)*qs, (y + 1)*qs, (w - 2)*qs, 1*qs); gfx_rect((x + 1)*qs, (y + 1)*qs, 1*qs, (h - 2)*qs);
+    ui_cola(0xFFFFFF, op_cr ? 0.5 : 0.16); gfx_rect((x + 1)*qs, (y + 1)*qs, (w - 2)*qs, 1*qs); gfx_rect((x + 1)*qs, (y + 1)*qs, 1*qs, (h - 2)*qs);
     ui_cola(0x000000, 0.45); gfx_rect((x + 1)*qs, (y + h - 2)*qs, (w - 2)*qs, 1*qs); gfx_rect((x + w - 2)*qs, (y + 1)*qs, 1*qs, (h - 2)*qs);
     mscrew((x + 10)*0.75, (y + 10)*0.75); mscrew((x + w - 10)*0.75, (y + 10)*0.75);
     mscrew((x + 10)*0.75, (y + h - 10)*0.75); mscrew((x + w - 10)*0.75, (y + h - 10)*0.75);
@@ -554,7 +558,7 @@ function plate(x, y, w, h) (
 );
 
 // modern accent and per-stage colours
-cr ? ( ACC = 0x0E8FA3; SCR = 0xE9E4D8; SCRG = 0xD2CCBF; ) : ( ACC = 0x38D0E6; SCR = 0x16181B; SCRG = 0x24272C; );
+op_cr ? ( ACC = 0x0E8FA3; SCR = 0xE9E4D8; SCRG = 0xD2CCBF; ) : ( ACC = 0x38D0E6; SCR = 0x16181B; SCRG = 0x24272C; );
 C_BASS = 0x8B5A2B; C_MID = CAP_BLU; C_PRES = CAP_GRN; C_AIR = CAP_RED;
 
 function pname(n) (
@@ -595,19 +599,21 @@ function lbar(cx, y, h, lin, name) local(d, f, x, w, c) (
 );
 // ---- card with a quiet title ----
 function card(x, y, w, h, t) (
-  n_raised(x, y, w, h, 16, 6);
-  gfx_setfont(8); ui_col(ACC); R(x + 18, y + 16, 3, 13); ui_col(NTX); TX(x + 28, y + 14, t);
+  hw ? ( plate(x, y, w, h); tape(x + 28, y + 12, t); ) : (
+    n_raised(x, y, w, h, 16, 6);
+    gfx_setfont(8); ui_col(ACC); R(x + 18, y + 16, 3, 13); ui_col(NTX); TX(x + 28, y + 14, t);
+  );
 );
 
 // =====================================================================
 // Draw
 // =====================================================================
-ui_col(NB); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(hw ? CHS : NB); gfx_rect(0, 0, gfx_w, gfx_h);
 
 // ---- header ----
 ui_col(ACC); CIRC(52, 46, 24, 1);
-gfx_setfont(2); ui_col(cr ? 0xFFFFFF : 0x0E1012); ui_text(52*qs, 39*qs, "GFX");
-gfx_setfont(12); ui_col(NVX); TX(90, 16, "OPTIMISER");
+gfx_setfont(2); ui_col(op_cr ? 0xFFFFFF : 0x0E1012); ui_text(52*qs, 39*qs, "GFX");
+gfx_setfont(12); ui_col(hw ? WHT : NVX); TX(90, 16, "OPTIMISER");
 gfx_setfont(8); ui_col(ACC); TX(92, 60, "BROADCAST PROCESSOR");
 
 // preset display: click for the list, < > to step
@@ -624,17 +630,18 @@ hkey(672, 26, 40, 46, "<", 0) ? go_preset(op_pre <= 1 ? 10 : min(10, op_pre - 1)
 hkey(718, 26, 40, 46, ">", 0) ? go_preset(op_pre >= 10 ? 1 : op_pre + 1);
 
 // release speed: one segmented control
-gfx_setfont(8); ui_col(NTX); TC(866, 12, "RELEASE");
-mkey(782, 32, 56, 38, "SLOW", slider1 < 0.5, ACC) ? ( setv(1, 0); setmsg("RELEASE", "SLOW"); );
-mkey(840, 32, 56, 38, "MED", slider1 >= 0.5 && slider1 < 1.5, ACC) ? ( setv(1, 1); setmsg("RELEASE", "MEDIUM"); );
-mkey(898, 32, 56, 38, "FAST", slider1 >= 1.5, ACC) ? ( setv(1, 2); setmsg("RELEASE", "FAST"); );
+gfx_setfont(8); ui_col(hw ? 0xA8ABB0 : NTX); TC(853, 12, "RELEASE");
+mkey(776, 32, 50, 38, "SLOW", slider1 < 0.5, ACC) ? ( setv(1, 0); setmsg("RELEASE", "SLOW"); );
+mkey(828, 32, 50, 38, "MED", slider1 >= 0.5 && slider1 < 1.5, ACC) ? ( setv(1, 1); setmsg("RELEASE", "MEDIUM"); );
+mkey(880, 32, 50, 38, "FAST", slider1 >= 1.5, ACC) ? ( setv(1, 2); setmsg("RELEASE", "FAST"); );
 
-hkey(982, 32, 32, 38, "S", ui_sz == 1) ? ui_sz = 1;
-hkey(1018, 32, 32, 38, "M", ui_sz == 0) ? ui_sz = 0;
-hkey(1054, 32, 32, 38, "L", ui_sz == 2) ? ui_sz = 2;
-hkey(1090, 32, 32, 38, "?", ui_help_open) ? ( ui_help_open = 1; ui_help_new = 1; );
-hkey(1134, 32, 48, 38, "", 0) ? op_thm = 1 - op_thm;
-ui_col(cr ? 0x2A2D31 : 0xE6DFD0); CIRC(1158, 51, 9, 1);
+hkey(946, 32, 32, 38, "S", ui_sz == 1) ? ui_sz = 1;
+hkey(980, 32, 32, 38, "M", ui_sz == 0) ? ui_sz = 0;
+hkey(1014, 32, 32, 38, "L", ui_sz == 2) ? ui_sz = 2;
+hkey(1048, 32, 32, 38, "?", ui_help_open) ? ( ui_help_open = 1; ui_help_new = 1; );
+hkey(1088, 32, 44, 38, "HW", ui_hw) ? ui_hw = 1 - ui_hw;
+hkey(1138, 32, 44, 38, "", 0) ? op_thm = 1 - op_thm;
+ui_col(op_cr ? 0x2A2D31 : 0xE6DFD0); CIRC(1160, 51, 9, 1);
 
 // ---- live stage display ----
 card(16, 100, 1168, 218, "SIGNAL PATH");
