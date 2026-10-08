@@ -3,6 +3,8 @@ desc:GFX Mod Rack
 //tags: modulation chorus tremolo vibe delay multi-effect
 //author: JGWizrad / Garden FX (GFX)
 //
+// Requires gfx-ui and gfx-panel (.jsfx-inc) in the same folder.
+//
 // Four modules run in PARALLEL on the input. Each module returns only its *change* to the
 // signal (its "delta"); the dry signal always passes. Three L / C / R toggles per module
 // choose where that change goes:
@@ -62,6 +64,9 @@ slider46:0<0,1,1{Off,On}>-Delay C
 slider47:1<0,1,1{Off,On}>-Delay R
 slider48:0<0,3,1{Off,Straight,Dotted,Triplet}>-Delay Sync
 slider49:4<0,7,1{4 Bars,2 Bars,1 Bar,1/2,1/4,1/8,1/16,1/32}>-Delay Sync Rate
+
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
 
 @init
 // =====================================================================
@@ -416,6 +421,10 @@ oy = floor((gfx_h - 420*S)*0.5);
 mx = (mouse_x - ox)/S;
 my = (mouse_y - oy)/S;
 
+// the ? pop-up is modal: while it is open the panel underneath takes no clicks
+hlp ? ( (mouse_cap & 1) && !(pcap & 1) && !hlp_new ? hlp = 0; pcap = mouse_cap; );
+hlp_new = 0;
+
 S != lastS ? (
   gfx_setfont(1, "Arial Bold", max(10, 40*S));            // MOD RACK
   gfx_setfont(2, "Arial Bold", max(9, 24*S));             // module titles
@@ -440,6 +449,8 @@ function TC(cx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + cx
 function TR(rx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + rx*S - w; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function CIRC(x, y, rr, fill) ( gfx_circle(ox + x*S, oy + y*S, rr*S, fill, 1); );
 function clicked(x, y, w, h) ( (mouse_cap & 1) && !(pcap & 1) && mx >= x && mx <= x+w && my >= y && my <= y+h; );
+// write a slider and tell REAPER (so GUI moves record as automation)
+function setk(idx, v) ( slider(idx) != v ? ( slider(idx) = v; slider_automate(2^(idx - 1)); ); );
 
 // Bevel: inset = 1 recessed, 0 raised (lo / hi are the edge shades)
 function bevel(x, y, w, h, inset, lo, hi) (
@@ -512,39 +523,18 @@ function knob(id, cx, cy, rad, v, vmin, vmax, lgt, def, sty) local(dx, dy, fr, n
   sx = ox + cx*S; sy = oy + cy*S; sr = rad*S;
   n = max(2, floor(5*S + 0.5));
 
-  // value ring: track then value
-  sty == 2 ? col(0.26, 0.26, 0.28) : cpanel(0.68);
-  k = 0; loop(n, gfx_arc(sx, sy, sr + 4*S + k, -0.75*$pi, 0.75*$pi, 1); k += 1; );
-  sty == 2 ? col(0.92, 0.90, 0.84) : cink();
-  fr > 0.002 ? ( k = 0; loop(n, gfx_arc(sx, sy, sr + 4*S + k, -0.75*$pi, ang, 1); k += 1; ); );
-
-  // skirt + cap (Mod pot = the panel's complementary colour qr/qg/qb)
-  sty == 1 ? col(qr*0.62, qg*0.62, qb*0.62) : sty == 2 ? col(0.05, 0.05, 0.06) : col(0.74, 0.72, 0.66);
-  gfx_circle(sx, sy, sr, 1, 1);
-  // knurling on the skirt
-  sty == 1 ? col(qr*0.45, qg*0.45, qb*0.45) : sty == 2 ? col(0.18, 0.18, 0.19) : col(0.60, 0.58, 0.53);
+  // house knob: printed ticks, fluted black skirt with a coloured cap (white on the top row, the panel's
+  // complementary colour on the Mod pots, grey on the master), black pointer
+  (sty == 2) ? col(0.80, 0.80, 0.82) : cink();
   k = 0;
-  loop(24,
-    fa = k*2*$pi/24;
-    gfx_line(sx + sin(fa)*sr*0.80, sy - cos(fa)*sr*0.80, sx + sin(fa)*(sr - 1), sy - cos(fa)*(sr - 1), 1);
+  loop(11,
+    fa = (-0.75 + k*0.15)*$pi;
+    gfx_line(sx + sin(fa)*(sr + 4*S), sy - cos(fa)*(sr + 4*S), sx + sin(fa)*(sr + 9*S), sy - cos(fa)*(sr + 9*S), 1);
     k += 1;
   );
-  sty == 1 ? col(qr, qg, qb) : sty == 2 ? col(0.13, 0.13, 0.14) : col(0.96, 0.94, 0.87);
-  gfx_circle(sx, sy, sr*0.74, 1, 1);
-  sty != 1 ? (                                                     // Mod pots stay flat (no highlight)
-    sty == 2 ? col(0.25, 0.25, 0.27) : col(1.0, 1.0, 0.98);
-    gfx_circle(sx - sr*0.18, sy - sr*0.22, sr*0.22, 1, 1);        // cap highlight
-  );
-
-  // pointer (dark on light caps, cream on dark caps)
-  (sty == 0 || (sty == 1 && ql > 0.55)) ? col(0.08, 0.08, 0.08) : col(0.97, 0.95, 0.88);
-  sa = sin(ang); ca = cos(ang);
-  t = max(2, floor(4*S + 0.5)); k = 0;
-  loop(t,
-    gfx_line(sx + sa*sr*0.15 + ca*(k - t*0.5), sy - ca*sr*0.15 + sa*(k - t*0.5),
-             sx + sa*sr*0.92 + ca*(k - t*0.5), sy - ca*sr*0.92 + sa*(k - t*0.5), 1);
-    k += 1;
-  );
+  sc = S; pk_kstyle = 7; pk_ptr = -1;
+  pk_kcol = sty == 1 ? (floor(qr*255 + 0.5)*65536 + floor(qg*255 + 0.5)*256 + floor(qb*255 + 0.5)) : sty == 2 ? 0x9DA2A8 : 0xEDEDE6;
+  pk_bkcap(sx, sy, sr, ang);
   v;
 );
 
@@ -586,9 +576,9 @@ function synck(id, cx, base, vmin, vmax, vdef, ddef, nm, istime) local(md, v) (
   md = floor(slider(base + 8) + 0.5);
   md > 0 ? (
     v = knob(id, cx, 112, 27, slider(base + 9), 0, 7, 0, ddef, 0);
-    slider(base + 9) = floor(v + 0.5);
+    setk(base + 9, floor(v + 0.5));
   ) : (
-    slider(base) = knob(id, cx, 112, 27, slider(base), vmin, vmax, 1, vdef, 0);
+    setk(base, knob(id, cx, 112, 27, slider(base), vmin, vmax, 1, vdef, 0));
   );
   gfx_setfont(3);
   md > 0 ? (
@@ -598,7 +588,7 @@ function synck(id, cx, base, vmin, vmax, vdef, ddef, nm, istime) local(md, v) (
   cink(); gfx_setfont(4);
   TC(cx, 166, md > 0 ? fsync(slider(base + 9), md) : istime ? fms(slider(base)) : fhz(slider(base)));
   clicked(cx - 35, 147, 70, 17) ? (
-    slider(base + 8) = (md + 1) % 4;
+    setk(base + 8, (md + 1) % 4);
     strcpy(#lcdn, nm);
     strcpy(#lcdv, md == 0 ? "SYNC STRAIGHT" : md == 1 ? "SYNC DOTTED" : md == 2 ? "SYNC TRIPLET" : istime ? "TIME IN MS" : "RATE IN HZ");
     lcd_t = time_precise();
@@ -616,6 +606,7 @@ function step_preset(dir) (
   slider1 = (slider1 + dir + 8) % 8;
   apply_preset(slider1); lastPreset = slider1;
   lcd_t = 0;
+  slider_automate(562949953421311);             // sliders 1-49
 );
 
 // =====================================================================
@@ -645,7 +636,7 @@ loop(2,
 // ---- Left: badge, LCD, presets, size ----
 col(0.55, 0.55, 0.58); gfx_setfont(6); TX(72, 24, "GFX");
 col(0.95, 0.94, 0.90); gfx_setfont(1); TX(70, 44, "MOD RACK");
-col(0.55, 0.55, 0.58); gfx_setfont(5); TX(72, 92, "TREMOLO  CHORUS  VIBE  DELAY");
+col(0.55, 0.55, 0.58); gfx_setfont(5); TX(72, 92, "PARALLEL STEREO FX");
 
 col(0.03, 0.03, 0.03); R(66, 118, 258, 90);
 bevel(66, 118, 258, 90, 1, 0.02, 0.24);
@@ -667,6 +658,7 @@ col(0.55, 0.55, 0.58); gfx_setfont(5); TX(70, 274, "SIZE");
 btn(70,  292, 46, 28, "S", ui_sz == 1, 4, 0) ? ui_sz = 1;
 btn(122, 292, 46, 28, "M", ui_sz == 0, 4, 0) ? ui_sz = 0;
 btn(174, 292, 46, 28, "L", ui_sz == 2, 4, 0) ? ui_sz = 2;
+btn(226, 292, 46, 28, "?", hlp, 4, 0) ? ( hlp = 1; hlp_new = 1; );
 col(0.40, 0.40, 0.42); gfx_setfont(5); TX(70, 372, "MODEL GFX-MR4   2U");
 
 // ---- Four module panels ----
@@ -689,18 +681,18 @@ loop(4,
   // Knob row
   mi == 0 ? (
     synck(1, px + 48, 10, 0.05, 8, 0.8, 2, "CHORUS RATE", 0);
-    slider11 = knob(2, px + 125, 112, 27, slider11, 0, 100, 0, 50, 0);   cink(); klab(px + 125, 146, "DEPTH", fpct(slider11)); touch(2, "CHORUS DEPTH", fpct(slider11));
-    slider12 = knob(3, px + 202, 112, 27, slider12, 0, 100, 0, 0, 0);    cink(); klab(px + 202, 146, "MIX",   fpct(slider12)); touch(3, "CHORUS MIX",   fpct(slider12));
+    setk(11, knob(2, px + 125, 112, 27, slider11, 0, 100, 0, 50, 0));   cink(); klab(px + 125, 146, "DEPTH", fpct(slider11)); touch(2, "CHORUS DEPTH", fpct(slider11));
+    setk(12, knob(3, px + 202, 112, 27, slider12, 0, 100, 0, 0, 0));    cink(); klab(px + 202, 146, "MIX",   fpct(slider12)); touch(3, "CHORUS MIX",   fpct(slider12));
   ) : mi == 1 ? (
     synck(11, px + 70, 20, 0.1, 15, 4, 5, "TREMOLO RATE", 0);
-    slider21 = knob(12, px + 180, 112, 27, slider21, 0, 100, 0, 0, 0);   cink(); klab(px + 180, 146, "DEPTH", fpct(slider21)); touch(12, "TREMOLO DEPTH", fpct(slider21));
+    setk(21, knob(12, px + 180, 112, 27, slider21, 0, 100, 0, 0, 0));   cink(); klab(px + 180, 146, "DEPTH", fpct(slider21)); touch(12, "TREMOLO DEPTH", fpct(slider21));
   ) : mi == 2 ? (
     synck(21, px + 70, 30, 0.1, 12, 1.5, 4, "VIBE RATE", 0);
-    slider31 = knob(22, px + 180, 112, 27, slider31, 0, 100, 0, 0, 0);    cink(); klab(px + 180, 146, "DEPTH", fpct(slider31)); touch(22, "VIBE DEPTH", fpct(slider31));
+    setk(31, knob(22, px + 180, 112, 27, slider31, 0, 100, 0, 0, 0));    cink(); klab(px + 180, 146, "DEPTH", fpct(slider31)); touch(22, "VIBE DEPTH", fpct(slider31));
   ) : (
     synck(31, px + 48, 40, 20, 1500, 350, 4, "DELAY TIME", 1);
-    slider41 = knob(32, px + 125, 112, 27, slider41, 0, 95, 0, 30, 0);     cink(); klab(px + 125, 146, "FEEDBACK", fpct(slider41)); touch(32, "DELAY FEEDBACK", fpct(slider41));
-    slider42 = knob(33, px + 202, 112, 27, slider42, 0, 100, 0, 0, 0);     cink(); klab(px + 202, 146, "MIX",      fpct(slider42)); touch(33, "DELAY MIX",      fpct(slider42));
+    setk(41, knob(32, px + 125, 112, 27, slider41, 0, 95, 0, 30, 0));     cink(); klab(px + 125, 146, "FEEDBACK", fpct(slider41)); touch(32, "DELAY FEEDBACK", fpct(slider41));
+    setk(42, knob(33, px + 202, 112, 27, slider42, 0, 100, 0, 0, 0));     cink(); klab(px + 202, 146, "MIX",      fpct(slider42)); touch(33, "DELAY MIX",      fpct(slider42));
   );
 
   // Divider
@@ -710,7 +702,7 @@ loop(4,
   cink(); gfx_setfont(5); TC(px + 125, 204, "MOD");
   mvi = base + ((mi == 0 || mi == 3) ? 3 : 2);     // Mod pot slider index
   mv = knob(mi*10 + 9, px + 125, 262, 32, slider(mvi), 0, 100, 0, 0, 1);
-  slider(mvi) = mv;
+  setk(mvi, mv);
   cink();
   klab(px + 125, 304, mi == 0 ? "CLOCK STRETCH" : mi == 1 ? "SQUARE CHOP" : mi == 2 ? "ASYM LAMP" : "RUNAWAY CLOCK", fpct(mv));
   touch(mi*10 + 9, mi == 0 ? "CLOCK STRETCH" : mi == 1 ? "SQUARE CHOP" : mi == 2 ? "ASYM LAMP" : "RUNAWAY CLOCK", fpct(mv));
@@ -720,7 +712,7 @@ loop(4,
   loop(3,
     rv = slider(base + 5 + k) > 0.5;
     btn(px + 18 + k*74, 344, 66, 34, k == 0 ? "L" : k == 1 ? "C" : "R", rv, 3, 1) ? (
-      slider(base + 5 + k) = !rv;
+      setk(base + 5 + k, !rv);
       // LCD readout of the new routing
       strcpy(#lcdn, mi == 0 ? "CHORUS OUT" : mi == 1 ? "TREMOLO OUT" : mi == 2 ? "VIBE OUT" : "DELAY OUT");
       sprintf(#lcdv, "%s %s %s", slider(base + 5) > 0.5 ? "L" : "-", slider(base + 6) > 0.5 ? "C" : "-", slider(base + 7) > 0.5 ? "R" : "-");
@@ -738,11 +730,11 @@ col(0.14, 0.14, 0.15); R(1393, 24, 154, 372);
 bevel(1393, 24, 154, 372, 1, 0.05, 0.24);
 col(0.80, 0.80, 0.82); gfx_setfont(6); TX(1405, 34, "MASTER");
 
-slider2 = knob(91, 1450, 90, 24, slider2, 0, 100, 0, 20, 2);
+setk(2, knob(91, 1450, 90, 24, slider2, 0, 100, 0, 20, 2));
 col(0.85, 0.85, 0.87); klab(1450, 122, "DRIFT", fpct(slider2)); touch(91, "DRIFT", fpct(slider2));
-slider5 = knob(93, 1450, 192, 24, slider5, 0, 100, 0, 100, 2);
+setk(5, knob(93, 1450, 192, 24, slider5, 0, 100, 0, 100, 2));
 col(0.85, 0.85, 0.87); klab(1450, 224, "MIX", fpct(slider5)); touch(93, "MASTER MIX", fpct(slider5));
-slider3 = knob(92, 1450, 294, 24, slider3, -24, 12, 0, 0, 2);
+setk(3, knob(92, 1450, 294, 24, slider3, -24, 12, 0, 0, 2));
 col(0.85, 0.85, 0.87); klab(1450, 326, "OUTPUT", fdb(slider3)); touch(92, "OUTPUT", fdb(slider3));
 
 // Output LED ladder (-48 .. +3 dB)
@@ -764,4 +756,14 @@ col(0.60, 0.60, 0.62); gfx_setfont(5); TC(1523, 362, "OUT");
 mLim > 0.5 ? col(0.98, 0.16, 0.10) : col(0.28, 0.06, 0.05); CIRC(1412, 382, 6, 1);
 col(0.60, 0.60, 0.62); gfx_setfont(5); TX(1424, 375, "LIMIT");
 
+// ? pop-up: design credit and the manual
+hlp ? (
+  gfx_r = gfx_g = gfx_b = 0; gfx_a = 0.62; gfx_rect(0, 0, gfx_w, gfx_h); gfx_a = 1;
+  col(0.11, 0.11, 0.13); R(560, 130, 480, 160);
+  col(0.88, 0.38, 0.23); R(580, 172, 440, 1);
+  gfx_setfont(3); col(0.95, 0.95, 0.93); TX(580, 146, "Design by JGWizrad.  © John Garden 2026");
+  gfx_setfont(5); col(0.91, 0.70, 0.23); TX(580, 186, "https://gardenfx.jgmd75.workers.dev/");
+  col(0.85, 0.84, 0.82); TX(580, 210, "Manual - https://gardenfx.jgmd75.workers.dev/manual/gfx-modrack.html");
+  col(0.52, 0.51, 0.49); TX(580, 254, "Click anywhere to close.");
+);
 pcap = mouse_cap;
