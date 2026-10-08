@@ -1,0 +1,495 @@
+desc:GFX TS-7
+// gfx-ts7 - Analog Tape Simulator & Compressor (1U, after the classic multi-stage tape/transformer boxes)
+//tags: tape saturation compressor transformer warmth spank
+//author: JGWizrad / Garden FX (GFX)
+//
+// CHAIN   IN -> INPUT -> [ oversampled 2x / 4x:  IRON -> WARMTH -> COMP (+ MIX) ] -> OUTPUT -> OUT stage
+// IRON    Input transformer: the low band (below ~120 Hz) runs into core saturation first, then the whole
+//         band meets a gentle asymmetric soft clip. The asymmetry (even harmonics) grows with level, so
+//         INPUT decides how much iron you hear. IRON off = clean input stage.
+// WARMTH  The HF tape tamer: a side-chain watches the top (above ~3.5 kHz) and, when transients push past
+//         the threshold, pulls the top down fast and lets it back slowly, like tape compressing its own
+//         high frequencies. Six steps: each one lowers the threshold by 4 dB (and so tames more).
+// COMP    TRANNY  gentle 2:1 leveling, slow, into a saturating output transformer.
+//         BUS     smooth 3:1 programme compression, transients let through, dual-stage release.
+//         SPANK   feedback topology, ultra-fast attack and release: slams transients and pumps.
+//         Every mode has a dual-stage detector: a fast envelope catches the peaks, a slow one holds the
+//         body, and the deeper of the two sets the gain (a two-stage, programme-dependent release).
+//         Thresholds are fixed as on the hardware: INPUT drives the compressor. Make-up is automatic.
+// MIX     parallel compression: the uncompressed signal blended under the compressed one.
+// OS      everything non-linear runs at 2x or 4x (linear-phase halfband filters, ~80 dB image rejection);
+//         the latency is reported to REAPER.
+// METERS  DRIVE (level after INPUT), WARMTH (dB of HF taken), COMP (dB of gain reduction), OUTPUT.
+// GUI: drag knobs (Shift = fine), double-click = reset. The white keys step through their settings.
+// S / M / L / ? = size and help. HW = black anodised rack panel; off = soft neumorphic panel.
+//
+// Requires gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,7,1{Init,Tape Glue Bus,Drum Spank,Vocal Tranny,Warm Master,Bass Iron,Parallel Smash,Lo-Fi Tape}>-Preset
+slider2:0<-12,24,0.1>-Input (dB)
+slider3:0<-24,12,0.1>-Output (dB)
+slider4:0<0,6,1{Off,1,2,3,4,5,6}>-Warmth
+slider5:0<0,3,1{Off,Tranny,Bus,Spank}>-Comp
+slider6:1<0,1,1{Off,On}>-Iron
+slider7:100<0,100,1>-Mix (%)
+slider8:0<0,1,1{Off,On}>-Bypass
+slider9:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider10:1<0,1,1{2x,4x}>-Oversampling
+
+@init
+#ui_man = "gfx-ts7";
+nextmem = 0;
+function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
+function db2g(d) ( exp(d*0.11512925465); );
+function g2db(g) ( 8.68588963807*log(max(g, 0.0000000001)); );
+function tanh(v) ( v = max(-20, min(20, v)); 1 - 2/(exp(2*v) + 1); );
+
+// ---------- oversampling: linear-phase halfband filters (Kaiser windowed) ----------
+function bi0(x) local(s, t, k) ( s = 1; t = 1; k = 1; loop(30, t *= (x/(2*k))^2; s += t; k += 1; ); s; );
+function hb_design(h, n, beta) local(c, t, k, w, x, se, i0) (
+  c = (n - 1)/2; i0 = bi0(beta); t = 0;
+  loop(n,
+    k = t - c; x = 2*t/(n - 1) - 1;
+    w = bi0(beta*sqrt(max(0, 1 - x*x)))/i0;
+    h[t] = k == 0 ? 0.5 : sin($pi*k/2)/($pi*k)*w;
+    t += 1;
+  );
+  se = 0; t = 0; loop((n + 1)/2, se += h[2*t]; t += 1; );
+  t = 0; loop((n + 1)/2, h[2*t] *= 0.5/se; t += 1; );          // each polyphase branch: unity at DC
+);
+// up 2x: one input sample -> o0, o1 (polyphase; the odd branch is a pure delay in a halfband)
+function hbu_init(n, h, sz) instance(buf, m, w, hh, nt, cc) ( buf = alloc(sz); m = sz - 1; w = 0; hh = h; nt = n; cc = (n - 1)/2; );
+function hbu(x) instance(buf, m, w, hh, nt, cc, o0, o1) local(j, s) (
+  w = (w + 1) & m; buf[w] = x;
+  s = 0; j = 0; loop((nt + 1)/2, s += hh[2*j]*buf[(w - j) & m]; j += 1; );
+  o0 = 2*s; o1 = buf[(w - (cc - 1)/2) & m];
+);
+// down 2x: two input samples -> one output
+function hbd_init(n, h, sz) instance(buf, m, w, hh, nt, cc) ( buf = alloc(sz); m = sz - 1; w = 0; hh = h; nt = n; cc = (n - 1)/2; );
+function hbd(x0, x1) instance(buf, m, w, hh, nt, cc) local(j, s) (
+  w = (w + 1) & m; buf[w] = x0; w = (w + 1) & m; buf[w] = x1;
+  s = 0; j = 0; loop((nt + 1)/2, s += hh[2*j]*buf[(w - 2*j) & m]; j += 1; );
+  s + 0.5*buf[(w - cc) & m];
+);
+N1 = 63; N2 = 23;
+H1 = alloc(N1); H2 = alloc(N2);
+hb_design(H1, N1, 8); hb_design(H2, N2, 7);
+uL1.hbu_init(N1, H1, 64); uR1.hbu_init(N1, H1, 64); dL1.hbd_init(N1, H1, 64); dR1.hbd_init(N1, H1, 64);
+uL2.hbu_init(N2, H2, 16); uR2.hbu_init(N2, H2, 16); dL2.hbd_init(N2, H2, 32); dR2.hbd_init(N2, H2, 32);
+BPN = 64; BPL = alloc(BPN); BPR = alloc(BPN); bpw = 0;      // latency-matched dry for BYPASS
+ost_init(alloc(4096));
+
+// ---------- stage A: the transformer ----------
+function iron(x) instance(lp, env, dx, dy) local(lo, b, y) (
+  env += (abs(x) - env)*(abs(x) > env ? irA : irR);
+  lp += (x - lp)*irC;
+  b = 0.06 + 0.24*min(1, env);                       // the asymmetry grows with level: more even harmonics
+  lo = (tanh(lp*1.6 + b) - tanh(b))/1.6;             // the low band saturates the core first
+  y = lo + (x - lp);
+  y = (tanh(y*0.85 + 0.5*b) - tanh(0.5*b))/0.85;     // gentle whole-band asymmetric soft clip
+  dy = y - dx + dcR*dy; dx = y;                      // the bias leaves no DC
+  dy;
+);
+
+// ---------- one oversampled sample through IRON -> WARMTH -> COMP (+ MIX) ----------
+function proc(l, r) local(e, lev, over, gt, g, d, pl_, pr_, ms_) (
+  ironOn ? ( l = irL.iron(l); r = irR.iron(r); );
+  // WARMTH: linked HF side-chain, fast down, slow back
+  wLpL += (l - wLpL)*wmC; wLpR += (r - wLpR)*wmC;
+  wmOn ? (
+    e = max(abs(l - wLpL), abs(r - wLpR));
+    wmE += (e - wmE)*(e > wmE ? wmA : wmR);
+    gt = min(14, max(0, g2db(wmE) - wmThr)*0.67);
+    wmG += (gt - wmG)*(gt > wmG ? wmGA : wmGR);
+    g = db2g(-wmG);
+    l = wLpL + (l - wLpL)*g; r = wLpR + (r - wLpR)*g;
+  ) : wmG = 0;
+  pl_ = l; pr_ = r;
+  // COMP
+  cMode ? (
+    e = cFb ? max(abs(cYL), abs(cYR)) : max(abs(l), abs(r));
+    cPk ? ms_ = e*e : ( cMs += (e*e - cMs)*cRms; ms_ = cMs; );
+    lev = 10*log10(max(ms_, 0.0000000001));
+    over = lev - cThr;
+    cFb ? gt = max(0, over)*cSlope : (
+      gt = over <= -cKn*0.5 ? 0 : over >= cKn*0.5 ? over*cSlope : cSlope*(over + cKn*0.5)^2/(2*cKn);
+    );
+    gt = min(gt, 30);
+    cGf += (gt - cGf)*(gt > cGf ? cAf : cRf);         // fast envelope: the peaks
+    cGs += (gt - cGs)*(gt > cGs ? cAs : cRs);         // slow envelope: the body
+    cGr = max(cGf, cGs);
+    g = db2g(-cGr);
+    l *= g; r *= g;
+    cYL = l; cYR = r;                               // SPANK's feedback detector listens here (before make-up)
+    g = db2g(cMk); l *= g; r *= g;
+    d = cDrv;
+    l = (tanh(l*d + cBias) - tanh(cBias))/d; r = (tanh(r*d + cBias) - tanh(cBias))/d;
+    l = pl_ + (l - pl_)*mix; r = pr_ + (r - pr_)*mix;
+  ) : ( cGr = 0; cGf = cGs = 0; );
+  pOL = l; pOR = r;
+);
+
+// ---------- parameters ----------
+function setup() local(fso) (
+  os4 = slider10 > 0.5; osf = os4 ? 4 : 2; fso = srate*osf;
+  inG = db2g(slider2); outG = db2g(slider3);
+  ironOn = slider6 > 0.5;
+  irC = 1 - exp(-2*$pi*120/fso); irA = 1 - exp(-1/(0.002*fso)); irR = 1 - exp(-1/(0.2*fso)); dcR = exp(-2*$pi*8/fso);
+  wmL = floor(slider4 + 0.5); wmOn = wmL > 0;
+  wmThr = -6 - 4*(wmL - 1);
+  wmC = 1 - exp(-2*$pi*3500/fso);
+  wmA = 1 - exp(-1/(0.0003*fso)); wmR = 1 - exp(-1/(0.03*fso));
+  wmGA = 1 - exp(-1/(0.0005*fso)); wmGR = 1 - exp(-1/(0.12*fso));
+  cMode = floor(slider5 + 0.5);
+  // thr, ratio, knee, attack ms, fast rel ms, slow rel ms, rms ms (0 = peak), make-up, drive, bias, feedback
+  cMode == 1 ? ( cThr = -14; cR = 2;  cKn = 10; cAt = 8;   cRF = 150; cRS = 1200; cRm = 10; cMk = 3;  cDrv = 1.6; cBias = 0.06; cFb = 0; ) :
+  cMode == 2 ? ( cThr = -18; cR = 3;  cKn = 6;  cAt = 15;  cRF = 120; cRS = 900;  cRm = 5;  cMk = 5;  cDrv = 1.1; cBias = 0.03; cFb = 0; ) :
+  cMode == 3 ? ( cThr = -24; cR = 6;  cKn = 0;  cAt = 0.1; cRF = 40;  cRS = 250;  cRm = 0;  cMk = 12; cDrv = 2.2; cBias = 0.08; cFb = 1; );
+  cSlope = cFb ? cR - 1 : 1 - 1/cR;
+  cPk = cRm == 0; cRms = 1 - exp(-1/(max(cRm, 0.1)*0.001*fso));
+  cAf = 1 - exp(-1/(cAt*0.001*fso)); cAs = 1 - exp(-1/(cAt*5*0.001*fso));
+  cRf = 1 - exp(-1/(cRF*0.001*fso)); cRs = 1 - exp(-1/(cRS*0.001*fso));
+  mix = slider7/100;
+  byp = slider8 > 0.5;
+  osLat = os4 ? 36 : 31;
+  ost_setup(0, 0, 120, 6000, -0.3, floor(slider9 + 0.5));
+  pdc_delay += osLat; pdc_bot_ch = 0; pdc_top_ch = 2;
+);
+
+// ---------- presets: input, output, warmth, comp, iron, mix ----------
+function pset(i, o, w, c, ir, m) ( slider2 = i; slider3 = o; slider4 = w; slider5 = c; slider6 = ir; slider7 = m; );
+function apply_preset(n) (
+  pset(0, 0, 0, 0, 1, 100); slider8 = 0;
+  n == 1 ? pset(3, -2, 2, 2, 1, 100) :      // Tape Glue Bus
+  n == 2 ? pset(6, -4, 3, 3, 1, 100) :      // Drum Spank
+  n == 3 ? pset(4, -2, 2, 1, 1, 100) :      // Vocal Tranny
+  n == 4 ? pset(2, -1, 1, 2, 1, 60) :       // Warm Master
+  n == 5 ? pset(8, -6, 0, 1, 1, 100) :      // Bass Iron
+  n == 6 ? pset(8, -3, 2, 3, 1, 35) :       // Parallel Smash
+  n == 7 ? pset(12, -8, 6, 3, 1, 100);      // Lo-Fi Tape
+);
+function pname(n) (
+  n == 0 ? "INIT" : n == 1 ? "TAPE GLUE BUS" : n == 2 ? "DRUM SPANK" : n == 3 ? "VOCAL TRANNY" :
+  n == 4 ? "WARM MASTER" : n == 5 ? "BASS IRON" : n == 6 ? "PARALLEL SMASH" : "LO-FI TAPE";
+);
+
+TH = alloc(16); CL = alloc(16); LB = alloc(16);       // GUI tables
+bpS = 0; mIn = mOut = 0; mWm = mGr = 0;
+mDec = exp(-1/(0.3*srate));
+!ui_dflt ? ( ui_hw = 1; lastPreset = slider1; );
+ui_dflt = 1;
+setup();
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+file_var(0, lastPreset);
+
+@slider
+slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
+setup();
+
+@block
+setup();
+
+@sample
+xL = spl0*inG; xR = spl1*inG;
+a_ = max(abs(xL), abs(xR)); mIn = a_ > mIn ? a_ : mIn*mDec;
+// latency-matched dry for BYPASS
+bpw = (bpw + 1) & (BPN - 1); BPL[bpw] = spl0; BPR[bpw] = spl1;
+dryL = BPL[(bpw - osLat) & (BPN - 1)]; dryR = BPR[(bpw - osLat) & (BPN - 1)];
+
+uL1.hbu(xL); uR1.hbu(xR);
+!os4 ? (
+  proc(uL1.o0, uR1.o0); q0L = pOL; q0R = pOR;
+  proc(uL1.o1, uR1.o1);
+  yL = dL1.hbd(q0L, pOL); yR = dR1.hbd(q0R, pOR);
+) : (
+  a1L = uL1.o1; a1R = uR1.o1;
+  uL2.hbu(uL1.o0); uR2.hbu(uR1.o0);
+  proc(uL2.o0, uR2.o0); q0L = pOL; q0R = pOR;
+  proc(uL2.o1, uR2.o1);
+  h0L = dL2.hbd(q0L, pOL); h0R = dR2.hbd(q0R, pOR);
+  uL2.hbu(a1L); uR2.hbu(a1R);
+  proc(uL2.o0, uR2.o0); q0L = pOL; q0R = pOR;
+  proc(uL2.o1, uR2.o1);
+  h1L = dL2.hbd(q0L, pOL); h1R = dR2.hbd(q0R, pOR);
+  yL = dL1.hbd(h0L, h1L); yR = dR1.hbd(h0R, h1R);
+);
+mWm = max(mWm*mDec, wmG); mGr = max(mGr*mDec, cGr);
+
+yL *= outG; yR *= outG;
+bpS += ((byp ? 1 : 0) - bpS)*0.002;
+yL += (dryL - yL)*bpS; yR += (dryR - yR)*bpS;
+ost_out(yL, yR);
+spl0 = ost_l; spl1 = ost_r;
+a_ = max(abs(spl0), abs(spl1)); mOut = a_ > mOut ? a_ : mOut*mDec;
+
+@gfx 1050 240
+// =====================================================================
+// GUI - a 1U rack unit in a 1400 x 320 design space drawn at qs = 0.75 * sc (1050 x 240 at size M).
+// HW: black anodised panel, rack ears, white knurled knobs, white stepped keys, LED ladders.
+// Flat: soft neumorphic panel in light grey with the same layout.
+// =====================================================================
+ui_begin(1050, 240);
+qs = sc*0.75;
+hw = ui_hw;
+
+gfx_setfont(6, "Arial", 13*qs, 'b');                       // small print
+gfx_setfont(7, "Arial", 15*qs, 'b');                       // labels
+gfx_setfont(9, "Arial", 11*qs, 'b');                       // meter numerals
+gfx_setfont(10, "Arial", 54*qs, 'bi');                     // TS-7
+gfx_setfont(11, "Courier New", 15*qs, 'b');                // preset readout
+
+hw ? ( PB = 0x121214; INK = 0xEDEDE8; INK2 = 0xB8B8B2; ) : ( NB = 0xE3E5E9; NL = 0xFFFFFF; ND = 0xB6BAC2; NW = 0xD7DADF; INK = 0x2A2D33; INK2 = 0x6A707A; );
+GRN = 0x3CDC5A; YEL = 0xF4D23C; RED = 0xFF3A2A; AMB = 0xFFA530;
+
+function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
+function RR(x, y, w, h, r) ( rd_rr(x*qs, y*qs, w*qs, h*qs, r*qs); );
+function CIRC(x, y, rr, f) ( gfx_circle(x*qs, y*qs, rr*qs, f, 1); );
+function TC(cx, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = cx*qs - w*0.5; gfx_y = y*qs; gfx_drawstr(t); );
+function TL(x, y, t) ( gfx_x = x*qs; gfx_y = y*qs; gfx_drawstr(t); );
+function TR(x, y, t) local(w, h) ( gfx_measurestr(t, w, h); gfx_x = x*qs - w; gfx_y = y*qs; gfx_drawstr(t); );
+function inbox(x, y, w, h) ( mouse_x >= x*qs && mouse_x < (x + w)*qs && mouse_y >= y*qs && mouse_y < (y + h)*qs; );
+
+// ---- neumorphic primitives (flat) ----
+function n_shadow(x, y, w, h, r, d) local(i, e, n, t) (
+  n = 6;
+  i = n; loop(n, e = d*1.7*i/n; t = 1 - i/(n + 1); ui_col(ui_mix(NB, ND, t*t)); RR(x + d - e, y + d - e, w + 2*e, h + 2*e, r + e); i -= 1; );
+  i = n; loop(n, e = d*1.7*i/n; t = 1 - i/(n + 1); ui_col(ui_mix(NB, NL, t*t)); RR(x - d - e, y - d - e, w + 2*e, h + 2*e, r + e); i -= 1; );
+);
+function n_raised(x, y, w, h, r, d) ( n_shadow(x, y, w, h, r, d); ui_col(NB); RR(x, y, w, h, r); );
+function n_well(x, y, w, h, r) local(i) (
+  ui_col(ui_mix(NB, ND, 0.85)); RR(x, y, w, h, r);
+  ui_col(ui_mix(NB, NL, 0.75)); RR(x + 2, y + 2, w - 2, h - 2, r);
+  i = 0; loop(5, ui_col(ui_mix(ui_mix(NB, ND, 0.7), NW, (i + 1)/5)); RR(x + 1 + i*0.9, y + 1 + i*0.9, w - 2.5 - i*0.9, h - 2.5 - i*0.9, max(1, r - i*0.5)); i += 1; );
+);
+function n_circ_shadow(cx, cy, r, d) local(i, e, n, t) (
+  n = 6;
+  i = n; loop(n, e = d*1.6*i/n; t = 1 - i/(n + 1); ui_col(ui_mix(NB, ND, t*t)); CIRC(cx + d, cy + d, r + e, 1); i -= 1; );
+  i = n; loop(n, e = d*1.6*i/n; t = 1 - i/(n + 1); ui_col(ui_mix(NB, NL, t*t)); CIRC(cx - d, cy - d, r + e, 1); i -= 1; );
+);
+
+// ---- LED ----
+function led(x, y, r, on, c) (
+  hw ? rd_led(x*0.75, y*0.75, r*0.75, on, c) : (
+    ui_col(ui_mix(NB, ND, 0.5)); CIRC(x, y, r + 1.5, 1);
+    on ? ( ui_cola(c, 0.3); CIRC(x, y, r + 4, 1); ui_col(c); ) : ui_col(ui_mix(NW, c, 0.18));
+    CIRC(x, y, r, 1);
+  );
+);
+
+// ---- white stepped key: a raised white cap on a lower white step; returns 1 when clicked ----
+function wkey(x, y, w, h) local(hov, hit, dn) (
+  hov = inbox(x, y, w, h);
+  hit = pressed && drag_id == 0 && hov; hit ? drag_id = -1;
+  dn = hov && mdown && drag_id == -1;
+  hw ? (
+    ui_cola(0x000000, 0.6); R(x + 1, y + 3, w, h);
+    ui_col(0x050506); R(x - 2, y - 2, w + 4, h + 4);
+    ui_col(0xA9AAA6); R(x, y, w, h);                                   // the lower step
+    ui_col(0xC9CAC6); R(x, y + h - 5, w, 5);
+    ui_col(dn ? 0xD9D9D4 : 0xF4F4F0); R(x + 4, y + (dn ? 4 : 3), w - 8, h - 9);   // the raised cap
+    !dn ? ( gfx_gradrect((x + 4)*qs, (y + 3)*qs, (w - 8)*qs, (h - 9)*qs*0.5, 1, 1, 1, 0.5, 0, 0, 0, 0, 0, 0, 0, -0.5/((h - 9)*qs*0.5)); );
+    ui_cola(0x000000, 0.25); R(x + 4, y + h - 6 + (dn ? 1 : 0), w - 8, 1);
+  ) : (
+    dn ? n_well(x, y, w, h, 5) : (
+      n_raised(x, y, w, h, 5, 3);
+      ui_col(0xFAFBFC); RR(x + 3, y + 3, w - 6, h - 7, 4);
+    );
+  );
+  hit;
+);
+
+// ---- big white knurled knob with a printed 0-10 scale; value bubble while dragging ----
+function wknob(idx, cx, cy, r, lo, hi, def, label, fmt) local(v, n, a, ca, sa, i, t, did, dx, dy, hov) (
+  did = 1600 + idx;
+  dx = mouse_x - cx*qs; dy = mouse_y - cy*qs; hov = dx*dx + dy*dy <= sqr((r + 6)*qs);
+  v = slider(idx);
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - tk_t < 0.35 && tk_id == idx ? ( slider(idx) = def; ui_auto(idx); drag_id = -1; tk_t = 0; ) : (
+      drag_id = did; tk_y = mouse_y; tk_t = time_precise(); tk_id = idx; tk_n = (v - lo)/(hi - lo);
+    );
+  );
+  drag_id == did ? (
+    tk_n = min(max(tk_n + (tk_y - mouse_y)/(((mouse_cap & 8) ? 1200 : 220)*sc), 0), 1); tk_y = mouse_y;
+    v = lo + tk_n*(hi - lo); v = floor(v*2 + 0.5)/2;                      // 0.5 dB steps
+    slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); );
+  );
+  hov && mouse_wheel != 0 && drag_id == 0 ? (
+    v = min(max(v + sign(mouse_wheel)*((mouse_cap & 8) ? 0.1 : 0.5), lo), hi); slider(idx) = v; ui_auto(idx); mouse_wheel = 0;
+  );
+  // scale
+  gfx_setfont(9); i = 0;
+  loop(11,
+    a = (-0.75 + i/10*1.5)*$pi; ca = sin(a); sa = -cos(a);
+    ui_col(INK); gfx_line((cx + ca*(r + 6))*qs, (cy + sa*(r + 6))*qs, (cx + ca*(r + 12))*qs, (cy + sa*(r + 12))*qs, 1);
+    sprintf(#wk, "%d", i); gfx_measurestr(#wk, t, n);
+    gfx_x = (cx + ca*(r + 22))*qs - t*0.5; gfx_y = (cy + sa*(r + 22))*qs - n*0.5; gfx_drawstr(#wk);
+    i += 1;
+  );
+  n = (slider(idx) - lo)/(hi - lo); a = (-0.75 + n*1.5)*$pi; ca = sin(a); sa = -cos(a);
+  hw ? (
+    ui_cola(0x000000, 0.55); CIRC(cx + 3, cy + 5, r + 1, 1);
+    ui_col(0xC8C8C3); CIRC(cx, cy, r, 1);
+    i = 0; loop(60, t = i/60*2*$pi; ui_cola(0x000000, i % 2 ? 0.10 : 0.26);       // knurled edge
+      gfx_line((cx + cos(t)*r*0.84)*qs, (cy + sin(t)*r*0.84)*qs, (cx + cos(t)*r)*qs, (cy + sin(t)*r)*qs, 1); i += 1; );
+    ui_col(0xEDEDE9); CIRC(cx, cy, r*0.8, 1);
+    gfx_gradrect((cx - r*0.62)*qs, (cy - r*0.62)*qs, r*1.24*qs, r*0.62*qs, 1, 1, 1, 0.35, 0, 0, 0, 0, 0, 0, 0, -0.35/(r*0.62*qs));
+    ui_cola(0x000000, 0.12); CIRC(cx, cy, r*0.8, 0); CIRC(cx, cy, r*0.36, 0);
+  ) : (
+    n_circ_shadow(cx, cy, r, 5);
+    ui_col(0xF7F8FA); CIRC(cx, cy, r, 1);
+    i = 0; loop(60, t = i/60*2*$pi; ui_cola(0x000000, i % 2 ? 0.04 : 0.10);
+      gfx_line((cx + cos(t)*r*0.86)*qs, (cy + sin(t)*r*0.86)*qs, (cx + cos(t)*r)*qs, (cy + sin(t)*r)*qs, 1); i += 1; );
+    ui_col(0xFDFDFE); CIRC(cx, cy, r*0.82, 1);
+  );
+  ui_col(0x141416); i = -1;
+  loop(3, gfx_line((cx + ca*r*0.3 - sa*i*0.9)*qs, (cy + sa*r*0.3 + ca*i*0.9)*qs, (cx + ca*r*0.9 - sa*i*0.9)*qs, (cy + sa*r*0.9 + ca*i*0.9)*qs, 1); i += 1; );
+  gfx_setfont(7); ui_col(INK); TC(cx, cy + r + 34, label);
+  (hov || drag_id == did) ? (
+    gfx_setfont(6); sprintf(#wv, fmt, slider(idx)); gfx_measurestr(#wv, t, n);
+    ui_cola(0x000000, 0.7); ui_rrect(cx*qs - t*0.5 - 6*qs, (cy - r - 40)*qs, t + 12*qs, n + 6*qs, 3*qs);
+    ui_col(0xFFFFFF); gfx_x = cx*qs - t*0.5; gfx_y = (cy - r - 37)*qs; gfx_drawstr(#wv);
+  );
+);
+// small white knob (MIX)
+function sknob(idx, cx, cy, r, lo, hi, def) local(v, n, a, ca, sa, did, dx, dy, hov, i) (
+  did = 1600 + idx;
+  dx = mouse_x - cx*qs; dy = mouse_y - cy*qs; hov = dx*dx + dy*dy <= sqr((r + 5)*qs);
+  v = slider(idx);
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - tk_t < 0.35 && tk_id == idx ? ( slider(idx) = def; ui_auto(idx); drag_id = -1; tk_t = 0; ) : (
+      drag_id = did; tk_y = mouse_y; tk_t = time_precise(); tk_id = idx; tk_n = (v - lo)/(hi - lo);
+    );
+  );
+  drag_id == did ? (
+    tk_n = min(max(tk_n + (tk_y - mouse_y)/(((mouse_cap & 8) ? 1200 : 200)*sc), 0), 1); tk_y = mouse_y;
+    v = floor(lo + tk_n*(hi - lo) + 0.5); slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); );
+  );
+  hov && mouse_wheel != 0 && drag_id == 0 ? ( slider(idx) = min(max(v + sign(mouse_wheel), lo), hi); ui_auto(idx); mouse_wheel = 0; );
+  n = (slider(idx) - lo)/(hi - lo); a = (-0.75 + n*1.5)*$pi; ca = sin(a); sa = -cos(a);
+  hw ? ( ui_cola(0x000000, 0.5); CIRC(cx + 2, cy + 3, r, 1); ui_col(0xC8C8C3); CIRC(cx, cy, r, 1); ui_col(0xEDEDE9); CIRC(cx, cy, r*0.78, 1); )
+     : ( n_circ_shadow(cx, cy, r, 3); ui_col(0xFAFBFC); CIRC(cx, cy, r, 1); );
+  ui_col(0x141416); gfx_line((cx + ca*r*0.25)*qs, (cy + sa*r*0.25)*qs, (cx + ca*r*0.9)*qs, (cy + sa*r*0.9)*qs, 1);
+  i = 0; loop(11, a = (-0.75 + i/10*1.5)*$pi; ui_cola(INK, 0.7);
+    gfx_line((cx + sin(a)*(r + 3))*qs, (cy - cos(a)*(r + 3))*qs, (cx + sin(a)*(r + 7))*qs, (cy - cos(a)*(r + 7))*qs, 1); i += 1; );
+  (hov || drag_id == did) ? (
+    gfx_setfont(6); sprintf(#wv, "%.0f%%", slider(idx)); gfx_measurestr(#wv, a, n);
+    ui_cola(0x000000, 0.7); ui_rrect(cx*qs - a*0.5 - 6*qs, (cy - r - 30)*qs, a + 12*qs, n + 6*qs, 3*qs);
+    ui_col(0xFFFFFF); gfx_x = cx*qs - a*0.5; gfx_y = (cy - r - 27)*qs; gfx_drawstr(#wv);
+  );
+);
+
+// ---- LED ladder: n LEDs from x, y; lit up to 'lvl' (value) against thresholds in th[] ----
+function ladder(x, y, label, n, th, cols, labs, lvl) local(i, xx, on) (
+  hw ? ( ui_col(0x050506); R(x - 10, y - 11, n*30 + 2, 22); ) : n_well(x - 10, y - 11, n*30 + 2, 22, 6);
+  gfx_setfont(6); ui_col(INK); TR(x - 20, y - 6, label);
+  i = 0;
+  loop(n,
+    xx = x + 5 + i*30;
+    on = lvl >= th[i];
+    led(xx, y, 5, on, cols[i]);
+    gfx_setfont(9); ui_cola(INK2, 1); sprintf(#lb, "%d", labs[i]); TC(xx, y - 26, #lb);
+    i += 1;
+  );
+);
+
+// ================= panel =================
+ui_col(hw ? 0x000000 : NB); gfx_rect(0, 0, gfx_w, gfx_h);
+hw ? (
+  ui_col(0x0A0A0B); R(0, 0, 1400, 320);
+  ui_col(PB); R(4, 4, 1392, 312);
+  gfx_gradrect(4*qs, 4*qs, 1392*qs, 150*qs, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06/(150*qs));
+  ui_cola(0xFFFFFF, 0.12); R(4, 4, 1392, 1);
+  // rack ears
+  ui_col(0x1A1A1D); R(4, 4, 38, 312); R(1358, 4, 38, 312);
+  ui_cola(0x000000, 0.6); R(42, 4, 2, 312); R(1356, 4, 2, 312);
+  ui_col(0x020203); RR(14, 28, 18, 34, 9); RR(14, 258, 18, 34, 9); RR(1368, 28, 18, 34, 9); RR(1368, 258, 18, 34, 9);
+) : (
+  ui_col(NB); R(0, 0, 1400, 320);
+);
+
+// ---- brand ----
+hw ? ( ui_col(0xC8282E); CIRC(84, 62, 22, 1); ) : ( n_circ_shadow(84, 62, 22, 3); ui_col(0xC8282E); CIRC(84, 62, 22, 1); );
+gfx_setfont(6); ui_col(0xFFFFFF); TC(84, 55, "GFX");
+gfx_setfont(10); ui_col(INK); TL(62, 96, "TS-7");
+gfx_setfont(6); ui_col(INK2); TL(66, 160, "ANALOG TAPE"); TL(66, 176, "& COMPRESSOR");
+ui_size_picker(62*qs, 232*qs);
+ui_hw_toggle(140*qs, 232*qs);
+
+// ---- INPUT ----
+wknob(2, 320, 150, 64, -12, 24, 0, "INPUT", "%+.1f dB");
+
+// ---- COMP: mode LEDs and the white key that steps through them ----
+cm = floor(slider5 + 0.5);
+gfx_setfont(6);
+led(452, 74, 5, cm == 2, GRN); ui_col(INK); TL(464, 67, "BUS");
+led(452, 102, 5, cm == 1, YEL); ui_col(INK); TL(464, 95, "TRANNY");
+led(452, 130, 5, cm == 3, RED); ui_col(INK); TL(464, 123, "SPANK");
+wkey(436, 166, 64, 34) ? ( slider5 = cm >= 3 ? 0 : cm + 1; ui_auto(5); );
+gfx_setfont(7); ui_col(INK); TC(468, 212, "COMP");
+
+// ---- meters ----
+th = TH; cols = CL; labs = LB;
+// DRIVE: level after INPUT, dBFS
+th[0] = -20; th[1] = -15; th[2] = -10; th[3] = -6; th[4] = -3; th[5] = 0; th[6] = 3; th[7] = 6;
+labs[0] = -20; labs[1] = -15; labs[2] = -10; labs[3] = -6; labs[4] = -3; labs[5] = 0; labs[6] = 3; labs[7] = 6;
+i = 0; loop(8, cols[i] = i < 5 ? GRN : i < 6 ? YEL : RED; i += 1; );
+ladder(640, 70, "DRIVE", 8, th, cols, labs, g2db(mIn));
+// WARMTH: dB of HF taken
+th[0] = 1; th[1] = 2; th[2] = 3; th[3] = 5; th[4] = 7; th[5] = 10;
+i = 0; loop(6, labs[i] = th[i]; cols[i] = YEL; i += 1; );
+ladder(640, 118, "WARMTH", 6, th, cols, labs, mWm);
+// COMP: dB of gain reduction
+th[0] = 1; th[1] = 2; th[2] = 3; th[3] = 5; th[4] = 7; th[5] = 10; th[6] = 15; th[7] = 20;
+i = 0; loop(8, labs[i] = th[i]; cols[i] = i < 4 ? AMB : RED; i += 1; );
+ladder(640, 166, "COMP", 8, th, cols, labs, mGr);
+// OUTPUT: dBFS
+th[0] = -24; th[1] = -18; th[2] = -12; th[3] = -6; th[4] = -3; th[5] = -1;
+labs[0] = -24; labs[1] = -18; labs[2] = -12; labs[3] = -6; labs[4] = -3; labs[5] = -1;
+i = 0; loop(6, cols[i] = i < 4 ? GRN : i < 5 ? YEL : RED; i += 1; );
+ladder(640, 214, "OUTPUT", 6, th, cols, labs, g2db(mOut));
+
+// ---- WARMTH: level LEDs 1-6 and the key ----
+wl = floor(slider4 + 0.5);
+gfx_setfont(9); i = 0;
+loop(6, led(950 + i*17, 112, 4, wl >= i + 1, YEL); ui_col(INK2); sprintf(#wn, "%d", i + 1); TC(950 + i*17, 88, #wn); i += 1; );
+wkey(960, 166, 64, 34) ? ( slider4 = wl >= 6 ? 0 : wl + 1; ui_auto(4); );
+gfx_setfont(7); ui_col(INK); TC(992, 212, "WARMTH");
+
+// ---- IRON / BYPASS ----
+led(1166, 88, 5, slider6 > 0.5, AMB);
+wkey(1080, 72, 64, 32) ? ( slider6 = slider6 < 0.5; ui_auto(6); );
+gfx_setfont(6); ui_col(INK); TC(1112, 110, "IRON");
+led(1166, 182, 5, slider8 > 0.5, RED);
+wkey(1080, 166, 64, 32) ? ( slider8 = slider8 < 0.5; ui_auto(8); );
+gfx_setfont(6); ui_col(INK); TC(1112, 204, "BYPASS");
+
+// ---- OUTPUT ----
+wknob(3, 1262, 150, 64, -24, 12, 0, "OUTPUT", "%+.1f dB");
+
+// ---- bottom strip: preset, oversampling, output stage, mix ----
+gfx_setfont(6); ui_col(INK); TL(600, 238, "PRESET");
+hw ? ( ui_col(0x050506); R(600, 256, 200, 30); ) : n_well(600, 256, 200, 30, 6);
+gfx_setfont(11); ui_col(hw ? 0xF4D23C : 0x2A2D33); TL(610, 263, pname(slider1));
+pressed && drag_id == 0 && inbox(600, 256, 200, 30) ? (
+  drag_id = -1; #pm = ""; i = 0;
+  loop(8, slider1 == i ? strcat(#pm, "!"); strcat(#pm, pname(i)); i < 7 ? strcat(#pm, "|"); i += 1; );
+  gfx_x = 600*qs; gfx_y = 286*qs; i = gfx_showmenu(#pm); i > 0 ? ( slider1 = i - 1; apply_preset(i - 1); lastPreset = i - 1; slider_automate(255); );
+);
+wkey(830, 256, 40, 30) ? ( slider10 = slider10 < 0.5; ui_auto(10); );
+gfx_setfont(6); ui_col(INK); TC(850, 238, slider10 > 0.5 ? "OS 4X" : "OS 2X");
+ui_outkeys(892*0.75, 236*0.75, 44*0.75, 14, 2, 9);
+gfx_setfont(6); ui_col(INK); TR(992, 262, "MIX");
+sknob(7, 1020, 270, 18, 0, 100, 100);
+hw ? ( ui_cola(0xFFFFFF, 0.35); i = 0; loop(2, rd_screw((24 + i*1352)*0.75, 160*0.75); i += 1; ); );
+
+pk_end();
+ui_end();
