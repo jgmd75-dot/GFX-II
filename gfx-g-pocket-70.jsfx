@@ -578,7 +578,8 @@ update();
 qcount = 0;
 while (midirecv(mofs, m1, m2, m3)) (
   st = m1 & 0xF0; c = m1 & 0x0F; z = PT + c*32; zc = CH + c*8;
-  st == 0x90 && m3 > 0 ? ( q_push(mofs, 1, m2, m3, c); ins_midi_hit(); midi_part = c; midi_t = time_precise(); p70_follow ? p70_part = c; ) :
+  st == 0x90 && m3 > 0 ? ( q_push(mofs, 1, m2, m3, c); ins_midi_hit(); midi_part = c; midi_t = time_precise(); p70_follow && !z[1] ? p70_part = c; ) :     // FOLLOW skips drum parts
+
   st == 0x80 || st == 0x90 ? q_push(mofs, 0, m2, 0, c) :
   st == 0xE0 ? zc[3] = ((m3*128 + m2) - 8192)/8192 :
   st == 0xC0 ? ( !z[1] ? z[0] = m2; ) :
@@ -658,7 +659,7 @@ spl1 = ost_r;
 
 @gfx 960 570
 // =====================================================================
-// GUI - the house rack layout: a top bar with the backlit LCD, the 16 part keys underneath, then
+// GUI - the house rack layout: a top bar with the backlit LCD (PART - / + pick the part you edit), then
 // page 1 (every program, click a name to give it to the selected part) or page 2 (EDIT: the selected part's
 // voice, envelope, vibrato and mix, plus the effects). Design space 1280 x 760 at qs = 0.75 * sc.
 // =====================================================================
@@ -669,8 +670,8 @@ gfx_setfont(10, "Courier New", 17*qs, 'b');
 gfx_setfont(11, "Trebuchet MS", 15*qs, 'b');
 gfx_setfont(12, "Trebuchet MS", 40*qs, 'b');
 gfx_setfont(13, "Trebuchet MS", 17*qs, 'b');
-gfx_setfont(14, "Trebuchet MS", 18*qs, 'b');
-gfx_setfont(15, "Courier New", 16*qs, 'b');
+gfx_setfont(14, "Trebuchet MS", 22*qs, 'b');
+gfx_setfont(15, "Courier New", 19*qs, 'b');
 gfx_setfont(16, "Trebuchet MS", 13*qs, 'b');
 BG = 0xB9BDC1; BG2 = 0xC9CCCF; BG3 = 0xA7ABB0; INK = 0x22262A; INK2 = 0x51575D; ACC = 0x2F6FB8;
 LB = 0xBFD0C4; LK = 0x16201C; KC = 0x6A6F76;
@@ -736,60 +737,48 @@ ui_col(LK); gfx_setfont(10);
 sprintf(#l1, "PART %02d   CH %02d   %s", p70_part + 1, p70_part + 1, z_[1] ? "DRUM" : cat_name(floor(z_[0]/8))); TX(378, 32, #l1);
 gfx_setfont(9); z_[1] ? strcpy(#l2, "--- ") : sprintf(#l2, "%03d ", z_[0] + 1); strcat(#l2, prog_name(z_)); TX(378, 62, #l2);
 gfx_setfont(10); time_precise() - midi_t < 0.15 ? ( sprintf(#l3, "MIDI IN  CH %d", midi_part + 1); TX(378, 98, #l3); );
-ui_button(842*qs, 26*qs, 42*qs, 98*qs, "<", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 127) % 128; );
-ui_button(888*qs, 26*qs, 42*qs, 98*qs, ">", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 1) % 128; );
+ui_button(842*qs, 24*qs, 42*qs, 48*qs, "<", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 127) % 128; );
+ui_button(888*qs, 24*qs, 42*qs, 48*qs, ">", 0, 1) ? ( !z_[1] ? z_[0] = (z_[0] + 1) % 128; );
+ui_button(842*qs, 78*qs, 42*qs, 48*qs, "-", 0, 1) ? p70_part = (p70_part + 15) % 16;
+ui_button(888*qs, 78*qs, 42*qs, 48*qs, "+", 0, 1) ? p70_part = (p70_part + 1) % 16;
+gfx_setfont(11); ui_col(0xA6ACB2); TC(886, 6, "PGM"); TC(886, 130, "PART");
 rd_sqbg = 0x55595E; rd_sq(952*0.75, 24*0.75, 74*0.75, 32*0.75, p70_page == 0, ACC, "LIST") ? p70_page = 0;
 rd_sq(1034*0.75, 24*0.75, 74*0.75, 32*0.75, p70_page != 0, 0xFFB030, "EDIT") ? p70_page = 1;
 rd_sq(952*0.75, 82*0.75, 74*0.75, 28*0.75, p70_follow, 0x46D86A, "FOLLOW") ? p70_follow = !p70_follow;
-rd_led(1050*0.75, 97*0.75, 6*0.75, ins_midi_lit(), 0x46D86A);
-gfx_setfont(11); ui_col(0xA6ACB2); TX(1062, 90, "MIDI");
+rd_sq(1034*0.75, 82*0.75, 74*0.75, 28*0.75, z_[1], 0xFFB030, "DRUMS") ? z_[1] = !z_[1];
+rd_led(1130*0.75, 140*0.75, 5*0.75, ins_midi_lit(), 0x46D86A);
+gfx_setfont(11); ui_col(0xA6ACB2); TX(1040, 133, "MIDI IN");
 dy_kst = 7; dy_ink = 0xD8D8D2; dy_ntick = 11;
 sprintf(#mv, "%+.1f dB", slider1); dy_knob(1172*0.75, 58*0.75, 24*0.75, 1, -24, 6, 0, 0, 0x9DA2A8, "VOLUME", #mv);
-ui_size_picker(1124*qs, 120*qs);
-
-// ---- the 16 part keys ----
-k = 0;
-loop(16,
-  px_ = 12 + k*79; zz_ = PT + k*32; on_ = k == p70_part; act_ = part_count(k) > 0;
-  ui_col(on_ ? ACC : zz_[27] ? 0x8A8E93 : 0x3A3E43); RR(px_, 158, 74, 52, 6);
-  act_ ? ( ui_col(0x46D86A); gfx_circle((px_ + 64)*qs, (168)*qs, 4*qs, 1, 1); );
-  gfx_setfont(13); ui_col(0xFFFFFF); sprintf(#pn_, "%d", k + 1); TX(px_ + 8, 162, #pn_);
-  gfx_setfont(16); ui_col(on_ ? 0xFFFFFF : 0xC9CDD2); TX(px_ + 6, 188, zz_[1] ? "Drums" : pnm(zz_[0]));
-  hitbox(px_, 158, 74, 52) ? p70_part = k;
-  k += 1;
-);
+ui_size_picker(1180*qs, 124*qs);
 
 p70_page == 0 ? (
   // ---- page 1: all 128 programs (two categories a column) and the drum kit - click a name to load it ----
   c_ = 0;
   loop(8,
-    cx_ = 12 + c_*158;
+    cx_ = 10 + c_*158.5;
     j = 0;
     loop(2,
-      ct_ = c_*2 + j; y_ = 222 + j*240;
-      gfx_setfont(14); ui_col(ACC); TX(cx_ + 4, y_, cat_name(ct_)); ui_cola(ACC, 0.5); R(cx_ + 4, y_ + 22, 148, 1);
+      ct_ = c_*2 + j; y_ = 160 + j*296;
+      gfx_setfont(14); ui_col(ACC); TX(cx_ + 4, y_, cat_name(ct_)); ui_cola(ACC, 0.5); R(cx_ + 4, y_ + 28, 148, 1);
       i = 0;
       loop(8,
-        pg_ = ct_*8 + i; ty_ = y_ + 26 + i*25.5;
-        on_ = !z_[1] && z_[0] == pg_; hv_ = inbox(cx_, ty_, 152, 24);
-        on_ ? ( ui_col(ACC); RR(cx_, ty_, 152, 24, 4); ) : hv_ ? ( ui_col(BG3); RR(cx_, ty_, 152, 24, 4); );
-        gfx_setfont(15); ui_col(on_ ? 0xFFFFFF : INK2); sprintf(#pe, "%03d", pg_ + 1); TX(cx_ + 4, ty_ + 3, #pe);
-        gfx_setfont(14); ui_col(on_ ? 0xFFFFFF : INK); TX(cx_ + 42, ty_ + 2, pnm(pg_));
-        hitbox(cx_, ty_, 152, 24) ? ( z_[0] = pg_; z_[1] = 0; );
+        pg_ = ct_*8 + i; ty_ = y_ + 32 + i*31.5;
+        on_ = !z_[1] && z_[0] == pg_; hv_ = inbox(cx_, ty_, 154, 30);
+        on_ ? ( ui_col(ACC); RR(cx_, ty_, 154, 30, 4); ) : hv_ ? ( ui_col(BG3); RR(cx_, ty_, 154, 30, 4); );
+        gfx_setfont(15); ui_col(on_ ? 0xFFFFFF : INK2); sprintf(#pe, "%03d", pg_ + 1); TX(cx_ + 3, ty_ + 5, #pe);
+        gfx_setfont(14); ui_col(on_ ? 0xFFFFFF : INK); TX(cx_ + 44, ty_ + 3, pnm(pg_));
+        hitbox(cx_, ty_, 154, 30) ? ( z_[0] = pg_; z_[1] = 0; );
         i += 1;
       );
       j += 1;
     );
     c_ += 1;
   );
-  // the drum kit, along the bottom
-  on_ = z_[1]; hv_ = inbox(12, 706, 300, 30);
-  ui_col(on_ ? 0xFFB030 : hv_ ? BG3 : BG2); RR(12, 706, 300, 30, 5);
-  gfx_setfont(14); ui_col(INK); TX(24, 711, on_ ? "DRUM KIT  (GM MAP)  - ON" : "DRUM KIT  (GM MAP)");
-  hitbox(12, 706, 300, 30) ? z_[1] = !z_[1];
-  gfx_setfont(11); ui_col(INK2); TX(330, 714, "Click a name to give it to the selected part.  Each part plays on its own MIDI channel; channel 10 starts as drums.");
 ) : (
   // ---- page 2: EDIT the selected part, and the effects ----
+  ui_col(0x3A3E43); RR(12, 160, 1256, 52, 6);
+  gfx_setfont(14); ui_col(0xFFFFFF); sprintf(#et, "EDITING PART %d  (MIDI CH %d)  -  ", p70_part + 1, p70_part + 1); strcat(#et, prog_name(z_)); TX(28, 172, #et);
   sect(12, 222, 300, 236, "VOICE");
   key(30, 262, 74, 30, z_[2], ACC, "MONO") ? z_[2] = !z_[2];
   key(122, 262, 74, 30, z_[6], ACC, "GLIDE") ? z_[6] = !z_[6];
