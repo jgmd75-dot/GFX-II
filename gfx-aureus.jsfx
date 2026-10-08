@@ -3,8 +3,6 @@ desc:GFX Aureus
 //tags: multiband eq saturation compressor mastering
 //author: JGWizrad / Garden FX (GFX)
 //
-// Requires gfx-ui (.jsfx-inc) in the same folder.
-//
 // DECADIC BANDS: LR4 crossovers at F1 / F1 x 10 / F1 x 100, with the top split kept between
 //   5 and 10 kHz so the top band is always presence/air. F1 is picked from the Fibonacci
 //   numbers 34, 55, 89, 144 Hz (each step ~ x PHI) or the classic 70 Hz (70 / 700 / 7k).
@@ -78,8 +76,6 @@ slider45:0<0,100,1>-B4 Comp (%)
 slider46:0<-12,12,0.1>-B4 Gain (dB)
 slider47:0<0,1,1{Off,On}>-B4 Solo
 slider48:0<0,1,1{Off,On}>-B4 Mute
-
-import gfx-ui.jsfx-inc
 
 @init
 // =====================================================================
@@ -273,14 +269,19 @@ limRel = exp(-1/(0.15*srate));
 vuC = cms(0.3);
 xfLp = 1 - exp(-TWO_PI*F1*PHI/srate);          // transformer low split: F1 * PHI
 vnd = alloc(2); memset(vnd, 0, 2);            // VU needle positions (GUI)
+drag_id = -1; pcap = 0; lastS = 0;
+gfx_ext_retina = 1;
 
-#ui_man = "gfx-aureus";                        // the ? pop-up links to this manual
-!ui_dflt ? ( ui_sz = 2; lastPreset = slider1; );   // new instances open in Large
-ui_dflt = 1;
+q_init == 0 ? (
+  lastPreset = slider1;
+  ui_sz = 2;
+  ui_szinit = 1;
+  q_init = 1;
+);
 
 @serialize
 file_var(0, ui_sz);
-file_var(0, ui_szinit);                       // kept so older projects load into the right places
+file_var(0, ui_szinit);
 file_var(0, lastPreset);
 
 @slider
@@ -417,7 +418,7 @@ vuL += vuC*(spl0*spl0 - vuL);
 vuR += vuC*(spl1*spl1 - vuR);
 mLim = lg < 0.98 ? 1 : mLim*0.9995;
 
-@gfx 1200 360
+@gfx 1680 504
 
 // =====================================================================
 // GUI - yellow rack faceplate (Looptrotter-inspired), 1600 x 480 design space.
@@ -426,19 +427,25 @@ mLim = lg < 0.98 ? 1 : mLim*0.9995;
 // The LCD shows the preset, or the parameter you are touching.
 // =====================================================================
 
-// house scaffolding: S / M / L / ? sizing (gfx-ui), mouse in design units, automation on every change
-ui_begin(1200, 360);
-S = sc*0.75; ox = 0; oy = 0;
-mx = mouse_x/S; my = mouse_y/S;
-gfx_setfont(8,  "Arial Black", 44*S);                  // AUREUS
-gfx_setfont(9,  "Arial Bold", 18*S);                   // band titles
-gfx_setfont(10, "Arial Bold", 13*S);                   // labels
-gfx_setfont(11, "Arial Bold", 12*S);                   // values
-gfx_setfont(12, "Arial Bold", 10*S);                   // small print
-gfx_setfont(13, "Arial Bold", 15*S);                   // selector letters / buttons
-gfx_setfont(14, "Courier New", 24*S, 'b');             // LCD line 2
-gfx_setfont(15, "Courier New", 13*S, 'b');             // LCD line 1
-gfx_setfont(16, "Arial Bold", 9*S);                    // VU scale
+szf = ui_sz == 1 ? 0.75 : ui_sz == 2 ? 1.05 : 0.9;
+S  = min(szf, min(gfx_w/1600, gfx_h/480));
+ox = floor((gfx_w - 1600*S)*0.5);
+oy = floor((gfx_h - 480*S)*0.5);
+mx = (mouse_x - ox)/S;
+my = (mouse_y - oy)/S;
+
+S != lastS ? (
+  gfx_setfont(1, "Arial Black", max(10, 44*S));           // AUREUS
+  gfx_setfont(2, "Arial Bold", max(9, 18*S));             // band titles
+  gfx_setfont(3, "Arial Bold", max(7, 13*S));             // labels
+  gfx_setfont(4, "Arial Bold", max(7, 12*S));             // values
+  gfx_setfont(5, "Arial Bold", max(6, 10*S));             // small print
+  gfx_setfont(6, "Arial Bold", max(8, 15*S));             // selector letters / buttons
+  gfx_setfont(7, "Courier New", max(9, 24*S), 'b');       // LCD line 2
+  gfx_setfont(8, "Courier New", max(7, 13*S), 'b');       // LCD line 1
+  gfx_setfont(9, "Arial Bold", max(6, 9*S));              // VU scale
+  lastS = S;
+);
 
 // ---- palette ----
 Y_R = 0.98; Y_G = 0.80; Y_B = 0.10;          // faceplate yellow
@@ -458,8 +465,7 @@ function TX(x, y, txt) ( gfx_x = ox + x*S; gfx_y = oy + y*S; gfx_drawstr(txt); )
 function TC(cx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + cx*S - w*0.5; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function TR(rx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + rx*S - w; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function CIRC(x, y, rr, fill) ( gfx_circle(ox + x*S, oy + y*S, rr*S, fill, 1); );
-function clicked(x, y, w, h) local(h_) ( h_ = pressed && drag_id == 0 && mx >= x && mx <= x+w && my >= y && my <= y+h; h_ ? drag_id = -1; h_; );
-function setk(idx, v) ( slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); ); );
+function clicked(x, y, w, h) ( (mouse_cap & 1) && !(pcap & 1) && mx >= x && mx <= x+w && my >= y && my <= y+h; );
 
 function screw(x, y) (
   col(0.55, 0.55, 0.57); CIRC(x, y, 7, 1);
@@ -485,7 +491,7 @@ function btn(x, y, w, h, lbl, on, fnt, red) local(sw, sh) (
 function frame(x, y, w, h, title) (
   cblk(); RO(x, y, w, h);
   title != 0 ? (
-    gfx_setfont(12);
+    gfx_setfont(5);
     gfx_measurestr(title, fw_, fh_);
     R(x + 10, y - 7, fw_/S + 14, 14);
     cyel(); TX(x + 17, y - 6, title);
@@ -496,9 +502,9 @@ function frame(x, y, w, h, title) (
 function knob(id, cx, cy, rad, v, vmin, vmax, bip, def) local(dx, dy, fr, nf, ang, sx, sy, sr, k, t, ca, sa, ta) (
   fr = (v - vmin)/(vmax - vmin);
   dx = mx - cx; dy = my - cy;
-  pressed && drag_id == 0 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
+  (mouse_cap & 1) && !(pcap & 1) && drag_id == -1 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
     ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? (
-      v = def; kc_t = 0; k_rst = id; drag_id = -1;
+      v = def; kc_t = 0; k_rst = id;
     ) : (
       drag_id = id; drag_sy = my; drag_sf = fr; kc_id = id; kc_t = time_precise();
     );
@@ -507,7 +513,7 @@ function knob(id, cx, cy, rad, v, vmin, vmax, bip, def) local(dx, dy, fr, nf, an
     (mouse_cap & 1) ? (
       nf = max(0, min(1, drag_sf + (drag_sy - my)/((mouse_cap & 8) ? 720 : 180)));
       v = vmin + nf*(vmax - vmin);
-    );
+    ) : drag_id = -1;
   );
   fr = (v - vmin)/(vmax - vmin);
   ang = (-0.75 + 1.5*fr)*$pi;
@@ -568,11 +574,11 @@ function pname(n) (
   n == 0 ? "INIT" : n == 1 ? "GOLDEN GLUE" : n == 2 ? "TAPE POLISH" : n == 3 ? "OPTO SMOOTH" :
   n == 4 ? "AIR LIFT" : n == 5 ? "IRON LOW END" : n == 6 ? "VCA PUNCH" : "DYNAMIC TAME";
 );
-function go_preset(n) (
-  slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0;
-  slider_automate(281474976710655);                 // sliders 1-48
+function step_preset(dir) (
+  slider1 = (slider1 + dir + 8) % 8;
+  apply_preset(slider1); lastPreset = slider1;
+  lcd_t = 0;
 );
-function step_preset(dir) ( go_preset((slider1 + dir + 8) % 8); );
 
 // VU meter: face at (x, y), 230 x 112; v = mean-square level; nd = needle state slot
 function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cyv) (
@@ -589,7 +595,7 @@ function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cy
     a = (-48 + 96*tp)*$pi/180;
     tv >= 0 ? col(0.80, 0.10, 0.08) : cblk();
     gfx_line(ox + (cxv + sin(a)*rr)*S, oy + (cyv - cos(a)*rr)*S, ox + (cxv + sin(a)*(rr - 9))*S, oy + (cyv - cos(a)*(rr - 9))*S, 1);
-    gfx_setfont(16);
+    gfx_setfont(9);
     sprintf(#vut, tv > 0 ? "+%d" : "%d", tv);
     TC(cxv + sin(a)*(rr + 9), cyv - cos(a)*(rr + 9) - 6, #vut);
     k += 1;
@@ -598,8 +604,8 @@ function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cy
   col(0.80, 0.10, 0.08);
   k = 0; loop(max(2, floor(3*S + 0.5)),
     gfx_arc(ox + cxv*S, oy + cyv*S, (rr - 4)*S + k, (-48 + 96*(1 - 0.1)/(10^(3/20) - 0.1))*$pi/180, 48*$pi/180, 1); k += 1; );
-  cblk(); gfx_setfont(10); TC(cxv, y + 76, "VU");
-  gfx_setfont(12); TX(x + 8, y + 94, lbl);
+  cblk(); gfx_setfont(3); TC(cxv, y + 76, "VU");
+  gfx_setfont(5); TX(x + 8, y + 94, lbl);
   // needle (0 VU = -18 dBFS RMS), simple ballistics per frame
   db = v > 0.000000001 ? 10*log10(v) + 18 : -40;
   pos = max(-0.04, min(1.06, (10^(max(-30, db)/20) - 0.1)/(10^(3/20) - 0.1)));
@@ -636,18 +642,18 @@ loop(2,
 cblk(); R(44, 0, 1512, 3); R(44, 477, 1512, 3);
 
 // ---- Left: brand, LCD, presets, size ----
-cblk(); gfx_setfont(8); TX(60, 18, "AUREUS");
-gfx_setfont(12); TX(64, 76, "DECADIC  φ  PROCESSOR");
+cblk(); gfx_setfont(1); TX(60, 18, "AUREUS");
+gfx_setfont(5); TX(64, 76, "DECADIC  φ  PROCESSOR");
 
 cblk(); R(60, 104, 266, 92);
 col(0.07, 0.05, 0.02); R(64, 108, 258, 84);
 col(1.0, 0.68, 0.15);
 time_precise() - lcd_t < 1.5 ? (
-  gfx_setfont(15); TX(76, 118, #lcdn);
-  gfx_setfont(14); TX(76, 146, #lcdv);
+  gfx_setfont(8); TX(76, 118, #lcdn);
+  gfx_setfont(7); TX(76, 146, #lcdv);
 ) : (
-  gfx_setfont(15); sprintf(#lcd1, "PRESET %02d/08", slider1 + 1); TX(76, 118, #lcd1);
-  gfx_setfont(14); TX(76, 146, pname(slider1));
+  gfx_setfont(8); sprintf(#lcd1, "PRESET %02d/08", slider1 + 1); TX(76, 118, #lcd1);
+  gfx_setfont(7); TX(76, 146, pname(slider1));
 );
 
 // Click the LCD: drop-down menu of all presets (current one ticked)
@@ -661,30 +667,29 @@ clicked(60, 104, 266, 92) ? (
   );
   gfx_x = mouse_x; gfx_y = mouse_y;
   psel = gfx_showmenu(#pmenu);
-  psel > 0 ? go_preset(psel - 1);
+  psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; );
 );
 
-btn(60, 210, 60, 36, "◄", 0, 13, 0) ? step_preset(-1);
-btn(266, 210, 60, 36, "►", 0, 13, 0) ? step_preset(1);
-cblk(); gfx_setfont(12); TC(193, 222, "PRESET");
+btn(60, 210, 60, 36, "◄", 0, 6, 0) ? step_preset(-1);
+btn(266, 210, 60, 36, "►", 0, 6, 0) ? step_preset(1);
+cblk(); gfx_setfont(5); TC(193, 222, "PRESET");
 
-cblk(); gfx_setfont(12); TX(60, 270, "SIZE");
-btn(60, 286, 48, 30, "S", ui_sz == 1, 13, 0) ? ui_sz = 1;
-btn(114, 286, 48, 30, "M", ui_sz == 0, 13, 0) ? ui_sz = 0;
-btn(168, 286, 48, 30, "L", ui_sz == 2, 13, 0) ? ui_sz = 2;
-btn(222, 286, 30, 30, "?", ui_help_open, 13, 0) ? ( ui_help_open = 1; ui_help_new = 1; );
+cblk(); gfx_setfont(5); TX(60, 270, "SIZE");
+btn(60, 286, 48, 30, "S", ui_sz == 1, 6, 0) ? ui_sz = 1;
+btn(114, 286, 48, 30, "M", ui_sz == 0, 6, 0) ? ui_sz = 0;
+btn(168, 286, 48, 30, "L", ui_sz == 2, 6, 0) ? ui_sz = 2;
 
 // INPUT trim beside the size picker
-setk(4, knob(94, 284, 300, 16, slider4, -24, 24, 1, 0));
-cblk(); gfx_setfont(12); TC(284, 258, "INPUT");
-gfx_setfont(11); TC(284, 330, fdb(slider4)); touch(94, "INPUT", fdb(slider4));
+slider4 = knob(94, 284, 300, 16, slider4, -24, 24, 1, 0);
+cblk(); gfx_setfont(5); TC(284, 258, "INPUT");
+gfx_setfont(4); TC(284, 330, fdb(slider4)); touch(94, "INPUT", fdb(slider4));
 
 // Crossover picker: F1 (x10, x100). Fibonacci 34 / 55 / 89 / 144 (steps ~ x phi) + classic 70
-cblk(); gfx_setfont(12); TX(60, 352, "CROSSOVER  F1   x10   x100");
+cblk(); gfx_setfont(5); TX(60, 352, "CROSSOVER  F1   x10   x100");
 k = 0;
 loop(5,
-  btn(60 + k*54, 368, 48, 30, k == 0 ? "34" : k == 1 ? "55" : k == 2 ? "70" : k == 3 ? "89" : "144", slider6 == k, 11, 0) ? (
-    slider6 = k; ui_auto(6);
+  btn(60 + k*54, 368, 48, 30, k == 0 ? "34" : k == 1 ? "55" : k == 2 ? "70" : k == 3 ? "89" : "144", slider6 == k, 4, 0) ? (
+    slider6 = k;
     strcpy(#lcdn, "CROSSOVERS");
     xv = k == 0 ? 34 : k == 1 ? 55 : k == 2 ? 70 : k == 3 ? 89 : 144;
     sprintf(#lcdv, "%s/%s/%s", fq(xv, #fa), fq(xv*10, #fb), fq(xf3(xv), #fc));
@@ -692,8 +697,8 @@ loop(5,
   );
   k += 1;
 );
-cblk(); gfx_setfont(10); TX(60, 410, "φ = 1.618034");
-gfx_setfont(12); TX(60, 432, "FIBONACCI SPLITS  LR4");
+cblk(); gfx_setfont(3); TX(60, 410, "φ = 1.618034");
+gfx_setfont(5); TX(60, 432, "FIBONACCI SPLITS  LR4");
 screw(312, 452);
 
 // ---- Four bands ----
@@ -706,9 +711,9 @@ loop(4,
   // frame + header tab
   cblk(); RO(bx, 20, 230, 440);
   R(bx, 20, 230, 34);
-  cyel(); gfx_setfont(9);
+  cyel(); gfx_setfont(2);
   TX(bx + 12, 27, bb == 0 ? "SUB" : bb == 1 ? "LOW-MID" : bb == 2 ? "HIGH-MID" : F3 < 6500 ? "PRESENCE" : "AIR");
-  gfx_setfont(12);
+  gfx_setfont(5);
   bb == 0 ? sprintf(#rng, "< %s Hz", fq(F1, #fa)) :
   bb == 1 ? sprintf(#rng, "%s - %s Hz", fq(F1, #fa), fq(F2, #fb)) :
   bb == 2 ? sprintf(#rng, "%s - %s Hz", fq(F2, #fa), fq(F3, #fb)) :
@@ -727,13 +732,13 @@ loop(4,
     ti = base + rw*2;                      // type slider index
     vi = ti + 1;                           // amount slider index
     tsel = floor(slider(ti) + 0.5);
-    cblk(); gfx_setfont(10); TX(bx + 12, y0 + 6, rw == 0 ? "EQ" : rw == 1 ? "DRIVE" : "COMP");
+    cblk(); gfx_setfont(3); TX(bx + 12, y0 + 6, rw == 0 ? "EQ" : rw == 1 ? "DRIVE" : "COMP");
     k = 0;
     loop(3,
       btn(bx + 12 + k*38, y0 + 26, 34, 26,
           rw == 0 ? (k == 0 ? "P" : k == 1 ? "S" : "D") : rw == 1 ? (k == 0 ? "T" : k == 1 ? "S" : "X") : (k == 0 ? "O" : k == 1 ? "V" : "R"),
-          tsel == k, 13, 0) ? (
-        slider(ti) = k; ui_auto(ti);
+          tsel == k, 6, 0) ? (
+        slider(ti) = k;
         strcpy(#lcdn, rw == 0 ? "EQ TYPE" : rw == 1 ? "DRIVE TYPE" : "COMP TYPE");
         strcpy(#lcdv, rw == 0 ? (k == 0 ? "PASSIVE" : k == 1 ? "CONSOLE" : "DYNAMIC") :
                       rw == 1 ? (k == 0 ? "TRANSISTOR" : k == 1 ? "TAPE" : "TRANSFORMER") :
@@ -743,18 +748,18 @@ loop(4,
       k += 1;
     );
     tsel = floor(slider(ti) + 0.5);
-    cblk(); gfx_setfont(12);
+    cblk(); gfx_setfont(5);
     TX(bx + 12, y0 + 58, rw == 0 ? (tsel == 0 ? "PASSIVE" : tsel == 1 ? "CONSOLE" : "DYNAMIC") :
                          rw == 1 ? (tsel == 0 ? "TRANSISTOR" : tsel == 1 ? "TAPE" : "TRANSFORMER") :
                                    (tsel == 0 ? "OPTO" : tsel == 1 ? "VCA" : "SUPER NICE"));
     // knob
     rw == 0 ? (
-      setk(vi, knob(bb*10 + 1, bx + 162, y0 + 40, 25, slider(vi), -12, 12, 1, 0));
-      cblk(); gfx_setfont(11); TC(bx + 162, y0 + 70, fdb(slider(vi)));
+      slider(vi) = knob(bb*10 + 1, bx + 162, y0 + 40, 25, slider(vi), -12, 12, 1, 0);
+      cblk(); gfx_setfont(4); TC(bx + 162, y0 + 70, fdb(slider(vi)));
       touch(bb*10 + 1, bb == 0 ? "SUB EQ" : bb == 1 ? "LOW-MID EQ" : bb == 2 ? "HIGH-MID EQ" : "AIR EQ", fdb(slider(vi)));
     ) : (
-      setk(vi, knob(bb*10 + 1 + rw, bx + 162, y0 + 40, 25, slider(vi), 0, 100, 0, 0));
-      cblk(); gfx_setfont(11); TC(bx + 162, y0 + 70, fpct(slider(vi)));
+      slider(vi) = knob(bb*10 + 1 + rw, bx + 162, y0 + 40, 25, slider(vi), 0, 100, 0, 0);
+      cblk(); gfx_setfont(4); TC(bx + 162, y0 + 70, fpct(slider(vi)));
       touch(bb*10 + 1 + rw, rw == 1 ? (bb == 0 ? "SUB DRIVE" : bb == 1 ? "LOW-MID DRIVE" : bb == 2 ? "HIGH-MID DRIVE" : "AIR DRIVE")
                                     : (bb == 0 ? "SUB COMP" : bb == 1 ? "LOW-MID COMP" : bb == 2 ? "HIGH-MID COMP" : "AIR COMP"), fpct(slider(vi)));
     );
@@ -771,17 +776,17 @@ loop(4,
     R(bx + 211, ly, 8, 14);
     k += 1;
   );
-  cblk(); gfx_setfont(12); TC(bx + 215, 332, "GR");
+  cblk(); gfx_setfont(5); TC(bx + 215, 332, "GR");
 
   // bottom row: band GAIN, SOLO, MUTE
   cblk(); R(bx + 10, 336, 196, 2);
-  setk(base + 6, knob(bb*10 + 4, bx + 54, 386, 24, slider(base + 6), -12, 12, 1, 0));
-  cblk(); gfx_setfont(10); TC(bx + 54, 420, "GAIN");
-  gfx_setfont(11); TC(bx + 54, 438, fdb(slider(base + 6)));
+  slider(base + 6) = knob(bb*10 + 4, bx + 54, 386, 24, slider(base + 6), -12, 12, 1, 0);
+  cblk(); gfx_setfont(3); TC(bx + 54, 420, "GAIN");
+  gfx_setfont(4); TC(bx + 54, 438, fdb(slider(base + 6)));
   touch(bb*10 + 4, bb == 0 ? "SUB GAIN" : bb == 1 ? "LOW-MID GAIN" : bb == 2 ? "HIGH-MID GAIN" : "AIR GAIN", fdb(slider(base + 6)));
   so = slider(base + 7) > 0.5; mu = slider(base + 8) > 0.5;
-  btn(bx + 106, 366, 52, 34, "SOLO", so, 11, 0) ? ( slider(base + 7) = !so; ui_auto(base + 7); );
-  btn(bx + 164, 366, 52, 34, "MUTE", mu, 11, 1) ? ( slider(base + 8) = !mu; ui_auto(base + 8); );
+  btn(bx + 106, 366, 52, 34, "SOLO", so, 4, 0) ? slider(base + 7) = !so;
+  btn(bx + 164, 366, 52, 34, "MUTE", mu, 4, 1) ? slider(base + 8) = !mu;
 
   bb += 1;
 );
@@ -792,14 +797,14 @@ vu(1312, 34, vuL, "LEFT", vnd);
 vu(1312, 160, vuR, "RIGHT", vnd + 1);
 
 frame(1305, 300, 245, 160, "MASTER");
-setk(2, knob(91, 1352, 352, 24, slider2, 0, 100, 0, 25));
-cblk(); gfx_setfont(10); TC(1352, 386, "DRIFT"); gfx_setfont(11); TC(1352, 404, fpct(slider2)); touch(91, "DRIFT (PHI)", fpct(slider2));
-setk(5, knob(92, 1428, 352, 24, slider5, 0, 100, 0, 100));
-cblk(); gfx_setfont(10); TC(1428, 386, "MIX"); gfx_setfont(11); TC(1428, 404, fpct(slider5)); touch(92, "MIX", fpct(slider5));
-setk(3, knob(93, 1504, 352, 24, slider3, -24, 12, 1, 0));
-cblk(); gfx_setfont(10); TC(1504, 386, "OUTPUT"); gfx_setfont(11); TC(1504, 404, fdb(slider3)); touch(93, "OUTPUT", fdb(slider3));
+slider2 = knob(91, 1352, 352, 24, slider2, 0, 100, 0, 25);
+cblk(); gfx_setfont(3); TC(1352, 386, "DRIFT"); gfx_setfont(4); TC(1352, 404, fpct(slider2)); touch(91, "DRIFT (PHI)", fpct(slider2));
+slider5 = knob(92, 1428, 352, 24, slider5, 0, 100, 0, 100);
+cblk(); gfx_setfont(3); TC(1428, 386, "MIX"); gfx_setfont(4); TC(1428, 404, fpct(slider5)); touch(92, "MIX", fpct(slider5));
+slider3 = knob(93, 1504, 352, 24, slider3, -24, 12, 1, 0);
+cblk(); gfx_setfont(3); TC(1504, 386, "OUTPUT"); gfx_setfont(4); TC(1504, 404, fdb(slider3)); touch(93, "OUTPUT", fdb(slider3));
 mLim > 0.5 ? col(1.0, 0.18, 0.10) : col(0.35, 0.08, 0.05); CIRC(1328, 438, 6, 1);
-cblk(); gfx_setfont(12); TX(1340, 432, "LIMIT");
+cblk(); gfx_setfont(5); TX(1340, 432, "LIMIT");
 screw(1530, 440);
 
-ui_end();
+pcap = mouse_cap;

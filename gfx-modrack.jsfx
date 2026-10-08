@@ -3,8 +3,6 @@ desc:GFX Mod Rack
 //tags: modulation chorus tremolo vibe delay multi-effect
 //author: JGWizrad / Garden FX (GFX)
 //
-// Requires gfx-ui (.jsfx-inc) in the same folder.
-//
 // Four modules run in PARALLEL on the input. Each module returns only its *change* to the
 // signal (its "delta"); the dry signal always passes. Three L / C / R toggles per module
 // choose where that change goes:
@@ -64,8 +62,6 @@ slider46:0<0,1,1{Off,On}>-Delay C
 slider47:1<0,1,1{Off,On}>-Delay R
 slider48:0<0,3,1{Off,Straight,Dotted,Triplet}>-Delay Sync
 slider49:4<0,7,1{4 Bars,2 Bars,1 Bar,1/2,1/4,1/8,1/16,1/32}>-Delay Sync Rate
-
-import gfx-ui.jsfx-inc
 
 @init
 // =====================================================================
@@ -150,6 +146,8 @@ limEnv = 0;
 
 // Meters (GUI)
 mOut = 0; mLim = 0;
+drag_id = -1; pcap = 0; lastS = 0;
+gfx_ext_retina = 1;
 
 // =====================================================================
 // Module voices
@@ -241,13 +239,16 @@ function apply_preset(n) (
 );
 
 // Per-instance guards (variables survive @init re-runs; @serialize restores saved values)
-#ui_man = "gfx-modrack";                       // the ? pop-up links to this manual
-!ui_dflt ? ( ui_sz = 2; lastPreset = slider1; );   // new instances open in Large
-ui_dflt = 1;
+q_init == 0 ? (
+  lastPreset = slider1;
+  ui_sz = 2;             // new instances open in Large
+  ui_szinit = 1;
+  q_init = 1;
+);
 
 @serialize
 file_var(0, ui_sz);
-file_var(0, ui_szinit);                       // kept so older projects load into the right places
+file_var(0, ui_szinit);
 file_var(0, lastPreset);
 
 @slider
@@ -399,7 +400,7 @@ spl1 = max(-1, min(1, oR));
 mOut = max(mOut*0.9997, max(abs(spl0), abs(spl1)));
 mLim = lg < 0.98 ? 1 : mLim*0.9995;
 
-@gfx 1200 315
+@gfx 1680 441
 
 // =====================================================================
 // GUI - 2U rack face drawn in a 1600 x 420 design space.
@@ -408,18 +409,24 @@ mLim = lg < 0.98 ? 1 : mLim*0.9995;
 // The LCD shows the preset, or the parameter you are touching.
 // =====================================================================
 
-// house scaffolding: S / M / L / ? sizing (gfx-ui), mouse in design units, automation on every change
-ui_begin(1200, 315);
-S = sc*0.75; ox = 0; oy = 0;
-mx = mouse_x/S; my = mouse_y/S;
-gfx_setfont(9,  "Arial Bold", 40*S);                   // MOD RACK
-gfx_setfont(10, "Arial Bold", 24*S);                   // module titles
-gfx_setfont(11, "Arial Bold", 15*S);                   // knob labels
-gfx_setfont(12, "Arial Bold", 14*S);                   // values / buttons
-gfx_setfont(13, "Arial Bold", 13*S);                   // small print
-gfx_setfont(14, "Arial Bold", 16*S);                   // MASTER
-gfx_setfont(15, "Courier New", 24*S, 'b');             // LCD line 2
-gfx_setfont(16, "Courier New", 15*S, 'b');             // LCD line 1
+szf = ui_sz == 1 ? 0.75 : ui_sz == 2 ? 1.05 : 0.9;
+S  = min(szf, min(gfx_w/1600, gfx_h/420));
+ox = floor((gfx_w - 1600*S)*0.5);
+oy = floor((gfx_h - 420*S)*0.5);
+mx = (mouse_x - ox)/S;
+my = (mouse_y - oy)/S;
+
+S != lastS ? (
+  gfx_setfont(1, "Arial Bold", max(10, 40*S));            // MOD RACK
+  gfx_setfont(2, "Arial Bold", max(9, 24*S));             // module titles
+  gfx_setfont(3, "Arial Bold", max(9, 15*S));             // knob labels
+  gfx_setfont(4, "Arial Bold", max(9, 14*S));             // values / buttons
+  gfx_setfont(5, "Arial Bold", max(8, 13*S));             // small print
+  gfx_setfont(6, "Arial Bold", max(8, 16*S));             // GFX / MASTER
+  gfx_setfont(7, "Courier New", max(9, 24*S), 'b');       // LCD line 2
+  gfx_setfont(8, "Courier New", max(9, 15*S), 'b');       // LCD line 1
+  lastS = S;
+);
 
 // ---- helpers (design-space coordinates) ----
 function col(r, g, b) ( gfx_r = r; gfx_g = g; gfx_b = b; );
@@ -432,8 +439,7 @@ function TX(x, y, txt) ( gfx_x = ox + x*S; gfx_y = oy + y*S; gfx_drawstr(txt); )
 function TC(cx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + cx*S - w*0.5; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function TR(rx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + rx*S - w; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function CIRC(x, y, rr, fill) ( gfx_circle(ox + x*S, oy + y*S, rr*S, fill, 1); );
-function clicked(x, y, w, h) local(h_) ( h_ = pressed && drag_id == 0 && mx >= x && mx <= x+w && my >= y && my <= y+h; h_ ? drag_id = -1; h_; );
-function setk(idx, v) ( slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); ); );
+function clicked(x, y, w, h) ( (mouse_cap & 1) && !(pcap & 1) && mx >= x && mx <= x+w && my >= y && my <= y+h; );
 
 // Bevel: inset = 1 recessed, 0 raised (lo / hi are the edge shades)
 function bevel(x, y, w, h, inset, lo, hi) (
@@ -487,9 +493,9 @@ function btn(x, y, w, h, lbl, on, fnt, sty) local(sw, sh) (
 function knob(id, cx, cy, rad, v, vmin, vmax, lgt, def, sty) local(dx, dy, fr, nf, ang, sx, sy, sr, n, k, t, ca, sa, fa) (
   fr = lgt ? log(v/vmin)/log(vmax/vmin) : (v - vmin)/(vmax - vmin);
   dx = mx - cx; dy = my - cy;
-  pressed && drag_id == 0 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
+  (mouse_cap & 1) && !(pcap & 1) && drag_id == -1 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
     ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? (
-      v = def; kc_t = 0; k_rst = id; drag_id = -1;
+      v = def; kc_t = 0; k_rst = id;
     ) : (
       drag_id = id; drag_sy = my; drag_sf = fr; kc_id = id; kc_t = time_precise();
     );
@@ -498,7 +504,7 @@ function knob(id, cx, cy, rad, v, vmin, vmax, lgt, def, sty) local(dx, dy, fr, n
     (mouse_cap & 1) ? (
       nf = max(0, min(1, drag_sf + (drag_sy - my)/((mouse_cap & 8) ? 720 : 180)));
       v = lgt ? vmin*(vmax/vmin)^nf : vmin + nf*(vmax - vmin);
-    );
+    ) : drag_id = -1;
   );
   fr = lgt ? log(v/vmin)/log(vmax/vmin) : (v - vmin)/(vmax - vmin);
   ang = (-0.75 + 1.5*fr)*$pi;
@@ -552,8 +558,8 @@ function touch(id, name, val) (
 
 // Label + value under a knob, in the current ink
 function klab(cx, y, lbl, val) (
-  gfx_setfont(11); TC(cx, y, lbl);
-  gfx_setfont(12); TC(cx, y + 20, val);
+  gfx_setfont(3); TC(cx, y, lbl);
+  gfx_setfont(4); TC(cx, y + 20, val);
 );
 
 function fhz(v)  ( v < 1 ? sprintf(#vt, "%.2f Hz", v) : sprintf(#vt, "%.1f Hz", v); #vt; );
@@ -580,19 +586,19 @@ function synck(id, cx, base, vmin, vmax, vdef, ddef, nm, istime) local(md, v) (
   md = floor(slider(base + 8) + 0.5);
   md > 0 ? (
     v = knob(id, cx, 112, 27, slider(base + 9), 0, 7, 0, ddef, 0);
-    setk(base + 9, floor(v + 0.5));
+    slider(base + 9) = floor(v + 0.5);
   ) : (
-    setk(base, knob(id, cx, 112, 27, slider(base), vmin, vmax, 1, vdef, 0));
+    slider(base) = knob(id, cx, 112, 27, slider(base), vmin, vmax, 1, vdef, 0);
   );
-  gfx_setfont(11);
+  gfx_setfont(3);
   md > 0 ? (
     cink(); R(cx - 35, 144, 70, 20); col(pr, pg, pb);
     TC(cx, 146, md == 1 ? "SYNC" : md == 2 ? "DOTTED" : "TRIPLET");
   ) : ( cink(); TC(cx, 146, istime ? "TIME" : "RATE"); );
-  cink(); gfx_setfont(12);
+  cink(); gfx_setfont(4);
   TC(cx, 166, md > 0 ? fsync(slider(base + 9), md) : istime ? fms(slider(base)) : fhz(slider(base)));
   clicked(cx - 35, 147, 70, 17) ? (
-    slider(base + 8) = (md + 1) % 4; ui_auto(base + 8);
+    slider(base + 8) = (md + 1) % 4;
     strcpy(#lcdn, nm);
     strcpy(#lcdv, md == 0 ? "SYNC STRAIGHT" : md == 1 ? "SYNC DOTTED" : md == 2 ? "SYNC TRIPLET" : istime ? "TIME IN MS" : "RATE IN HZ");
     lcd_t = time_precise();
@@ -606,11 +612,11 @@ function pname(n) (
 );
 
 // Preset step from the GUI
-function go_preset(n) (
-  slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0;
-  slider_automate(562949953421311);                 // sliders 1-49
+function step_preset(dir) (
+  slider1 = (slider1 + dir + 8) % 8;
+  apply_preset(slider1); lastPreset = slider1;
+  lcd_t = 0;
 );
-function step_preset(dir) ( go_preset((slider1 + dir + 8) % 8); );
 
 // =====================================================================
 // Draw
@@ -637,39 +643,31 @@ loop(2,
 );
 
 // ---- Left: badge, LCD, presets, size ----
-col(0.80, 0.25, 0.18); CIRC(84, 30, 13, 1); col(0.96, 0.92, 0.84); gfx_setfont(13); TC(84, 22, "GFX");
-col(0.95, 0.94, 0.90); gfx_setfont(9); TX(70, 44, "MOD RACK");
-col(0.55, 0.55, 0.58); gfx_setfont(13); TX(72, 92, "TREMOLO  CHORUS  VIBE  DELAY");
+col(0.55, 0.55, 0.58); gfx_setfont(6); TX(72, 24, "GFX");
+col(0.95, 0.94, 0.90); gfx_setfont(1); TX(70, 44, "MOD RACK");
+col(0.55, 0.55, 0.58); gfx_setfont(5); TX(72, 92, "TREMOLO  CHORUS  VIBE  DELAY");
 
 col(0.03, 0.03, 0.03); R(66, 118, 258, 90);
 bevel(66, 118, 258, 90, 1, 0.02, 0.24);
 col(0.55, 0.68, 0.24); R(70, 122, 250, 82);                       // green LCD
 col(0.08, 0.13, 0.03);
 time_precise() - lcd_t < 1.5 ? (
-  gfx_setfont(16); TX(80, 130, #lcdn);
-  gfx_setfont(15); TX(80, 160, #lcdv);
+  gfx_setfont(8); TX(80, 130, #lcdn);
+  gfx_setfont(7); TX(80, 160, #lcdv);
 ) : (
-  gfx_setfont(16); sprintf(#lcd1, "PRESET %02d/08", slider1 + 1); TX(80, 130, #lcd1);
-  gfx_setfont(15); TX(80, 160, pname(slider1));
-);
-clicked(66, 118, 258, 90) ? (
-  strcpy(#pmenu, ""); k = 0;
-  loop(8, k == slider1 ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k)); k < 7 ? strcat(#pmenu, "|"); k += 1; );
-  gfx_x = mouse_x; gfx_y = mouse_y;
-  psel = gfx_showmenu(#pmenu);
-  psel > 0 ? go_preset(psel - 1);
+  gfx_setfont(8); sprintf(#lcd1, "PRESET %02d/08", slider1 + 1); TX(80, 130, #lcd1);
+  gfx_setfont(7); TX(80, 160, pname(slider1));
 );
 
-btn(70, 218, 56, 34, "◄", 0, 12, 0) ? step_preset(-1);
-btn(264, 218, 56, 34, "►", 0, 12, 0) ? step_preset(1);
-col(0.70, 0.70, 0.72); gfx_setfont(13); TC(195, 228, "PRESET");
+btn(70, 218, 56, 34, "◄", 0, 4, 0) ? step_preset(-1);
+btn(264, 218, 56, 34, "►", 0, 4, 0) ? step_preset(1);
+col(0.70, 0.70, 0.72); gfx_setfont(5); TC(195, 228, "PRESET");
 
-col(0.55, 0.55, 0.58); gfx_setfont(13); TX(70, 274, "SIZE");
-btn(70,  292, 46, 28, "S", ui_sz == 1, 12, 0) ? ui_sz = 1;
-btn(122, 292, 46, 28, "M", ui_sz == 0, 12, 0) ? ui_sz = 0;
-btn(174, 292, 46, 28, "L", ui_sz == 2, 12, 0) ? ui_sz = 2;
-btn(226, 292, 46, 28, "?", ui_help_open, 12, 0) ? ( ui_help_open = 1; ui_help_new = 1; );
-col(0.40, 0.40, 0.42); gfx_setfont(13); TX(70, 372, "MODEL GFX-MR4   2U");
+col(0.55, 0.55, 0.58); gfx_setfont(5); TX(70, 274, "SIZE");
+btn(70,  292, 46, 28, "S", ui_sz == 1, 4, 0) ? ui_sz = 1;
+btn(122, 292, 46, 28, "M", ui_sz == 0, 4, 0) ? ui_sz = 0;
+btn(174, 292, 46, 28, "L", ui_sz == 2, 4, 0) ? ui_sz = 2;
+col(0.40, 0.40, 0.42); gfx_setfont(5); TX(70, 372, "MODEL GFX-MR4   2U");
 
 // ---- Four module panels ----
 mi = 0;
@@ -683,36 +681,36 @@ loop(4,
   cpanel(1.12); R(px + 2, 26, 246, 2);
   screw(px + 12, 36, 5); screw(px + 238, 36, 5); screw(px + 12, 384, 5); screw(px + 238, 384, 5);
 
-  cink(); gfx_setfont(10);
+  cink(); gfx_setfont(2);
   TX(px + 26, 30, mi == 0 ? "CHORUS" : mi == 1 ? "TREMOLO" : mi == 2 ? "VIBE" : "DELAY");
-  gfx_setfont(13);
+  gfx_setfont(5);
   TR(px + 226, 40, mi == 0 ? "BBD" : mi == 1 ? "OPTICAL" : mi == 2 ? "PHOTOCELL" : "BBD / TAPE");
 
   // Knob row
   mi == 0 ? (
     synck(1, px + 48, 10, 0.05, 8, 0.8, 2, "CHORUS RATE", 0);
-    setk(11, knob(2, px + 125, 112, 27, slider11, 0, 100, 0, 50, 0));   cink(); klab(px + 125, 146, "DEPTH", fpct(slider11)); touch(2, "CHORUS DEPTH", fpct(slider11));
-    setk(12, knob(3, px + 202, 112, 27, slider12, 0, 100, 0, 0, 0));    cink(); klab(px + 202, 146, "MIX",   fpct(slider12)); touch(3, "CHORUS MIX",   fpct(slider12));
+    slider11 = knob(2, px + 125, 112, 27, slider11, 0, 100, 0, 50, 0);   cink(); klab(px + 125, 146, "DEPTH", fpct(slider11)); touch(2, "CHORUS DEPTH", fpct(slider11));
+    slider12 = knob(3, px + 202, 112, 27, slider12, 0, 100, 0, 0, 0);    cink(); klab(px + 202, 146, "MIX",   fpct(slider12)); touch(3, "CHORUS MIX",   fpct(slider12));
   ) : mi == 1 ? (
     synck(11, px + 70, 20, 0.1, 15, 4, 5, "TREMOLO RATE", 0);
-    setk(21, knob(12, px + 180, 112, 27, slider21, 0, 100, 0, 0, 0));   cink(); klab(px + 180, 146, "DEPTH", fpct(slider21)); touch(12, "TREMOLO DEPTH", fpct(slider21));
+    slider21 = knob(12, px + 180, 112, 27, slider21, 0, 100, 0, 0, 0);   cink(); klab(px + 180, 146, "DEPTH", fpct(slider21)); touch(12, "TREMOLO DEPTH", fpct(slider21));
   ) : mi == 2 ? (
     synck(21, px + 70, 30, 0.1, 12, 1.5, 4, "VIBE RATE", 0);
-    setk(31, knob(22, px + 180, 112, 27, slider31, 0, 100, 0, 0, 0));    cink(); klab(px + 180, 146, "DEPTH", fpct(slider31)); touch(22, "VIBE DEPTH", fpct(slider31));
+    slider31 = knob(22, px + 180, 112, 27, slider31, 0, 100, 0, 0, 0);    cink(); klab(px + 180, 146, "DEPTH", fpct(slider31)); touch(22, "VIBE DEPTH", fpct(slider31));
   ) : (
     synck(31, px + 48, 40, 20, 1500, 350, 4, "DELAY TIME", 1);
-    setk(41, knob(32, px + 125, 112, 27, slider41, 0, 95, 0, 30, 0));     cink(); klab(px + 125, 146, "FEEDBACK", fpct(slider41)); touch(32, "DELAY FEEDBACK", fpct(slider41));
-    setk(42, knob(33, px + 202, 112, 27, slider42, 0, 100, 0, 0, 0));     cink(); klab(px + 202, 146, "MIX",      fpct(slider42)); touch(33, "DELAY MIX",      fpct(slider42));
+    slider41 = knob(32, px + 125, 112, 27, slider41, 0, 95, 0, 30, 0);     cink(); klab(px + 125, 146, "FEEDBACK", fpct(slider41)); touch(32, "DELAY FEEDBACK", fpct(slider41));
+    slider42 = knob(33, px + 202, 112, 27, slider42, 0, 100, 0, 0, 0);     cink(); klab(px + 202, 146, "MIX",      fpct(slider42)); touch(33, "DELAY MIX",      fpct(slider42));
   );
 
   // Divider
   cpanel(0.7); R(px + 16, 192, 218, 2);
 
   // Mod pot (red)
-  cink(); gfx_setfont(13); TC(px + 125, 204, "MOD");
+  cink(); gfx_setfont(5); TC(px + 125, 204, "MOD");
   mvi = base + ((mi == 0 || mi == 3) ? 3 : 2);     // Mod pot slider index
   mv = knob(mi*10 + 9, px + 125, 262, 32, slider(mvi), 0, 100, 0, 0, 1);
-  setk(mvi, mv);
+  slider(mvi) = mv;
   cink();
   klab(px + 125, 304, mi == 0 ? "CLOCK STRETCH" : mi == 1 ? "SQUARE CHOP" : mi == 2 ? "ASYM LAMP" : "RUNAWAY CLOCK", fpct(mv));
   touch(mi*10 + 9, mi == 0 ? "CLOCK STRETCH" : mi == 1 ? "SQUARE CHOP" : mi == 2 ? "ASYM LAMP" : "RUNAWAY CLOCK", fpct(mv));
@@ -721,8 +719,8 @@ loop(4,
   k = 0;
   loop(3,
     rv = slider(base + 5 + k) > 0.5;
-    btn(px + 18 + k*74, 344, 66, 34, k == 0 ? "L" : k == 1 ? "C" : "R", rv, 11, 1) ? (
-      slider(base + 5 + k) = !rv; ui_auto(base + 5 + k);
+    btn(px + 18 + k*74, 344, 66, 34, k == 0 ? "L" : k == 1 ? "C" : "R", rv, 3, 1) ? (
+      slider(base + 5 + k) = !rv;
       // LCD readout of the new routing
       strcpy(#lcdn, mi == 0 ? "CHORUS OUT" : mi == 1 ? "TREMOLO OUT" : mi == 2 ? "VIBE OUT" : "DELAY OUT");
       sprintf(#lcdv, "%s %s %s", slider(base + 5) > 0.5 ? "L" : "-", slider(base + 6) > 0.5 ? "C" : "-", slider(base + 7) > 0.5 ? "R" : "-");
@@ -738,13 +736,13 @@ loop(4,
 // ---- Master ----
 col(0.14, 0.14, 0.15); R(1393, 24, 154, 372);
 bevel(1393, 24, 154, 372, 1, 0.05, 0.24);
-col(0.80, 0.80, 0.82); gfx_setfont(14); TX(1405, 34, "MASTER");
+col(0.80, 0.80, 0.82); gfx_setfont(6); TX(1405, 34, "MASTER");
 
-setk(2, knob(91, 1450, 90, 24, slider2, 0, 100, 0, 20, 2));
+slider2 = knob(91, 1450, 90, 24, slider2, 0, 100, 0, 20, 2);
 col(0.85, 0.85, 0.87); klab(1450, 122, "DRIFT", fpct(slider2)); touch(91, "DRIFT", fpct(slider2));
-setk(5, knob(93, 1450, 192, 24, slider5, 0, 100, 0, 100, 2));
+slider5 = knob(93, 1450, 192, 24, slider5, 0, 100, 0, 100, 2);
 col(0.85, 0.85, 0.87); klab(1450, 224, "MIX", fpct(slider5)); touch(93, "MASTER MIX", fpct(slider5));
-setk(3, knob(92, 1450, 294, 24, slider3, -24, 12, 0, 0, 2));
+slider3 = knob(92, 1450, 294, 24, slider3, -24, 12, 0, 0, 2);
 col(0.85, 0.85, 0.87); klab(1450, 326, "OUTPUT", fdb(slider3)); touch(92, "OUTPUT", fdb(slider3));
 
 // Output LED ladder (-48 .. +3 dB)
@@ -760,10 +758,10 @@ loop(20,
   R(1516, 62 + 294 - 4 - (k + 1)*14.3, 14, 11);
   k += 1;
 );
-col(0.60, 0.60, 0.62); gfx_setfont(13); TC(1523, 362, "OUT");
+col(0.60, 0.60, 0.62); gfx_setfont(5); TC(1523, 362, "OUT");
 
 // Limiter LED
 mLim > 0.5 ? col(0.98, 0.16, 0.10) : col(0.28, 0.06, 0.05); CIRC(1412, 382, 6, 1);
-col(0.60, 0.60, 0.62); gfx_setfont(13); TX(1424, 375, "LIMIT");
+col(0.60, 0.60, 0.62); gfx_setfont(5); TX(1424, 375, "LIMIT");
 
-ui_end();
+pcap = mouse_cap;
