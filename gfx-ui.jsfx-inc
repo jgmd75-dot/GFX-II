@@ -34,7 +34,34 @@ function ui_auto(idx) (
   idx == 68 ? slider_automate(slider68) : idx == 69 ? slider_automate(slider69) :
   idx == 70 ? slider_automate(slider70) : idx == 71 ? slider_automate(slider71) :
   idx == 72 ? slider_automate(slider72) : idx == 73 ? slider_automate(slider73) :
-  idx == 74 ? slider_automate(slider74) : idx == 75 ? slider_automate(slider75);
+  idx == 74 ? slider_automate(slider74) : idx == 75 ? slider_automate(slider75) :
+  idx == 76 ? slider_automate(slider76) : idx == 77 ? slider_automate(slider77) :
+  idx == 78 ? slider_automate(slider78) : idx == 79 ? slider_automate(slider79) :
+  idx == 80 ? slider_automate(slider80) : idx == 81 ? slider_automate(slider81) :
+  idx == 82 ? slider_automate(slider82) : idx == 83 ? slider_automate(slider83) :
+  idx == 84 ? slider_automate(slider84) : idx == 85 ? slider_automate(slider85) :
+  idx == 86 ? slider_automate(slider86) : idx == 87 ? slider_automate(slider87) :
+  idx == 88 ? slider_automate(slider88) : idx == 89 ? slider_automate(slider89) :
+  idx == 90 ? slider_automate(slider90) : idx == 91 ? slider_automate(slider91) :
+  idx == 92 ? slider_automate(slider92) : idx == 93 ? slider_automate(slider93) :
+  idx == 94 ? slider_automate(slider94) : idx == 95 ? slider_automate(slider95) :
+  idx == 96 ? slider_automate(slider96) : idx == 97 ? slider_automate(slider97) :
+  idx == 98 ? slider_automate(slider98) : idx == 99 ? slider_automate(slider99) :
+  idx == 100 ? slider_automate(slider100) : idx == 101 ? slider_automate(slider101) :
+  idx == 102 ? slider_automate(slider102) : idx == 103 ? slider_automate(slider103) :
+  idx == 104 ? slider_automate(slider104) : idx == 105 ? slider_automate(slider105) :
+  idx == 106 ? slider_automate(slider106) : idx == 107 ? slider_automate(slider107) :
+  idx == 108 ? slider_automate(slider108) : idx == 109 ? slider_automate(slider109) :
+  idx == 110 ? slider_automate(slider110) : idx == 111 ? slider_automate(slider111) :
+  idx == 112 ? slider_automate(slider112) : idx == 113 ? slider_automate(slider113) :
+  idx == 114 ? slider_automate(slider114) : idx == 115 ? slider_automate(slider115) :
+  idx == 116 ? slider_automate(slider116) : idx == 117 ? slider_automate(slider117) :
+  idx == 118 ? slider_automate(slider118) : idx == 119 ? slider_automate(slider119) :
+  idx == 120 ? slider_automate(slider120) : idx == 121 ? slider_automate(slider121) :
+  idx == 122 ? slider_automate(slider122) : idx == 123 ? slider_automate(slider123) :
+  idx == 124 ? slider_automate(slider124) : idx == 125 ? slider_automate(slider125) :
+  idx == 126 ? slider_automate(slider126) : idx == 127 ? slider_automate(slider127) :
+  idx == 128 ? slider_automate(slider128);
 );
 
 // house style: knob values show only on hover / drag (a plugin may set ui_hovval = 0 to show them always)
