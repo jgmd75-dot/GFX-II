@@ -307,6 +307,10 @@ oy = floor((gfx_h - 520*S)*0.5);
 mx = (mouse_x - ox)/S;
 my = (mouse_y - oy)/S;
 
+// the ? pop-up is modal: while it is open the panel underneath takes no clicks
+hlp ? ( (mouse_cap & 1) && !(pcap & 1) && !hlp_new ? hlp = 0; pcap = mouse_cap; );
+hlp_new = 0;
+
 (S != lastS || tf != lastTf) ? (
   gfx_setfont(1, "Arial Black", max(12, 36*S));             // brand
   gfx_setfont(2, "Arial Bold", max(10, 13*S*tf));            // frame tabs
@@ -337,6 +341,8 @@ function TC(cx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + cx
 function TR(rx, y, txt) local(w, h) ( gfx_measurestr(txt, w, h); gfx_x = ox + rx*S - w; gfx_y = oy + y*S; gfx_drawstr(txt); );
 function CIRC(x, y, rr, fill) ( gfx_circle(ox + x*S, oy + y*S, rr*S, fill, 1); );
 function clicked(x, y, w, h) ( (mouse_cap & 1) && !(pcap & 1) && mx >= x && mx <= x+w && my >= y && my <= y+h; );
+// write a slider and tell REAPER (so GUI moves record as automation)
+function setk(idx, v) ( slider(idx) != v ? ( slider(idx) = v; slider_automate(2^(idx - 1)); ); );
 
 function screw(x, y) (
   col(0.62, 0.63, 0.65); CIRC(x, y, 7, 1);
@@ -465,6 +471,7 @@ function pname(n) (
 function step_preset(dir) (
   slider1 = (slider1 + dir + 16) % 16;
   apply_preset(slider1); lastPreset = slider1; lcd_t = 0;
+  slider_automate(8388607);                    // sliders 1-23
 );
 function setmsg(n, v) ( strcpy(#lcdn, n); strcpy(#lcdv, v); lcd_t = time_precise(); );
 
@@ -543,7 +550,7 @@ clicked(52, 82, 270, 84) ? (
   );
   gfx_x = mouse_x; gfx_y = mouse_y;
   psel = gfx_showmenu(#pmenu);
-  psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; );
+  psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; slider_automate(8388607); );
 );
 
 btn(52, 180, 58, 32, "◄", 0, 0) ? step_preset(-1);
@@ -554,6 +561,7 @@ cink(); gfx_setfont(5); TX(52, 238, "TEXT");
 btn(110, 230, 46, 30, "S", ui_sz == 1, 0) ? ui_sz = 1;
 btn(164, 230, 46, 30, "M", ui_sz == 0, 0) ? ui_sz = 0;
 btn(218, 230, 46, 30, "L", ui_sz == 2, 0) ? ui_sz = 2;
+btn(272, 230, 46, 30, "?", hlp, 0) ? ( hlp = 1; hlp_new = 1; );
 
 // ---- level history display ----
 cdark(); R(336, 16, 584, 232);
@@ -655,18 +663,18 @@ led(1424, 204, listen, 2); cdim(); TC(1424, 216, "LSTN");
 // ---- mode buttons ----
 gfx_setfont(5); cink();
 TX(336, 268, "MODEL");
-btn(398, 260, 70, 32, "GATE", !mdl, 0) ? ( slider2 = 0; setmsg("MODEL", "GATE"); );
-btn(474, 260, 70, 32, "EXP", mdl, 0) ? ( slider2 = 1; setmsg("MODEL", "EXPANDER"); );
+btn(398, 260, 70, 32, "GATE", !mdl, 0) ? ( setk(2, 0); setmsg("MODEL", "GATE"); );
+btn(474, 260, 70, 32, "EXP", mdl, 0) ? ( setk(2, 1); setmsg("MODEL", "EXPANDER"); );
 cink(); gfx_setfont(5); TX(568, 268, "FUNCTION");
-btn(646, 260, 70, 32, "NORM", !fnc, 0) ? ( slider3 = 0; setmsg("FUNCTION", "NORMAL"); );
-btn(722, 260, 70, 32, "DUCK", fnc, 2) ? ( slider3 = 1; setmsg("FUNCTION", "DUCK"); );
+btn(646, 260, 70, 32, "NORM", !fnc, 0) ? ( setk(3, 0); setmsg("FUNCTION", "NORMAL"); );
+btn(722, 260, 70, 32, "DUCK", fnc, 2) ? ( setk(3, 1); setmsg("FUNCTION", "DUCK"); );
 cink(); gfx_setfont(5); TX(816, 268, "KNEE");
-btn(866, 260, 70, 32, "HARD", !knee, 0) ? ( slider4 = 0; setmsg("KNEE", "HARD"); );
-btn(942, 260, 70, 32, "SOFT", knee, 0) ? ( slider4 = 1; setmsg("KNEE", "SOFT"); );
+btn(866, 260, 70, 32, "HARD", !knee, 0) ? ( setk(4, 0); setmsg("KNEE", "HARD"); );
+btn(942, 260, 70, 32, "SOFT", knee, 0) ? ( setk(4, 1); setmsg("KNEE", "SOFT"); );
 cink(); gfx_setfont(5); TX(1036, 268, "STEREO");
-btn(1100, 260, 70, 32, "LINK", smode == 0, 1) ? ( slider15 = 0; setmsg("STEREO", "LINKED"); );
-btn(1176, 260, 70, 32, "DUAL", smode == 1, 1) ? ( slider15 = 1; setmsg("STEREO", "DUAL MONO"); );
-btn(1252, 260, 70, 32, "M/S", smode == 2, 1) ? ( slider15 = 2; setmsg("STEREO", "MID / SIDE"); );
+btn(1100, 260, 70, 32, "LINK", smode == 0, 1) ? ( setk(15, 0); setmsg("STEREO", "LINKED"); );
+btn(1176, 260, 70, 32, "DUAL", smode == 1, 1) ? ( setk(15, 1); setmsg("STEREO", "DUAL MONO"); );
+btn(1252, 260, 70, 32, "M/S", smode == 2, 1) ? ( setk(15, 2); setmsg("STEREO", "MID / SIDE"); );
 // latency readout
 cdim(); gfx_setfont(9);
 la > 0 ? sprintf(#lat, "LATENCY %.1f ms", la*1000/srate) : strcpy(#lat, "ZERO LATENCY");
@@ -675,66 +683,76 @@ TR(1452, 270, #lat);
 // ---- dynamics knobs ----
 frame(52, 318, 790, 188, "DYNAMICS");
 kx = 102;
-slider5 = knob(1, kx, 400, 30, slider5, -80, 0, 0, -40, 0);
+setk(5, knob(1, kx, 400, 30, slider5, -80, 0, 0, -40, 0));
 cink(); gfx_setfont(3); TC(kx, 446, "THRESHOLD"); gfx_setfont(4); TC(kx, 468, fdb(slider5)); touch(1, "THRESHOLD", fdb(slider5));
 kx += 98;
-slider6 = knob(2, kx, 400, 30, slider6, 0, 80, 0, 60, 0);
+setk(6, knob(2, kx, 400, 30, slider6, 0, 80, 0, 60, 0));
 cink(); gfx_setfont(3); TC(kx, 446, "RANGE"); gfx_setfont(4); TC(kx, 468, fdb(-slider6)); touch(2, fnc ? "DUCK RANGE" : "RANGE", fdb(-slider6));
 kx += 98;
-slider7 = knob(3, kx, 400, 30, slider7, 1, 10, 1, 2, !mdl);
+setk(7, knob(3, kx, 400, 30, slider7, 1, 10, 1, 2, !mdl));
 !mdl ? col(0.62, 0.66, 0.71) : cink(); gfx_setfont(3); TC(kx, 446, "RATIO");
 sprintf(#rt, "1:%.1f", slider7); gfx_setfont(4); TC(kx, 468, mdl ? #rt : "GATE");
 touch(3, "RATIO (EXP)", #rt);
 kx += 98;
-slider8 = knob(4, kx, 400, 30, slider8, 0.01, 100, 1, 0.5, 0);
+setk(8, knob(4, kx, 400, 30, slider8, 0.01, 100, 1, 0.5, 0));
 cink(); gfx_setfont(3); TC(kx, 446, "ATTACK"); gfx_setfont(4); TC(kx, 468, fms(slider8)); touch(4, "ATTACK", fms(slider8));
 kx += 98;
-slider9 = knob(5, kx, 400, 30, slider9, 0, 2000, 2, 50, 0);
+setk(9, knob(5, kx, 400, 30, slider9, 0, 2000, 2, 50, 0));
 cink(); gfx_setfont(3); TC(kx, 446, "HOLD"); gfx_setfont(4); TC(kx, 468, fms(slider9)); touch(5, "HOLD", fms(slider9));
 kx += 98;
-slider10 = knob(6, kx, 400, 30, slider10, 5, 4000, 1, 150, 0);
+setk(10, knob(6, kx, 400, 30, slider10, 5, 4000, 1, 150, 0));
 cink(); gfx_setfont(3); TC(kx, 446, "RELEASE"); gfx_setfont(4); TC(kx, 468, fms(slider10)); touch(6, "RELEASE", fms(slider10));
 kx += 98;
-slider11 = knob(7, kx, 400, 30, slider11, 0, 20, 0, 4, 0);
+setk(11, knob(7, kx, 400, 30, slider11, 0, 20, 0, 4, 0));
 cink(); gfx_setfont(3); TC(kx, 446, "HYSTERESIS"); sprintf(#hy, "%.1f dB", slider11); gfx_setfont(4); TC(kx, 468, #hy); touch(7, "HYSTERESIS", #hy);
 kx += 98;
-slider12 = knob(8, kx, 400, 30, slider12, 0, 10, 0, 0, 0);
+setk(12, knob(8, kx, 400, 30, slider12, 0, 10, 0, 0, 0));
 slider12 < 0.05 ? strcpy(#lk, "ZERO") : sprintf(#lk, "%.1f ms", slider12);
 cink(); gfx_setfont(3); TC(kx, 446, "LOOKAHEAD"); gfx_setfont(4); TC(kx, 468, #lk); touch(8, "LOOKAHEAD", #lk);
 
 // ---- key section ----
 frame(856, 318, 420, 188, "KEY");
-btn(870, 334, 58, 30, "INT", !ext, 1) ? ( slider13 = 0; setmsg("KEY SOURCE", "INTERNAL"); );
-btn(934, 334, 58, 30, "EXT", ext, 1) ? ( slider13 = 1; setmsg("KEY SOURCE", "EXT 3/4"); );
-btn(1006, 334, 64, 30, "MIDI", midiOn, 0) ? ( slider14 = !midiOn; setmsg("MIDI TRIGGER", !midiOn ? "ON  CH1/2/3" : "OFF"); );
-btn(1084, 334, 84, 30, "LISTEN", listen, 2) ? ( slider21 = !listen; setmsg("KEY LISTEN", !listen ? "ON" : "OFF"); );
+btn(870, 334, 58, 30, "INT", !ext, 1) ? ( setk(13, 0); setmsg("KEY SOURCE", "INTERNAL"); );
+btn(934, 334, 58, 30, "EXT", ext, 1) ? ( setk(13, 1); setmsg("KEY SOURCE", "EXT 3/4"); );
+btn(1006, 334, 64, 30, "MIDI", midiOn, 0) ? ( setk(14, !midiOn); setmsg("MIDI TRIGGER", !midiOn ? "ON  CH1/2/3" : "OFF"); );
+btn(1084, 334, 84, 30, "LISTEN", listen, 2) ? ( setk(21, !listen); setmsg("KEY LISTEN", !listen ? "ON" : "OFF"); );
 kx = 904;
-slider17 = knob(11, kx, 412, 23, slider17, 20, 5000, 1, 20, 0);
+setk(17, knob(11, kx, 412, 23, slider17, 20, 5000, 1, 20, 0));
 slider17 < 20.5 ? strcpy(#fa, "OFF") : strcpy(#fa, fhz(slider17));
 cink(); gfx_setfont(3); TC(kx, 446, "HPF"); gfx_setfont(4); TC(kx, 468, #fa); touch(11, "KEY HPF", #fa);
 kx += 81;
-slider18 = knob(12, kx, 412, 23, slider18, 100, 20000, 1, 20000, 0);
+setk(18, knob(12, kx, 412, 23, slider18, 100, 20000, 1, 20000, 0));
 slider18 > 19999 ? strcpy(#fb, "OFF") : strcpy(#fb, fhz(slider18));
 cink(); gfx_setfont(3); TC(kx, 446, "LPF"); gfx_setfont(4); TC(kx, 468, #fb); touch(12, "KEY LPF", #fb);
 kx += 81;
-slider19 = knob(13, kx, 412, 23, slider19, 100, 10000, 1, 1000, abs(slider20) < 0.05);
+setk(19, knob(13, kx, 412, 23, slider19, 100, 10000, 1, 1000, abs(slider20) < 0.05));
 strcpy(#fc, fhz(slider19));
 cink(); gfx_setfont(3); TC(kx, 446, "FOCUS"); gfx_setfont(4); TC(kx, 468, #fc); touch(13, "KEY FOCUS", #fc);
 kx += 81;
-slider20 = knob(14, kx, 412, 23, slider20, -12, 12, 0, 0, 0);
+setk(20, knob(14, kx, 412, 23, slider20, -12, 12, 0, 0, 0));
 cink(); gfx_setfont(3); TC(kx, 446, "F.GAIN"); gfx_setfont(4); TC(kx, 468, fdb(slider20)); touch(14, "FOCUS GAIN", fdb(slider20));
 kx += 81;
-slider16 = knob(15, kx, 412, 23, slider16, 0, 100, 0, 100, smode == 0);
+setk(16, knob(15, kx, 412, 23, slider16, 0, 100, 0, 100, smode == 0));
 smode == 0 ? col(0.62, 0.66, 0.71) : cink(); gfx_setfont(3); TC(kx, 446, "LINK"); gfx_setfont(4); TC(kx, 468, smode == 0 ? "FULL" : fpct(slider16));
 touch(15, "STEREO LINK", fpct(slider16));
 
 // ---- master ----
 frame(1290, 318, 162, 188, "MASTER");
-slider22 = knob(21, 1331, 400, 25, slider22, 0, 100, 0, 100, 0);
+setk(22, knob(21, 1331, 400, 25, slider22, 0, 100, 0, 100, 0));
 cink(); gfx_setfont(3); TC(1331, 446, "MIX"); gfx_setfont(4); TC(1331, 468, fpct(slider22)); touch(21, "MIX", fpct(slider22));
-slider23 = knob(22, 1411, 400, 25, slider23, -24, 12, 0, 0, 0);
+setk(23, knob(22, 1411, 400, 25, slider23, -24, 12, 0, 0, 0));
 cink(); gfx_setfont(3); TC(1411, 446, "OUTPUT"); gfx_setfont(4); TC(1411, 468, fdb(slider23)); touch(22, "OUTPUT", fdb(slider23));
 
 screw(18, 20); screw(18, 500); screw(1482, 20); screw(1482, 500);
 
+// ? pop-up: design credit and the manual
+hlp ? (
+  gfx_r = gfx_g = gfx_b = 0; gfx_a = 0.62; gfx_rect(0, 0, gfx_w, gfx_h); gfx_a = 1;
+  col(0.11, 0.11, 0.13); R(520, 170, 460, 170);
+  col(0.88, 0.38, 0.23); R(540, 214, 420, 1);
+  gfx_setfont(3); col(0.95, 0.95, 0.93); TX(540, 188, "Design by JGWizrad.  © John Garden 2026");
+  gfx_setfont(5); col(0.91, 0.70, 0.23); TX(540, 230, "https://gardenfx.jgmd75.workers.dev/");
+  col(0.85, 0.84, 0.82); TX(540, 256, "Manual - https://gardenfx.jgmd75.workers.dev/manual/gfx-gate.html");
+  col(0.52, 0.51, 0.49); TX(540, 300, "Click anywhere to close.");
+);
 pcap = mouse_cap;
