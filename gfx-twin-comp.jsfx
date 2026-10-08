@@ -13,7 +13,8 @@ desc:GFX Twin Comp
 //             HF EXP: brings the top back up in proportion to the gain reduction, so heavy compression stays open.
 //             SPR: two all-passes at 180 Hz rotate the low end against the top for a tighter, firmer bottom.
 //             LF CUT: a 150 Hz high-pass on the detector only - bass peaks no longer pump the compressor.
-// ORDER       A only / B only / A > B / B > A.  MIX blends in the dry signal (parallel compression).
+// ON          each unit has its own ON key (off = bypassed).
+// ORDER       A > B or B > A.  MIX blends in the dry signal (parallel compression).
 // DRIFT       an uneven supply under both VCAs: their gain and colour wobble very slightly (level-neutral).
 // OUT         the GFX output stage: OFF / CLIP (soft clip at -0.3 dBFS) / LIMIT (3 ms lookahead).
 //
@@ -29,12 +30,12 @@ import gfx-dyn.jsfx-inc
 import gfx-faceplate.jsfx-inc
 
 slider1:0<0,7,1{Init,Drum Bus,Vocal Expressor,Bass Tight,Mix Glue,Parallel Smash,Acoustic Natural,Negative Pump}>-Preset
-slider2:2<0,3,1{A only,B only,A > B,B > A}>-Order
+slider2:0<0,1,1{A > B,B > A}>-Order
 slider3:-20<-40,0,0.1>-A Threshold (dB)
 slider4:40<0,100,1>-A Compression (%)
 slider5:1<0,1,1{Off,On}>-A Soft Knee
 slider6:0<-20,20,0.1>-A Output (dB)
-slider7:-20<-40,0,0.1>-B Drive (dB)
+slider7:20<0,40,0.1>-B Drive (dB)
 slider8:3<1,20,0.1>-B Ratio
 slider9:5<0.1,50,0.01>-B Attack (ms)
 slider10:300<30,3000,1>-B Release (ms)
@@ -46,6 +47,8 @@ slider15:0<-20,20,0.1>-B Output (dB)
 slider16:100<0,100,1>-Mix (%)
 slider17:20<0,100,1>-Drift (%)
 slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider19:1<0,1,1{Off,On}>-A On
+slider20:1<0,1,1{Off,On}>-B On
 
 @init
 #ui_man = "gfx-twin-comp";
@@ -104,12 +107,12 @@ function engB() local(dl, dr, pk, lv, tg, g, boost, hL, hR) (
 
 // ---------- parameters ----------
 function setup() local(s) (
-  ord = floor(slider2 + 0.5);
+  ord = floor(slider2 + 0.5); aOn = slider19 > 0.5; bOn = slider20 > 0.5;
   aThr = slider3; s = slider4/100;
   aSl = s <= 0.8 ? s/0.8 : 1 + (s - 0.8)/0.2*0.5;      // 1:1 .. INF:1 at 80%, then negative ratios to -2:1
   aKn = slider5 > 0.5 ? 10 : 0;
   aOut = db2g(slider6);
-  bThr = slider7; bSl = 1 - 1/max(1, slider8);
+  bThr = -slider7; bSl = 1 - 1/max(1, slider8);
   bAt = tc(slider9*0.001); bRl = tc(slider10*0.001);
   bEasy = slider11 > 0.5; bHfx = slider12/100; bSpr = slider13 > 0.5; bLcut = slider14 > 0.5;
   bOut = db2g(slider15);
@@ -124,9 +127,10 @@ dGa = dGb = dCa = 1; dwA = dwB = 0; dtA = dtB = 0; dsA = dsB = 0;
 mGrA = mGrB = 0; mOut = 0; aLamp = 0;
 
 // ---------- presets: order, A thr / comp / OE / out, B drive / ratio / att / rel / auto / hfx / spr / lfcut / out, mix ----------
-function pa(o, at, ac, ae, ao) ( slider2 = o; slider3 = at; slider4 = ac; slider5 = ae; slider6 = ao; );
+// o: 0 A only, 1 B only, 2 A > B, 3 B > A
+function pa(o, at, ac, ae, ao) ( slider2 = (o == 3); slider19 = (o != 1); slider20 = (o != 0); slider3 = at; slider4 = ac; slider5 = ae; slider6 = ao; );
 function pb(bd, br, ba, bl, be, bh, bs, bc, bo, m) (
-  slider7 = bd; slider8 = br; slider9 = ba; slider10 = bl; slider11 = be; slider12 = bh; slider13 = bs; slider14 = bc; slider15 = bo; slider16 = m;
+  slider7 = -bd; slider8 = br; slider9 = ba; slider10 = bl; slider11 = be; slider12 = bh; slider13 = bs; slider14 = bc; slider15 = bo; slider16 = m;
 );
 function apply_preset(n) (
   n == 0 ? ( pa(2, -20, 40, 1, 0);   pb(-20, 3, 5, 300, 0, 30, 0, 0, 0, 100); ) :     // Init
@@ -161,7 +165,7 @@ dGa = db2g(0.15*drA*dsA); dGb = db2g(0.15*drA*dsB); dCa = 1 + 0.8*drA*dsA;
 @sample
 inL = spl0; inR = spl1;
 xL = inL; xR = inR;
-ord == 0 ? engA() : ord == 1 ? engB() : ord == 2 ? ( engA(); engB(); ) : ( engB(); engA(); );
+ord == 0 ? ( aOn ? engA(); bOn ? engB(); ) : ( bOn ? engB(); aOn ? engA(); );
 yL = inL + (xL - inL)*mix; yR = inR + (xR - inR)*mix;
 ost_out(yL, yR);
 spl0 = ost_l; spl1 = ost_r;
@@ -225,7 +229,7 @@ function pname(n) (
   n == 0 ? "INIT" : n == 1 ? "DRUM BUS" : n == 2 ? "VOCAL EXPRESSOR" : n == 3 ? "BASS TIGHT" :
   n == 4 ? "MIX GLUE" : n == 5 ? "PARALLEL SMASH" : n == 6 ? "ACOUSTIC NATURAL" : "NEGATIVE PUMP";
 );
-function go_preset(n) ( slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0; slider_automate(65535); );
+function go_preset(n) ( slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0; slider_automate(1048575); );
 
 // ---------------------------------------------------------------------
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
@@ -250,15 +254,15 @@ hitbox(300, 10, 290, 56) ? (
 ui_button(600*qs, 14*qs, 38*qs, 48*qs, "<", 0, 1) ? go_preset((slider1 + 7) % 8);
 ui_button(642*qs, 14*qs, 38*qs, 48*qs, ">", 0, 1) ? go_preset((slider1 + 1) % 8);
 
-// ORDER: one key steps A > B, B > A, A only, B only
+// ORDER: one key flips A > B / B > A
 o_hov = inbox(712, 16, 150, 44);
 o_hov && pressed && drag_id == 0 ? (
   drag_id = -1; o_held = 1;
-  slider2 = ord == 2 ? 3 : ord == 3 ? 0 : ord == 0 ? 1 : 2; ui_auto(2); ord = slider2;
-  setmsg("ORDER", ord == 0 ? "A ONLY" : ord == 1 ? "B ONLY" : ord == 2 ? "A > B" : "B > A");
+  slider2 = 1 - ord; ui_auto(2); ord = slider2;
+  setmsg("ORDER", ord == 0 ? "A > B" : "B > A");
 );
 !mdown ? o_held = 0;
-ui_bbckey(712*qs, 16*qs, 150*qs, 44*qs, ord == 0 ? "A ONLY" : ord == 1 ? "B ONLY" : ord == 2 ? "A  >  B" : "B  >  A", o_held, 1, 1, 1, o_hov, o_held, 13);
+ui_bbckey(712*qs, 16*qs, 150*qs, 44*qs, ord == 0 ? "A  >  B" : "B  >  A", o_held, 1, 1, 1, o_hov, o_held, 13);
 gfx_setfont(8); ui_col(0xA8ABB0); TC(787, 62, "ORDER");
 
 knob(16, 1140, 36, 16, 0, 100, 100, 0, 0x9DA2A8, 0xD8D8D2, 7, "", "");
@@ -276,6 +280,7 @@ ui_cola(0x000000, 0.35); R(10, 352, 704, 2); ui_cola(0xFFFFFF, 0.4); R(10, 86, 7
 rscrew(24, 100); rscrew(24, 340); rscrew(700, 100); rscrew(700, 340);
 gfx_setfont(13); ui_col(INKA); TX(44, 98, "A");
 gfx_setfont(8); ui_col(0x3C4048); TX(70, 104, "VCA COMPRESSOR  -  TRUE RMS");
+key(600, 100, 40, 22, aOn, RED, "ON", INKA) ? ( tog(19); setmsg("COMP A", slider19 > 0.5 ? "ON" : "OFF"); );
 // threshold lamps
 lamp(66, 150, aLamp == 0, GRN); lamp(66, 186, aLamp == 1 && aKn > 0, AMB); lamp(66, 222, aLamp == 2, RED);
 gfx_setfont(8); ui_col(INKA); TX(82, 143, "BELOW"); TX(82, 179, "KNEE"); TX(82, 215, "ABOVE");
@@ -296,8 +301,9 @@ ui_cola(0x000000, 0.35); R(726, 352, 704, 2);
 rscrew(740, 106); rscrew(740, 340); rscrew(1416, 106); rscrew(1416, 340);
 gfx_setfont(13); ui_col(INKB); TX(760, 100, "B");
 gfx_setfont(8); ui_col(0xC6CCD4); TX(786, 106, "EXPRESSOR  -  PEAK");
+key(1248, 100, 40, 22, bOn, RED, "ON", INKB) ? ( tog(20); setmsg("COMP B", slider20 > 0.5 ? "ON" : "OFF"); );
 CB = 0x3A6FB8;
-sprintf(#vB1, "%.1f dB", slider7);  knob(7, 816, 196, 42, -40, 0, -20, 0, 0xE8B444, INKB, 7, "DRIVE", #vB1);
+sprintf(#vB1, "+%.1f dB", slider7);  knob(7, 816, 196, 42, 0, 40, 20, 0, 0xE8B444, INKB, 7, "DRIVE", #vB1);
 sprintf(#vB2, "%.1f:1", slider8);   knob(8, 944, 186, 30, 1, 20, 3, 1, CB, INKB, 7, "RATIO", #vB2);
 slider9 < 10 ? sprintf(#vB3, "%.2f ms", slider9) : sprintf(#vB3, "%.0f ms", slider9);
 knob(9, 1040, 186, 30, 0.1, 50, 5, 1, bEasy ? 0x6A7078 : CB, INKB, 7, "ATTACK", bEasy ? "AUTO" : #vB3);
@@ -318,7 +324,7 @@ loop(16, lit_ = od_ >= -30 + (16 - k)*30/16 - 30/16; c_ = k < 2 ? RED : k < 5 ? 
   ui_col(lit_ ? c_ : ui_mix(c_, 0x000000, 0.8)); R(1374, 136 + k*11.6 + 1, 16, 9.6); k += 1; );
 gfx_setfont(8); ui_col(INKB); TC(1382, 330, "OUT");
 // order lamps between the units
-lamp(720, 220, ord != 1, AMB);
+lamp(720, 220, aOn && bOn, AMB);
 
 pk_end();
 ui_end();
