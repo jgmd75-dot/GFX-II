@@ -1,4 +1,4 @@
-desc:GFX Drift engine (include) - Garden FX
+desc:GFX Drift engine (include)
 //author: JGWizrad / Garden FX (GFX)
 //
 // Smoothed random motion: cosine-interpolated random points, never cycles.

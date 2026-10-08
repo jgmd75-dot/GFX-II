@@ -1,6 +1,6 @@
-desc:gfx-piano1
+desc:GFX Piano1
 //tags: piano physical-modeling waveguide string synthesis polyphony
-//author: JGWizrad / DSP Dave
+//author: JGWizrad / John Garden © 2026
 
 slider1:60<21,108,1>-MIDI Note (60 = Middle C)
 slider2:0.5<0,1,0.01>-Hammer Hardness

@@ -1,7 +1,7 @@
-desc:gfx-modrack
+desc:GFX Mod Rack
 // gfx-modrack - 2U Chorus / Tremolo / Vibe / Delay with Circuit-Bend Mod Pots
 //tags: modulation chorus tremolo vibe delay multi-effect
-//author: Garden FX (GFX)
+//author: JGWizrad / Garden FX (GFX)
 //
 // Four modules run in PARALLEL on the input. Each module returns only its *change* to the
 // signal (its "delta"); the dry signal always passes. Three L / C / R toggles per module

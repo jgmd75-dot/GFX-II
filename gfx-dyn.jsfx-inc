@@ -1,4 +1,4 @@
-desc:GFX dynamics parts (include) - Garden FX
+desc:GFX dynamics parts (include)
 //author: JGWizrad / Garden FX (GFX)
 //
 // Shared by the GFX hardware-style compressors and EQs (Duplex, Thrust, Console, VB30, Board EQ, Graphic EQ, Tilt EQ). Import after gfx-ui and gfx-panel.

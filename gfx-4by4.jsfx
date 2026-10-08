@@ -1,8 +1,8 @@
-desc:Cat22 Companded - Dolby A-Style 4-Band Compander / Saturator / EQ
+desc:GFX 4by4
 //tags: dynamics multiband saturation eq
-//author: Emergent (inspired by the Dolby Model 361 + Cat. No. 22 card)
+//author: JGWizrad / Garden FX (GFX)
 //
-// A modern rebuild of the Dolby A "Cat 22" idea as a 4-band channel strip.
+// A modern take on the classic studio noise-reduction compander idea as a 4-band channel strip.
 // Splits audio at 80 Hz / 3 kHz / 9 kHz with phase-coherent Linkwitz-Riley (LR4)
 // crossovers, then runs each band through Saturation -> EQ -> Compander -> Gain,
 // and sums it all back with a master trim + ceiling limiter.
@@ -243,9 +243,9 @@ i=0; loop(gfx_h/2,
 );
 gfx_r=0.0; gfx_g=0.0; gfx_b=0.0; gfx_a=0.35; gfx_rect(0,0,gfx_w,40); gfx_a=1;
 gfx_r=0.92; gfx_g=0.6; gfx_b=0.18; gfx_x=16; gfx_y=12;
-gfx_setfont(1,"Arial",20); gfx_drawstr("CAT 22  COMPANDED");
+gfx_setfont(1,"Arial",20); gfx_drawstr("4BY4  COMPANDED");
 gfx_setfont(2,"Arial",12); gfx_r=0.6;gfx_g=0.6;gfx_b=0.62;
-gfx_x=250; gfx_y=16; gfx_drawstr("Dolby A-style 4-band compander");
+gfx_x=250; gfx_y=16; gfx_drawstr("4-band compander / saturator / EQ");
 
 function clicked(x,y,w,h) ( (mouse_cap&1) && !(pcap&1) && mouse_x>=x && mouse_x<=x+w && mouse_y>=y && mouse_y<=y+h; );
 
