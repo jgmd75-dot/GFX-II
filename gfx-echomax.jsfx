@@ -290,10 +290,9 @@ dy_ink = INK; dy_bg = FACE; dy_nov = 1;
 function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
 
 ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
-ui_col(FACE); gfx_rect(26 * sc, 0, 1008 * sc, 300 * sc);
-rd_rack(0, 0, 1060, 300, 0xA8ACB2);
-ui_cola(0x000000, 0.35); gfx_rect(26 * sc, 0, 1008 * sc, 2 * sc); gfx_rect(26 * sc, 298 * sc, 1008 * sc, 2 * sc);
-ui_col(BLU); gfx_rect(26 * sc, 62 * sc, 1008 * sc, 3 * sc);
+ui_col(FACE); gfx_rect(0, 0, 1060 * sc, 300 * sc);
+ui_cola(0x000000, 0.35); gfx_rect(0, 0, 1060 * sc, 2 * sc); gfx_rect(0, 298 * sc, 1060 * sc, 2 * sc);
+ui_col(BLU); gfx_rect(0, 62 * sc, 1060 * sc, 3 * sc);
 
 // ---------- HEADER ----------
 rd_badge(60, 34, 15, INK, FACE);
@@ -387,4 +386,5 @@ pkL *= 0.85; pkR *= 0.85;
 rd_lbl(960, 256, "OUT", DIM, 1);
 
 pk_end();
-ui_end();
+ui_end();
+

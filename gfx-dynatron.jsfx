@@ -326,9 +326,8 @@ dy_ink = INK; dy_bg = FACE;
 function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
 
 ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
-rd_plate(26, 0, 1008, 400, FACE, 0);
-rd_rack(0, 0, 1060, 400, 0x322D38);
-ui_col(ORG); gfx_rect(26 * sc, 66 * sc, 1008 * sc, 2 * sc);
+rd_plate(0, 0, 1060, 400, FACE, 0);
+ui_col(ORG); gfx_rect(0, 66 * sc, 1060 * sc, 2 * sc);
 
 // ---------- header: badge, title, the preset LCD (click it for every preset), size ----------
 rd_badge(60, 32, 15, ORG, FACE);

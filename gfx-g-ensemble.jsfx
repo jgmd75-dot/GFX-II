@@ -173,6 +173,7 @@ e_ds = 0.0016 * srate * edep; e_df = 0.00035 * srate * edep;
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 while (evi < evn && evq[evi * 4] <= spos) (
@@ -244,26 +245,24 @@ spl0 = ost_l;
 spl1 = ost_r;
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
-@gfx 640 502
+@gfx 640 458
 ui_thm = 5; ui_hw = 1;
-ui_begin(640, 502);
+ui_begin(640, 458);
 
 // ---------- chassis: silver 80s panel with colour stripes ----------
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
-fh = 494;                                              // the panel, with the IN / OUT strip along the bottom
+fh = 448;                                              // the panel
 pk_chassis(8 * sc, 4 * sc, 624 * sc, fh * sc, SLV);
 ui_col(INKD); gfx_circle(36 * sc, 24 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(SLV); ui_text(36 * sc, 19 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 20 * sc, 'b'); ui_col(INKD); gfx_x = 58 * sc; gfx_y = 12 * sc; gfx_drawstr("ENSEMBLE");
 gfx_setfont(4); ui_cola(INKD, 0.7); gfx_x = 170 * sc; gfx_y = 20 * sc; gfx_drawstr("STRING SYNTHESIZER");
-gfx_setfont(4); ui_col(INKD); gfx_x = 380 * sc; gfx_y = 17 * sc; gfx_drawstr("PRESETS");
-pk_ledbtn(342 * sc, 8 * sc, 32 * sc, 28 * sc, 0, ORG) ? (
-  gfx_x = 342 * sc; gfx_y = 38 * sc;
-  load_preset(gfx_showmenu("Classic Strings|Violins Only|Dark Cellos|Space Pad|Disco Stabs|Full Orchestra-ish|Dry (no ensemble)|Slow Swell|Reset all to defaults"));
-);
-ui_size_picker(448 * sc, 13 * sc);
-pk_ledbtn(520 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;
-gfx_setfont(4); ui_col(INKD); gfx_x = 558 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+ge_psel = pk_preset(256 * sc, 9 * sc, 252 * sc, 26 * sc, pr_cur, "Classic Strings|Violins Only|Dark Cellos|Space Pad|Disco Stabs|Full Orchestra-ish|Dry (no ensemble)|Slow Swell");
+ge_psel > 0 ? ( load_preset(ge_psel); pr_cur = ge_psel > 8 ? 0 : ge_psel; );
+ui_size_picker(514 * sc, 13 * sc);
+pk_ledbtn(574 * sc, 9 * sc, 24 * sc, 26 * sc, 0, REDL) ? panic_req = 1;
+gfx_setfont(4); ui_col(INKD); gfx_x = 602 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
 // the colour stripes
 ui_col(0xF07A1A); gfx_rect(8 * sc, 42 * sc, 624 * sc, 2 * sc);
 ui_col(0xD8302A); gfx_rect(8 * sc, 45 * sc, 624 * sc, 2 * sc);
@@ -319,29 +318,32 @@ ui_knob(470 * sc, 292 * sc, 12, 0, 100, 65, 0, "TONE", "%.0f%%");
 ui_knob(562 * sc, 292 * sc, 13, -50, 50, 0, 0, "TUNE", "%+.0f cents");
 
 // ---------- DRIFT ----------
-mgroup(16, 350, 170, 92, 1, "DRIFT", SH3);
-ui_knob(101 * sc, 394 * sc, 15, 0, 100, 25, 0, "DRIFT", "%.0f%%");
+mgroup(16, 350, 104, 92, 1, "DRIFT", SH3);
+ui_knob(68 * sc, 394 * sc, 15, 0, 100, 25, 0, "DRIFT", "%.0f%%");
 
 // ---------- MIDI ----------
-mgroup(194, 350, 170, 92, 3, "MIDI", SH3);
+mgroup(128, 350, 160, 92, 3, "MIDI", SH3);
 knob_step = 1;
-ui_knob(240 * sc, 394 * sc, 14, 0, 16, 0, 0, "CHANNEL", slider14 == 0 ? "OMNI" : "CH %.0f");
-pk_led(294 * sc, 374 * sc, 3 * sc, ins_midi_lit() || nact > 0, REDL);
+ui_knob(170 * sc, 394 * sc, 14, 0, 16, 0, 0, "CHANNEL", slider14 == 0 ? "OMNI" : "CH %.0f");
+pk_led(220 * sc, 380 * sc, 3 * sc, ins_midi_lit() || nact > 0, REDL);
 gfx_setfont(4); ui_col(INKD);
-gfx_x = 304 * sc; gfx_y = 370 * sc; gfx_drawstr("MIDI IN");
+gfx_x = 230 * sc; gfx_y = 375 * sc; gfx_drawstr("MIDI IN");
 sprintf(#nh, "%d sounding", nact);
-gfx_x = 286 * sc; gfx_y = 390 * sc; gfx_drawstr(#nh);
+gfx_x = 214 * sc; gfx_y = 396 * sc; gfx_drawstr(#nh);
 
-// ---------- MASTER ----------
-mgroup(372, 350, 252, 92, 2, "MASTER", SH3);
-ui_knob(422 * sc, 394 * sc, 17, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
-mL.ui_ledm(578 * sc, 360 * sc, 14 * sc, 70 * sc, pkL);
-mR.ui_ledm(598 * sc, 360 * sc, 14 * sc, 70 * sc, pkR);
+// ---------- MASTER: SAT, output stage, stereo, level ----------
+mgroup(296, 350, 328, 92, 4, "MASTER", SH3);
+ui_knob(336 * sc, 394 * sc, 18, 0, 100, 0, 0, "SAT", "%.0f%%");
+ui_okfs = 1; ui_outkeys(366, 364, 46, 18, 3, 23); ui_okfs = 0.85;
+ui_section(4); C_INK = INKD;
+ui_knob(448 * sc, 394 * sc, 24, 20, 500, 20, 1, "MONO", slider24 <= 20.5 ? "OFF" : "%.0f Hz");
+ui_knob(502 * sc, 394 * sc, 25, 0, 100, 0, 0, "WIDTH", "+%.0f%%");
+ui_section(2); C_INK = INKD;
+ui_knob(556 * sc, 394 * sc, 17, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
+mL.ui_ledm(588 * sc, 360 * sc, 12 * sc, 70 * sc, pkL);
+mR.ui_ledm(604 * sc, 360 * sc, 12 * sc, 70 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;
-gfx_setfont(4); ui_col(INKD); ui_text(595 * sc, 432 * sc, "OUT");
-
-// ---------- IN / OUT strip: SAT, OUT, STEREO ----------
-ins_strip(16, 448, 608, 18, 24, INKD, SH3);
+gfx_setfont(4); ui_col(INKD); ui_text(603 * sc, 432 * sc, "OUT");
 
 pk_end();
 ui_end();

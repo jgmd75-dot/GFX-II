@@ -22,7 +22,7 @@ desc:GFX Chopper
 // DRIFT (pitch only): the repeated slices wander slowly in pitch, with a small offset per slice, like tape.
 //            The live sound and the timing are never touched.
 
-slider1:0<0,8,1{Init,Lavern Gate,Breathless 16ths,Triplet Flutter,Underwater Build,Reverse Swell,Half-Time Freeze,24th Roll,Trance Pulse}>-Preset
+slider1:0<0,18,1{Init,Lavern Gate,Breathless 16ths,Triplet Flutter,Underwater Build,Reverse Swell,Half-Time Freeze,24th Roll,Trance Pulse,Sidechain Pump,Offbeat Gate,Dotted Gate,Pitch-Up Chops,Triplet Stutter,Snare Roll Build,Rewind Bar,Filter Ladder,IDM Glitch,Half-Time Chops}>-Preset
 slider2:25<0,100,1>-Drift (%)
 slider3:0<-24,12,0.1>-Output (dB)
 slider4:0<-24,24,0.1>-Input (dB)
@@ -165,6 +165,34 @@ function apply_preset(n) (
   ) : n == 8 ? (    // Trance Pulse: the classic gate on the live sound
     slider8 = 10;
     pat("0300300303003003", "1111111111111111", "0000000000000000", "0000000002000020");
+  ) : n == 9 ? (    // Sidechain Pump: ducked on every beat, the 16th after it thinned by the HP
+    slider11 = 300;
+    pat("3000300030003000", "1111111111111111", "0000000000000000", "0200020002000200");
+  ) : n == 10 ? (   // Offbeat Gate: the straight 16th on-off trance gate
+    pat("0303030303030303", "1111111111111111", "0000000000000000", "0000000000000000");
+  ) : n == 11 ? (   // Dotted Gate: 3 + 3 + 3 + 3 + 4 syncopation across the bar
+    pat("0330330330330333", "1111111111111111", "0000000000000000", "0000000000000000");
+  ) : n == 12 ? (   // Pitch-Up Chops: stutter-house vocal repeats lifted a fifth, an octave at the end
+    slider9 = 7;
+    pat("0011001100111111", "1111111111112233", "0011001100110122", "0000000000000000");
+  ) : n == 13 ? (   // Triplet Stutter: one bar of 1/12 steps, a backwards kick on each beat
+    slider6 = 5; slider7 = 12;
+    pat("0120120120110000", "1111111111231111", "0000000000120000", "0000000000000000");
+  ) : n == 14 ? (   // Snare Roll Build: two bars of eighths that ratchet faster, rise and thin out
+    slider6 = 4; slider11 = 400;
+    pat("1111111111111111", "1111222233334444", "0000000011112222", "0000000022222222");
+  ) : n == 15 ? (   // Rewind Bar: live for half a bar, then backwards and darker
+    slider6 = 4; slider7 = 8; slider10 = 2500;
+    pat("0000222200000000", "1111111211111111", "0000000200000000", "0000111100000000");
+  ) : n == 16 ? (   // Filter Ladder: a gate whose open steps go LP, then HP, then wide open
+    slider10 = 900; slider11 = 1500;
+    pat("0030003000300033", "1111111111111111", "0000000000000000", "1111222200000000");
+  ) : n == 17 ? (   // IDM Glitch: 1/32 scatter of repeats, reverses, ratchets and filters
+    slider6 = 8; slider2 = 60; slider9 = 3;
+    pat("1213012310213102", "1311241121314121", "0201020010020120", "0120002100120010");
+  ) : n == 18 ? (   // Half-Time Chops: quarter-note repeats that drag the groove to half time
+    slider6 = 2; slider7 = 8; slider8 = 15;
+    pat("0101011100000000", "1111111211111111", "0000000200000000", "0000000100000000");
   );
 );
 
@@ -462,9 +490,12 @@ function dname(i) ( i = floor(i + 0.5);
   i == 0 ? "1/2" : i == 1 ? "1/3" : i == 2 ? "1/4" : i == 3 ? "1/6" : i == 4 ? "1/8" : i == 5 ? "1/12" : i == 6 ? "1/16" : i == 7 ? "1/24" : "1/32"; );
 function pname(n) ( n = floor(n + 0.5);
   n == 0 ? "INIT" : n == 1 ? "LAVERN GATE" : n == 2 ? "BREATHLESS 16S" : n == 3 ? "TRIPLET FLUTTER" : n == 4 ? "UNDERWATER BUILD" :
-  n == 5 ? "REVERSE SWELL" : n == 6 ? "HALF-TIME FREEZE" : n == 7 ? "24TH ROLL" : "TRANCE PULSE"; );
+  n == 5 ? "REVERSE SWELL" : n == 6 ? "HALF-TIME FREEZE" : n == 7 ? "24TH ROLL" : n == 8 ? "TRANCE PULSE" :
+  n == 9 ? "SIDECHAIN PUMP" : n == 10 ? "OFFBEAT GATE" : n == 11 ? "DOTTED GATE" : n == 12 ? "PITCH-UP CHOPS" :
+  n == 13 ? "TRIPLET STUTTER" : n == 14 ? "SNARE ROLL BUILD" : n == 15 ? "REWIND BAR" : n == 16 ? "FILTER LADDER" :
+  n == 17 ? "IDM GLITCH" : "HALF-TIME CHOPS"; );
 function step_preset(dir) (
-  slider1 = (slider1 + dir + 9) % 9;
+  slider1 = (slider1 + dir + 19) % 19;
   apply_preset(slider1); lastPreset = slider1; lcd_t = 0;
   slider_automate(2^35 - 1);
 );
@@ -502,14 +533,14 @@ hm ? (
   gfx_setfont(8); TX(76, 122, #lcdn);
   gfx_setfont(7); TX(76, 150, #lcdv);
 ) : (
-  gfx_setfont(8); sprintf(#lcd1, "PRESET %02d/09", slider1 + 1); TX(76, 122, #lcd1);
+  gfx_setfont(8); sprintf(#lcd1, "PRESET %02d/19", slider1 + 1); TX(76, 122, #lcd1);
   gfx_setfont(7); TX(76, 150, pname(slider1));
 );
 // PRESETS key or a click on the LCD: every preset in a drop-down
 pm_ = btn(60, 212, 130, 36, "PRESETS", 0, 6);
 clicked(60, 108, 266, 92) || pm_ ? (
   strcpy(#pmenu, ""); k = 0;
-  loop(9, k == slider1 ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k)); k < 8 ? strcat(#pmenu, "|"); k += 1; );
+  loop(19, k == slider1 ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k)); k < 18 ? strcat(#pmenu, "|"); k += 1; );
   gfx_x = mouse_x; gfx_y = mouse_y;
   psel = gfx_showmenu(#pmenu);
   psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; slider_automate(2^35 - 1); );

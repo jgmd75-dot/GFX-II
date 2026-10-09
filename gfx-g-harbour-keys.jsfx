@@ -746,9 +746,9 @@ spl1 = ost_r;
 file_var(0, ui_sz);
 file_var(0, edited);
 
-@gfx 860 556
+@gfx 860 586
 ui_thm = 9; ui_hw = 1;
-ui_begin(860, 556);
+ui_begin(860, 586);
 // night-drive faceplate: deep indigo into plum, neon pink and cyan
 // GRAND: indigo into plum; UPRIGHT: pastel blue into cyan
 uprt = slider2 > 0.5;
@@ -761,8 +761,8 @@ uprt ? (
 );
 GOLD = CYAN; GOLDL = CYAN; LEDC = NEON;
 // ---------- helpers ----------
-function lbl(x, y, s, a) ( gfx_setfont(4); ui_cola(INK, a); ui_text(x * sc, y * sc, s); );
-function stitle(cx, y, s) ( gfx_setfont(4); ui_cola(STC, 0.25); ui_text(cx * sc + 1, y * sc + 1, s); ui_col(STC); ui_text(cx * sc, y * sc, s); );
+function lbl(x, y, s, a) ( gfx_setfont(5); ui_cola(INK, a); ui_text(x * sc, y * sc, s); );
+function stitle(cx, y, s) ( gfx_setfont(5); ui_cola(STC, 0.25); ui_text(cx * sc + 1, y * sc + 1, s); ui_col(STC); ui_text(cx * sc, y * sc, s); );
 function divider(x, y1, y2) ( ui_cola(NEON, 0.30); gfx_line(x * sc, y1 * sc, x * sc, y2 * sc); );
 function hline(y) ( ui_cola(NEON, 0.35); gfx_line(24 * sc, y * sc, 836 * sc, y * sc); ui_cola(NEON, 0.10); gfx_line(24 * sc, y * sc + 1, 836 * sc, y * sc + 1); );
 function hexf(c, k) ( ((c >> (16 - 8 * k)) & 255) / 255; );
@@ -788,7 +788,7 @@ function kname(id) (
 );
 
 // ---------- cabinet ----------
-fh = 540;
+fh = 570;
 ui_col(0x06040C); gfx_rect(0, 0, gfx_w, gfx_h);
 ui_cola(0x000000, 0.6); ui_rrect(10 * sc, 12 * sc, 844 * sc, fh * sc, 7 * sc);
 ui_col(0x0A0614); ui_rrect(8 * sc, 8 * sc, 844 * sc, fh * sc, 7 * sc);
@@ -803,7 +803,7 @@ loop(70,
   gk_ += 1;
 );
 // sunset: a striped sun rising behind the horizon line
-sy_ = 126; sr_ = 46; sx_ = 722;
+sy_ = 126; sr_ = 44; sx_ = 792;
 gk_ = 0;
 loop(sr_,
   yy_ = sy_ - sr_ + gk_; t_ = gk_ / sr_;
@@ -826,17 +826,26 @@ ui_cola(0xFFFFFF, 0.10); gfx_line(16 * sc, 9 * sc, 844 * sc, 9 * sc);
 ui_col(0xB8923A); gfx_circle(50 * sc, 58 * sc, 18 * sc, 1, 1);
 ui_cola(0xFFFFFF, 0.25); gfx_circle(45 * sc, 52 * sc, 8 * sc, 1, 1);
 gfx_setfont(2); ui_col(0x1A1408); ui_text(50 * sc, 51 * sc, "GFX");
-gfx_setfont(6, "Georgia", 26 * sc, 'bi');
-gk_ = 0; loop(8, ui_cola(TGLO, 0.08); gfx_x = (80 + 2.5 * cos(gk_ * 0.785)) * sc; gfx_y = (34 + 2.5 * sin(gk_ * 0.785)) * sc; gfx_drawstr("G Harbour Keys"); gk_ += 1;);
-ui_col(TCORE); gfx_x = 80 * sc; gfx_y = 34 * sc; gfx_drawstr("G Harbour Keys");
-gfx_setfont(4); ui_cola(STC, 0.85); gfx_x = 82 * sc; gfx_y = 76 * sc; gfx_drawstr("SYNTHETIC PIANO WITH MODULATION");
+gfx_setfont(6, "Georgia", 25 * sc, 'bi');
+gk_ = 0; loop(8, ui_cola(TGLO, 0.08); gfx_x = (78 + 2.5 * cos(gk_ * 0.785)) * sc; gfx_y = (36 + 2.5 * sin(gk_ * 0.785)) * sc; gfx_drawstr("Harbour Keys"); gk_ += 1;);
+ui_col(TCORE); gfx_x = 78 * sc; gfx_y = 36 * sc; gfx_drawstr("Harbour Keys");
+gfx_setfont(4); ui_cola(STC, 0.85); gfx_x = 80 * sc; gfx_y = 76 * sc; gfx_drawstr("SYNTHETIC PIANO WITH MODULATION");
 
-// ---------- patch display ----------
-ui_col(0x030208); ui_rrect(300 * sc, 34 * sc, 210 * sc, 56 * sc, 4 * sc);
-gfx_gradrect(304 * sc, 38 * sc, 202 * sc, 48 * sc, 0.02, 0.10, 0.13, 1, 0, 0, 0, 0, -0.01 / (48 * sc), -0.05 / (48 * sc), -0.06 / (48 * sc), 0);
-gfx_setfont(7, "Courier New", 15 * sc, 'b'); ui_col(CYAN);
+// ---------- preset bar: [PRESETS][<][>][LCD] ----------
+gpx_ = 322; gpw_ = 176;                                  // bar start, LCD width
+gsel = pbtn(gpx_, 38, 62, 46) ? -1 : 0;
+gfx_setfont(5); ui_col(CYAN); ui_text((gpx_ + 31) * sc, 55 * sc, "PRESETS");
+pbtn(gpx_ + 66, 38, 26, 46) ? load_patch(slider1 <= 0 ? 11 : slider1 - 1);
+pbtn(gpx_ + 94, 38, 26, 46) ? load_patch(slider1 >= 11 ? 0 : slider1 + 1);
+ui_col(CYAN);
+gfx_triangle((gpx_ + 75) * sc, 59 * sc, (gpx_ + 83) * sc, 54 * sc, (gpx_ + 83) * sc, 64 * sc);
+gfx_triangle((gpx_ + 111) * sc, 59 * sc, (gpx_ + 103) * sc, 54 * sc, (gpx_ + 103) * sc, 64 * sc);
+lx_ = gpx_ + 128;
+ui_col(0x030208); ui_rrect(lx_ * sc, 36 * sc, gpw_ * sc, 50 * sc, 4 * sc);
+gfx_gradrect((lx_ + 4) * sc, 40 * sc, (gpw_ - 8) * sc, 42 * sc, 0.02, 0.10, 0.13, 1, 0, 0, 0, 0, -0.01 / (42 * sc), -0.05 / (42 * sc), -0.06 / (42 * sc), 0);
+gfx_setfont(7, "Courier New", 14 * sc, 'b'); ui_col(CYAN);
 sprintf(#l1, edited ? "P%02d*%s" : "P%02d %s", slider1 + 1, patch_name(slider1));
-gfx_x = 312 * sc; gfx_y = 45 * sc; gfx_drawstr(#l1);
+gfx_x = (lx_ + 9) * sc; gfx_y = 45 * sc; gfx_drawstr(#l1);
 gfx_setfont(8, "Courier New", 11 * sc, 'b'); ui_cola(CYAN, 0.75);
 strlen(kname(drag_id)) > 0 ? (
   drag_id == 38 || drag_id == 41 || drag_id == 43 ? sprintf(#l2, "%-12s%5.2fHz", kname(drag_id), slider(drag_id)) :
@@ -846,29 +855,24 @@ strlen(kname(drag_id)) > 0 ? (
 ) : drag_id == 15 ? sprintf(#l2, "VOLUME      %5.1fdB", slider15) : (
   sprintf(#l2, "%s %s PED:%s", slider2 > 0.5 ? "UPRT" : "GRND", slider24 < 0.5 ? "FELT  " : slider24 < 1.5 ? "TACK  " : slider24 < 2.5 ? "PLUCK " : "MALLET", sus_pedal ? "ON" : "--");
 );
-gfx_x = 312 * sc; gfx_y = 68 * sc; gfx_drawstr(#l2);
-pressed && drag_id == 0 && mouse_x >= 300 * sc && mouse_x < 510 * sc && mouse_y >= 34 * sc && mouse_y < 90 * sc ? (
-  drag_id = -1; #pm = ""; gk_ = 0;
+gfx_x = (lx_ + 9) * sc; gfx_y = 66 * sc; gfx_drawstr(#l2);
+pressed && drag_id == 0 && mouse_x >= lx_ * sc && mouse_x < (lx_ + gpw_) * sc && mouse_y >= 36 * sc && mouse_y < 86 * sc ? ( drag_id = -1; gsel = -1; );
+gsel < 0 ? (
+  #pm = ""; gk_ = 0;
   loop(12, slider1 == gk_ ? strcat(#pm, "!"); strcat(#pm, patch_name(gk_)); gk_ < 11 ? strcat(#pm, "|"); gk_ += 1;);
-  gfx_x = 300 * sc; gfx_y = 90 * sc; gsel = gfx_showmenu(#pm); gsel > 0 ? load_patch(gsel - 1);
+  gfx_x = gpx_ * sc; gfx_y = 88 * sc; gsel = gfx_showmenu(#pm); gsel > 0 ? load_patch(gsel - 1);
 );
-ui_col(CYAN); gfx_triangle(494 * sc, 78 * sc, 502 * sc, 78 * sc, 498 * sc, 83 * sc);
-pbtn(518, 34, 34, 26) ? load_patch(slider1 >= 11 ? 0 : slider1 + 1);
-pbtn(518, 64, 34, 26) ? load_patch(slider1 <= 0 ? 11 : slider1 - 1);
-ui_col(CYAN);
-gfx_line(529 * sc, 49 * sc, 535 * sc, 43 * sc, 1); gfx_line(535 * sc, 43 * sc, 541 * sc, 49 * sc, 1);
-gfx_line(529 * sc, 74 * sc, 535 * sc, 80 * sc, 1); gfx_line(535 * sc, 80 * sc, 541 * sc, 74 * sc, 1);
-lbl(535, 96, "PATCH", 0.6);
+ui_col(CYAN); gfx_triangle((lx_ + gpw_ - 16) * sc, 74 * sc, (lx_ + gpw_ - 8) * sc, 74 * sc, (lx_ + gpw_ - 12) * sc, 79 * sc);
 
 // ---------- core model ----------
-lkey(578, 40, 40, 38, slider2 < 0.5, "GRAND") ? ( slider2 = 0; ui_auto(2); edited = 1; );
-lkey(626, 40, 40, 38, slider2 > 0.5, "UPRIGHT") ? ( slider2 = 1; ui_auto(2); edited = 1; );
-ui_size_picker(770 * sc, 28 * sc);
+lkey(642, 40, 42, 38, slider2 < 0.5, "GRAND") ? ( slider2 = 0; ui_auto(2); edited = 1; );
+lkey(692, 40, 42, 38, slider2 > 0.5, "UPRIGHT") ? ( slider2 = 1; ui_auto(2); edited = 1; );
+ui_size_picker(774 * sc, 26 * sc);
 lit = ins_midi_lit();
-lit ? ( ui_cola(CYAN, 0.25); gfx_circle(780 * sc, 74 * sc, 5.5 * sc, 1, 1); ui_col(CYAN); ) : ui_col(0x123A40);
-gfx_circle(780 * sc, 74 * sc, 2.8 * sc, 1, 1); lbl(808, 69, "MIDI", 0.7);
-sus_pedal ? ( ui_cola(NEON, 0.25); gfx_circle(780 * sc, 98 * sc, 5.5 * sc, 1, 1); ui_col(NEON); ) : ui_col(0x40142E);
-gfx_circle(780 * sc, 98 * sc, 2.8 * sc, 1, 1); lbl(812, 93, "PEDAL", 0.7);
+lit ? ( ui_cola(CYAN, 0.25); gfx_circle(758 * sc, 64 * sc, 5.5 * sc, 1, 1); ui_col(CYAN); ) : ui_col(0x123A40);
+gfx_circle(758 * sc, 64 * sc, 2.8 * sc, 1, 1); lbl(780, 59, "MIDI", 0.8);
+sus_pedal ? ( ui_cola(NEON, 0.25); gfx_circle(806 * sc, 64 * sc, 5.5 * sc, 1, 1); ui_col(NEON); ) : ui_col(0x40142E);
+gfx_circle(806 * sc, 64 * sc, 2.8 * sc, 1, 1); lbl(830, 59, "PEDAL", 0.8);
 
 // ---------- knob sections ----------
 ui_section(2); C_INK = INK; C_KA = NEON; C_KAH = ui_mix(NEON, 0xFFFFFF, 0.3);
@@ -908,23 +912,27 @@ ui_knob(648 * sc, 372 * sc, 46, 0, 95, 35, 0, "FEEDBACK", "%.0f%%");
 ui_knob(716 * sc, 372 * sc, 47, 0, 100, 0, 0, "MIX", "%.0f%%");
 ds_ = floor(slider48 + 0.5);
 lkey(778, 352, 44, 28, ds_ > 0, ds_ == 0 ? "MS" : ds_ == 1 ? "1/4" : ds_ == 2 ? "1/8 D" : ds_ == 3 ? "1/8" : "1/4 T") ? ( slider48 = ds_ >= 4 ? 0 : ds_ + 1; ui_auto(48); edited = 1; );
-lbl(800, 344, "SYNC", 0.6);
+lbl(800, 336, "SYNC", 0.7);
 // SPACE
-stitle(140, 458, "SPACE");
-lkey(30, 478, 38, 26, slider49 < 0.5, "ROOM") ? ( slider49 = 0; ui_auto(49); edited = 1; );
-lkey(76, 478, 38, 26, slider49 >= 0.5 && slider49 < 1.5, "PLATE") ? ( slider49 = 1; ui_auto(49); edited = 1; );
-lkey(122, 478, 38, 26, slider49 >= 1.5, "GATED") ? ( slider49 = 2; ui_auto(49); edited = 1; );
-ui_knob(212 * sc, 494 * sc, 12, 0, 100, 30, 0, "SPACE", "%.0f%%");
-ui_knob(278 * sc, 494 * sc, 13, 0, 100, 60, 0, "SPREAD", "%.0f%%");
-ui_knob(344 * sc, 494 * sc, 10, 0, 100, 50, 0, "TONE", "%.0f");
+stitle(140, 460, "SPACE");
+lkey(30, 502, 38, 26, slider49 < 0.5, "ROOM") ? ( slider49 = 0; ui_auto(49); edited = 1; );
+lkey(76, 502, 38, 26, slider49 >= 0.5 && slider49 < 1.5, "PLATE") ? ( slider49 = 1; ui_auto(49); edited = 1; );
+lkey(122, 502, 38, 26, slider49 >= 1.5, "GATED") ? ( slider49 = 2; ui_auto(49); edited = 1; );
+ui_knob(212 * sc, 520 * sc, 12, 0, 100, 30, 0, "SPACE", "%.0f%%");
+ui_knob(278 * sc, 520 * sc, 13, 0, 100, 60, 0, "SPREAD", "%.0f%%");
+ui_knob(344 * sc, 520 * sc, 10, 0, 100, 50, 0, "TONE", "%.0f");
 (drag_id >= 3 && drag_id <= 13) || (drag_id >= 24 && drag_id <= 49) ? edited = 1;
 // master + IN / OUT
-divider(392, 456, 530);
+divider(392, 456, 556);
 ui_section(2); C_INK = INK; C_KA = NEON; C_KAH = ui_mix(NEON, 0xFFFFFF, 0.3);
-ui_kmini = 1; ui_knob(430 * sc, 492 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%"); ui_kmini = 0;
-lbl(430, 508, "DRIFT", 0.9);
-ui_kmini = 1; ui_knob(482 * sc, 492 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB"); ui_kmini = 0;
-lbl(482, 508, "VOLUME", 0.9);
-ins_io(530, 479, 16, INK);
-ins_stereo_mini(650, 479, 22, INK);
+stitle(470, 460, "MASTER"); stitle(606, 460, "OUTPUT"); stitle(746, 460, "STEREO");
+ui_knob(436 * sc, 520 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%");
+ui_knob(504 * sc, 520 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB");
+divider(538, 456, 556);
+ui_knob(574 * sc, 520 * sc, 16, 0, 100, 0, 0, "SAT", "%.0f%%");
+ui_okfs = 1.05; ui_outkeys(612, 495, 50, 14, 3, 21); ui_okfs = 0.85;
+gfx_setfont(2); ui_col(INK); ui_text(637 * sc, 546 * sc, "OUT");
+divider(676, 456, 556);
+ui_knob(712 * sc, 520 * sc, 22, 20, 500, 20, 1, "MONO", slider22 <= 20.5 ? "OFF" : "%.0f Hz");
+ui_knob(780 * sc, 520 * sc, 23, 0, 100, 0, 0, "WIDTH", "+%.0f%%");
 ui_end();

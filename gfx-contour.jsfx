@@ -96,6 +96,30 @@ function cv_default(c) (
            cv_set(3, 4, 0, 0.5, 0, 0.25, 1, 0, 0.75, 0, 0, 1, 0.5, 0);     // pan: left - right
 );
 !crv_init ? ( crv_init = 1; cv_default(0); cv_default(1); cv_default(2); cv_default(3); );
+
+// ---------- presets (the sound sliders 1-14 and all four curves; OUTPUT and the I/O rows stay as they are) ----------
+function ct_set(md, ct, rs, dv, rt, st, ca, ra, va, pa) (
+  slider1 = md; slider2 = ct; slider3 = rs; slider4 = dv; slider5 = rt; slider6 = 0; slider7 = 0;
+  slider8 = st; slider9 = 100; slider10 = ca; slider11 = ra; slider12 = va; slider13 = pa; slider14 = 100;
+  cv_default(0); cv_default(1); cv_default(2); cv_default(3);
+);
+function load_preset(p) (
+  p == 1 ? ct_set(1, 400, 25, 0, 5, 0, 4, 0, 0, 0) :                          // Init
+  p == 2 ? ct_set(3, 120, 78, 10, 1, 0, 5.5, 0, 0, 0) :                        // Acid Pluck 1/16 (the pluck curve)
+  p == 3 ? ( ct_set(0, 20000, 0, 0, 1, 0, 0, 0, 100, 0);                       // Trance Gate 1/16
+             cv_set(2, 4, 0, 1, 0, 0.5, 1, 0, 0.505, 0, 0, 1, 0, 0); ) :
+  p == 4 ? ( ct_set(0, 20000, 0, 0, 3, 0, 0, 0, 75, 0);                        // Sidechain Pump 1/4
+             cv_set(2, 3, 0, 0, -0.5, 0.45, 1, 0, 1, 1, 0, 0, 0, 0); ) :
+  p == 5 ? ( ct_set(3, 150, 45, 4, 7, 25, 6.5, 0, 0, 0);                       // 4-Bar Sweep
+             cv_set(0, 3, 0, 0, 0, 0.5, 1, 0, 1, 0, 0, 0, 0, 0); ) :
+  p == 6 ? ( ct_set(5, 300, 65, 0, 3, 50, 3.5, 0, 0, 0);                       // Stereo Wah 1/4
+             cv_set(0, 3, 0, 0, 0, 0.5, 1, 0, 1, 0, 0, 0, 0, 0); ) :
+  p == 7 ? ( ct_set(4, 40, 30, 0, 8, 0, 7.5, 0, 0, 0);                         // HP Riser 8 Bars
+             cv_set(0, 2, 0, 0, 0.5, 1, 1, 0, 0, 0, 0, 0, 0, 0); ) :
+  p == 8 ? ( ct_set(0, 20000, 0, 0, 2, 0, 0, 0, 0, 80);                        // Ping-Pong Pan 1/8
+             cv_set(3, 4, 0, 0, 0, 0.5, 0, 0, 0.505, 1, 0, 1, 1, 0); );
+  p >= 1 && p <= 8 ? slider_automate(16383);       // sliders 1-14
+);
 lut_req = 1;
 
 // ---------- biquad (the oversampling filters) ----------
@@ -182,6 +206,7 @@ function cgroup(x, y, w, h, title, shade) (
 );
 update();
 mix_s = mix_t; out_s = out_t;
+!ui_dflt ? pr_cur = 1;                            // a new instance opens on Init
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
@@ -211,6 +236,7 @@ file_var(0, crv_init);
 file_var(0, ctab);
 file_mem(0, CRV, 4 * CSZ);
 file_avail(0) >= 0 ? lut_req = 1;
+file_avail(0) != 0 ? file_var(0, pr_cur) : pr_cur = 0;    // the preset in use (older projects end before it)
 
 @sample
 // where we are in the curve
@@ -262,7 +288,10 @@ ui_col(INKL); gfx_circle(40 * sc, 38 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 33 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKL); gfx_x = 62 * sc; gfx_y = 24 * sc; gfx_drawstr("CONTOUR");
 gfx_setfont(4); ui_cola(INKL, 0.6); gfx_x = 210 * sc; gfx_y = 34 * sc; gfx_drawstr("DRAWN-ENVELOPE FILTER");
-ui_size_picker(700 * sc, 28 * sc);
+// the house preset bar: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(470 * sc, 21 * sc, 330 * sc, 34 * sc, pr_cur, "Init|Acid Pluck 1/16|Trance Gate 1/16|Sidechain Pump 1/4|4-Bar Sweep|Stereo Wah 1/4|HP Riser 8 Bars|Ping-Pong Pan 1/8");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_; );
+ui_size_picker(820 * sc, 29 * sc);
 ui_col(ACC); gfx_rect(14 * sc, 70 * sc, 872 * sc, 3 * sc);
 
 // ---------- curve tabs (the LED shows the curve is in use) ----------
