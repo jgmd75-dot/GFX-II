@@ -10,8 +10,8 @@ desc:GFX Quad22
 // Compander: left = encode-style upward lift, right = decode-style downward expansion.
 //
 // GUI: drag knobs (Shift = fine), double-click / Ctrl-click = reset. Click the LCD for the preset list.
-// S / M / L / ? = size and help. HW = brushed-aluminium rack; off = soft neumorphic panel, light grey or
-// dark blue (the colour key).
+// S / M / L / ? = size and help. HW = hardware rack in graphite or cream & walnut (the swatch key beside HW);
+// off = soft neumorphic panel, light grey or dark blue (the colour key).
 //
 // Requires gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
 
@@ -24,6 +24,7 @@ slider2:0<-24,24,0.1>-Master Trim (dB)
 slider3:-0.3<-12,0,0.1>-Ceiling (dB)
 slider4:0<0,1,1{Light Grey,Dark Blue}>-Theme
 slider5:100<0,100,1>-Dry/Wet Mix (%)
+slider8:0<0,1,1{Graphite,Cream & Walnut}>-HW Finish
 slider6:0<0,7,1{Init,Air Lift,Gentle Glue,Tape Master,Vocal Presence,Low-End Control,Analog Sheen,Loudness Push}>-Preset
 
 slider10:2<0,3,1{Off,Transformer,Tape,Transistor}>-B1 Sat Type
@@ -396,11 +397,12 @@ mtr[4] = max(mtr[4]*0.92, max(abs(spl0), abs(spl1)));
 // Layout in a 1360 x 680 design space drawn at qs = 0.75 * sc (1020 x 510 at size M).
 // HW: film-console look - dark graphite modules, cream print, one cap colour (elephant's breath), band
 //     colours only as hairlines, amber as the single accent (LCD, lit keys, meters).
+//     Cream & walnut finish (slider 8): lime-white modules on a walnut chassis, walnut-brown print, darker-cream caps.
 // Flat: neumorphic panel in light grey or dark blue (slider 4, the colour key).
 // =====================================================================
 ui_begin(1020, 510);
 qs = sc*0.75;
-hw = ui_hw; cr = hw ? 0 : slider4 < 0.5;
+hw = ui_hw; wal = hw && slider8 > 0.5; cr = hw ? wal : slider4 < 0.5;
 
 function pname(n) (
   n == 0 ? "INIT" : n == 1 ? "AIR LIFT" : n == 2 ? "GENTLE GLUE" : n == 3 ? "TAPE MASTER" :
@@ -644,12 +646,13 @@ function plate(x, y, w, h) (
 );
 
 // Quad22's own colours: aluminium hardware; light grey or dark blue neumorphic panel
-hw ? ( PNL = 0x26272B; CHS = 0x0E0F11; INK = 0xE6DFCB; INK2 = 0x9A958A; CAPU = 0xC7BEB3; ) :   // graphite, cream print, elephant's breath caps
+hw ? ( wal ? ( PNL = 0xE8E0CB; CHS = 0x2A1A10; INK = 0x2E2219; INK2 = 0x6E5C4A; CAPU = 0xD6C9AA; HDR = 0xD9CFB6; TOPI = 0xE8E0CB; )   // lime white, walnut-brown print, darker-cream caps
+             : ( PNL = 0x26272B; CHS = 0x0E0F11; INK = 0xE6DFCB; INK2 = 0x9A958A; CAPU = 0xC7BEB3; HDR = 0x18191C; TOPI = INK2; ); ) :   // graphite, cream print, elephant's breath caps
 cr ? ( NB = 0xD0D3D8; NL = 0xF2F4F7; ND = 0xA6ABB4; NW = 0xC3C7CE; NTX = 0x4A5260; NVX = 0x1E232B; )
    : ( NB = 0x1D2433; NL = 0x2B3447; ND = 0x10141D; NW = 0x182030; NTX = 0x9AA8C4; NVX = 0xE6ECF8; );
 LFT = 0xE0503C; EXPC = 0x46C05A; MDG = 0x55595F;   // medium-dark grey caps: EQ + TRIM
 // accents: warm amber on the aluminium hardware, teal on light grey, ice blue on dark blue
-ACC = hw ? 0xE8A33A : cr ? 0x0D8585 : 0x5C99FF;
+ACC = hw ? (wal ? 0xD98C1E : 0xE8A33A) : cr ? 0x0D8585 : 0x5C99FF;
 hw ? ( AMB = ACC; LCDBG = 0x120B04; LCDTX = 0xF2AE45; ) : (
   AMB = ACC; TTXT = ACC;
   cr ? ( LCDBG = 0x0B1A1A; LCDTX = 0x4DEBCC; ) : ( LCDBG = 0x0A1020; LCDTX = 0x8CCCFF; NTX = 0x94A1BD; NVX = 0xEBF0FA; );
@@ -685,10 +688,22 @@ function hmeter(x, y, w, h, lin) local(db, k, n, f, d, c, lit) (
   TX(x, y + h + 5, "-48"); TC(x + w*30/51, y + h + 5, "-18"); TC(x + w*42/51, y + h + 5, "-6"); TC(x + w*48/51, y + h + 5, "0");
 );
 
+// walnut grain for the cream & walnut chassis (design units)
+function walnut(x, y, w, h) local(i, k, n) (
+  ui_col(0x4A3122); R(x, y, w, h);
+  n = floor(h*qs); i = 0;
+  loop(n,
+    k = 0.5 + 0.5*sin(i*0.07/qs + 2.6*sin(i*0.013/qs) + 1.3*sin(i*0.31/qs));
+    ui_cola(k > 0.5 ? 0x8A5E3C : 0x1E120A, 0.05 + 0.18*abs(k - 0.5)); gfx_line(x*qs, y*qs + i, (x + w)*qs, y*qs + i);
+    i += 1;
+  );
+  gfx_gradrect(x*qs, y*qs, w*qs, h*qs*0.5, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06/(h*qs*0.5));
+);
+
 // =====================================================================
 // Draw
 // =====================================================================
-hw ? rd_brushed(0, 0, 1360*0.75, 680*0.75, 0x16171A) : ( ui_col(NB); gfx_rect(0, 0, gfx_w, gfx_h); );
+hw ? ( wal ? walnut(0, 0, 1360, 680) : rd_brushed(0, 0, 1360*0.75, 680*0.75, 0x16171A); ) : ( ui_col(NB); gfx_rect(0, 0, gfx_w, gfx_h); );
 hw ? ( ui_cola(0x000000, 0.25); gfx_rect(0, 680*qs, gfx_w, gfx_h); );
 
 // ---- top strip ----
@@ -723,13 +738,17 @@ hitbox(342, 14, 330, 72) ? (
 );
 hkey(690, 30, 40, 40, "<", 0) ? go_preset((slider6 + 7) % 8);
 hkey(736, 30, 40, 40, ">", 0) ? go_preset((slider6 + 1) % 8);
-gfx_setfont(8); ui_col(hw ? INK2 : NTX); TC(733, 76, "PRESET");
-gfx_setfont(8); ui_col(hw ? INK2 : NTX); TC(940, 34, "MODEL Q22"); TC(940, 52, "COMP / SAT / EQ");
+gfx_setfont(8); ui_col(hw ? TOPI : NTX); TC(733, 76, "PRESET");
+gfx_setfont(8); ui_col(hw ? TOPI : NTX); TC(940, 34, "MODEL Q22"); TC(940, 52, "COMP / SAT / EQ");
 
 hw ? (
   ui_size_picker(1122*qs, 36*qs);
-  gfx_setfont(8); ui_col(INK2); TX(1122, 68, "SIZE");
+  gfx_setfont(8); ui_col(TOPI); TX(1122, 68, "SIZE");
   ui_hw_toggle(1206*qs, 36*qs);
+  // finish key: a swatch of the other finish
+  ui_button(1258*qs, 36*qs, 30*sc, 18*sc, "", 0, 1) ? ( slider8 = slider8 < 0.5; ui_auto(8); ui_bgok = 0; setmsg("HW FINISH", slider8 > 0.5 ? "CREAM & WALNUT" : "GRAPHITE"); );
+  ui_col(wal ? 0x26272B : 0x6B4630); CIRC(1278, 48, 7, 1); ui_col(wal ? 0x9A958A : 0xE8E0CB); CIRC(1278, 48, 7, 0);
+  gfx_setfont(8); ui_col(TOPI); TC(1278, 68, "FINISH");
 ) : (
   hkey(1106, 32, 32, 34, "S", ui_sz == 1) ? ui_sz = 1;
   hkey(1142, 32, 32, 34, "M", ui_sz == 0) ? ui_sz = 0;
@@ -747,7 +766,7 @@ loop(4,
   base = 10 + b_*10; x0 = 8 + b_*270; st = slider(base);
   BCOL = b_ == 0 ? 0x8B5A2B : b_ == 1 ? CAP_BLU : b_ == 2 ? CAP_GRN : CAP_RED;   // COMPAND + GAIN: LF brown, LMF blue, HMF green, HF red
   plate(x0, 110, 264, 556);
-  hw ? ( ui_col(0x18191C); R(x0 + 1, 111, 262, 7); ui_col(BCOL); R(x0 + 1, 116, 262, 3); ) : ( ui_col(ACC); RR(x0 + 18, 113, 228, 5, 2.5); );
+  hw ? ( ui_col(HDR); R(x0 + 1, 111, 262, 7); ui_col(BCOL); R(x0 + 1, 116, 262, 3); ) : ( ui_col(ACC); RR(x0 + 18, 113, 228, 5, 2.5); );
   tape(x0 + 16, 124, b_ == 0 ? "BAND 1" : b_ == 1 ? "BAND 2" : b_ == 2 ? "BAND 3" : "BAND 4");
   gfx_setfont(8); ui_col(hw ? INK2 : NTX);
   TX(x0 + 18, 158, b_ == 0 ? "< 80 Hz  SUB" : b_ == 1 ? "80 Hz - 3 kHz  BODY" : b_ == 2 ? "3 - 9 kHz  PRESENCE" : "> 9 kHz  BREATH");
@@ -782,7 +801,7 @@ loop(4,
 
 // ---- master ----
 plate(1088, 110, 264, 556);
-hw ? ( ui_col(0x18191C); R(1089, 111, 262, 7); ui_col(ACC); R(1089, 116, 262, 3); ) : ( ui_col(ACC); RR(1108, 113, 224, 5, 2.5); );
+hw ? ( ui_col(HDR); R(1089, 111, 262, 7); ui_col(ACC); R(1089, 116, 262, 3); ) : ( ui_col(ACC); RR(1108, 113, 224, 5, 2.5); );
 tape(1104, 124, "MASTER");
 mknob(5, 1162, 240, 26, 0, 100, 100, 0, ACC, "MIX", fpct(slider5)); touch(5, "DRY / WET MIX", fpct(slider5));
 mknob(2, 1162, 388, 26, -24, 24, 0, 0, MDG, "TRIM", fdb(slider2)); touch(2, "MASTER TRIM", fdb(slider2));
