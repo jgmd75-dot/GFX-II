@@ -283,7 +283,8 @@ ui_cola(0x000000, 0.35); R(10, 352, 704, 2); ui_cola(0xFFFFFF, 0.4); R(10, 86, 7
 rscrew(24, 100); rscrew(24, 340); rscrew(700, 100); rscrew(700, 340);
 gfx_setfont(13); ui_col(INKA); TX(44, 98, "A");
 gfx_setfont(8); ui_col(0x3C4048); TX(70, 104, "VCA COMPRESSOR  -  TRUE RMS");
-key(600, 100, 40, 22, aOn, RED, "ON", INKA) ? ( tog(19); setmsg("COMP A", slider19 > 0.5 ? "ON" : "OFF"); );
+key(483, 100, 24, 22, 1, 0xA9ADB2, "ON", INKA) ? ( tog(19); setmsg("COMP A", slider19 > 0.5 ? "ON" : "OFF"); );
+lamp(521, 111, aOn, RED);   // red LED: lit while that compressor is on
 // threshold lamps
 lamp(66, 150, aLamp == 0, GRN); lamp(66, 186, aLamp == 1 && aKn > 0, AMB); lamp(66, 222, aLamp == 2, RED);
 gfx_setfont(8); ui_col(INKA); TX(82, 143, "BELOW"); TX(82, 179, "KNEE"); TX(82, 215, "ABOVE");
@@ -305,7 +306,8 @@ ui_cola(0x000000, 0.35); R(726, 352, 704, 2);
 rscrew(740, 106); rscrew(740, 340); rscrew(1416, 106); rscrew(1416, 340);
 gfx_setfont(13); ui_col(INKB); TX(760, 100, "B");
 gfx_setfont(8); ui_col(0xC6CCD4); TX(786, 106, "EXPRESSOR  -  PEAK");
-key(1248, 100, 40, 22, bOn, RED, "ON", INKB) ? ( tog(20); setmsg("COMP B", slider20 > 0.5 ? "ON" : "OFF"); );
+key(1194, 100, 24, 22, 1, 0xA9ADB2, "ON", INKB) ? ( tog(20); setmsg("COMP B", slider20 > 0.5 ? "ON" : "OFF"); );
+lamp(1232, 111, bOn, RED);   // red LED: lit while that compressor is on
 CB = 0x3A6FB8;
 sprintf(#vB1, "+%.1f dB", slider7);  knob(7, 816, 196, 42, 0, 40, 20, 0, 0xE8B444, INKB, 7, "DRIVE", #vB1);
 sprintf(#vB2, "%.1f:1", slider8);   knob(8, 944, 186, 30, 1, 20, 3, 1, CB, INKB, 7, "RATIO", #vB2);
