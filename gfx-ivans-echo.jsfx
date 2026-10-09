@@ -1,0 +1,275 @@
+desc:GFX Ivans Echo
+//tags: delay echo bbd analog lo-fi slapback mini
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// A small, cheap solid-state echo box in the spirit of the early-80s budget bucket-brigade mini echoes:
+// one BBD line (mono), a compander round it, a narrow 3 - 4 kHz echo path and audible hiss.
+//   INST / MIC   - the two input sockets: MIC has 12 dB more preamp gain and a low cut, and brings up the hiss.
+//   VOLUME       - input level into the preamp; the PEAK light flickers as the preamp starts to clip.
+//   BALANCE      - dry (fully left) to echo only (fully right).
+//   REPEAT       - from a single slap to runaway feedback past about 2 o'clock; the REPEAT light shows the loop's level.
+//   DELAY TIME   - 20 - 400 ms. The clock glides, so turning it bends the repeats. SYNC locks it to the project tempo.
+//   ECHO         - echo on / off (latching). Off stops new signal reaching the echo; the repeats already in it die away.
+//   MOMENTARY    - does not latch: while held it flips ECHO - pauses the echo if it is on, turns it on if it is off.
+// The echo path is mono (as on the original); the dry signal stays stereo.
+//
+// DRIFT (50% = standard): the BBD clock wanders, so the delay time breathes, and the supply voltage sags and
+// wanders, so the preamp's headroom and gain move (loud passages pull the supply down and squash a little more).
+// 0% = steady, 100% = twice the standard amount.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-lfo.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,1,1{Inst,Mic}>-Input
+slider2:0<-24,18,0.1>-Volume (dB)
+slider3:35<0,100,1>-Balance (%)
+slider4:35<0,110,1>-Repeat (%)
+slider5:180<20,400,1>-Delay time (ms)
+slider6:0<0,8,1{Free,1/32,1/16T,1/16,1/8T,1/16D,1/8,1/4T,1/8D}>-Sync
+slider7:1<0,1,1{Off,On}>-Echo
+slider8:50<0,100,1>-Drift (%)
+slider9:0<-24,12,0.1>-Output (dB)
+slider10:0<0,7,1{Init,Slapback,ADT Double,Metallic Room,Dub Repeats,Runaway,Mic Booth,Lo-Fi Haze}>-Preset
+slider11:0<0,1,1{Released,Held}>-Momentary
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-ivans-echo";
+
+// the BBD line (mono)
+dlen = ceil(0.45 * srate) + 8;
+buf = 100000;
+memset(buf, 0, dlen);
+wp = 0;
+
+// interpolated read, d samples back
+function rdl(ie_d) local(p, i, f, x0, x1, x2, x3) (
+  p = wp - ie_d; p < 0 ? p += dlen; i = floor(p); f = p - i;
+  x0 = buf[(i - 1 + dlen) % dlen]; x1 = buf[i % dlen]; x2 = buf[(i + 1) % dlen]; x3 = buf[(i + 2) % dlen];
+  (((0.5 * (x3 - x0) + 1.5 * (x1 - x2)) * f + (x0 - 2.5 * x1 + 2 * x2 - 0.5 * x3)) * f + 0.5 * (x2 - x0)) * f + x1;
+);
+
+// the preamp: an op-amp running off a modest supply; hv = headroom (falls as the supply sags), slightly asymmetric
+function pre_clip(ie_x, hv) local(s) (
+  s = ie_x / hv;
+  s > 0 ? s = s / (1 + abs(s) ^ 2.2) ^ (1 / 2.2) : s = s / (1 + abs(s) ^ 2.6) ^ (1 / 2.6);
+  s * hv;
+);
+
+// sync divisions in quarter notes
+function divqn(k) (
+  k == 1 ? 0.125 : k == 2 ? 1/6 : k == 3 ? 0.25 : k == 4 ? 1/3 : k == 5 ? 0.375 : k == 6 ? 0.5 : k == 7 ? 2/3 : 0.75;
+);
+function divname(k) (
+  k == 0 ? "FREE" : k == 1 ? "1/32" : k == 2 ? "1/16T" : k == 3 ? "1/16" : k == 4 ? "1/8T" : k == 5 ? "1/16D" : k == 6 ? "1/8" : k == 7 ? "1/4T" : "1/8D";
+);
+
+// presets: input, volume, balance, repeat, time, sync, drift (echo, momentary and output are left alone)
+function setp(ip, vo, ba, re, ti, sy, dr) (
+  slider1 = ip; slider2 = vo; slider3 = ba; slider4 = re; slider5 = ti; slider6 = sy; slider8 = dr;
+);
+function apply_preset(n) (
+  n == 0 ? setp(0,  0, 35, 35, 180, 0, 50) :     // Init
+  n == 1 ? setp(0,  2, 30,  6, 110, 0, 40) :     // Slapback
+  n == 2 ? setp(0,  0, 45,  0,  28, 0, 70) :     // ADT Double
+  n == 3 ? setp(0,  3, 40, 72,  24, 0, 50) :     // Metallic Room
+  n == 4 ? setp(0,  0, 40, 68, 375, 0, 60) :     // Dub Repeats
+  n == 5 ? setp(0,  4, 50, 98, 260, 0, 80) :     // Runaway
+  n == 6 ? setp(1, -4, 30, 22, 140, 0, 50) :     // Mic Booth
+           setp(0,  8, 45, 45, 320, 0, 90);      // Lo-Fi Haze
+  slider_automate(2^0 + 2^1 + 2^2 + 2^3 + 2^4 + 2^5 + 2^7);
+);
+function pname(n) ( n = floor(n + 0.5);
+  n == 0 ? "INIT" : n == 1 ? "SLAPBACK" : n == 2 ? "ADT DOUBLE" : n == 3 ? "METALLIC ROOM" :
+  n == 4 ? "DUB REPEATS" : n == 5 ? "RUNAWAY" : n == 6 ? "MIC BOOTH" : "LO-FI HAZE"; );
+
+function update() (
+  mic = slider1 > 0.5;
+  vol = 10 ^ ((slider2 + (mic ? 12 : 0)) / 20);
+  bal = slider3 / 100;
+  rep = slider4 / 100 * 1.08;
+  ie_sync = floor(slider6 + 0.5);
+  t_ms = ie_sync > 0 && tempo > 0 ? min(max(divqn(ie_sync) * 60000 / tempo, 20), 400) : slider5;
+  t_s = t_ms * 0.001 * srate;
+  fsw = (slider7 > 0.5) != (slider11 > 0.5);    // MOMENTARY held flips ECHO
+  out_g = 10 ^ (slider9 / 20);
+  hiss = (mic ? 0.0016 : 0.0009);
+  drift_macro(slider8);
+  // the slower the clock (longer delay), the narrower the echo: about 4.2 kHz at 20 ms, 2.6 kHz at 400 ms
+  ie_bw = 4200 - 1600 * (t_ms - 20) / 380;
+  lpa = 1 - exp(-2 * $pi * min(ie_bw, srate * 0.45) / srate);
+  lpb = 1 - exp(-2 * $pi * min(ie_bw * 1.4, srate * 0.45) / srate);
+);
+
+!ui_dflt ? ui_thm = 0;
+lastp = slider10;                                // adopt the saved preset without re-applying it
+drT.drift_init(0.8 + rand(0.5)); drV.drift_init(0.8 + rand(0.5));
+tsc = 1 - exp(-1 / (0.06 * srate));               // the clock glides rather than jumps
+hpa = exp(-2 * $pi * 120 / srate);                // feedback-loop coupling cap
+mca = exp(-2 * $pi * 150 / srate);                // MIC low cut
+ie_ca = 1 - exp(-1 / (0.004 * srate)); cr = 1 - exp(-1 / (0.040 * srate));   // compander detectors
+sga = 1 - exp(-1 / (0.25 * srate));               // supply sag follows the level slowly
+update();
+t_sm = t_s; envC = envE = 0.1;
+
+@slider
+slider10 != lastp ? ( apply_preset(slider10); lastp = slider10; );
+update();
+
+@block
+update();
+// DRIFT: the supply voltage wanders slowly (a few per cent), setting the preamp's headroom and gain
+vV = drV.drift_tick(0.15 * dm_s * samplesblock / srate);
+
+@sample
+dL = spl0; dR = spl1;
+
+// input socket and VOLUME (the box is mono)
+ie_x = (dL + dR) * 0.5 * vol;
+mic ? ( mcs = ie_x + mca * (mcs - ie_x); ie_x -= mcs; );
+
+// preamp on a sagging supply: drift wanders it, loud passages pull it down
+sag += (min(abs(ie_x), 2) - sag) * sga;
+hv = 1.0 * (1 + 0.05 * dm_a * vV) * (1 - 0.12 * dm_a * min(sag, 1));
+g_sup = 1 + 0.03 * dm_a * vV;
+ie_x = pre_clip(ie_x * g_sup, hv);
+pkIn = max(pkIn, abs(ie_x) / hv);
+
+// send: with the echo off (or paused by MOMENTARY) no new signal goes in; the repeats carry on
+snd = fsw ? ie_x : 0;
+
+// the clock (DRIFT: it breathes) and the delay time glide
+vT = drT.drift_tick(0.35 * dm_s / srate);
+t_sm += (t_s * (1 + 0.007 * dm_a * vT) - t_sm) * tsc;
+ie_d = min(max(t_sm, 3), dlen - 4);
+
+// read the line, clock / reconstruction filter (two poles), hiss, expander
+ie_e = rdl(ie_d);
+f1 += (ie_e - f1) * lpa; f2 += (f1 - f2) * lpb; ie_e = f2;
+ie_e += (rand(2) - 1) * hiss;
+ae = abs(ie_e); envE += (ae - envE) * (ae > envE ? ie_ca : cr);
+ie_e = ie_e * (max(envE, 0.0005) / 0.25);              // 1:2 expander (the hiss sinks between notes)
+ie_e += (rand(2) - 1) * hiss * 0.3;                     // the output stage hiss stays (about 60 dB down at nominal level)
+
+// feedback: coupling cap, op-amp clip (runaway stays bounded)
+fb = ie_e * rep;
+hps = fb + hpa * (hps - fb); fb = fb - hps;
+fb = 1.1 * fb / (1 + abs(fb / 1.1) ^ 2) ^ 0.5;
+pkFb = max(pkFb, abs(fb));
+
+// write: input filter, then the 2:1 compressor
+ie_w = snd + fb;
+wf += (ie_w - wf) * lpb; ie_w = wf;
+aw = abs(ie_w); envC += (aw - envC) * (aw > envC ? ie_ca : cr);
+ie_w = ie_w * sqrt(0.25 / max(envC, 0.0005));
+buf[wp] = min(max(ie_w, -4), 4);
+wp += 1; wp >= dlen ? wp = 0;
+
+// BALANCE (dry stereo, echo mono) and OUTPUT
+dry_g = min(2 * (1 - bal), 1); wet_g = min(2 * bal, 1);
+spl0 = (dL * dry_g + ie_e * wet_g) * out_g;
+spl1 = (dR * dry_g + ie_e * wet_g) * out_g;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 900 300
+ui_begin(900, 300);
+
+FACE = 0x161616; HEAD = 0x222222; INK = 0xEEEFEA; DIM = 0x9A9A9A; RULE = 0x3A3A3A;
+C_ORG = 0xE8742A; C_GRN = 0x33A052; C_BLU = 0x3D70CC; C_YEL = 0xF2C83E; C_GRY = 0x9DA2A8; C_WHT = 0xEEEFEA;
+KEY = 0xC7BEB3;
+dy_ink = INK; dy_bg = FACE; dy_nov = 1;
+
+function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+
+// painted black steel: flat paint with a soft top sheen, screws in the corners
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(FACE); gfx_rect(0, 0, 900 * sc, 300 * sc);
+gfx_gradrect(0, 0, 900 * sc, 150 * sc, 1, 1, 1, 0.05, 0, 0, 0, 0, 0, 0, 0, -0.05 / (150 * sc));
+ui_col(HEAD); gfx_rect(0, 0, 900 * sc, 62 * sc);
+ui_cola(0x000000, 0.4); gfx_rect(0, 0, 900 * sc, 2 * sc); gfx_rect(0, 298 * sc, 900 * sc, 2 * sc);
+ui_col(INK); gfx_rect(0, 62 * sc, 900 * sc, 2 * sc);
+rd_screw(10, 284); rd_screw(890, 284);
+
+// ---------- HEADER: title, presets [PRESETS][◄][►][LCD], size ----------
+rd_badge(36, 31, 15, INK, HEAD);
+rd_title(60, 16, "IVANS ECHO", 24, INK);
+rd_sub(236, 28, "MINI ECHO UNIT", DIM, 1);
+pm_ = rd_sq(392, 16, 78, 30, 0, KEY, "PRESETS");
+rd_sq(476, 16, 30, 30, 0, KEY, "◄") ? ( setv(10, (floor(slider10 + 0.5) + 7) % 8); apply_preset(slider10); lastp = slider10; );
+rd_sq(510, 16, 30, 30, 0, KEY, "►") ? ( setv(10, (floor(slider10 + 0.5) + 1) % 8); apply_preset(slider10); lastp = slider10; );
+pk_lcd(548 * sc, 9 * sc, 220 * sc, 46 * sc, 0);
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+sprintf(#plcd, "PRESET %02d/08", floor(slider10 + 0.5) + 1); gfx_x = 560 * sc; gfx_y = 15 * sc; gfx_drawstr(#plcd);
+pk_lcdfont(9, 15 * sc); gfx_x = 560 * sc; gfx_y = 30 * sc; gfx_drawstr(pname(slider10));
+pm_ || (pressed && drag_id == 0 && mouse_x >= 548 * sc && mouse_x < 768 * sc && mouse_y >= 9 * sc && mouse_y < 55 * sc) ? (
+  drag_id = -1;
+  strcpy(#pmenu, ""); k_ = 0;
+  loop(8, k_ == floor(slider10 + 0.5) ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k_)); k_ < 7 ? strcat(#pmenu, "|"); k_ += 1; );
+  gfx_x = 392 * sc; gfx_y = 56 * sc;
+  k_ = gfx_showmenu(#pmenu);
+  k_ > 0 ? ( setv(10, k_ - 1); apply_preset(slider10); lastp = slider10; );
+);
+ui_size_picker(800 * sc, 24 * sc);
+
+// ---------- INPUT ----------
+rd_sub(24, 76, "INPUT", INK, 1);
+rd_sq(30, 100, 58, 28, slider1 < 0.5, KEY, "INST") ? setv(1, 0);
+rd_sq(94, 100, 58, 28, slider1 > 0.5, KEY, "MIC")  ? setv(1, 1);
+rd_sq(30, 214, 52, 30, slider7 > 0.5, C_GRN, "ECHO") ? setv(7, 1 - slider7);
+// MOMENTARY does not latch: held, it flips ECHO; let go, it springs back
+k_ = rd_sq(88, 214, 92, 30, slider11 > 0.5, C_YEL, "MOMENTARY");
+k_ && mom_m == 0 ? ( mom_m = 1; setv(11, 1); );
+mom_m && !(mouse_cap & 1) ? ( mom_m = 0; setv(11, 0); );
+sprintf(#v, "%+.1f dB", slider2);
+dy_knob(212, 166, 32, 2, -24, 18, 0, 0, C_ORG, "VOLUME", #v);
+rd_led(254, 116, 5, pkIn > 0.82, 0xFF3A22); rd_lbl(254, 126, "PEAK", DIM, 1);
+pkIn *= 0.8;
+
+ui_col(RULE); gfx_rect(282 * sc, 78 * sc, 1 * sc, 196 * sc);
+
+// ---------- ECHO ----------
+rd_sub(298, 76, "ECHO", INK, 1);
+sprintf(#v, "%.0f%%", slider3);
+dy_knob(344, 166, 32, 3, 0, 100, 35, 0, C_GRN, "BALANCE", #v);
+sprintf(#v, "%.0f%%", slider4);
+dy_knob(450, 166, 32, 4, 0, 110, 35, 0, C_BLU, "REPEAT", #v);
+rd_led(492, 116, 5, pkFb > 0.45, 0xFF3A22); rd_lbl(492, 126, "REPEAT", DIM, 1);
+pkFb *= 0.85;
+ie_sync = floor(slider6 + 0.5);
+ie_sync > 0 ? sprintf(#v, "%s  %.0f ms", divname(ie_sync), t_ms) : sprintf(#v, "%.0f ms", slider5);
+dy_knob(578, 166, 38, 5, 20, 400, 180, 1, C_YEL, "DELAY TIME", #v);
+rd_sq(640, 100, 64, 26, ie_sync > 0, KEY, divname(ie_sync)) ? (
+  strcpy(#smenu, ""); k_ = 0;
+  loop(9, k_ == ie_sync ? strcat(#smenu, "!"); strcat(#smenu, divname(k_)); k_ < 8 ? strcat(#smenu, "|"); k_ += 1; );
+  gfx_x = 640 * sc; gfx_y = 128 * sc;
+  k_ = gfx_showmenu(#smenu);
+  k_ > 0 ? setv(6, k_ - 1);
+);
+rd_lbl(672, 132, "SYNC", DIM, 1);
+
+ui_col(RULE); gfx_rect(722 * sc, 78 * sc, 1 * sc, 196 * sc);
+
+// ---------- MASTER ----------
+rd_sub(738, 76, "MASTER", INK, 1);
+sprintf(#v, "%.0f%%", slider8);
+dy_knob(764, 120, 20, 8, 0, 100, 50, 0, C_GRY, "DRIFT", #v);
+sprintf(#v, "%+.1f dB", slider9);
+dy_knob(764, 214, 26, 9, -24, 12, 0, 0, C_WHT, "OUTPUT", #v);
+mL.ui_ledm(840 * sc, 96 * sc, 10 * sc, 150 * sc, pkL); mR.ui_ledm(856 * sc, 96 * sc, 10 * sc, 150 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+rd_lbl(853, 256, "OUT", DIM, 1);
+
+pk_end();
+ui_end();
