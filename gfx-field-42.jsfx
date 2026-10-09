@@ -252,7 +252,7 @@ sect(554, 76, 188, 208, SH1, "CHANNEL");
 abs(slider5) < 0.5 ? strcpy(#v, "C") : sprintf(#v, "%s %.0f", slider5 < 0 ? "L" : "R", abs(slider5));
 dy_knob(600, 150, 22, 5, -100, 100, 0, 0, CAP, "PAN", #v);
 slider6 <= -39.95 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider6);
-dy_knob(686, 150, 30, 6, -40, 10, 0, 0, CAPW, "FADER", #v);
+dy_knob(686, 150, 30, 6, -40, 10, 0, 0, 0xC7BEB3, "FADER", #v);   // elephant's breath
 rd_sq(568, 226, 38, 30, slider10 > 0.5, AMB, "TONE") ? setv(10, 1 - slider10);
 rd_sq(610, 226, 56, 30, 0, 0xD8CBA4, slider11 < 0.5 ? "1 kHz" : slider11 < 1.5 ? "400 Hz" : "100 Hz") ? setv(11, (floor(slider11 + 0.5) + 1) % 3);
 sprintf(#v, "%+.0f dBu", slider12); dy_knob(706, 240, 14, 12, -20, 8, 0, 0, 0x9DA2A8, "", #v);

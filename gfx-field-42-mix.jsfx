@@ -254,7 +254,7 @@ function strip(x, k, s, pk, lm) local(cx) (
     abs(slider(k + 5)) < 0.5 ? strcpy(#v, "C") : sprintf(#v, "%s %.0f", slider(k + 5) < 0 ? "L" : "R", abs(slider(k + 5)));
   dy_knob(cx, 336, 22, k + 5, -100, 100, 0, 0, CAP, slider(k + 4) > 0.5 ? "WIDTH" : "PAN", #v);
   slider(k + 6) <= -39.95 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider(k + 6));
-  dy_knob(cx, 424, 28, k + 6, -40, 10, 0, 0, CAPW, "FADER", #v);
+  dy_knob(cx, 424, 28, k + 6, -40, 10, 0, 0, 0xC7BEB3, "FADER", #v);   // elephant's breath
   rd_sq(x + 14, 492, 56, 24, slider(k + 7) > 0.5, REDL, "MUTE") ? setv(k + 7, 1 - slider(k + 7));
   rd_sq(x + 76, 492, 56, 24, slider(k + 8) > 0.5, AMB, "SOLO") ? setv(k + 8, 1 - slider(k + 8));
 );
@@ -309,7 +309,7 @@ rd_sq(698, 470, 60, 26, 0, KEYL, slider42 < 0.5 ? "1 kHz" : slider42 < 1.5 ? "40
 sprintf(#v, "%+.0f dBu", slider43); dy_knob(784, 483, 12, 43, -20, 8, 0, 0, 0x9DA2A8, "", #v);
 sprintf(#v, "%.0f%%", slider44); dy_knob(850, 300, 14, 44, 0, 100, 50, 0, 0x9DA2A8, "DRIFT", #v);
 slider37 <= -39.95 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider37);
-dy_knob(870, 420, 32, 37, -40, 10, 0, 0, CAPW, "MASTER", #v);
+dy_knob(870, 420, 32, 37, -40, 10, 0, 0, 0xC7BEB3, "MASTER", #v);
 mL.ui_ledm(962 * sc, 96 * sc, 12 * sc, 400 * sc, pkL); mR.ui_ledm(982 * sc, 96 * sc, 12 * sc, 400 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;
 rd_lbl(979, 504, "OUT", DIMI, 1);
