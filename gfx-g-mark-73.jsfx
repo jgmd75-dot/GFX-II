@@ -1,0 +1,349 @@
+desc:GFX G Mark 73
+//tags: instrument electric piano tine stage keys tremolo
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-voice, gfx-output, gfx-ui, gfx-panel, gfx-instrument, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// A lean tine electric piano in the spirit of the classic tiny freeware e-piano plug-ins, but with no samples:
+// each note is a struck tine modelled with three decaying resonators (the tine, its tonebar, and the bright
+// "bell" partial of the hammer strike), read by an uneven magnetic pickup that barks when you dig in.
+// A small, fixed voice engine (8 - 32 voices, oldest stolen first) keeps it very light on the CPU.
+//   DECAY / RELEASE  how long notes ring, and how fast they stop when you let go (the sustain pedal works).
+//   HARDNESS         hammer hardness: more bell, more pickup bark, a brighter tone.
+//   TREBLE           a high shelf on the output.
+//   MODULATION       one LFO, two jobs: turn right for tremolo, left for auto-pan; RATE sets its speed.
+//   VELOCITY, WIDTH  velocity response; how far the keys spread across the stereo field (low left, high right).
+//   POLYPHONY, FINE, RANDOM  voices, fine tuning, and a random detune on every note.
+//   OVERDRIVE        drives the pickup and the output for a growling, broken-up tone.
+//
+// DRIFT (50% = standard): the universal GFX instrument drift - the pitch and the tone wander slowly, and every
+// new note lands slightly off tune. 0% = steady, 100% = twice the standard amount.
+// IN / OUT: the GFX band saturation and output stage (SAT and OFF / CLIP / LIM on the panel).
+
+import gfx-drift.jsfx-inc
+import gfx-voice.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:50<0,100,1>-Decay (%)
+slider2:40<0,100,1>-Release (%)
+slider3:45<0,100,1>-Hardness (%)
+slider4:0<-6,12,0.1>-Treble (dB)
+slider5:0<-100,100,1>-Modulation (pan - / trem +, %)
+slider6:4<0.1,10,0.01>-LFO rate (Hz)
+slider7:70<0,100,1>-Velocity (%)
+slider8:50<0,100,1>-Width (%)
+slider9:32<8,32,1>-Polyphony
+slider10:0<-50,50,0.1>-Fine tune (cents)
+slider11:4<0,50,0.1>-Random tuning (cents)
+slider12:0<0,100,1>-Overdrive (%)
+slider13:50<0,100,1>-Drift (%)
+slider14:0<-24,6,0.1>-Volume (dB)
+slider15:0<0,9,1{Mark 73,Bright Stage,Mellow Ballad,Suitcase Tremolo,Auto Pan Wide,Bark,Bell Tines,Soft Felt,Drive Amp,Lo-Fi Upright}>-Patch
+slider16:0<0,100,1>-Band sat (%)
+slider17:30<0,100,1>-Bias (%)
+slider18:120<40,400,1>-Sat low band (Hz)
+slider19:6000<2000,16000,10>-Sat high band (Hz)
+slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-mark-73";
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+ins_drift_init();
+last_patch = -1; edited = 0; sus = 0; seq = 0;
+
+// ---------- the voices: 32 slots of VS values from VB ----------
+VB = 30000; VS = 32; NV = 32;
+memset(VB, 0, VS * NV);
+// slot fields: 0 active, 1 note, 2 age, 3 released, 4 gain L, 5 gain R, 6 pickup drive, 7 held by the pedal,
+//              8.. three modes x 6: y1, y2, c, r2, w (angle), r (pole radius)
+function vmode(v, m) ( VB + v * VS + 8 + m * 6; );
+
+// a mode: decaying sinusoid of amplitude A, angle w, T60 seconds (2-pole resonator, starts at zero phase)
+function mode_set(p, A, w, t60) local(r) (
+  r = exp(-6.9078 / (max(t60, 0.005) * srate));
+  w >= $pi * 0.9 ? ( p[0] = p[1] = 0; p[2] = p[3] = 0; p[4] = w; p[5] = 0; ) : (
+    p[0] = A * r * sin(w); p[1] = 0; p[2] = 2 * r * cos(w * ins_pitch); p[3] = r * r; p[4] = w; p[5] = r;
+  );
+);
+// let go: the damper falls - each mode decays at least as fast as the release time
+function mode_release(p, t60) local(r) (
+  r = exp(-6.9078 / (max(t60, 0.005) * srate));
+  r < p[5] ? ( p[5] = r; p[3] = r * r; p[2] = 2 * r * cos(p[4] * ins_pitch); );
+);
+
+function voice_release(v, t60) local(b) (
+  b = VB + v * VS; b[3] = 1; b[7] = 0;
+  mode_release(vmode(v, 0), t60); mode_release(vmode(v, 1), t60); mode_release(vmode(v, 2), t60);
+);
+
+function note_on(n, vel) local(i, v, best, ba, b, f, w, amp, vv, kt, t0, pan, h) (
+  // a key struck again: its old note is damped quickly
+  i = 0; loop(NV, b = VB + i * VS; b[0] && b[1] == n && !b[3] ? voice_release(i, 0.08); i += 1; );
+  // a free slot within POLYPHONY, else steal the oldest (released notes first)
+  v = -1; i = 0; loop(poly, b = VB + i * VS; v < 0 && !b[0] ? v = i; i += 1; );
+  v < 0 ? (
+    best = -1; ba = 1000000000; i = 0;
+    loop(poly, b = VB + i * VS; (b[2] - b[3] * 1000000) < ba ? ( ba = b[2] - b[3] * 1000000; best = i; ); i += 1; );
+    v = best;
+  );
+  b = VB + v * VS;
+  seq += 1; b[0] = 1; b[1] = n; b[2] = seq; b[3] = 0; b[7] = 0;
+  vv = vel / 127;
+  amp = (1 - velsens) + velsens * vv ^ 1.4;
+  kt = (n - 60) / 12;
+  f = 440 * 2 ^ ((n - 69) / 12) * fine_m * 2 ^ ((rand(2) - 1) * rnd_c / 1200) * ins_note_detune();
+  w = 2 * $pi * f / srate;
+  h = hard * (0.4 + 0.6 * vv);
+  t0 = min(max(dec_t * 2 ^ (-kt * 0.9), 0.4), 24);
+  mode_set(vmode(v, 0), amp, w, t0);                                         // the tine
+  mode_set(vmode(v, 1), amp * (0.05 + 0.10 * h), w * 2, t0 * 0.45);         // the tonebar / second harmonic
+  mode_set(vmode(v, 2), amp * (0.03 + 0.38 * h), w * 7.11, (0.05 + 0.30 * (1 - hard)) * 2 ^ (-kt * 0.5));   // the hammer's bell partial
+  b[6] = 1 + 5.5 * h * h + 5 * od;                                           // pickup drive: harder hits bark more
+  pan = min(max(kt / 3, -1), 1) * width;                                     // low keys left, high keys right
+  b[4] = sqrt(0.5 * (1 - pan)); b[5] = sqrt(0.5 * (1 + pan));
+  ins_midi_hit();
+);
+function note_off(n) local(i, b) (
+  i = 0; loop(NV, b = VB + i * VS;
+    b[0] && b[1] == n && !b[3] && !b[7] ? ( sus ? b[7] = 1 : voice_release(i, rel_t); );
+    i += 1; );
+);
+function pedal(on) local(i, b) (
+  sus = on;
+  !on ? ( i = 0; loop(NV, b = VB + i * VS; b[0] && b[7] ? voice_release(i, rel_t); i += 1; ); );
+);
+function all_off() ( memset(VB, 0, VS * NV); sus = 0; );
+
+// per-patch level trim (keeps the hottest patches out of the output clipper)
+function patch_trim(p) (
+  p == 0 ? 1.000 : p == 1 ? 1.460 : p == 2 ? 0.790 : p == 3 ? 1.070 : p == 4 ? 1.290 :
+  p == 5 ? 1.330 : p == 6 ? 1.150 : p == 7 ? 0.830 : p == 8 ? 1.100 : 1.200;
+);
+
+// ---------- patches: decay, release, hardness, treble, modulation, rate, velocity, width, overdrive ----------
+function setp(de, re, ha, tr, mo, ra, ve, wi, ov) (
+  slider1 = de; slider2 = re; slider3 = ha; slider4 = tr; slider5 = mo; slider6 = ra; slider7 = ve; slider8 = wi; slider12 = ov;
+);
+function load_patch(p) (
+  p == 0 ? setp(50, 40, 45,  0,   0, 4.0, 70, 50,  0) :     // Mark 73
+  p == 1 ? setp(45, 35, 75,  5,   0, 4.0, 80, 40, 10) :     // Bright Stage
+  p == 2 ? setp(65, 55, 20, -3,   0, 4.0, 60, 40,  0) :     // Mellow Ballad
+  p == 3 ? setp(55, 45, 45,  2,  55, 4.6, 70, 40,  0) :     // Suitcase Tremolo
+  p == 4 ? setp(55, 45, 45,  2, -80, 3.2, 70, 70,  0) :     // Auto Pan Wide
+  p == 5 ? setp(45, 35, 90,  3,   0, 4.0, 90, 40, 35) :     // Bark
+  p == 6 ? setp(60, 50, 85,  8,   0, 4.0, 70, 60,  0) :     // Bell Tines
+  p == 7 ? setp(55, 50,  5, -6,   0, 4.0, 50, 30,  0) :     // Soft Felt
+  p == 8 ? setp(45, 35, 70,  4,  30, 5.5, 85, 40, 70) :     // Drive Amp
+           setp(35, 30, 35, -6,  20, 6.5, 60, 10, 20);      // Lo-Fi Upright
+  slider15 = p; last_patch = p; edited = 0;
+  slider_automate(2 ^ 8 - 1 + 2 ^ 11 + 2 ^ 14);
+);
+function patch_name(p) (
+  p == 0 ? "MARK 73" : p == 1 ? "BRIGHT STAGE" : p == 2 ? "MELLOW BALLAD" : p == 3 ? "SUITCASE TREMOLO" : p == 4 ? "AUTO PAN WIDE" :
+  p == 5 ? "BARK" : p == 6 ? "BELL TINES" : p == 7 ? "SOFT FELT" : p == 8 ? "DRIVE AMP" : "LO-FI UPRIGHT";
+);
+
+// ---------- parameters ----------
+function hshelf(f, db) local(w, cw, al, A, sA, d0) (
+  A = 10 ^ (db / 40); w = 2 * $pi * f / srate; cw = cos(w); al = sin(w) / 2 * sqrt(2); sA = 2 * sqrt(A) * al;
+  d0 = (A + 1) - (A - 1) * cw + sA;
+  tb0 = A * ((A + 1) + (A - 1) * cw + sA) / d0; tb1 = -2 * A * ((A - 1) + (A + 1) * cw) / d0; tb2 = A * ((A + 1) + (A - 1) * cw - sA) / d0;
+  ta1 = 2 * ((A - 1) - (A + 1) * cw) / d0; ta2 = ((A + 1) - (A - 1) * cw - sA) / d0;
+);
+function update() (
+  dec_t = 0.8 * 2 ^ (slider1 / 100 * 4.2);                 // middle C rings 0.8 - 15 s
+  rel_t = 0.04 * 2 ^ (slider2 / 100 * 5);                  // 40 ms - 1.3 s
+  hard = slider3 / 100;
+  hshelf(2500, slider4);
+  modu = slider5 / 100; lfo_r = slider6;
+  velsens = slider7 / 100; width = slider8 / 100;
+  poly = floor(slider9 + 0.5);
+  fine_m = 2 ^ (slider10 / 1200); rnd_c = slider11;
+  od = slider12 / 100; od_g = 1 + 7 * od * od;
+  drift = slider13 / 100 * 1.0;
+  vol_t = 10 ^ (slider14 / 20);
+  ins_output_setup(16);
+);
+// recessed front-panel section (the GFX instrument inset)
+function inset(x, y, w, h, col) local(b, ox, oy, ow, oh) (
+  x *= sc; y *= sc; w *= sc; h *= sc; b = 5 * sc;
+  ox = x - b; oy = y - b; ow = w + 2 * b; oh = h + 2 * b;
+  ui_col(ui_mix(col, 0x000000, 0.45)); gfx_triangle(ox, oy, ox + ow, oy, x + w, y, x, y);
+  ui_col(ui_mix(col, 0x000000, 0.28)); gfx_triangle(ox, oy, x, y, x, y + h, ox, oy + oh);
+  ui_col(ui_mix(col, 0xFFFFFF, 0.18)); gfx_triangle(ox, oy + oh, x, y + h, x + w, y + h, ox + ow, oy + oh);
+  ui_col(ui_mix(col, 0xFFFFFF, 0.07)); gfx_triangle(ox + ow, oy, ox + ow, oy + oh, x + w, y + h, x + w, y);
+  ui_col(col); gfx_rect(x, y, w, h);
+  gfx_gradrect(x, y, w, 6 * sc, 0, 0, 0, 0.22, 0, 0, 0, 0, 0, 0, 0, -0.22 / (6 * sc));
+  ui_cola(0x000000, 0.45); gfx_line(ox, oy, x, y, 1); gfx_line(ox + ow, oy, x + w, y, 1);
+  ui_cola(0xFFFFFF, 0.20); gfx_line(ox, oy + oh, x, y + h, 1); gfx_line(ox + ow, oy + oh, x + w, y + h, 1);
+);
+update();
+vol_s = vol_t; sm = vo_coef(30);
+pk_off = 0.35; pk_n = 1 / (1 / (1 + pk_off * pk_off) ^ 1.5); pk_z0 = pk_off / sqrt(1 + pk_off * pk_off);
+ui_dflt = 1;
+
+@slider
+last_patch < 0 ? ( last_patch = slider15; ) : ( slider15 != last_patch ? load_patch(slider15); );
+update();
+
+@block
+update();
+while (midirecv(mofs, m1, m2, m3)) (
+  st = m1 & 0xF0;
+  st == 0x90 && m3 > 0 ? note_on(m2, m3) :
+  st == 0x80 || (st == 0x90 && m3 == 0) ? note_off(m2) :
+  st == 0xB0 && m2 == 64 ? pedal(m3 >= 64) :
+  st == 0xB0 && (m2 == 123 || m2 == 120) ? all_off();
+  midisend(mofs, m1, m2, m3);
+);
+ins_drift_block(drift, samplesblock);                      // GFX instrument drift
+// DRIFT: the running notes follow the pitch wander; spent notes are freed
+i = 0;
+loop(NV,
+  b = VB + i * VS;
+  b[0] ? (
+    m_ = 0; loop(3, p_ = vmode(i, m_); p_[5] > 0 ? p_[2] = 2 * p_[5] * cos(p_[4] * ins_pitch); m_ += 1; );
+    p_ = vmode(i, 0);
+    b[3] && abs(p_[0]) + abs(p_[1]) < 0.00002 ? b[0] = 0;
+    !b[3] && p_[5] ^ (srate * 0.25) < 0.0001 && abs(p_[0]) + abs(p_[1]) < 0.00002 ? b[0] = 0;
+  );
+  i += 1;
+);
+muf_a = 1 - exp(-2 * $pi * min((1800 + 9000 * hard) * 2 ^ ins_tone, srate * 0.45) / srate);
+
+@sample
+mL = mR = 0;
+i = 0;
+loop(NV,
+  b = VB + i * VS;
+  b[0] ? (
+    p_ = b + 8;
+    y_ = p_[2] * p_[0] - p_[3] * p_[1]; p_[1] = p_[0]; p_[0] = y_; s_ = y_;
+    p_ += 6; y_ = p_[2] * p_[0] - p_[3] * p_[1]; p_[1] = p_[0]; p_[0] = y_; s_ += y_;
+    p_ += 6; y_ = p_[2] * p_[0] - p_[3] * p_[1]; p_[1] = p_[0]; p_[0] = y_; s_ += y_;
+    // the pickup: an offset magnet makes the response uneven, so hard notes bark
+    z_ = s_ * b[6] + pk_off;
+    o_ = (z_ / sqrt(1 + z_ * z_) - pk_z0) * pk_n / b[6];
+    mL += o_ * b[4]; mR += o_ * b[5];
+  );
+  i += 1;
+);
+mL *= 0.35; mR *= 0.35;
+
+// tone: hammer-felt muffling (HARDNESS, DRIFT), TREBLE shelf
+mfL += (mL - mfL) * muf_a; mfR += (mR - mfR) * muf_a;
+x_ = mL * 0.25 + mfL * 0.75; y_ = tb0 * x_ + tz1L; tz1L = tb1 * x_ - ta1 * y_ + tz2L; tz2L = tb2 * x_ - ta2 * y_; mL = y_;
+x_ = mR * 0.25 + mfR * 0.75; y_ = tb0 * x_ + tz1R; tz1R = tb1 * x_ - ta1 * y_ + tz2R; tz2R = tb2 * x_ - ta2 * y_; mR = y_;
+
+// OVERDRIVE
+od > 0.001 ? ( mL = vo_tanh(mL * od_g) / sqrt(od_g); mR = vo_tanh(mR * od_g) / sqrt(od_g); );
+
+// MODULATION: right = tremolo, left = auto-pan
+lf_ph += lfo_r / srate; lf_ph -= floor(lf_ph); lf_s = sin(2 * $pi * lf_ph);
+modu > 0 ? ( g_ = 1 - modu * (0.5 - 0.5 * lf_s); mL *= g_; mR *= g_; ) :
+modu < 0 ? ( mL *= 1 + modu * (0.5 + 0.5 * lf_s); mR *= 1 + modu * (0.5 - 0.5 * lf_s); );
+
+// DC block, volume, output stage
+dyL = mL - dxL + 0.9995 * dyL; dxL = mL; dyR = mR - dxR + 0.9995 * dyR; dxR = mR;
+vol_s += (vol_t - vol_s) * sm;
+g_ = patch_trim(slider15) * vol_s;
+oL = ostL.ost_band(dyL * g_); oR = ostR.ost_band(dyR * g_);
+ost_out(oL, oR);
+spl0 = ost_l; spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, edited);
+
+@gfx 900 420
+ui_begin(900, 420);
+
+RED = 0x6A141B; SH1 = 0x5C1117; SH2 = 0x541015; SH3 = 0x4B0E13; INK = 0xF2E8D0; DIMI = 0xD7B8A8; ACC = 0xE8C27A;
+CAPC = 0xF2E8D0; CAPG = 0x9DA2A8; CAPA = 0xE8C27A;
+dy_ink = INK; dy_bg = RED; dy_nov = 1; rd_sqbg = 0x2A0A0D;
+
+function setv(idx, v) ( slider(idx) = v; slider_automate(2 ^ (idx - 1)); edited = 1; );
+function sect(x, y, w, h, col, s) ( inset(x, y, w, h, col); rd_sub(x + 10, y + 8, s, ACC, 1); );
+
+// dark red sparkle: the finish, then a scatter of glints
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(RED); gfx_rect(0, 0, 900 * sc, 420 * sc);
+gfx_gradrect(0, 0, 900 * sc, 210 * sc, 1, 0.8, 0.8, 0.07, 0, 0, 0, 0, 0, 0, 0, -0.07 / (210 * sc));
+gi = 0;
+loop(1600,
+  ui_cola(0xFFD8C8, 0.05 + 0.30 * rd_hash(gi + 3333) ^ 3);
+  gfx_rect(floor(rd_hash(gi) * 900 * sc), floor(rd_hash(gi + 7777) * 420 * sc), max(1, sc * 0.9), max(1, sc * 0.9));
+  gi += 1;
+);
+ui_col(ACC); gfx_rect(0, 66 * sc, 900 * sc, 2 * sc);
+ui_cola(0x000000, 0.35); gfx_rect(0, 416 * sc, 900 * sc, 4 * sc);
+
+// header: badge, name, presets [PRESETS][◄][►][LCD], MIDI, size
+rd_badge(36, 33, 16, INK, RED);
+rd_title(62, 14, "MARK 73", 28, INK);
+rd_sub(66, 47, "ELECTRIC PIANO", DIMI, 1);
+pm_ = rd_sq(340, 18, 78, 32, 0, ACC, "PRESETS");
+rd_sq(422, 18, 32, 32, 0, ACC, "◄") ? load_patch(slider15 <= 0 ? 9 : slider15 - 1);
+rd_sq(458, 18, 32, 32, 0, ACC, "►") ? load_patch(slider15 >= 9 ? 0 : slider15 + 1);
+pk_lcd(498 * sc, 10 * sc, 236 * sc, 48 * sc, 0);
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+sprintf(#l1, edited ? "PATCH %02d/10 *" : "PATCH %02d/10", slider15 + 1); gfx_x = 510 * sc; gfx_y = 16 * sc; gfx_drawstr(#l1);
+pk_lcdfont(9, 15 * sc); gfx_x = 510 * sc; gfx_y = 32 * sc; gfx_drawstr(patch_name(slider15));
+pm_ || (pressed && drag_id == 0 && mouse_x >= 498 * sc && mouse_x < 734 * sc && mouse_y >= 10 * sc && mouse_y < 58 * sc) ? (
+  drag_id = -1; strcpy(#pm, ""); k_ = 0;
+  loop(10, k_ == slider15 ? strcat(#pm, "!"); strcat(#pm, patch_name(k_)); k_ < 9 ? strcat(#pm, "|"); k_ += 1; );
+  gfx_x = 340 * sc; gfx_y = 58 * sc; k_ = gfx_showmenu(#pm); k_ > 0 ? load_patch(k_ - 1);
+);
+rd_led(764, 34, 5, ins_midi_lit(), 0x3ADF6A); rd_lbl(764, 45, "MIDI", DIMI, 1);
+ui_size_picker(800 * sc, 24 * sc);
+
+// ---------- row 1: TINES, MODULATION ----------
+sect(16, 90, 500, 140, SH1, "TINES");
+sprintf(#v, "%.0f%%", slider1); dy_knob(74, 166, 26, 1, 0, 100, 50, 0, CAPC, "DECAY", #v);
+sprintf(#v, "%.0f%%", slider2); dy_knob(194, 166, 26, 2, 0, 100, 40, 0, CAPC, "RELEASE", #v);
+sprintf(#v, "%.0f%%", slider3); dy_knob(314, 166, 26, 3, 0, 100, 45, 0, CAPA, "HARDNESS", #v);
+sprintf(#v, "%+.1f dB", slider4); dy_knob(434, 166, 26, 4, -6, 12, 0, 0, CAPC, "TREBLE", #v);
+
+sect(528, 90, 356, 140, SH2, "MODULATION");
+slider5 < 0 ? sprintf(#v, "PAN %.0f%%", -slider5) : slider5 > 0 ? sprintf(#v, "TREM %.0f%%", slider5) : strcpy(#v, "OFF");
+dy_knob(624, 166, 30, 5, -100, 100, 0, 0, CAPA, "MODULATION", #v);
+rd_lbl(586, 198, "PAN", DIMI, 1); rd_lbl(664, 198, "TREM", DIMI, 1);
+sprintf(#v, "%.2f Hz", slider6); dy_knob(784, 166, 26, 6, 0.1, 10, 4, 1, CAPC, "RATE", #v);
+rd_led(840, 112, 4, modu != 0 && lf_s > 0, 0xFF5A3A);
+
+// ---------- row 2: PLAYING, TUNING, MASTER ----------
+sect(16, 252, 360, 150, SH2, "PLAYING");
+sprintf(#v, "%.0f%%", slider7); dy_knob(74, 330, 24, 7, 0, 100, 70, 0, CAPC, "VELOCITY", #v);
+sprintf(#v, "%.0f%%", slider8); dy_knob(190, 330, 24, 8, 0, 100, 50, 0, CAPC, "WIDTH", #v);
+sprintf(#v, "%.0f", floor(slider9 + 0.5)); dy_knob(306, 330, 24, 9, 8, 32, 32, 0, CAPG, "VOICES", #v);
+
+sect(388, 252, 210, 150, SH3, "TUNING");
+sprintf(#v, "%+.1f ct", slider10); dy_knob(440, 330, 22, 10, -50, 50, 0, 0, CAPG, "FINE", #v);
+sprintf(#v, "%.1f ct", slider11); dy_knob(544, 330, 22, 11, 0, 50, 4, 0, CAPG, "RANDOM", #v);
+
+sect(610, 252, 274, 150, SH1, "MASTER");
+sprintf(#v, "%.0f%%", slider13); dy_knob(646, 312, 18, 13, 0, 100, 50, 0, CAPG, "DRIFT", #v);
+sprintf(#v, "%.0f%%", slider12); dy_knob(712, 312, 18, 12, 0, 100, 0, 0, CAPA, "DRIVE", #v);
+sprintf(#v, "%+.1f dB", slider14); dy_knob(784, 312, 22, 14, -24, 6, 0, 0, CAPC, "VOLUME", #v);
+sprintf(#v, "%.0f%%", slider16); dy_knob(646, 376, 14, 16, 0, 100, 0, 0, CAPG, "", #v);
+rd_lbl(676, 371, "SAT", DIMI, 1);
+rd_sq(700, 364, 40, 20, slider21 == 0, ACC, "OFF") ? setv(21, 0);
+rd_sq(744, 364, 44, 20, slider21 == 1, ACC, "CLIP") ? setv(21, 1);
+rd_sq(792, 364, 44, 20, slider21 == 2, ACC, "LIM") ? setv(21, 2);
+mL_.ui_ledm(848 * sc, 282 * sc, 9 * sc, 108 * sc, pkL); mR_.ui_ledm(862 * sc, 282 * sc, 9 * sc, 108 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+
+(drag_id > 1600 && drag_id <= 1614) ? edited = 1;
+pk_end();
+ui_end();

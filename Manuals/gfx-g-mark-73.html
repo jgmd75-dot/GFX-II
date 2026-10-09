@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX G Mark 73 - manual</title><meta name="description" content="A lean tine electric piano: modelled tines and pickup, no samples, tremolo or auto-pan, up to 32 voices.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://www.gardenfx.uk/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-g-mark-73">
+<div class="cat">Instruments</div><h1>G Mark 73</h1>
+<p class="tagline">A lean tine electric piano: modelled tines and pickup, no samples, tremolo or auto-pan, up to 32 voices.</p>
+<div class="shot"><img src="img/gfx-g-mark-73.webp" alt="The G Mark 73 panel" loading="lazy"></div>
+<h2>Overview</h2><p>G Mark 73 is a tine electric piano in the spirit of the classic tiny freeware e-piano plug-ins: a handful of controls, a light touch on the CPU, and the sound of a 70s stage piano. Like everything in GFX it uses no samples. Each note is a struck tine, modelled with three decaying resonators: the tine itself, its tonebar, and the bright bell partial of the hammer strike. These are read by a magnetic pickup set slightly off-centre, so soft notes are round and pure and hard notes bark.</p><p>One LFO does two jobs, as on the original plug-in: turn MODULATION right for tremolo, left for auto-pan. WIDTH spreads the keyboard across the stereo field, low notes left and high notes right. The sustain pedal (CC64) works.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Classic tine electric piano: soul, jazz, ballads</li><li>Suitcase tremolo and wide auto-pan pads</li><li>Barking, driven rock and funk keys</li><li>Bell-like, glassy high tines</li><li>A light e-piano when your session is already heavy</li></ul>
+<h2>Controls</h2><h3>TINES</h3><dl class="ctl"><dt>DECAY</dt><dd>How long notes ring when held: from about 0.8 s to 15 s at middle C. Low notes ring longer, high notes shorter, as on the real thing.</dd><dt>RELEASE</dt><dd>How quickly a note stops when you let go: the damper, from 40 ms to about 1.3 s.</dd><dt>HARDNESS</dt><dd>The hammer: more bell at the start of each note, more pickup bark on hard hits, and a brighter tone overall. Low settings give a soft, felt-like sound.</dd><dt>TREBLE</dt><dd>A high shelf at 2.5 kHz, -6 to +12 dB.</dd></dl><h3>MODULATION</h3><dl class="ctl"><dt>MODULATION</dt><dd>Turn right for tremolo (the level pulses), left for auto-pan (the sound moves between the speakers). The centre is off. The light blinks with the LFO.</dd><dt>RATE</dt><dd>The LFO's speed, 0.1 to 10 Hz.</dd></dl><h3>PLAYING</h3><dl class="ctl"><dt>VELOCITY</dt><dd>How much key velocity changes the level (hardness always follows velocity).</dd><dt>WIDTH</dt><dd>How far the keys spread across the stereo field: 0% is mono.</dd><dt>VOICES</dt><dd>Polyphony, 8 to 32. When all voices are busy the oldest note is taken, released notes first.</dd></dl><h3>TUNING</h3><dl class="ctl"><dt>FINE</dt><dd>Fine tuning, -50 to +50 cents.</dd><dt>RANDOM</dt><dd>A random detune on every note, up to 50 cents (4 by default): a little life, or an out-of-tune upright.</dd></dl><h3>MASTER</h3><dl class="ctl"><dt>DRIFT</dt><dd>See Drift below.</dd><dt>DRIVE</dt><dd>Overdrive: drives the pickup and the output for a broken-up, growling tone.</dd><dt>VOLUME</dt><dd>-24 to +6 dB.</dd><dt>SAT</dt><dd>The GFX band saturation on the output (0% by default).</dd><dt>OFF / CLIP / LIM</dt><dd>The GFX output stage. CLIP (the default) is a soft clipper just under 0 dB; LIM is a look-ahead limiter. The band frequencies, bias and ceiling are in the parameter list.</dd><dt>Meters</dt><dd>Output level, left and right.</dd></dl><h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the patch list (or click the display). An asterisk after the patch number means you have changed it.</dd><dt>◄ / ►</dt><dd>Step through the patches.</dd><dt>MIDI</dt><dd>Blinks on each note.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><h3>Drift</h3><p>DRIFT (0 - 100%, 50% by default) is the universal GFX instrument drift: the pitch and the tone wander slowly, and every new note lands slightly off tune. 50% is the standard amount, 100% twice that, 0 steady; the wander also speeds up as you turn it up.</p>
+<h2>Patches</h2><dl class="ctl"><dt>Mark 73</dt><dd>The classic, balanced stage-piano sound.</dd><dt>Bright Stage</dt><dd>Harder hammers, more treble and a touch of drive: cuts through a band.</dd><dt>Mellow Ballad</dt><dd>Soft hammers, long decay, a darker top.</dd><dt>Suitcase Tremolo</dt><dd>Tremolo at a medium rate.</dd><dt>Auto Pan Wide</dt><dd>A wide stereo spread with slow auto-pan.</dd><dt>Bark</dt><dd>Very hard hammers and drive: hard notes growl.</dd><dt>Bell Tines</dt><dd>Hard hammers and lots of treble: glassy, bell-like highs.</dd><dt>Soft Felt</dt><dd>The softest hammers and a dark top: round and quiet.</dd><dt>Drive Amp</dt><dd>Heavy drive with fast tremolo, like a piano through a cranked amp.</dd><dt>Lo-Fi Upright</dt><dd>Short, dark and narrow, with tremolo and more random detune.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Play with dynamics: HARDNESS and the pickup respond to velocity, so the tone changes as much as the level.</li><li>For classic tremolo, try MODULATION around +50% with RATE between 4 and 6 Hz.</li><li>Raise VOICES only if you hear notes cut off in long sustained passages; fewer voices use less CPU.</li><li>For an old, characterful instrument, turn RANDOM and DRIFT up together.</li></ul>
+<p class="file">File: gfx-g-mark-73.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://www.gardenfx.uk/">https://www.gardenfx.uk/</a></div></footer></body></html>
