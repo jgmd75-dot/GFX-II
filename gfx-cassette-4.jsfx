@@ -210,6 +210,7 @@ update();
 @serialize
 file_var(0, ui_sz);
 gn = 0; loop(4, file_avail(0) != 0 ? file_string(0, UI_NM + gn); gn += 1; );   // channel names (older projects have none)
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // ---------- transport: wow (0.6 Hz + a slow wander) and flutter (6 Hz), one for all tracks ----------
@@ -256,11 +257,11 @@ gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INK); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("CASSETTE 4");
 gfx_setfont(4); ui_col(ACC); gfx_x = 246 * sc; gfx_y = 30 * sc;
 gfx_drawstr(model ? "MODEL 44" : "MODEL 15");
-ui_button(450 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 450 * sc; gfx_y = 48 * sc;
-  load_preset(gfx_showmenu("Bedroom Demo (15)|Hot and Woolly (15)|No NR, Old Tape (15)|Worn-out Cassette (15)|Clean Double Speed (44)|Pumping Compander (44)|Squashed Tape (44)|44 without NR|Reset all to defaults"));
-);
-ui_size_picker(560 * sc, 22 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(300 * sc, 14 * sc, 300 * sc, 36 * sc, pr_cur, "Bedroom Demo (15)|Hot and Woolly (15)|No NR, Old Tape (15)|Worn-out Cassette (15)|Clean Double Speed (44)|Pumping Compander (44)|Squashed Tape (44)|44 without NR");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 8 ? 0 : k_; );
+ui_size_picker(612 * sc, 22 * sc);
+
 ui_col(ACC); gfx_rect(14 * sc, 60 * sc, 732 * sc, 3 * sc);
 
 // ---------- the mixer: four tracks ----------

@@ -175,6 +175,7 @@ update();
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -294,11 +295,11 @@ ui_col(PNL); gfx_x = 64 * sc; gfx_y = 16 * sc; gfx_drawstr("VB30");
 ui_col(OWH); gfx_rect(160 * sc, 26 * sc, 236 * sc, 15 * sc);
 gfx_setfont(4); ui_col(BLKC); gfx_x = 166 * sc; gfx_y = 29 * sc; gfx_drawstr("DIODE-BRIDGE PROGRAMME LIMITER");
 pk_led(420 * sc, 34 * sc, 4.5 * sc, slider1, 0xFF3A2A); gfx_setfont(4); ui_cola(OWH, 0.7); gfx_x = 430 * sc; gfx_y = 29 * sc; gfx_drawstr("POWER");
-ui_button(690 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 690 * sc; gfx_y = 48 * sc;
-  load_preset(gfx_showmenu("Room Mic Smash|Parallel Drum Crush|Shouty Vocal|Big Suck-back|Brick Wall Peaks|Bass Grab|Snare Grit (gated)|Gentle Glue Pump|Destroy (blend in)|Colour Only|Reset all to defaults"));
-);
-ui_size_picker(800 * sc, 22 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(500 * sc, 14 * sc, 320 * sc, 36 * sc, pr_cur, "Room Mic Smash|Parallel Drum Crush|Shouty Vocal|Big Suck-back|Brick Wall Peaks|Bass Grab|Snare Grit (gated)|Gentle Glue Pump|Destroy (blend in)|Colour Only");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_size_picker(832 * sc, 22 * sc);
+
 ui_cola(0x000000, 0.4); gfx_rect(14 * sc, 60 * sc, 972 * sc, 1 * sc);
 ui_cola(0xFFFFFF, 0.08); gfx_rect(14 * sc, 61 * sc, 972 * sc, 1 * sc);
 

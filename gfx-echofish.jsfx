@@ -351,6 +351,9 @@ playing ? bpos = beat_position;
 bpm = tempo > 1 ? tempo : 120;                     // (no host tempo: 120)
 binc = bpm / 60 / srate;
 
+
+@serialize
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 @sample
 in_process(spl0, spl1);
 !q_ord ? ( q_proc(in_l, in_r); in_l = q_out_l; in_r = q_out_r; );   // EQ first
@@ -471,11 +474,11 @@ pk_ledbtn(400 * sc, 19 * sc, 26 * sc, 22 * sc, slider18, 0xFF3A2A) ? ( slider18 
 gfx_setfont(4); ui_col(WHT); gfx_x = 432 * sc; gfx_y = 25 * sc; gfx_drawstr("HOLD");
 pk_ledbtn(474 * sc, 19 * sc, 26 * sc, 22 * sc, slider17, dy_grn) ? ( slider17 = 1 - slider17; ui_auto(17); );
 gfx_setfont(4); ui_col(WHT); gfx_x = 506 * sc; gfx_y = 25 * sc; gfx_drawstr("ON");
-ui_button(560 * sc, 16 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 560 * sc; gfx_y = 44 * sc;
-  load_preset(gfx_showmenu("Funk Up|Bass Quack (down)|Ship Steps|Random Gurgle|Envelope Steps|Notch Sweep|Slow Talker|Clav Wah|Synth Blips|Lowpass Bloom|Reset all to defaults"));
-);
-ui_size_picker(670 * sc, 20 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(540 * sc, 12 * sc, 282 * sc, 34 * sc, pr_cur, "Funk Up|Bass Quack (down)|Ship Steps|Random Gurgle|Envelope Steps|Notch Sweep|Slow Talker|Clav Wah|Synth Blips|Lowpass Bloom");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_size_picker(834 * sc, 20 * sc);
+
 
 // ---------- display: the cutoff over time ----------
 ui_col(0x050507); ui_rrect(18 * sc, 58 * sc, 344 * sc, 124 * sc, 5 * sc);

@@ -156,6 +156,7 @@ file_var(0, ui_sz);
 file_var(0, ui_hw);
 file_var(0, tlook);
 ui_hw = 1;
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -232,11 +233,11 @@ tlook ? (
 ui_button(390 * sc, 20 * sc, 74 * sc, 24 * sc, tlook ? "HORIZON" : "CLASSIC", 0, 1) ? tlook = 1 - tlook;
 // removed 'style' text
 // ui_hw_toggle(476 * sc, 23 * sc);
-ui_button(540 * sc, 18 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 540 * sc; gfx_y = 46 * sc;
-  load_preset(gfx_showmenu("Mix Bus Lift|Warm It Up|Vocal Forward|Dark & Thick|Bright Sides|Tame the Sides|Telephone Band|Thin Out (steep HPF)|Vintage Mid Roll-off|Clean Up (filters only)|Reset all to defaults"));
-);
-ui_size_picker(650 * sc, 22 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(476 * sc, 14 * sc, 340 * sc, 34 * sc, pr_cur, "Mix Bus Lift|Warm It Up|Vocal Forward|Dark & Thick|Bright Sides|Tame the Sides|Telephone Band|Thin Out (steep HPF)|Vintage Mid Roll-off|Clean Up (filters only)");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_size_picker(828 * sc, 22 * sc);
+
 
 // ---------- response window ----------
 gx = 22; gy = 62; gw = 856; gh = 101;

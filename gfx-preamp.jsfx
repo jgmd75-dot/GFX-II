@@ -221,6 +221,7 @@ update();
 file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // input stage: DC block, trim, guard
@@ -342,11 +343,11 @@ gi = 0; loop(4, gx_ = gi % 2 ? 884 : 16; gy_ = gi < 2 ? 24 : fh - 16;
 ui_col(WHT); gfx_circle(54 * sc, 30 * sc, 15 * sc, 1, 1); gfx_setfont(5); ui_col(PBLU); ui_text(54 * sc, 24 * sc, "GFX");
 gfx_setfont(6, "Arial", 28 * sc, 'b'); ui_col(WHT); gfx_x = 80 * sc; gfx_y = 14 * sc; gfx_drawstr("PREAMP");
 txt(290, 23, "FOUR VOICINGS", 12, WHT, 0.75);
-ui_button(560 * sc, 16 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 560 * sc; gfx_y = 44 * sc;
-  load_preset(gfx_showmenu("Vibe Warm|Vibe Driven|Zen Edge|Zen Crunch|Transistor Grit|Transistor Fuzz|Console Lift|Mid Push into Zen|Breathing Valve|Reset all to defaults"));
-);
-ui_size_picker(670 * sc, 20 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(400 * sc, 12 * sc, 400 * sc, 34 * sc, pr_cur, "Vibe Warm|Vibe Driven|Zen Edge|Zen Crunch|Transistor Grit|Transistor Fuzz|Console Lift|Mid Push into Zen|Breathing Valve");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 9 ? 0 : k_; );
+ui_size_picker(812 * sc, 20 * sc);
+
 
 // ---------- VOICE: four lit buttons, then the EQ boost ----------
 frame(40, 62, 276, 160, "VOICE");

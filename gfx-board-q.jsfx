@@ -143,6 +143,7 @@ update();
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -196,11 +197,11 @@ gfx_setfont(4); ui_col(PNL); ui_text(38 * sc, 27 * sc, "GFX");
 stripes(62, 20, 9, 22, 1);
 gfx_setfont(6, "Arial", 27 * sc, 'bi'); ui_col(PRT); gfx_x = 108 * sc; gfx_y = 16 * sc; gfx_drawstr("BOARD EQ");
 txt(340, 28, "4-BAND CHANNEL EQUALISER", 0.75);
-ui_button(620 * sc, 18 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 620 * sc; gfx_y = 46 * sc;
-  load_preset(gfx_showmenu("Vocal Presence|Kick Punch|Snare Crack|Bass Weight|Acoustic Sparkle|Mix Bus Air|Telephone|De-mud|Brown Warmth|De-harsh|Reset all to defaults"));
-);
-ui_size_picker(730 * sc, 22 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(420 * sc, 14 * sc, 330 * sc, 36 * sc, pr_cur, "Vocal Presence|Kick Punch|Snare Crack|Bass Weight|Acoustic Sparkle|Mix Bus Air|Telephone|De-mud|Brown Warmth|De-harsh");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_size_picker(762 * sc, 22 * sc);
+
 ui_cola(PRT, 0.5); gfx_rect(14 * sc, 60 * sc, 952 * sc, 1 * sc);
 // livery rule over the display, in golden-ratio steps: light blue : dark blue : red = 1 : 1.618 : 2.618
 ui_col(SLB); gfx_rect(670 * sc, 64 * sc, 55 * sc, 2 * sc); ui_col(SDB); gfx_rect(727 * sc, 64 * sc, 90 * sc, 2 * sc); ui_col(SRD); gfx_rect(819 * sc, 64 * sc, 145 * sc, 2 * sc);

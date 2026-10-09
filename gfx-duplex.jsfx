@@ -183,6 +183,7 @@ update();
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -260,11 +261,11 @@ ui_col(dy_ink); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(dy_ink); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("DUPLEX");
 gfx_setfont(4); ui_cola(dy_ink, 0.6); gfx_x = 176 * sc; gfx_y = 30 * sc; gfx_drawstr("DUAL COMPRESSOR  -  DE-ESSER  -  PEAK LIMITER");
-ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 590 * sc; gfx_y = 48 * sc;
-  load_preset(gfx_showmenu("Gentle Stereo Bus|Vocal Compressor|De-esser (split)|Broadcast Voice|Dual Mono Pair|M-S Glue|M-S Widen + Tame Sides|Brickwall Safety|Parallel Drums|Bass Leveller|Reset all to defaults"));
-);
-ui_size_picker(700 * sc, 22 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(470 * sc, 14 * sc, 346 * sc, 36 * sc, pr_cur, "Gentle Stereo Bus|Vocal Compressor|De-esser (split)|Broadcast Voice|Dual Mono Pair|M-S Glue|M-S Widen + Tame Sides|Brickwall Safety|Parallel Drums|Bass Leveller");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_size_picker(828 * sc, 22 * sc);
+
 ui_col(GRN); gfx_rect(14 * sc, 60 * sc, 872 * sc, 4 * sc);
 ui_col(INKD); gfx_rect(14 * sc, 64 * sc, 872 * sc, 1 * sc);
 

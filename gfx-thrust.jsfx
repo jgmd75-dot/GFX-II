@@ -139,6 +139,7 @@ update();
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -178,11 +179,11 @@ ui_col(INKW); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 26 * sc, 'b'); ui_col(INKW); gfx_x = 62 * sc; gfx_y = 18 * sc; gfx_drawstr("THRUST");
 gfx_setfont(4); ui_col(YEL); gfx_x = 200 * sc; gfx_y = 30 * sc; gfx_drawstr("STEREO BUS COMPRESSOR");
-ui_button(590 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 590 * sc; gfx_y = 48 * sc;
-  load_preset(gfx_showmenu("Mix Bus Glue|Big Mix (loud thrust)|Drum Bus Punch|Drum Smash (parallel)|Vintage Feedback|Vocal Bus|Wide Stereo (independent)|Bus Limiter|Bass Control|Room Pump|Reset all to defaults"));
-);
-ui_size_picker(700 * sc, 22 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(470 * sc, 14 * sc, 346 * sc, 36 * sc, pr_cur, "Mix Bus Glue|Big Mix (loud thrust)|Drum Bus Punch|Drum Smash (parallel)|Vintage Feedback|Vocal Bus|Wide Stereo (independent)|Bus Limiter|Bass Control|Room Pump");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_size_picker(828 * sc, 22 * sc);
+
 ui_col(YEL); gfx_rect(14 * sc, 60 * sc, 520 * sc, 4 * sc);
 ui_col(BLU); gfx_rect(534 * sc, 60 * sc, 352 * sc, 4 * sc);
 

@@ -437,6 +437,7 @@ update();                                          // knobs moved on the panel d
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -483,11 +484,11 @@ ui_col(INKL); gfx_circle(40 * sc, 38 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 33 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKL); gfx_x = 62 * sc; gfx_y = 24 * sc; gfx_drawstr("QUAD");
 gfx_setfont(4); ui_cola(INKL, 0.6); gfx_x = 142 * sc; gfx_y = 34 * sc; gfx_drawstr("4-BAND BUS COMPRESSOR  -  EQ + SATURATION PER BAND");
-ui_button(770 * sc, 22 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 770 * sc; gfx_y = 50 * sc;
-  load_preset(gfx_showmenu("Gentle Glue|Mix Bus Punch|Drum Bus Smash (parallel)|Transient Lift (expand)|Vocal Control|Bass Tighten|De-Mud & Air|Tape Warmth|Master Gentle|Parallel Crush|Reset all to defaults"));
-);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(560 * sc, 18 * sc, 300 * sc, 36 * sc, pr_cur, "Gentle Glue|Mix Bus Punch|Drum Bus Smash (parallel)|Transient Lift (expand)|Vocal Control|Bass Tighten|De-Mud & Air|Tape Warmth|Master Gentle|Parallel Crush");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 ui_size_picker(880 * sc, 31 * sc);
+
 ui_col(ACC); gfx_rect(14 * sc, 66 * sc, 1072 * sc, 3 * sc);
 
 // ---------- display: response, crossovers, bells and gain reduction ----------
