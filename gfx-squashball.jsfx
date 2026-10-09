@@ -279,33 +279,37 @@ ui_size_picker(572 * sc, 26 * sc);
 // ---------- main controls: GAIN | TIME REGEN TONE | LEVEL MIX ----------
 qg_tray(16, 72, 608, 132, 0x1B1B1D, "");
 ui_cola(QG_INK, 0.16); gfx_rect(124 * sc, 82 * sc, 1 * sc, 112 * sc); gfx_rect(432 * sc, 82 * sc, 1 * sc, 112 * sc);
-dy_kst = 1; dy_num = 1;
+// knob caps: black ribbed with a yellow pointer; the main TIME knob has a yellow cap
+function qg_kst() ( dy_kst = 33; qg_cap = QG_YEL; );
+qg_kst(); dy_num = 1;
 sprintf(#v, "%.0f%%", slider6);
-dy_knob(70, 130, 24, 6, 0, 100, 25, 0, QG_INK, "GAIN", #v);
+dy_knob(70, 130, 24, 6, 0, 100, 25, 0, qg_cap, "GAIN", #v);
+dy_kst = 7;                                                   // TIME: the yellow cap
 slider2 ? (
   dy_step = 16; dy_steps = "";
-  dy_knob(190, 130, 30, 3, 0, 15, 6, 0, QG_INK, "TIME", lfo_div_name(slider3));
+  dy_knob(190, 130, 30, 3, 0, 15, 6, 0, QG_YEL, "TIME", lfo_div_name(slider3));
 ) : (
   sprintf(#v, "%.0f ms", slider1);
-  dy_knob(190, 130, 30, 1, 30, 1500, 350, 1, QG_INK, "TIME", #v);
+  dy_knob(190, 130, 30, 1, 30, 1500, 350, 1, QG_YEL, "TIME", #v);
 );
+qg_kst();
 sprintf(#v, "%.0f%%", slider4);
-dy_knob(290, 130, 24, 4, 0, 130, 35, 0, QG_INK, "REGEN", #v);
+dy_knob(290, 130, 24, 4, 0, 130, 35, 0, qg_cap, "REGEN", #v);
 sprintf(#v, "%.0f Hz", qb_tfc);
-dy_knob(380, 130, 24, 5, 0, 100, 55, 0, QG_INK, "TONE", #v);
+dy_knob(380, 130, 24, 5, 0, 100, 55, 0, qg_cap, "TONE", #v);
 sprintf(#v, "%+.1f dB", slider7);
-dy_knob(486, 130, 24, 7, -24, 6, 0, 0, QG_INK, "LEVEL", #v);
+dy_knob(486, 130, 24, 7, -24, 6, 0, 0, qg_cap, "LEVEL", #v);
 sprintf(#v, "%.0f%%", slider8);
-dy_knob(566, 130, 24, 8, 0, 100, 35, 0, QG_INK, "MIX", #v);
+dy_knob(566, 130, 24, 8, 0, 100, 35, 0, qg_cap, "MIX", #v);
 dy_num = 0;
 
 // ---------- STRETCH settings ----------
 qg_tray(16, 218, 220, 186, 0x1E1D1B, "STRETCH");
 dy_num = 1;
 sprintf(#v, "%.0f ms", slider11);
-dy_knob(72, 290, 22, 11, 30, 2000, 900, 1, QG_INK, "TIME", #v);
+dy_knob(72, 290, 22, 11, 30, 2000, 900, 1, qg_cap, "TIME", #v);
 sprintf(#v, "%.0f%%", slider12);
-dy_knob(180, 290, 22, 12, 0, 100, 50, 0, QG_INK, "RATE", #v);
+dy_knob(180, 290, 22, 12, 0, 100, 50, 0, qg_cap, "RATE", #v);
 dy_num = 0;
 rd_sq(28, 360, 92, 28, slider10 == 0, QG_YEL, "HOLD")  ? qg_setv(10, 0);
 rd_sq(132, 360, 92, 28, slider10 == 1, QG_YEL, "LATCH") ? qg_setv(10, 1);
