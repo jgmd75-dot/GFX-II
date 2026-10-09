@@ -1,4 +1,4 @@
-desc:GFX Benthick 3
+desc:GFX Benthick 3A
 //tags: bus processor saturation transformer transistor compressor limiter width mastering
 //author: JGWizrad / Garden FX (GFX)
 //
@@ -23,8 +23,9 @@ desc:GFX Benthick 3
 //   4 LIMITER    - a transparent 1.5 ms lookahead brickwall: DRIVE into it, CEILING, RELEASE (it slows
 //                  itself down under sustained limiting, for glue).
 //   5 WIDTH      - M/S width; S SAT drives the Sides into a second discrete saturation stage.
-//     MIX        - wet / dry (the dry is delayed to match), OUTPUT, then the house OUT stage
-//                  (OFF / CLIP / LIMIT, CLIP by default: the final soft-clip protection).
+//     MIX        - wet / dry (the dry is delayed to match), OUTPUT, then the house OUT stage, fixed at
+//                  CLIP: the final soft-clip protection. (3A has no IN / OUT strip: input trim, guard,
+//                  band sat and the OUT stage stay at their defaults.)
 // Every stage has an IN key. No drift: Benthick 3 is clean and repeatable.
 
 import gfx-drift.jsfx-inc
@@ -79,7 +80,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-benthick-3";
+#ui_man = "gfx-benthick-3a";
 
 // ---------- 1 FRONT END ----------
 // IRON: the lows (below ~160 Hz) are driven harder into an asymmetric core (even harmonics, weight);
@@ -373,7 +374,7 @@ ui_col(COP); gfx_rect(26 * sc, 66 * sc, 1128 * sc, 2 * sc);
 
 // ---------- header: badge, title, PRESETS, prev / next, the LCD (click either for every preset), size ----------
 rd_badge(60, 32, 15, COP, FACE);
-rd_title(84, 14, "BENTHICK 3", 26, INK);
+rd_title(84, 14, "BENTHICK 3A", 26, INK);
 rd_sub(282, 30, "IRON  ·  TRANSISTOR  ·  BUS PROCESSOR", DIM, 1);
 pm_ = rd_sq(676, 20, 78, 30, 0, KEYC, "PRESETS");
 rd_sq(760, 20, 30, 30, 0, KEYC, "◄") ? ( pr_cur = pr_cur <= 1 ? PRESET_N : pr_cur - 1; load_preset(pr_cur); );
@@ -447,16 +448,12 @@ sprintf(#v, "%.0f ms", slider20); dy_knob(970, 282, 22, 20, 10, 500, 80, 1, SAND
 bt_gr(1100, 252, d3_gr);
 !li_on ? bt_dim(766, 244, 300, 100);
 
-// ---------- row 3: IN / OUT | WIDTH & OUTPUT | meters ----------
-bt_sect(40, 356, 270, 114, "IN / OUT", 1);
-rd_ioc1 = 0x2A3436; rd_ioc2 = COP; rd_ioc3 = 0xC83A2A;
-rd_io(56, 386, 25, 26, 27, 32);
-
-bt_sect(318, 356, 470, 114, "5  WIDTH  ·  OUTPUT", 1);
-sprintf(#v, "%.0f%%", slider21); dy_knob(374, 418, 22, 21, 0, 200, 100, 0, TEAL, "WIDTH", #v);
-sprintf(#v, "%.0f%%", slider22); dy_knob(476, 418, 22, 22, 0, 100, 0, 0, COP, "S SAT", #v);
-sprintf(#v, "%.0f%%", slider23); dy_knob(578, 418, 22, 23, 0, 100, 100, 0, SAND, "MIX", #v);
-sprintf(#v, "%+.1f dB", slider24); dy_knob(700, 418, 26, 24, -24, 12, 0, 0, 0x2A3436, "OUTPUT", #v);
+// ---------- row 3: WIDTH & OUTPUT | meters ----------
+bt_sect(40, 356, 748, 114, "5  WIDTH  ·  OUTPUT", 1);
+sprintf(#v, "%.0f%%", slider21); dy_knob(150, 418, 24, 21, 0, 200, 100, 0, TEAL, "WIDTH", #v);
+sprintf(#v, "%.0f%%", slider22); dy_knob(310, 418, 24, 22, 0, 100, 0, 0, COP, "S SAT", #v);
+sprintf(#v, "%.0f%%", slider23); dy_knob(470, 418, 24, 23, 0, 100, 100, 0, SAND, "MIX", #v);
+sprintf(#v, "%+.1f dB", slider24); dy_knob(650, 418, 28, 24, -24, 12, 0, 0, 0x2A3436, "OUTPUT", #v);
 
 bt_sect(796, 356, 344, 114, "METERS", 1);
 // gain reduction readouts, then the in / out level meters
