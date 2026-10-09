@@ -290,8 +290,8 @@ spl0 = ost_l;
 spl1 = ost_r;
 mpk = max(mpk, max(abs(spl0), abs(spl1)));
 
-@gfx 780 534
-ui_begin(780, 534);
+@gfx 780 530
+ui_begin(780, 530);
 ui_theme(ui_thm);
 ME_PNL = F_BG; ME_INK = F_INK; ME_ACC = C_ACC;   // the panel takes the theme's faceplate, ink and accent
 // pastel group colours, so FREQ, GAIN and Q read apart at a glance
@@ -409,7 +409,7 @@ function me_vis(x, y, w, h) local(i, f, r, px, py, qx, qy, gx, k, fx) (
   !slider34 ? ( ui_cola(0x000000, 0.45); gfx_rect(x * sc, y * sc, w * sc, h * sc); gfx_setfont(2); ui_col(ME_INK); ui_text((x + w * 0.5) * sc, (y + h * 0.5 - 8) * sc, "EQ OUT"); );
 );
 
-T = 8; TH = 468 + 50;
+T = 8; TH = 468 + 46;
 hs_unit(T, TH, ME_PNL);
 gfx_gradrect(10 * sc, (T + 2) * sc, 760 * sc, (TH - 4) * sc, 1, 1, 1, 0.035, 0, 0, 0, -0.035 / (760 * sc), 0, 0, 0, 0);
 hs_badge(40, T + 8, "MASTER EQ", "DYNAMIC MASTERING EQUALISER", 0x1C1D20);
@@ -419,16 +419,15 @@ ui_keycap(622 * sc, (T + 8) * sc, 50 * sc, 24 * sc, "EQ IN", slider34, 1) ? ( sl
 pk_ink = ME_INK; pk_bg = ME_PNL; pk_ptr = 0xEDEFF2;
 C_INK = ME_INK;
 
-me_vis(24, T + 44, 732, 88);
-
-// the preset row along the foot: PRESETS, prev / next, LCD (click it for the list)
-ui_cola(ME_INK, 0.25); gfx_line(24 * sc, (T + 466) * sc, 756 * sc, (T + 466) * sc);
+// the preset row under the header: PRESETS, prev / next, LCD (click it for the list), at the right
 pk_pextra = "Reset (flat)";
-k_ = pk_preset(24 * sc, (T + 474) * sc, 400 * sc, 30 * sc, pr_cur, "Gentle Polish|Warm & Full|Bright & Open|Low-End Control|Vocal Forward|De-Harsh|Wide Air|Loud Modern|Vintage Tape|Acoustic / Classical");
+k_ = pk_preset(356 * sc, (T + 48) * sc, 400 * sc, 30 * sc, pr_cur, "Gentle Polish|Warm & Full|Bright & Open|Low-End Control|Vocal Forward|De-Harsh|Wide Air|Loud Modern|Vintage Tape|Acoustic / Classical");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 
+me_vis(24, T + 90, 732, 88);
+
 // columns: FILTERS 20-110 | LOW 110-200 | (labels) | DYN 1 240-350 | DYN 2 350-460 | DYN 3 460-570 | HIGH 570-670 | AIR 670-760
-Y0 = T + 146;
+Y0 = T + 192;
 me_sec(20, 110, Y0, "IN + FILTERS", -1);
 me_sec(110, 200, Y0, "LOW", -1);
 me_sec(240, 350, Y0, "DYN 1", d1.grs / 3); d1.grs = 0;

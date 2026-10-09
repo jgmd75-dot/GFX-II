@@ -136,7 +136,7 @@ function pk_preset(x, y, w, h, cur, menu) local(n, kw, bw, sel, i, lx, lw, open,
     strcpy(#pk_pm, ""); i = 1;
     loop(n, i == cur ? strcat(#pk_pm, "!"); strcat(#pk_pm, pk_pitem(menu, i, #pk_pt)); i < n ? strcat(#pk_pm, "|"); i += 1; );
     strlen(pk_pextra) ? ( strcat(#pk_pm, "|"); strcat(#pk_pm, pk_pextra); );
-    gfx_x = x; gfx_y = y + h; i = gfx_showmenu(#pk_pm); i > 0 ? sel = i;
+    gfx_x = x + ui_mdx; gfx_y = y + h + ui_mdy; i = gfx_showmenu(#pk_pm); i > 0 ? sel = i;
   );
   sel;
 );

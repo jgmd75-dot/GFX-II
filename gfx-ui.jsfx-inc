@@ -1318,9 +1318,9 @@ function ui_swb() (
   (ui_sww != gfx_w || ui_swh != gfx_h) ? ( ui_sww = gfx_w; ui_swh = gfx_h; gfx_setimgdim(125, gfx_w, gfx_h); );
   ui_swmy = mouse_y; gfx_dest = 125;
 );
-function ui_swu(d) ( mouse_y = ui_swmy - d * sc; );
+function ui_swu(d) ( mouse_y = ui_swmy - d * sc; ui_mdy = d * sc; );   // (ui_mdy: pop-up menus open where the unit is shown)
 function ui_swe(x0, x1, t0, t1, b0, b1, swap) local(X, W, T0, T1, B0, B1) (
-  mouse_y = ui_swmy;
+  mouse_y = ui_swmy; ui_mdy = 0;
   gfx_muladdrect(0, 0, gfx_w, gfx_h, 1, 1, 1, 0, 0, 0, 0, 1);   // make the image opaque (alpha 1) so it blits solid
   gfx_dest = -1; gfx_a = 1; gfx_mode = 0;
   gfx_blit(125, 1, 0, 0, 0, gfx_w, gfx_h, 0, 0, gfx_w, gfx_h);
@@ -1332,6 +1332,44 @@ function ui_swe(x0, x1, t0, t1, b0, b1, swap) local(X, W, T0, T1, B0, B1) (
     gfx_blit(125, 1, 0, X, T1, W, B0 - T1, X, T0 + B1 - B0, W, B0 - T1);
     gfx_blit(125, 1, 0, X, T0, W, T1 - T0, X, T0 + B1 - T1, W, T1 - T0);
   );
+);
+// ---------- a row shown at the top, under the header (the house preset display) ----------
+// Drawn off-screen like the ORDER swap: ui_swb(), then (panels on the stock background) ui_swbg(x0, x1, t0, r0, r1).
+// The row is designed below everything, r0..r1; ui_swrow() shows it from t0 and moves t0..r0 down by r1 - r0.
+// Controls: ui_swu(t0 - r0) before the row's, ui_swu(r1 - r0) before the moved panel's, ui_swu(0) for the rest.
+// A combo with ORDER passes its pair as in ui_swe (s = 1: st0..st1 and sb0..sb1 change places).
+function ui_swbl(X, W, a, b, d) local(A, B) (
+  A = floor(a * sc + 0.5); B = floor(b * sc + 0.5);
+  B > A ? gfx_blit(125, 1, 0, X, A, W, B - A, X, A + floor((d - a) * sc + 0.5), W, B - A);
+);
+function ui_swbg(x0, x1, t0, r0, r1) local(X, W, D, A, B, C) (
+  ui_hw ? (
+    ui_hw_bg(); gfx_dest = 125; gfx_x = 0; gfx_y = 0; gfx_a = 1; gfx_mode = 0; gfx_blit(127, 1, 0);
+    // the background under the moved bands is taken from where they will be shown, so the grain runs on
+    X = floor(x0 * sc); W = floor(x1 * sc) - X; D = floor((r1 - r0) * sc + 0.5);
+    A = floor(t0 * sc + 0.5); B = floor(r0 * sc + 0.5); C = floor(r1 * sc + 0.5);
+    gfx_blit(127, 1, 0, X, A + D, W, B - A, X, A, W, B - A);
+    gfx_blit(127, 1, 0, X, A, W, C - B, X, B, W, C - B);
+    ui_screw(9 * sc, 9 * sc);          ui_screw(gfx_w - 9 * sc, 9 * sc);
+    ui_screw(9 * sc, gfx_h - 9 * sc);  ui_screw(gfx_w - 9 * sc, gfx_h - 9 * sc);
+  ) : (
+    ui_col(C_BG); gfx_rect(0, 0, gfx_w, gfx_h);
+  );
+);
+function ui_swrow(x0, x1, t0, r0, r1, s, st0, st1, sb0, sb1) local(X, W, D) (
+  mouse_y = ui_swmy; ui_mdy = 0;
+  gfx_muladdrect(0, 0, gfx_w, gfx_h, 1, 1, 1, 0, 0, 0, 0, 1);   // make the image opaque (alpha 1) so it blits solid
+  gfx_dest = -1; gfx_a = 1; gfx_mode = 0;
+  gfx_blit(125, 1, 0, 0, 0, gfx_w, gfx_h, 0, 0, gfx_w, gfx_h);
+  X = floor(x0 * sc); W = floor(x1 * sc) - X; D = r1 - r0;
+  ui_swbl(X, W, r0, r1, t0);
+  s ? (
+    ui_swbl(X, W, t0, st0, t0 + D);
+    ui_swbl(X, W, sb0, sb1, st0 + D);
+    ui_swbl(X, W, st1, sb0, st0 + D + sb1 - sb0);
+    ui_swbl(X, W, st0, st1, st0 + D + sb1 - st1);
+    ui_swbl(X, W, sb1, r0, sb1 + D);
+  ) : ui_swbl(X, W, t0, r0, t0 + D);
 );
 // the ORDER key: a momentary key whose amber LED lights while it is held; each press flips slider idx
 function ui_orderkey(x, y, w, h, idx, s0, s1, font) local(hov) (

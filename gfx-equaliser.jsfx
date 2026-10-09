@@ -314,6 +314,7 @@ pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
 @gfx 1100 442
 ui_begin(1100, 442);
+ui_swb();   // drawn off-screen, then shown with the preset row moved up to the top
 lz_colours();
 pk_shad = 0.3; pk_shoff = 0.8;
 CP0 = 0x9A6238; CP1 = 0x3A78C0; CP2 = 0x3C9A6C; CP3 = 0xC0423B;   // knob caps per band: brown, blue, green, red
@@ -349,6 +350,7 @@ ui_col(0x0B0C0C); gfx_rect(0, 0, gfx_w, gfx_h);
 lz_chassis(6, 4, 1088, fh);
 lz_brand("EQUALISER");
 
+ui_swu(46);   // the panel, shown below the preset row
 // ---------- the four bands ----------
 band(84, 240, "LF", CP0, 2, 20, 500, 100, 5, 6);
 band(328, 206, "LMF", CP1, 7, 80, 2000, 400, 0, 10);
@@ -467,11 +469,14 @@ sprintf(#v, "%+.1f", slider25); lz_lw = 50; lz_knob(1027, 332, 14, 25, -24, 12, 
 
 pk_shad = 0.45; pk_shoff = 1;
 
-// the preset row along the foot: PRESETS, prev / next, LCD (click it for the list)
+// the preset row along the top: PRESETS, prev / next, LCD (click it for the list), at the right;
+// designed below the panel and shown at the top
+ui_swu(10 - 382);
 lz_sect(84, 384, 974, 42);
 pk_pextra = "Reset all to defaults";
-k_ = pk_preset(96 * sc, 390 * sc, 420 * sc, 30 * sc, pr_cur, "Vocal Presence|Kick Weight|Bass Clarity|Acoustic Sparkle|Mix Air|Mud Cut|Telephone|De-Harsh|Hum Notch 50 Hz|M/S Wide Air|M/S Centre Focus");
+k_ = pk_preset(628 * sc, 390 * sc, 420 * sc, 30 * sc, pr_cur, "Vocal Presence|Kick Weight|Bass Clarity|Acoustic Sparkle|Mix Air|Mud Cut|Telephone|De-Harsh|Hum Notch 50 Hz|M/S Wide Air|M/S Centre Focus");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 11 ? 0 : k_; );
 
+ui_swrow(80, 1062, 10, 382, 428, 0, 0, 0, 0, 0);
 pk_end();
 ui_end();

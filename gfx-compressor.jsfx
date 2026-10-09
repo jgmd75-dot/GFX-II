@@ -259,6 +259,7 @@ dispLdb = ld; grPk = max(grPk, max(grL, grR)); dispGr = max(grL, grR);
 
 @gfx 1000 430
 ui_begin(1000, 430);
+ui_swb();   // drawn off-screen, then shown with the preset row moved up to the top
 lz_colours();
 pk_shad = 0.3; pk_shoff = 0.8;
 
@@ -283,6 +284,7 @@ ui_col(0x0B0C0C); gfx_rect(0, 0, gfx_w, gfx_h);
 lz_chassis(6, 4, 988, fh);
 lz_brand("COMPRESSOR");
 
+ui_swu(46);   // the panel, shown below the preset row
 // ---------- the graph section ----------
 lz_sect(84, 12, 250, 358);
 vdb = 10 * log10(max(vu_ms, 0.0000000001));
@@ -377,11 +379,14 @@ sprintf(#v, "%+.1f", slider15); lz_lw = 50; lz_knob(927, 322, 14, 15, -24, 12, 0
 
 pk_shad = 0.45; pk_shoff = 1;
 
-// the preset row along the foot: PRESETS, prev / next, LCD (click it for the list)
+// the preset row along the top: PRESETS, prev / next, LCD (click it for the list), at the right;
+// designed below the panel and shown at the top
+ui_swu(10 - 372);
 lz_sect(84, 374, 874, 42);
 pk_pextra = "Reset all to defaults";
-k_ = pk_preset(96 * sc, 380 * sc, 420 * sc, 30 * sc, pr_cur, "Vocal Ride|Drum Smash|Bass Glue|Bus Glue|Negative Pump|Gentle Level|Parallel Crush|Mastering Touch|Opto Vocal|Opto Lows Only");
+k_ = pk_preset(528 * sc, 380 * sc, 420 * sc, 30 * sc, pr_cur, "Vocal Ride|Drum Smash|Bass Glue|Bus Glue|Negative Pump|Gentle Level|Parallel Crush|Mastering Touch|Opto Vocal|Opto Lows Only");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 
+ui_swrow(80, 962, 10, 372, 418, 0, 0, 0, 0, 0);
 pk_end();
 ui_end();

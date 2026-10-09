@@ -327,9 +327,10 @@ d_agc = agc_db;
 mIn = max(mIn * 0.9998, max(abs(inL), abs(inR)));
 d_g1 = max(d_g1, g1); d_g2 = max(d_g2, g2); d_g3 = max(d_g3, g3); d_g4 = max(d_g4, g4);
 
-@gfx 640 500
+@gfx 640 496
 ui_hovval = 1;   // house style: knob values show on hover only
-ui_begin(640, 500);
+ui_begin(640, 496);
+ui_swb(); ui_swbg(14, 626, 45, 452, 496);   // drawn off-screen, then shown with the preset row moved up under the header
 ui_header("OPTIMISER");
 
 // ---------- header controls ----------
@@ -337,16 +338,19 @@ ui_theme_picker(148 * sc, 17 * sc);
 ui_size_picker(184 * sc, 13 * sc);
 ui_hw_toggle(248 * sc, 13 * sc);
 
-// the preset strip along the foot: PRESETS, prev / next, LCD (click it for the list)
-ui_cola(F_INK, 0.25); gfx_line(16 * sc, 454 * sc, gfx_w - 16 * sc, 454 * sc);
+// the preset row under the header: PRESETS, prev / next, LCD (click it for the list), at the right;
+// designed below the panel and shown at the top
+ui_swu(45 - 452);
 pk_pextra = "Reset all to defaults";
-k_ = pk_preset(16 * sc, 462 * sc, 380 * sc, 30 * sc, pr_cur, "Gentle FM|Rock FM|Pop Loud|Talk Radio|Classical|Dance Smash|Vintage AM|Master Polish|Podcast Voice|Parallel Punch");
+k_ = pk_preset(244 * sc, 460 * sc, 380 * sc, 30 * sc, pr_cur, "Gentle FM|Rock FM|Pop Loud|Talk Radio|Classical|Dance Smash|Vintage AM|Master Polish|Podcast Voice|Parallel Punch");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_swu(0);
 
 ui_button(410 * sc, 10 * sc, 68 * sc, 24 * sc, "SLOW", slider1 == 0, 1) ? ( slider1 = 0; slider_automate(slider1); );
 ui_button(482 * sc, 10 * sc, 68 * sc, 24 * sc, "MED",  slider1 == 1, 1) ? ( slider1 = 1; slider_automate(slider1); );
 ui_button(554 * sc, 10 * sc, 70 * sc, 24 * sc, "FAST", slider1 == 2, 1) ? ( slider1 = 2; slider_automate(slider1); );
 
+ui_swu(44);   // the panel, shown below the preset row
 // ---------- display window: bar meters, one per stage ----------
 ui_screen(16 * sc, 52 * sc, 454 * sc, 80 * sc);
 by0 = 62 * sc; bh = 50 * sc;                       // bar area: 0 dB at the top, -20 dB at the bottom
@@ -440,4 +444,5 @@ gfx_setfont(4); ui_col(C_INK); ui_text(597 * sc, 432 * sc, "OUT");
 
 ost_clipped = 0;
 
+ui_swrow(14, 626, 45, 452, 496, 0, 0, 0, 0, 0);
 ui_end();

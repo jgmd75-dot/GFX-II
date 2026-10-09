@@ -216,8 +216,9 @@ pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 cLR += (spl0 * spl1 - cLR) * crc; cLL += (spl0 * spl0 - cLL) * crc; cRR += (spl1 * spl1 - cRR) * crc;
 (scd += 1) >= 3 ? ( scd = 0; scL[scw] = spl0; scR[scw] = spl1; scw = (scw + 1) % scN; );
 
-@gfx 640 396
-ui_begin(640, 396);
+@gfx 640 392
+ui_begin(640, 392);
+ui_swb(); ui_swbg(14, 626, 45, 348, 392);   // drawn off-screen, then shown with the preset row moved up under the header
 ui_header("MID/SIDE");
 
 // ---------- header controls ----------
@@ -225,17 +226,20 @@ ui_theme_picker(148 * sc, 17 * sc);
 ui_size_picker(184 * sc, 13 * sc);
 ui_hw_toggle(248 * sc, 13 * sc);
 
-// the preset strip along the foot: PRESETS, prev / next, LCD (click it for the list)
-ui_cola(F_INK, 0.25); gfx_line(16 * sc, 350 * sc, gfx_w - 16 * sc, 350 * sc);
+// the preset row under the header: PRESETS, prev / next, LCD (click it for the list), at the right;
+// designed below the panel and shown at the top
+ui_swu(45 - 348);
 pk_pextra = "Reset all to defaults";
-k_ = pk_preset(16 * sc, 358 * sc, 380 * sc, 30 * sc, pr_cur, "Subtle Widen|Wide Master|Mono Bass|Vocal Focus|Super Wide|Narrow & Tight|M/S Decode|M/S Encode");
+k_ = pk_preset(244 * sc, 356 * sc, 380 * sc, 30 * sc, pr_cur, "Subtle Widen|Wide Master|Mono Bass|Vocal Focus|Super Wide|Narrow & Tight|M/S Decode|M/S Encode");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 8 ? 0 : k_; );
+ui_swu(0);
 
 ui_button(410 * sc, 10 * sc, 70 * sc, 24 * sc, "STEREO", slider1 == 0, 1) ? ( slider1 = 0; slider_automate(slider1); );
 ui_button(482 * sc, 10 * sc, 70 * sc, 24 * sc, "MID",    slider1 == 1, 1) ? ( slider1 = 1; slider_automate(slider1); );
 ui_button(554 * sc, 10 * sc, 70 * sc, 24 * sc, "SIDE",   slider1 == 2, 1) ? ( slider1 = 2; slider_automate(slider1); );
 
 
+ui_swu(44);   // the panel, shown below the preset row
 // ---------- display window: vectorscope, correlation, mid / side energy ----------
 ui_screen(16 * sc, 52 * sc, 454 * sc, 80 * sc);
 vcx = 72 * sc; vcy = 92 * sc; vr = 34 * sc;
@@ -311,4 +315,5 @@ mR.ui_ledm(584 * sc, 256 * sc, 14 * sc, 70 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;
 gfx_setfont(4); ui_col(C_INK); ui_text(581 * sc, 328 * sc, "OUT");
 
+ui_swrow(14, 626, 45, 348, 392, 0, 0, 0, 0, 0);
 ui_end();
