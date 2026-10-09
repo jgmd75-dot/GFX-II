@@ -218,6 +218,7 @@ lfoR.lfo_block(syncmode, div, frate);
 file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // input stage: DC block, trim, guard
@@ -308,23 +309,10 @@ ui_col(BLU); gfx_rect(44 * sc, 58 * sc, 972 * sc, 3 * sc); gfx_rect(44 * sc, 306
 rd_badge(60, 32, 15, BLU, FACE);
 rd_title(84, 14, "FLANGER", 28, INK);
 rd_sub(256, 30, "STEREO FLANGER  ·  THRU-ZERO", BLU, 1);
-rd_sq(718, 18, 26, 24, 0, SILV, "<") ? (
-  cur_preset = cur_preset <= 1 ? 12 : cur_preset - 1;
-  load_preset(cur_preset);
-);
-rd_sq(746, 18, 26, 24, 0, SILV, ">") ? (
-  cur_preset = cur_preset >= 12 ? 1 : cur_preset + 1;
-  load_preset(cur_preset);
-);
-rd_sq(780, 18, 80, 24, 0, SILV, "PRESETS") ? (
-  gfx_x = 780 * sc; gfx_y = 42 * sc;
-  cur_preset = gfx_showmenu("Classic Pedal|Jet Plane|Negative Hollow|Stereo Pedal|Rack Wide Sweep|Rack Chorus-Flange|Thru-Zero Tape|Thru-Zero Jet|Filter Matrix|Envelope Swoosh|Synced 1/2 Bar|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
-);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(640 * sc, 16 * sc, 290 * sc, 34 * sc, pr_cur, "Classic Pedal|Jet Plane|Negative Hollow|Stereo Pedal|Rack Wide Sweep|Rack Chorus-Flange|Thru-Zero Tape|Thru-Zero Jet|Filter Matrix|Envelope Swoosh|Synced 1/2 Bar");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 11 ? 0 : k_; );
 ui_size_picker(940 * sc, 21 * sc);
-pk_lcd(780 * sc, 45 * sc, 264 * sc, 16 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 786 * sc; gfx_y = 48 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
 
 
 // ---------- delay readout + sweep bar graph ----------

@@ -196,6 +196,7 @@ ratemode ? ( lfoB.lfo_block(2, div, 0); lfoB.inc *= 1.682; ) : lfoB.lfo_block(0,
 file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // input stage: DC block, trim, guard
@@ -270,11 +271,10 @@ rd_sq(558, 18, 50, 26, slider1 == 2, KEYC, "I+II") ? chorus_mode(2);
 rd_sq(612, 18, 50, 26, slider1 == 3, 0x8A9A9C, "OFF") ? setv(1, 3);
 rd_sqdark = 0;
 rd_led(475, 12, 2.5, slider1 == 0 || slider1 == 2, RED); rd_led(529, 12, 2.5, slider1 == 1 || slider1 == 2, RED); rd_led(583, 12, 2.5, slider1 == 2, RED);
-rd_sq(700, 18, 80, 26, 0, 0x1C4F55, "PRESETS") ? (
-  gfx_x = 700 * sc; gfx_y = 44 * sc;
-  load_preset(gfx_showmenu("Classic I|Classic II|Classic I+II|Lush Wide|Subtle Thicken|Vintage Hiss|Synced Swirl|Dark Bucket|Reset all to defaults"));
-);
-ui_size_picker(800 * sc, 21 * sc);
+pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(670 * sc, 16 * sc, 216 * sc, 28 * sc, pr_cur, "Classic I|Classic II|Classic I+II|Lush Wide|Subtle Thicken|Vintage Hiss|Synced Swirl|Dark Bucket");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 8 ? 0 : k_; );
+ui_size_picker(300 * sc, 24 * sc);
 
 // ---------- the window: two delay taps sweeping, and the LFO ----------
 ui_col(0x0A0F10); rd_rr(40 * sc, 74 * sc, 300 * sc, 100 * sc, 6 * sc);

@@ -148,6 +148,7 @@ update();
 file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -262,11 +263,10 @@ rd_sq(612, 25, 50, 26, slider1 == 2, 0x331111, "OFF")  ? setv(1, 2);
 rd_led(475, 15, 2.5, slider1 == 0, YELLOW); 
 rd_led(535, 15, 2.5, slider1 == 1, ORANGE);
 
-rd_sq(700, 25, 80, 26, 0, YELLOW, "PRESETS") ? (
-  gfx_x = 700 * sc; gfx_y = 44 * sc;
-  load_preset(gfx_showmenu("Roxy Lead ('73)|Funk Envelope|Cocked Wah Drive|Mild Auto-Sweep"));
-);
-ui_size_picker(800 * sc, 21 * sc);
+pk_pextra = "";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(670 * sc, 20 * sc, 216 * sc, 28 * sc, pr_cur, "Roxy Lead ('73)|Funk Envelope|Cocked Wah Drive|Mild Auto-Sweep");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 4 ? 0 : k_; );
+ui_size_picker(370 * sc, 24 * sc);
 
 // ---------- Scope Window ----------
 ui_col(CHARCOAL); rd_rr(40 * sc, 80 * sc, 300 * sc, 94 * sc, 6 * sc);
@@ -361,4 +361,4 @@ pkL *= 0.85; pkR *= 0.85;
 rd_lbl(750, 286, " LEVEL ", ORANGE, 0.8);
 
 pk_end();
-ui_end();
+ui_end();
