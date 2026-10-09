@@ -101,15 +101,15 @@ fD = g2db(eF);
 aDb = max(0, fD - g2db(eS));                       // how far the front is ahead of the slow envelope
 sDb = max(0, g2db(eH) - fD);                       // how far the tail hangs above the fast envelope
 w_ = min(max((g2db(eH) + 66)/12, 0), 1);           // fade the sustain stage out below -54 dBFS (no noise pumping)
-aC = atk*min(aDb, 24)*0.5; sC = sus*min(sDb, 24)*0.6*w_;   // up to about +/-12 dB attack, +/-14 dB sustain
-tg = min(max(aC + sC, -24), 15);
+aC = atk*min(aDb, 24)*0.5; susC = sus*min(sDb, 24)*0.6*w_;   // up to about +/-12 dB attack, +/-14 dB sustain
+tg = min(max(aC + susC, -24), 15);
 gDb += (tg - gDb)*0.35;
 g_ = db2g(gDb);
 yL = inL + (inL*g_ - inL)*mix; yR = inR + (inR*g_ - inR)*mix;
 ost_out(yL*outg, yR*outg);
 spl0 = ost_l; spl1 = ost_r;
 // meters: the attack and sustain stages' own contributions (dB)
-abs(aC) > abs(mA) ? mA = aC; abs(sC) > abs(mS) ? mS = sC;
+abs(aC) > abs(mA) ? mA = aC; abs(susC) > abs(mS) ? mS = susC;
 a_ = max(abs(spl0), abs(spl1)); mOut = a_ > mOut ? a_ : mOut*0.9997;
 
 @gfx 720 300
