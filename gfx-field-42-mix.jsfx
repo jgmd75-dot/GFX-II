@@ -1,0 +1,318 @@
+desc:GFX Field 42 Mix
+//tags: summing mixer submixer bus field location transformer limiter mid-side
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// The Field 42 channel as a four-pair location mixer: four stereo inputs summed to one stereo master.
+// Inputs arrive on the track's channels 1/2, 3/4, 5/6 and 7/8 (set the track to 8 channels and send each
+// source to its pair); the master leaves on 1/2.
+// Each pair: HPF (80 - 240 Hz, OFF fully left), TRIM into a transformer-balanced preamp, the input safety
+// limiter, Ø, M/S (the pair is a mid / side mic: left = mid, right = side, and PAN becomes WIDTH; Ø flips
+// the side), PAN (constant loudness, +3 dB at the sides), FADER, MUTE and SOLO.
+// Master: FADER, the output limiter (OFF / ON / LINK, +4 to +20 dBu), the output transformer (IRON),
+// a line-up TONE, and DRIFT. The VU reads the mix before the master fader; the LEDs read the master output.
+// Levels: 0 dBu = -20 dBFS = 0 VU.
+//
+// DRIFT (50% = standard): battery sag. The supply wanders slowly and droops under heavy, sustained level
+// (the whole mix draws on one battery), so the preamps' headroom, the limiter thresholds and the
+// transformers' drive all move a little. 0% = a fresh battery, 100% = twice the standard amount.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-lfo.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:75<75,240,1>-1-2 HPF (Hz, 75 = off)
+slider2:0<-20,40,0.1>-1-2 Trim (dB)
+slider3:1<0,1,1{Off,On}>-1-2 Input limiter
+slider4:0<0,1,1{Normal,Reversed}>-1-2 Polarity
+slider5:0<0,1,1{Off,On}>-1-2 M/S
+slider6:0<-100,100,1>-1-2 Pan / width
+slider7:0<-40,10,0.1>-1-2 Fader (dB)
+slider8:0<0,1,1{Off,On}>-1-2 Mute
+slider9:0<0,1,1{Off,On}>-1-2 Solo
+slider10:75<75,240,1>-3-4 HPF (Hz, 75 = off)
+slider11:0<-20,40,0.1>-3-4 Trim (dB)
+slider12:1<0,1,1{Off,On}>-3-4 Input limiter
+slider13:0<0,1,1{Normal,Reversed}>-3-4 Polarity
+slider14:0<0,1,1{Off,On}>-3-4 M/S
+slider15:0<-100,100,1>-3-4 Pan / width
+slider16:0<-40,10,0.1>-3-4 Fader (dB)
+slider17:0<0,1,1{Off,On}>-3-4 Mute
+slider18:0<0,1,1{Off,On}>-3-4 Solo
+slider19:75<75,240,1>-5-6 HPF (Hz, 75 = off)
+slider20:0<-20,40,0.1>-5-6 Trim (dB)
+slider21:1<0,1,1{Off,On}>-5-6 Input limiter
+slider22:0<0,1,1{Normal,Reversed}>-5-6 Polarity
+slider23:0<0,1,1{Off,On}>-5-6 M/S
+slider24:0<-100,100,1>-5-6 Pan / width
+slider25:0<-40,10,0.1>-5-6 Fader (dB)
+slider26:0<0,1,1{Off,On}>-5-6 Mute
+slider27:0<0,1,1{Off,On}>-5-6 Solo
+slider28:75<75,240,1>-7-8 HPF (Hz, 75 = off)
+slider29:0<-20,40,0.1>-7-8 Trim (dB)
+slider30:1<0,1,1{Off,On}>-7-8 Input limiter
+slider31:0<0,1,1{Normal,Reversed}>-7-8 Polarity
+slider32:0<0,1,1{Off,On}>-7-8 M/S
+slider33:0<-100,100,1>-7-8 Pan / width
+slider34:0<-40,10,0.1>-7-8 Fader (dB)
+slider35:0<0,1,1{Off,On}>-7-8 Mute
+slider36:0<0,1,1{Off,On}>-7-8 Solo
+slider37:0<-40,10,0.1>-Master fader (dB)
+slider38:2<0,2,1{Off,On,Link}>-Output limiter
+slider39:20<4,20,1>-Output limiter threshold (dBu)
+slider40:30<0,100,1>-Iron (output transformer, %)
+slider41:0<0,1,1{Off,On}>-Tone
+slider42:0<0,2,1{1 kHz,400 Hz,100 Hz}>-Tone frequency
+slider43:0<-20,8,1>-Tone level (dBu)
+slider44:50<0,100,1>-Drift (%)
+slider45:0<0,5,1{Init,Drum Kit,Field Rig,Band Sub,Dialogue Pair,Glue Bus}>-Preset
+slider46:30<0,100,1>-Input iron (%)
+slider47:1<0.1,10,0.1>-Limiter attack (ms)
+slider48:200<50,1000,1>-Limiter release (ms)
+slider49:0<0,100,1>-Band sat (%)
+slider50:30<0,100,1>-Bias (%)
+slider51:120<40,400,1>-Sat low band (Hz)
+slider52:6000<2000,16000,10>-Sat high band (Hz)
+slider53:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider54:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:1-2 left
+in_pin:1-2 right
+in_pin:3-4 left
+in_pin:3-4 right
+in_pin:5-6 left
+in_pin:5-6 right
+in_pin:7-8 left
+in_pin:7-8 right
+out_pin:master left
+out_pin:master right
+
+@init
+#ui_man = "gfx-field-42-mix";
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+drV.drift_init(0.8 + rand(0.5));
+
+// ---------- building blocks (as Field 42) ----------
+function f4_hp(f) instance(b0, b1, b2, a1, a2) local(w, cw, al, d0) (
+  w = 2 * $pi * f / srate; cw = cos(w); al = sin(w) / (2 * 0.7071); d0 = 1 + al;
+  b0 = (1 + cw) / 2 / d0; b1 = -(1 + cw) / d0; b2 = (1 + cw) / 2 / d0; a1 = -2 * cw / d0; a2 = (1 - al) / d0;
+);
+function f4_bq(x) instance(b0, b1, b2, a1, a2, z1, z2) local(y) (
+  y = b0 * x + z1; z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y; y;
+);
+function f4_iron(x, amt, drv) instance(lf, hf) local(d, c, sc_) (
+  lf += (x - lf) * f4_ia;
+  d = 1 + 5 * drv * amt;
+  c = lf * d; sc_ = c / sqrt(1 + c * c);
+  x += (sc_ - c) / d * (0.6 + 0.4 * amt) + amt * 0.03 * lf * lf * d;
+  hf += (x - hf) * f4_ha;
+  x + (hf - x) * amt * 0.35;
+);
+function f4_rail(x, hv) ( x / (1 + (abs(x) / hv) ^ 4) ^ 0.25; );
+
+// ---------- one input pair: settings from slider base k (HPF at k, then trim, lim, pol, m/s, pan, fader, mute, solo) ----------
+function ch_set(k) instance(hl, hr, hp_on, trim, il_on, pol, ms, wid, pl, pr, fad, mute, solo) local(th) (
+  hp_on = slider(k) > 75.5; hl.f4_hp(slider(k)); hr.f4_hp(slider(k));
+  trim = 10 ^ (slider(k + 1) / 20);
+  il_on = slider(k + 2) > 0.5; pol = slider(k + 3) > 0.5 ? -1 : 1; ms = slider(k + 4) > 0.5;
+  wid = (slider(k + 5) + 100) / 100;                                      // M/S: PAN is WIDTH, 0 - 200 %
+  th = (slider(k + 5) / 100 + 1) * $pi / 4; pl = cos(th) * sqrt(2); pr = sin(th) * sqrt(2);
+  fad = slider(k + 6) <= -39.95 ? 0 : 10 ^ (slider(k + 6) / 20);
+  mute = slider(k + 7) > 0.5; solo = slider(k + 8) > 0.5;
+);
+// process one pair: in l, r; out ch_l, ch_r; also leaves pk (input peak) and lim (limiter hit) for the panel
+function ch_run(l, r) instance(hl, hr, il, ir, hp_on, trim, il_on, pol, ms, wid, pl, pr, fad, mute, solo, env, pk, lim)
+  local(lv, gr, g, m, s) (
+  hp_on ? ( l = hl.f4_bq(l); r = hr.f4_bq(r); );
+  l *= trim; r *= trim;
+  l = il.f4_iron(l, iron_i, sup); r = ir.f4_iron(r, iron_i, sup);
+  l = f4_rail(l, hv); r = f4_rail(r, hv);
+  pk = max(pk, max(abs(l), abs(r)));
+  il_on ? (
+    lv = max(abs(l), abs(r)); env += (lv - env) * (lv > env ? l_at : l_rl);
+    gr = max(20 * log10(max(env, 0.000001)) - il_thr, 0) * 0.95; g = 10 ^ (-gr / 20); l *= g; r *= g; lim = max(lim, gr);
+  );
+  ms ? (
+    m = l; s = r * pol * wid;                                              // left = mid, right = side; Ø flips the side
+    l = (m + s) * 0.7071; r = (m - s) * 0.7071;
+    l *= fad; r *= fad;
+  ) : (
+    l *= pol * fad * pl; r *= pol * fad * pr;
+  );
+  (mute || (any_solo && !solo)) ? ( l = 0; r = 0; );
+  ch_l = l; ch_r = r;
+);
+
+// presets (master and the four pairs' HPF / trim; faders, pans, mutes and solos are left alone)
+function setch(k, h, t, ms) ( slider(k) = h; slider(k + 1) = t; slider(k + 4) = ms; );
+function setm(ol, th, ir, ii) ( slider38 = ol; slider39 = th; slider40 = ir; slider46 = ii; );
+function apply_preset(n) (
+  n == 0 ? ( setch(1, 75, 0, 0); setch(10, 75, 0, 0); setch(19, 75, 0, 0); setch(28, 75, 0, 0); setm(2, 20, 30, 30); ) :    // Init
+  n == 1 ? ( setch(1, 75, 6, 0); setch(10, 100, 4, 0); setch(19, 120, 3, 0); setch(28, 90, 6, 0); setm(2, 16, 55, 45); ) :   // Drum Kit
+  n == 2 ? ( setch(1, 120, 8, 1); setch(10, 120, 6, 0); setch(19, 160, 6, 0); setch(28, 160, 6, 0); setm(2, 18, 30, 30); ) : // Field Rig
+  n == 3 ? ( setch(1, 75, 3, 0); setch(10, 90, 3, 0); setch(19, 100, 3, 0); setch(28, 120, 3, 0); setm(2, 18, 45, 40); ) :   // Band Sub
+  n == 4 ? ( setch(1, 140, 6, 0); setch(10, 140, 6, 0); setch(19, 75, 0, 0); setch(28, 75, 0, 0); setm(2, 18, 25, 25); ) :   // Dialogue Pair
+           ( setch(1, 75, 2, 0); setch(10, 75, 2, 0); setch(19, 75, 2, 0); setch(28, 75, 2, 0); setm(2, 12, 60, 50); );     // Glue Bus
+  pa_ = 0; loop(46, slider_automate(2 ^ pa_); pa_ += 1; );
+);
+function pname(n) ( n = floor(n + 0.5);
+  n == 0 ? "INIT" : n == 1 ? "DRUM KIT" : n == 2 ? "FIELD RIG" : n == 3 ? "BAND SUB" : n == 4 ? "DIALOGUE PAIR" : "GLUE BUS"; );
+
+function update() (
+  c1.ch_set(1); c2.ch_set(10); c3.ch_set(19); c4.ch_set(28);
+  any_solo = slider9 > 0.5 || slider18 > 0.5 || slider27 > 0.5 || slider36 > 0.5;
+  mfad = slider37 <= -39.95 ? 0 : 10 ^ (slider37 / 20);
+  ol_m = floor(slider38 + 0.5); ol_thr = slider39 - 20;
+  iron_o = slider40 / 100; iron_i = slider46 / 100;
+  tone_on = slider41 > 0.5; tone_f = slider42 < 0.5 ? 1000 : slider42 < 1.5 ? 400 : 100; tone_a = 10 ^ ((slider43 - 20) / 20) * sqrt(2);
+  drift_macro(slider44);
+  l_at = 1 - exp(-1 / (max(slider47, 0.05) * 0.001 * srate)); l_rl = 1 - exp(-1 / (slider48 * 0.001 * srate));
+  ost_setup(slider49 / 100, slider50 / 100, slider51, slider52, slider53, floor(slider54 + 0.5));
+);
+
+f4_ia = 1 - exp(-2 * $pi * 110 / srate);
+f4_ha = 1 - exp(-2 * $pi * 14000 / srate);
+vu_c = 1 - exp(-1 / (0.065 * srate));
+sag_c = 1 - exp(-1 / (0.6 * srate));
+lastp = slider45;
+!ui_dflt ? ( ui_thm = 0; );
+update();
+ui_dflt = 1;
+
+@slider
+slider45 != lastp ? ( apply_preset(slider45); lastp = slider45; );
+update();
+
+@block
+update();
+vV = drV.drift_tick(0.08 * dm_s * samplesblock / srate);
+sup = 1 + 0.03 * dm_a * vV - 0.10 * dm_a * min(sag, 1);
+il_thr = -2 + 20 * log10(sup);
+ol_t = ol_thr + 20 * log10(sup);
+hv = 1.58 * sup;
+
+@sample
+c1.ch_run(spl0, spl1); sL = ch_l; sR = ch_r;
+c2.ch_run(spl2, spl3); sL += ch_l; sR += ch_r;
+c3.ch_run(spl4, spl5); sL += ch_l; sR += ch_r;
+c4.ch_run(spl6, spl7); sL += ch_l; sR += ch_r;
+sag += (min((abs(sL) + abs(sR)) * 0.5, 2) - sag) * sag_c;
+
+// the VU reads the mix before the master fader
+vu_e += ((sL * sL + sR * sR) * 0.5 - vu_e) * vu_c;
+
+sL *= mfad; sR *= mfad;
+tone_on ? ( tn_ph += tone_f / srate; tn_ph -= floor(tn_ph); sL = sR = tone_a * sin(2 * $pi * tn_ph); );
+
+ol_m > 0 ? (
+  ol_m == 2 ? ( lv = max(abs(sL), abs(sR)); olL_e += (lv - olL_e) * (lv > olL_e ? l_at : l_rl); olR_e = olL_e; ) :
+              ( lv = abs(sL); olL_e += (lv - olL_e) * (lv > olL_e ? l_at : l_rl); lv = abs(sR); olR_e += (lv - olR_e) * (lv > olR_e ? l_at : l_rl); );
+  grL = max(20 * log10(max(olL_e, 0.000001)) - ol_t, 0) * 0.95; grR = max(20 * log10(max(olR_e, 0.000001)) - ol_t, 0) * 0.95;
+  sL *= 10 ^ (-grL / 20); sR *= 10 ^ (-grR / 20);
+  ol_hit = max(ol_hit, max(grL, grR));
+);
+
+sL = ioL.f4_iron(sL, iron_o, sup); sR = ioR.f4_iron(sR, iron_o, sup);
+sL = ostL.ost_band(sL); sR = ostR.ost_band(sR);
+ost_out(sL, sR);
+spl0 = ost_l; spl1 = ost_r;
+spl2 = spl3 = spl4 = spl5 = spl6 = spl7 = 0;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 1040 540
+ui_begin(1040, 540);
+
+KHAKI = 0xB9A97E; SH1 = 0xAE9E73; SH2 = 0xA6966B; INK = 0x1B1A16; DIMI = 0x4A4434; AMB = 0xFFB020; REDL = 0xFF3A22;
+CAP = 0x1E1E1E; HPFC = 0xF2C83E; CAPW = 0xEEEFEA; KEYL = 0xD8CBA4; GRN = 0x5BCB6A;
+dy_ink = INK; dy_bg = KHAKI; dy_nov = 1; rd_sqbg = 0x2A2822;
+
+function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+function sect(x, y, w, h, col, s) (
+  ui_col(col); gfx_rect(x * sc, y * sc, w * sc, h * sc);
+  ui_cola(0x000000, 0.25); gfx_rect(x * sc, y * sc, w * sc, 1 * sc); gfx_rect(x * sc, y * sc, 1 * sc, h * sc);
+  ui_cola(0xFFFFFF, 0.25); gfx_rect(x * sc, (y + h - 1) * sc, w * sc, 1 * sc); gfx_rect((x + w - 1) * sc, y * sc, 1 * sc, h * sc);
+  rd_sub(x + 10, y + 7, s, DIMI, 1);
+);
+// one channel strip at x (146 wide), slider base k, the pair's name, its peak / limiter readings
+function strip(x, k, s, pk, lm) local(cx) (
+  cx = x + 73;
+  sect(x, 76, 146, 450, (k == 1 || k == 19) ? SH1 : SH2, s);
+  rd_led(x + 104, 89, 4, pk > 0.89, REDL); rd_led(x + 126, 89, 4, lm > 0.5, AMB);
+  slider(k) <= 75.5 ? strcpy(#v, "OFF") : sprintf(#v, "%.0f Hz", slider(k));
+  dy_kf = 1; dy_knob(cx, 130, 20, k, 75, 240, 75, 0, HPFC, "HPF", #v);
+  sprintf(#v, "%+.1f dB", slider(k + 1)); dy_knob(cx, 210, 24, k + 1, -20, 40, 0, 0, CAP, "TRIM", #v);
+  rd_sq(x + 10, 264, 40, 24, slider(k + 2) > 0.5, AMB, "LIM") ? setv(k + 2, 1 - slider(k + 2));
+  rd_sq(x + 53, 264, 40, 24, slider(k + 3) > 0.5, CAPW, "Ø") ? setv(k + 3, 1 - slider(k + 3));
+  rd_sq(x + 96, 264, 40, 24, slider(k + 4) > 0.5, GRN, "M/S") ? setv(k + 4, 1 - slider(k + 4));
+  slider(k + 4) > 0.5 ? sprintf(#v, "%.0f%%", slider(k + 5) + 100) :
+    abs(slider(k + 5)) < 0.5 ? strcpy(#v, "C") : sprintf(#v, "%s %.0f", slider(k + 5) < 0 ? "L" : "R", abs(slider(k + 5)));
+  dy_knob(cx, 336, 22, k + 5, -100, 100, 0, 0, CAP, slider(k + 4) > 0.5 ? "WIDTH" : "PAN", #v);
+  slider(k + 6) <= -39.95 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider(k + 6));
+  dy_knob(cx, 424, 28, k + 6, -40, 10, 0, 0, CAPW, "FADER", #v);
+  rd_sq(x + 14, 492, 56, 24, slider(k + 7) > 0.5, REDL, "MUTE") ? setv(k + 7, 1 - slider(k + 7));
+  rd_sq(x + 76, 492, 56, 24, slider(k + 8) > 0.5, AMB, "SOLO") ? setv(k + 8, 1 - slider(k + 8));
+);
+
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(KHAKI); gfx_rect(0, 0, 1040 * sc, 540 * sc);
+gi = 0;
+loop(3600, ui_cola(rd_hash(gi + 51) > 0.5 ? 0xFFFFFF : 0x000000, 0.05 + 0.07 * rd_hash(gi + 919));
+  gfx_rect(floor(rd_hash(gi) * 1040 * sc), floor(rd_hash(gi + 4242) * 540 * sc), max(1, sc), max(1, sc)); gi += 1; );
+ui_cola(0x000000, 0.35); gfx_rect(0, 0, 1040 * sc, 2 * sc); gfx_rect(0, 536 * sc, 1040 * sc, 4 * sc);
+ui_col(INK); gfx_rect(0, 62 * sc, 1040 * sc, 2 * sc);
+rd_screw(10, 10); rd_screw(1030, 10); rd_screw(10, 526); rd_screw(1030, 526);
+
+// header
+rd_badge(40, 32, 15, INK, KHAKI);
+rd_title(64, 15, "FIELD 42 MIX", 26, INK);
+rd_sub(252, 28, "FOUR-PAIR LOCATION MIXER", DIMI, 1);
+pm_ = rd_sq(470, 16, 78, 32, 0, KEYL, "PRESETS");
+rd_sq(552, 16, 32, 32, 0, KEYL, "◄") ? ( setv(45, (floor(slider45 + 0.5) + 5) % 6); apply_preset(slider45); lastp = slider45; );
+rd_sq(588, 16, 32, 32, 0, KEYL, "►") ? ( setv(45, (floor(slider45 + 0.5) + 1) % 6); apply_preset(slider45); lastp = slider45; );
+pk_lcd(628 * sc, 9 * sc, 236 * sc, 46 * sc, 0);
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+sprintf(#plcd, "PRESET %02d/06", floor(slider45 + 0.5) + 1); gfx_x = 640 * sc; gfx_y = 15 * sc; gfx_drawstr(#plcd);
+pk_lcdfont(9, 15 * sc); gfx_x = 640 * sc; gfx_y = 30 * sc; gfx_drawstr(pname(slider45));
+pm_ || (pressed && drag_id == 0 && mouse_x >= 628 * sc && mouse_x < 864 * sc && mouse_y >= 9 * sc && mouse_y < 55 * sc) ? (
+  drag_id = -1; strcpy(#pmenu, ""); k_ = 0;
+  loop(6, k_ == floor(slider45 + 0.5) ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k_)); k_ < 5 ? strcat(#pmenu, "|"); k_ += 1; );
+  gfx_x = 470 * sc; gfx_y = 56 * sc; k_ = gfx_showmenu(#pmenu);
+  k_ > 0 ? ( setv(45, k_ - 1); apply_preset(slider45); lastp = slider45; );
+);
+ui_size_picker(912 * sc, 24 * sc);
+
+// ---------- the four pairs ----------
+strip(16, 1, "1 - 2", c1.pk, c1.lim);   c1.pk *= 0.85; c1.lim *= 0.8;
+strip(170, 10, "3 - 4", c2.pk, c2.lim); c2.pk *= 0.85; c2.lim *= 0.8;
+strip(324, 19, "5 - 6", c3.pk, c3.lim); c3.pk *= 0.85; c3.lim *= 0.8;
+strip(478, 28, "7 - 8", c4.pk, c4.lim); c4.pk *= 0.85; c4.lim *= 0.8;
+
+// ---------- master: VU, limiter, iron, tone, drift, fader, LED ladder ----------
+sect(636, 76, 388, 450, SH1, "MASTER");
+hw_ = ui_hw; ui_hw = 1;
+vuM.ui_vu(648 * sc, 98 * sc, 300 * sc, 160 * sc, 10 * log10(max(vu_e, 0.0000000001)) + 20, "MIX  0 VU = -20 dBFS");
+ui_hw = hw_;
+rd_sq(650, 276, 40, 24, slider38 == 0, AMB, "OFF") ? setv(38, 0);
+rd_sq(693, 276, 40, 24, slider38 == 1, AMB, "ON") ? setv(38, 1);
+rd_sq(736, 276, 46, 24, slider38 == 2, AMB, "LINK") ? setv(38, 2);
+rd_led(800, 288, 5, ol_hit > 0.5, AMB); ol_hit *= 0.8;
+sprintf(#v, "%+.0f dBu", slider39); dy_knob(688, 360, 22, 39, 4, 20, 20, 0, CAP, "LIMIT", #v);
+sprintf(#v, "%.0f%%", slider40); dy_knob(772, 360, 22, 40, 0, 100, 30, 0, CAP, "IRON", #v);
+rd_sq(650, 470, 44, 26, slider41 > 0.5, AMB, "TONE") ? setv(41, 1 - slider41);
+rd_sq(698, 470, 60, 26, 0, KEYL, slider42 < 0.5 ? "1 kHz" : slider42 < 1.5 ? "400 Hz" : "100 Hz") ? setv(42, (floor(slider42 + 0.5) + 1) % 3);
+sprintf(#v, "%+.0f dBu", slider43); dy_knob(784, 483, 12, 43, -20, 8, 0, 0, 0x9DA2A8, "", #v);
+sprintf(#v, "%.0f%%", slider44); dy_knob(850, 300, 14, 44, 0, 100, 50, 0, 0x9DA2A8, "DRIFT", #v);
+slider37 <= -39.95 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider37);
+dy_knob(870, 420, 32, 37, -40, 10, 0, 0, CAPW, "MASTER", #v);
+mL.ui_ledm(962 * sc, 96 * sc, 12 * sc, 400 * sc, pkL); mR.ui_ledm(982 * sc, 96 * sc, 12 * sc, 400 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+rd_lbl(979, 504, "OUT", DIMI, 1);
+
+pk_end();
+ui_end();
