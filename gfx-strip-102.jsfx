@@ -141,6 +141,7 @@ slider10 != lastp ? ( apply_preset(slider10); lastp = slider10; );
 update();
 
 @block
+update();                                          // the panel's knobs change the sliders directly, so read them every block
 // DRIFT: the supply voltage (headroom and gain) and the saturation wander slowly
 vV = drV.drift_tick(0.12 * dm_s * samplesblock / srate);
 vS = drS.drift_tick(0.10 * dm_s * samplesblock / srate);
