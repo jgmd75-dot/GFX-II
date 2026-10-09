@@ -86,10 +86,11 @@ function pk_lcd(x, y, w, h, kind) (
 );
 function pk_lcdfont(idx, size) ( gfx_setfont(idx, "Courier New", size, 'b'); );
 
-// ---------- the house preset display: [LCD: PRESET nn/NN + name] [◄][►]; click the LCD for the list ----------
-// menu = "Name 1|Name 2|...|Name n" (1-based). cur = the preset in use (0 = none). pk_pextra (optional) = one more
-// item shown only in the drop-down, e.g. "Reset all to defaults"; choosing it returns n + 1.
-// Returns the preset to load (1 .. n, or n + 1 for the extra item), 0 for nothing. x, y, w, h in pixels.
+// ---------- the house preset display: [PRESETS][◄][►] [LCD: PRESET nn/NN + name] ----------
+// PRESETS (or a click on the LCD) opens the list; ◄ ► step through it. menu = "Name 1|Name 2|...|Name n" (1-based).
+// cur = the preset in use (0 = none). pk_pextra (optional) = one more item shown only in the list, e.g.
+// "Reset all to defaults"; choosing it returns n + 1. Returns the preset to load (1 .. n + 1), 0 for nothing.
+// x, y, w, h in pixels.
 pk_pextra = "";
 function pk_pitem(menu, i, dst) local(k, k0, n, c, len) (
   strcpy(dst, ""); len = strlen(menu); k = 0; k0 = 0; n = 1;
@@ -101,24 +102,26 @@ function pk_pitem(menu, i, dst) local(k, k0, n, c, len) (
   dst;
 );
 function pk_pcount(menu) local(k, n) ( n = 1; k = 0; loop(strlen(menu), str_getchar(menu, k) == 124 ? n += 1; k += 1; ); n; );
-function pk_preset(x, y, w, h, cur, menu) local(n, bw, sel, i, lx, hov) (
-  n = pk_pcount(menu); bw = floor(h * 0.7); sel = 0; lx = x;     // prev / next sit side by side, right of the LCD
-  ui_button(x + w - 2 * bw - 2 * sc, y, bw, h, "◄", 0, 1) ? sel = cur <= 1 || cur > n ? n : cur - 1;
-  ui_button(x + w - bw, y, bw, h, "►", 0, 1) ? sel = cur >= n || cur < 1 ? 1 : cur + 1;
-  pk_lcd(lx, y, w - 2 * bw - 8 * sc, h, 0);
+function pk_preset(x, y, w, h, cur, menu) local(n, kw, bw, sel, i, lx, lw, open) (
+  n = pk_pcount(menu); kw = floor(h * 1.65); bw = floor(h * 0.7); sel = 0; open = 0;
+  lx = x + kw + 2 * bw + 12 * sc; lw = x + w - lx;
+  ui_noled = 1; ui_button(x, y, kw, h, "PRESETS", 0, 1) ? open = 1;
+  ui_noled = 1; ui_button(x + kw + 4 * sc, y, bw, h, "◄", 0, 1) ? sel = cur <= 1 || cur > n ? n : cur - 1;
+  ui_noled = 1; ui_button(x + kw + bw + 6 * sc, y, bw, h, "►", 0, 1) ? sel = cur >= n || cur < 1 ? 1 : cur + 1;
+  pk_lcd(lx, y, lw, h, 0);
   ui_col(pk_lcdc);
   pk_lcdfont(9, max(7, h * 0.26));
-  cur >= 1 && cur <= n ? sprintf(#pk_pl1, "PRESET %02d/%02d", cur, n) : strcpy(#pk_pl1, "PRESETS");
+  cur >= 1 && cur <= n ? sprintf(#pk_pl1, "PRESET %02d/%02d", cur, n) : strcpy(#pk_pl1, "PRESET --");
   gfx_x = lx + 8 * sc; gfx_y = y + h * 0.12; gfx_drawstr(#pk_pl1);
-  pk_lcdfont(9, max(8, h * 0.38));
-  cur >= 1 && cur <= n ? pk_pitem(menu, cur, #pk_pl2) : strcpy(#pk_pl2, "click for list");
-  gfx_x = lx + 8 * sc; gfx_y = y + h * 0.42; gfx_drawstr(#pk_pl2);
-  hov = mouse_x >= lx && mouse_x < x + w - 2 * bw - 8 * sc && mouse_y >= y && mouse_y < y + h;
-  pressed && drag_id == 0 && hov ? (
-    drag_id = -1; strcpy(#pk_pm, ""); i = 1;
+  pk_lcdfont(9, max(8, h * 0.34));
+  cur >= 1 && cur <= n ? pk_pitem(menu, cur, #pk_pl2) : strcpy(#pk_pl2, "-");
+  gfx_x = lx + 8 * sc; gfx_y = y + h * 0.46; gfx_drawstr(#pk_pl2);
+  pressed && drag_id == 0 && mouse_x >= lx && mouse_x < lx + lw && mouse_y >= y && mouse_y < y + h ? ( drag_id = -1; open = 1; );
+  open ? (
+    strcpy(#pk_pm, ""); i = 1;
     loop(n, i == cur ? strcat(#pk_pm, "!"); strcat(#pk_pm, pk_pitem(menu, i, #pk_pt)); i < n ? strcat(#pk_pm, "|"); i += 1; );
     strlen(pk_pextra) ? ( strcat(#pk_pm, "|"); strcat(#pk_pm, pk_pextra); );
-    gfx_x = lx; gfx_y = y + h; i = gfx_showmenu(#pk_pm); i > 0 ? sel = i;
+    gfx_x = x; gfx_y = y + h; i = gfx_showmenu(#pk_pm); i > 0 ? sel = i;
   );
   sel;
 );
