@@ -334,23 +334,24 @@ ui_col(ORG); gfx_rect(26 * sc, 66 * sc, 1008 * sc, 2 * sc);
 rd_badge(60, 32, 15, ORG, FACE);
 rd_title(84, 14, "DYNATRON", 26, INK);
 rd_sub(260, 30, "DYNAMIC FLANGE  ·  PHASE  ·  FILTER", DIM, 1);
+pm_ = rd_sq(556, 20, 78, 30, 0, 0x6A7484, "PRESETS");   // PRESETS, prev / next, then the LCD (click either for every preset)
 rd_sq(640, 20, 30, 30, 0, 0x6A7484, "◄") ? (
   cur_preset = cur_preset <= 1 ? PRESET_N : cur_preset - 1;
   load_preset(cur_preset);
 );
-rd_sq(914, 20, 30, 30, 0, 0x6A7484, "►") ? (
+rd_sq(674, 20, 30, 30, 0, 0x6A7484, "►") ? (
   cur_preset = cur_preset >= PRESET_N ? 1 : cur_preset + 1;
   load_preset(cur_preset);
 );
-pk_lcd(676 * sc, 12 * sc, 232 * sc, 46 * sc, 0);
+pk_lcd(712 * sc, 12 * sc, 232 * sc, 46 * sc, 0);
 pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-sprintf(#plcd, "PRESET %02d/%02d", cur_preset, PRESET_N); gfx_x = 688 * sc; gfx_y = 18 * sc; gfx_drawstr(#plcd);
-pk_lcdfont(9, 15 * sc); gfx_x = 688 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
-pressed && drag_id == 0 && mouse_x >= 676 * sc && mouse_x < 908 * sc && mouse_y >= 12 * sc && mouse_y < 58 * sc ? (
+sprintf(#plcd, "PRESET %02d/%02d", cur_preset, PRESET_N); gfx_x = 724 * sc; gfx_y = 18 * sc; gfx_drawstr(#plcd);
+pk_lcdfont(9, 15 * sc); gfx_x = 724 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+pm_ || (pressed && drag_id == 0 && mouse_x >= 712 * sc && mouse_x < 944 * sc && mouse_y >= 12 * sc && mouse_y < 58 * sc) ? (
   drag_id = -1;
   strcpy(#pmenu, ""); k_ = 1;
   loop(11, k_ == cur_preset ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k_)); k_ < 11 ? strcat(#pmenu, "|"); k_ += 1; );
-  gfx_x = 676 * sc; gfx_y = 58 * sc;
+  gfx_x = 556 * sc; gfx_y = 58 * sc;
   k_ = gfx_showmenu(#pmenu);
   k_ > 0 ? ( load_preset(k_); k_ <= PRESET_N ? cur_preset = k_; );
 );

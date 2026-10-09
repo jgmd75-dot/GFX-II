@@ -700,8 +700,9 @@ time_precise() - lcd_t < 1.5 ? (
   gfx_setfont(7); TX(76, 146, pname(slider1));
 );
 
-// Click the LCD: drop-down menu of all presets (current one ticked)
-clicked(60, 104, 266, 92) ? (
+// PRESETS key or a click on the LCD: drop-down menu of all presets (current one ticked)
+pm_ = btn(60, 210, 130, 36, "PRESETS", 0, 6, 0);
+clicked(60, 104, 266, 92) || pm_ ? (
   strcpy(#pmenu, ""); k = 0;
   loop(8,
     k == slider1 ? strcat(#pmenu, "!");
@@ -714,9 +715,8 @@ clicked(60, 104, 266, 92) ? (
   psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; slider_automate(281474976710655); );
 );
 
-btn(60, 210, 60, 36, "◄", 0, 6, 0) ? step_preset(-1);
+btn(198, 210, 60, 36, "◄", 0, 6, 0) ? step_preset(-1);
 btn(266, 210, 60, 36, "►", 0, 6, 0) ? step_preset(1);
-cblk(); gfx_setfont(5); TC(193, 222, "PRESET");
 
 cblk(); gfx_setfont(5); TX(60, 270, "SIZE");
 btn(60, 286, 48, 30, "S", ui_sz == 1, 6, 0) ? ui_sz = 1;

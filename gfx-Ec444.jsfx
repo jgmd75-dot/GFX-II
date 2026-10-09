@@ -191,17 +191,18 @@ ui_col(BLU); gfx_rect(26 * sc, 62 * sc, 1008 * sc, 3 * sc);
 rd_badge(60, 34, 15, INK, FACE);
 rd_title(84, 18, "ECHORDER EC-444", 24, INK);
 rd_sub(334, 30, "ANALOG BBD DELAY LINE", DIM, 1);
+pm_ = rd_sq(516, 18, 78, 30, 0, BLU, "PRESETS");   // PRESETS, prev / next, then the LCD (click either for every preset)
 rd_sq(600, 18, 30, 30, 0, BLU, "◄") ? ( setv(13, (floor(slider13 + 0.5) + 7) % 8); apply_preset(slider13); lastp = slider13; );
-rd_sq(874, 18, 30, 30, 0, BLU, "►") ? ( setv(13, (floor(slider13 + 0.5) + 1) % 8); apply_preset(slider13); lastp = slider13; );
-pk_lcd(636 * sc, 10 * sc, 232 * sc, 46 * sc, 0);
+rd_sq(634, 18, 30, 30, 0, BLU, "►") ? ( setv(13, (floor(slider13 + 0.5) + 1) % 8); apply_preset(slider13); lastp = slider13; );
+pk_lcd(672 * sc, 10 * sc, 232 * sc, 46 * sc, 0);
 pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-sprintf(#plcd, "PRESET %02d/08", floor(slider13 + 0.5) + 1); gfx_x = 648 * sc; gfx_y = 16 * sc; gfx_drawstr(#plcd);
-pk_lcdfont(9, 15 * sc); gfx_x = 648 * sc; gfx_y = 31 * sc; gfx_drawstr(pname(slider13));
-pressed && drag_id == 0 && mouse_x >= 636 * sc && mouse_x < 868 * sc && mouse_y >= 10 * sc && mouse_y < 56 * sc ? (
+sprintf(#plcd, "PRESET %02d/08", floor(slider13 + 0.5) + 1); gfx_x = 684 * sc; gfx_y = 16 * sc; gfx_drawstr(#plcd);
+pk_lcdfont(9, 15 * sc); gfx_x = 684 * sc; gfx_y = 31 * sc; gfx_drawstr(pname(slider13));
+pm_ || (pressed && drag_id == 0 && mouse_x >= 672 * sc && mouse_x < 904 * sc && mouse_y >= 10 * sc && mouse_y < 56 * sc) ? (
   drag_id = -1;
   strcpy(#pmenu, ""); k_ = 0;
   loop(8, k_ == floor(slider13 + 0.5) ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k_)); k_ < 7 ? strcat(#pmenu, "|"); k_ += 1; );
-  gfx_x = 636 * sc; gfx_y = 56 * sc;
+  gfx_x = 516 * sc; gfx_y = 56 * sc;
   k_ = gfx_showmenu(#pmenu);
   k_ > 0 ? ( setv(13, k_ - 1); apply_preset(slider13); lastp = slider13; );
 );

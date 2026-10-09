@@ -505,17 +505,17 @@ hm ? (
   gfx_setfont(8); sprintf(#lcd1, "PRESET %02d/09", slider1 + 1); TX(76, 122, #lcd1);
   gfx_setfont(7); TX(76, 150, pname(slider1));
 );
-// click the LCD: every preset in a drop-down
-clicked(60, 108, 266, 92) ? (
+// PRESETS key or a click on the LCD: every preset in a drop-down
+pm_ = btn(60, 212, 130, 36, "PRESETS", 0, 6);
+clicked(60, 108, 266, 92) || pm_ ? (
   strcpy(#pmenu, ""); k = 0;
   loop(9, k == slider1 ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k)); k < 8 ? strcat(#pmenu, "|"); k += 1; );
   gfx_x = mouse_x; gfx_y = mouse_y;
   psel = gfx_showmenu(#pmenu);
   psel > 0 ? ( slider1 = psel - 1; apply_preset(slider1); lastPreset = slider1; lcd_t = 0; slider_automate(2^35 - 1); );
 );
-btn(60, 212, 60, 36, "◄", 0, 6) ? step_preset(-1);
+btn(198, 212, 60, 36, "◄", 0, 6) ? step_preset(-1);
 btn(266, 212, 60, 36, "►", 0, 6) ? step_preset(1);
-cink(); gfx_setfont(5); TC(193, 224, "PRESET");
 
 cink(); gfx_setfont(5); TX(60, 268, "SIZE");
 btn(60, 284, 48, 30, "S", ui_sz == 1, 6) ? ui_sz = 1;
