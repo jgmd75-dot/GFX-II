@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Strip 102 - manual</title><meta name="description" content="A slim horizontal channel strip in the spirit of a small 10-input desk: gain, HPF, one-knob compressor, 3-band EQ, pan and level.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://www.gardenfx.uk/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-strip-102">
+<div class="cat">Dynamics</div><h1>Strip 102</h1>
+<p class="tagline">A slim horizontal channel strip in the spirit of a small 10-input desk: gain, HPF, one-knob compressor, 3-band EQ, pan and level.</p>
+<div class="shot"><img src="img/gfx-strip-102.webp" alt="The Strip 102 panel" loading="lazy"></div>
+<h2>Overview</h2><p>Strip 102 is one channel of a small compact mixer, laid out as a slim horizontal strip so it takes up little room on screen. The signal runs left to right, as on the desk: GAIN into a gently colouring preamp, an 80 Hz high-pass filter, a one-knob compressor, a three-band EQ, then LEVEL and PAN.</p><p>The compressor needs one knob: turning it up lowers the threshold, raises the ratio and adds make-up gain together, so you dial in more control rather than setting four things. The EQ bands are fixed, as on the original: a low shelf at 100 Hz, a broad mid peak at 2.5 kHz and a high shelf at 10 kHz.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Quick, simple tone and level control on any track</li><li>Vocals and acoustic instruments: HPF, a touch of COMP, a lift at 2.5 kHz</li><li>Evening out bass and drums with one knob</li><li>A small-mixer sound and workflow inside REAPER</li></ul>
+<h2>Controls</h2><h3>INPUT</h3><dl class="ctl"><dt>GAIN</dt><dd>Preamp gain, -24 to +24 dB. The preamp is clean at normal levels and rounds off gently, a little unevenly, when pushed hard.</dd><dt>HPF</dt><dd>An 80 Hz high-pass filter, 12 dB per octave, to clear rumble, handling noise and low-end mud.</dd><dt>PEAK</dt><dd>Lights when the signal after the EQ comes within 3 dB of clipping. Turn GAIN down if it stays lit.</dd></dl><h3>COMP</h3><dl class="ctl"><dt>COMP</dt><dd>The one-knob compressor, 0 to 10 (0 = off). Turning it up lowers the threshold from 0 to -30 dB and raises the ratio from 1:1 to 10:1, with a soft knee, and adds make-up gain as it goes. Quiet parts come up and loud parts are held down, so the level gets more even.</dd><dt>COMP light</dt><dd>Lights when the compressor is pulling the level down by more than 1 dB.</dd></dl><h3>EQ</h3><dl class="ctl"><dt>LOW</dt><dd>A shelf at 100 Hz, -15 to +15 dB.</dd><dt>MID</dt><dd>A broad peak at 2.5 kHz, -15 to +15 dB: presence and bite, or cut it for a softer sound.</dd><dt>HIGH</dt><dd>A shelf at 10 kHz, -15 to +15 dB: air and sparkle.</dd></dl><h3>OUTPUT</h3><dl class="ctl"><dt>PAN</dt><dd>Constant-power pan. On a stereo track it works as a balance control: the centre stays at full level on both sides.</dd><dt>LEVEL</dt><dd>The channel level, -40 dB (OFF) to +10 dB (0 dB by default).</dd><dt>DRIFT</dt><dd>See Drift below.</dd><dt>Meters</dt><dd>Output level, left and right. Click them to reset the peak hold.</dd></dl><h3>Presets and size</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets (or click the preset display). Choosing one sets GAIN, HPF, COMP and the EQ; PAN, LEVEL and DRIFT are left alone.</dd><dt>◄ / ►</dt><dd>Step through the presets.</dd><dt>Preset display</dt><dd>Shows the preset number and name. Click it for the list.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><h3>Output stage (parameter list only)</h3><p>The GFX output stage runs under the hood, after LEVEL, and has no controls on the panel: set it from REAPER's parameter list. OUTPUT STAGE is CLIP by default (a soft clipper at the ceiling, no latency); LIMIT is a 3 ms look-ahead brickwall limiter whose threshold pulls the level up into a fixed -0.3 dB ceiling; OFF bypasses it. CEILING / LIMIT THRESHOLD sets that level (-0.3 dB by default). BAND SAT (0% by default) adds the house low- and high-band saturation, with BIAS and the two band frequencies to shape it.</p><h3>Drift</h3><p>DRIFT (0 - 100%, 50% by default) works on the preamp. The supply voltage wanders slowly, so the preamp's headroom and gain move a little, and its saturation wanders too: how hard it rounds off, and how unevenly. You hear it most when GAIN is pushed. 50% is the standard amount, 100% twice that, 0 steady; the wander also speeds up as you turn it up.</p>
+<h2>Presets</h2><dl class="ctl"><dt>Init</dt><dd>Everything flat, compressor off.</dd><dt>Vocal</dt><dd>+6 dB gain, HPF on, COMP 4, a little less low end, more mid and air.</dd><dt>Acoustic Guitar</dt><dd>HPF on, COMP 3, less boom, a brighter top.</dd><dt>Bass DI</dt><dd>COMP 6, more low end, less mid and top.</dd><dt>Kick</dt><dd>COMP 3, low end up, the mid scooped, a little click.</dd><dt>Snare</dt><dd>HPF on, COMP 5, crack at 2.5 kHz and a brighter top.</dd><dt>Keys</dt><dd>COMP 2, a slightly lighter low end and a brighter top.</dd><dt>Squash</dt><dd>+4 dB gain and COMP 9: heavy, even compression.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Set GAIN first so PEAK only flickers on the loudest notes, then add COMP.</li><li>Use HPF on almost everything except bass and kick.</li><li>Cutting MID often works better than boosting LOW and HIGH together.</li><li>The strip is short and wide: drag the plugin window wide and low to fit it under your other plug-ins.</li></ul>
+<p class="file">File: gfx-strip-102.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://www.gardenfx.uk/">https://www.gardenfx.uk/</a></div></footer></body></html>

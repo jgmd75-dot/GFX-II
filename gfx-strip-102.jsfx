@@ -1,0 +1,261 @@
+desc:GFX Strip 102
+//tags: channel strip mixer preamp eq compressor pan compact
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// One channel of a small 10-input desk, laid out as a slim horizontal strip:
+//   GAIN       - preamp gain, -24 to +24 dB. The preamp colours gently as it is pushed.
+//   HPF        - 80 Hz high-pass, 12 dB/oct (as on the mic channels).
+//   COMP       - one knob, 0 - 10: turning it up lowers the threshold (0 to -30 dB), raises the ratio
+//                (1:1 to 10:1) and adds make-up gain, so the level stays about the same as it squashes.
+//   LOW / MID / HIGH - 100 Hz shelf, 2.5 kHz peak, 10 kHz shelf, each +/-15 dB (Audio EQ Cookbook biquads).
+//   PAN        - constant-power pan (a balance on stereo tracks: the centre stays at unity).
+//   LEVEL      - channel level, -40 dB (off) to +10 dB.
+//   PEAK       - lights 3 dB below clipping, after the EQ.
+// Chain: GAIN -> preamp -> HPF -> COMP -> EQ -> LEVEL -> GFX output stage (band sat) -> PAN -> clip / limit.
+// The GFX output stage (band saturation, ceiling, OFF / CLIP / LIMIT) has no panel controls: set it from the parameter list.
+//
+// DRIFT (50% = standard): the supply voltage wanders, so the preamp's headroom and gain move slowly, and
+// the preamp's saturation (its amount and its evenness) wanders too. 0% = steady, 100% = twice the standard amount.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-lfo.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<-24,24,0.1>-Gain (dB)
+slider2:0<0,1,1{Off,On}>-HPF 80 Hz
+slider3:0<0,10,0.1>-Comp
+slider4:0<-15,15,0.1>-Low 100 Hz (dB)
+slider5:0<-15,15,0.1>-Mid 2.5 kHz (dB)
+slider6:0<-15,15,0.1>-High 10 kHz (dB)
+slider7:0<-1,1,0.01>-Pan
+slider8:0<-40,10,0.1>-Level (dB)
+slider9:50<0,100,1>-Drift (%)
+slider10:0<0,7,1{Init,Vocal,Acoustic Guitar,Bass DI,Kick,Snare,Keys,Squash}>-Preset
+slider11:0<0,100,1>-Band sat (%)
+slider12:30<0,100,1>-Bias (%)
+slider13:120<40,400,1>-Sat low band (Hz)
+slider14:6000<2000,16000,10>-Sat high band (Hz)
+slider15:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_noinit = 1.0;
+#ui_man = "gfx-strip-102";
+
+// ---------- biquads (Audio EQ Cookbook), transposed direct form II ----------
+function bq_run(x) instance(b0, b1, b2, a1, a2, z1, z2) local(y) (
+  y = b0 * x + z1; z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y; y;
+);
+function bq_norm(c0, c1, c2, d0, d1, d2) instance(b0, b1, b2, a1, a2) (
+  b0 = c0 / d0; b1 = c1 / d0; b2 = c2 / d0; a1 = d1 / d0; a2 = d2 / d0;
+);
+function bq_hp(f, q) local(w, cw, al) (
+  w = 2 * $pi * f / srate; cw = cos(w); al = sin(w) / (2 * q);
+  this.bq_norm((1 + cw) / 2, -(1 + cw), (1 + cw) / 2, 1 + al, -2 * cw, 1 - al);
+);
+function bq_peak(f, q, db) local(w, cw, al, A) (
+  A = 10 ^ (db / 40); w = 2 * $pi * f / srate; cw = cos(w); al = sin(w) / (2 * q);
+  this.bq_norm(1 + al * A, -2 * cw, 1 - al * A, 1 + al / A, -2 * cw, 1 - al / A);
+);
+function bq_lshelf(f, db) local(w, cw, al, A, sA) (
+  A = 10 ^ (db / 40); w = 2 * $pi * f / srate; cw = cos(w); al = sin(w) / 2 * sqrt(2); sA = 2 * sqrt(A) * al;
+  this.bq_norm(A * ((A + 1) - (A - 1) * cw + sA), 2 * A * ((A - 1) - (A + 1) * cw), A * ((A + 1) - (A - 1) * cw - sA),
+               (A + 1) + (A - 1) * cw + sA, -2 * ((A - 1) + (A + 1) * cw), (A + 1) + (A - 1) * cw - sA);
+);
+function bq_hshelf(f, db) local(w, cw, al, A, sA) (
+  A = 10 ^ (db / 40); w = 2 * $pi * f / srate; cw = cos(w); al = sin(w) / 2 * sqrt(2); sA = 2 * sqrt(A) * al;
+  this.bq_norm(A * ((A + 1) + (A - 1) * cw + sA), -2 * A * ((A - 1) + (A + 1) * cw), A * ((A + 1) + (A - 1) * cw - sA),
+               (A + 1) - (A - 1) * cw + sA, 2 * ((A - 1) - (A + 1) * cw), (A + 1) - (A - 1) * cw - sA);
+);
+
+// the preamp: soft and slightly uneven; hv = headroom, kp / kn = how hard each half bends
+function s2_pre(x, hv, kp, kn) local(s) (
+  s = x / hv;
+  s > 0 ? s = s / (1 + s ^ kp) ^ (1 / kp) : s = s / (1 + (-s) ^ kn) ^ (1 / kn);
+  s * hv;
+);
+
+// presets: gain, hpf, comp, low, mid, high (pan, level and drift are left alone)
+function setp(g, h, c, lo, mi, hi) (
+  slider1 = g; slider2 = h; slider3 = c; slider4 = lo; slider5 = mi; slider6 = hi;
+);
+function apply_preset(n) (
+  n == 0 ? setp( 0, 0, 0,  0,  0,  0) :      // Init
+  n == 1 ? setp( 6, 1, 4, -2,  2,  3) :      // Vocal
+  n == 2 ? setp( 4, 1, 3, -3, -1,  4) :      // Acoustic Guitar
+  n == 3 ? setp( 3, 0, 6,  4, -2, -3) :      // Bass DI
+  n == 4 ? setp( 2, 0, 3,  5, -4,  2) :      // Kick
+  n == 5 ? setp( 2, 1, 5, -1,  3,  2) :      // Snare
+  n == 6 ? setp( 0, 0, 2, -1,  0,  2) :      // Keys
+           setp( 4, 0, 9,  0,  1,  1);       // Squash
+  slider_automate(2^0 + 2^1 + 2^2 + 2^3 + 2^4 + 2^5);
+);
+function pname(n) ( n = floor(n + 0.5);
+  n == 0 ? "INIT" : n == 1 ? "VOCAL" : n == 2 ? "ACOUSTIC GUITAR" : n == 3 ? "BASS DI" :
+  n == 4 ? "KICK" : n == 5 ? "SNARE" : n == 6 ? "KEYS" : "SQUASH"; );
+
+// coefficients and gains, worked out here rather than per sample
+function update() local(k, th) (
+  s2_gain = 10 ^ (slider1 / 20);
+  s2_hpon = slider2 > 0.5;
+  hpL.bq_hp(80, 0.7071); hpR.bq_hp(80, 0.7071);
+  loL.bq_lshelf(100, slider4); loR.bq_lshelf(100, slider4);
+  miL.bq_peak(2500, 0.8, slider5); miR.bq_peak(2500, 0.8, slider5);
+  hiL.bq_hshelf(min(10000, srate * 0.45), slider6); hiR.bq_hshelf(min(10000, srate * 0.45), slider6);
+  k = slider3 / 10;
+  s2_thr = -30 * k;
+  s2_rat = 1 + 9 * k ^ 1.6;
+  s2_mk = 10 ^ (max(0, -s2_thr * (1 - 1 / s2_rat)) * 0.45 / 20);
+  s2_con = k > 0.001;
+  s2_lev = slider8 <= -39.95 ? 0 : 10 ^ (slider8 / 20);
+  th = (slider7 + 1) * $pi / 4;
+  s2_pl = min(1, cos(th) * sqrt(2)); s2_pr = min(1, sin(th) * sqrt(2));
+  drift_macro(slider9);
+);
+
+!ui_dflt ? ui_thm = 0;
+lastp = slider10;                                  // adopt the saved preset without re-applying it
+drV.drift_init(0.8 + rand(0.5)); drS.drift_init(0.8 + rand(0.5));
+s2_ca = 1 - exp(-1 / (0.005 * srate));             // detector attack
+s2_cr = 1 - exp(-1 / (0.150 * srate));             // detector release
+s2_gs = 1 - exp(-1 / (0.002 * srate));             // gain smoothing
+update();
+s2_env = 0; s2_grs = 0;
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // the GFX output stage
+ui_dflt = 1;
+
+@slider
+slider10 != lastp ? ( apply_preset(slider10); lastp = slider10; );
+update();
+
+@block
+// DRIFT: the supply voltage (headroom and gain) and the saturation wander slowly
+vV = drV.drift_tick(0.12 * dm_s * samplesblock / srate);
+vS = drS.drift_tick(0.10 * dm_s * samplesblock / srate);
+s2_hv = 1.3 * (1 + 0.05 * dm_a * vV);
+s2_gv = 1 + 0.035 * dm_a * vV;
+s2_kp = 2.6 - 0.35 * dm_a * vS; s2_kn = 3.0 + 0.35 * dm_a * vS;
+ost_setup(slider11 / 100, slider12 / 100, slider13, slider14, slider15, floor(slider16 + 0.5));
+
+@sample
+// GAIN and the preamp (DRIFT moves its headroom, gain and saturation)
+s2_l = s2_pre(spl0 * s2_gain * s2_gv, s2_hv, s2_kp, s2_kn);
+s2_r = s2_pre(spl1 * s2_gain * s2_gv, s2_hv, s2_kp, s2_kn);
+
+// HPF 80 Hz
+s2_hpon ? ( s2_l = hpL.bq_run(s2_l); s2_r = hpR.bq_run(s2_r); );
+
+// COMP: mono detector, smoothed level in dB, 6 dB soft knee, make-up gain
+s2_con ? (
+  s2_m = (s2_l + s2_r) * 0.5; s2_m *= s2_m;
+  s2_env += (s2_m - s2_env) * (s2_m > s2_env ? s2_ca : s2_cr);
+  s2_db = 10 * log10(max(s2_env, 0.0000000001)) + 3;
+  s2_ov = s2_db - s2_thr;
+  s2_gr = s2_ov <= -3 ? 0 : s2_ov >= 3 ? s2_ov * (1 - 1 / s2_rat) : (1 - 1 / s2_rat) * sqr(s2_ov + 3) / 12;
+  s2_grs += (s2_gr - s2_grs) * s2_gs;
+  s2_g = 10 ^ (-s2_grs / 20) * s2_mk;
+  s2_l *= s2_g; s2_r *= s2_g;
+) : s2_grs = 0;
+
+// EQ: LOW shelf, MID peak, HIGH shelf
+s2_l = hiL.bq_run(miL.bq_run(loL.bq_run(s2_l)));
+s2_r = hiR.bq_run(miR.bq_run(loR.bq_run(s2_r)));
+s2_pk = max(s2_pk, max(abs(s2_l), abs(s2_r)));
+
+// LEVEL, the output stage's band saturation, PAN, then clip / limit
+s2_l = ostL.ost_band(s2_l * s2_lev); s2_r = ostR.ost_band(s2_r * s2_lev);
+ost_out(s2_l * s2_pl, s2_r * s2_pr);
+spl0 = ost_l; spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+s2_grm = max(s2_grm, s2_grs);
+
+@gfx 1090 110
+ui_begin(1090, 110);
+
+FACE = 0xBABDC0; INK = 0x1C1D1F; DIM = 0x4E5156; RULE = 0x8E9196;
+C_GAIN = 0xEEEFEA; C_CMP = 0xE8742A; C_LO = 0x3D70CC; C_MI = 0x33A052; C_HI = 0xD02E28; C_PAN = 0x6E7378; C_LEV = 0xEEEFEA; C_DR = 0x9DA2A8; C_HPF = 0xF2C83E;
+KEY = 0x5A5E64;
+dy_ink = INK; dy_bg = FACE; dy_nov = 1;
+
+function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+
+// the desk's grey panel: a soft sheen, a darker lip top and bottom
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(FACE); gfx_rect(0, 0, 1090 * sc, 110 * sc);
+gfx_gradrect(0, 0, 1090 * sc, 55 * sc, 1, 1, 1, 0.10, 0, 0, 0, 0, 0, 0, 0, -0.10 / (55 * sc));
+ui_cola(0x000000, 0.25); gfx_rect(0, 0, 1090 * sc, 2 * sc); gfx_rect(0, 107 * sc, 1090 * sc, 3 * sc);
+
+// ---------- title, presets [PRESETS][◄][►][LCD], size ----------
+rd_badge(26, 25, 14, INK, FACE);
+rd_title(48, 10, "STRIP 102", 22, INK);
+rd_sub(166, 21, "CHANNEL STRIP", DIM, 1);
+ui_size_picker(268 * sc, 16 * sc);
+pm_ = rd_sq(10, 62, 64, 30, 0, KEY, "PRESETS");
+rd_sq(78, 62, 28, 30, 0, KEY, "◄") ? ( setv(10, (floor(slider10 + 0.5) + 7) % 8); apply_preset(slider10); lastp = slider10; );
+rd_sq(110, 62, 28, 30, 0, KEY, "►") ? ( setv(10, (floor(slider10 + 0.5) + 1) % 8); apply_preset(slider10); lastp = slider10; );
+pk_lcd(144 * sc, 56 * sc, 182 * sc, 42 * sc, 0);
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+sprintf(#plcd, "PRESET %02d/08", floor(slider10 + 0.5) + 1); gfx_x = 154 * sc; gfx_y = 61 * sc; gfx_drawstr(#plcd);
+pk_lcdfont(9, 14 * sc); gfx_x = 154 * sc; gfx_y = 76 * sc; gfx_drawstr(pname(slider10));
+pm_ || (pressed && drag_id == 0 && mouse_x >= 144 * sc && mouse_x < 326 * sc && mouse_y >= 56 * sc && mouse_y < 98 * sc) ? (
+  drag_id = -1;
+  strcpy(#pmenu, ""); k_ = 0;
+  loop(8, k_ == floor(slider10 + 0.5) ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k_)); k_ < 7 ? strcat(#pmenu, "|"); k_ += 1; );
+  gfx_x = 10 * sc; gfx_y = 98 * sc;
+  k_ = gfx_showmenu(#pmenu);
+  k_ > 0 ? ( setv(10, k_ - 1); apply_preset(slider10); lastp = slider10; );
+);
+
+function rule(x) ( ui_col(RULE); gfx_rect(x * sc, 10 * sc, 1 * sc, 90 * sc); ui_cola(0xFFFFFF, 0.35); gfx_rect((x + 1) * sc, 10 * sc, 1 * sc, 90 * sc); );
+
+// ---------- INPUT: GAIN, HPF, PEAK ----------
+rule(338);
+rd_sub(348, 6, "INPUT", DIM, 1);
+sprintf(#v, "%+.1f dB", slider1);
+dy_knob(390, 50, 22, 1, -24, 24, 0, 0, C_GAIN, "GAIN", #v);
+rd_sq(432, 30, 60, 26, slider2 > 0.5, C_HPF, "HPF") ? setv(2, 1 - slider2);
+rd_lbl(462, 60, "80 Hz", DIM, 1);
+rd_led(446, 86, 5, s2_pk > 0.708, 0xFF3A22); rd_lbl(474, 82, "PEAK", DIM, 1);
+s2_pk *= 0.8;
+
+// ---------- COMP ----------
+rule(504);
+rd_sub(514, 6, "COMP", DIM, 1);
+sprintf(#v, "%.1f", slider3);
+dy_knob(560, 50, 22, 3, 0, 10, 0, 0, C_CMP, "COMP", #v);
+rd_led(594, 24, 4, s2_grm > 1, 0xFFB020);
+s2_grm *= 0.8;
+
+// ---------- EQ ----------
+rule(612);
+rd_sub(622, 6, "EQ", DIM, 1);
+sprintf(#v, "%+.1f dB", slider4); dy_knob(664, 50, 22, 4, -15, 15, 0, 0, C_LO, "LOW", #v);
+sprintf(#v, "%+.1f dB", slider5); dy_knob(736, 50, 22, 5, -15, 15, 0, 0, C_MI, "MID", #v);
+sprintf(#v, "%+.1f dB", slider6); dy_knob(808, 50, 22, 6, -15, 15, 0, 0, C_HI, "HIGH", #v);
+
+// ---------- OUTPUT: PAN, LEVEL, DRIFT, meters ----------
+rule(848);
+rd_sub(858, 6, "OUTPUT", DIM, 1);
+abs(slider7) < 0.005 ? strcpy(#v, "C") : sprintf(#v, "%s %.0f", slider7 < 0 ? "L" : "R", abs(slider7) * 100);
+dy_knob(890, 50, 22, 7, -1, 1, 0, 0, C_PAN, "PAN", #v);
+slider8 <= -39.95 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider8);
+dy_knob(956, 50, 22, 8, -40, 10, 0, 0, C_LEV, "LEVEL", #v);
+sprintf(#v, "%.0f%%", slider9);
+dy_knob(1012, 56, 15, 9, 0, 100, 50, 0, C_DR, "DRIFT", #v);
+mL.ui_ledm(1048 * sc, 12 * sc, 9 * sc, 86 * sc, pkL); mR.ui_ledm(1062 * sc, 12 * sc, 9 * sc, 86 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+
+pk_end();
+ui_end();
