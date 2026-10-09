@@ -1,0 +1,617 @@
+desc:GFX G Traveller
+//tags: instrument synth mono monophonic analogue lead bass vintage
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-voice, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
+//
+// Monophonic analogue synth in the spirit of the mid-70s Japanese two-oscillator minis: a black and silver panel,
+// tab switches, and the signature pair of horizontal slide controls that move the low-pass and high-pass filters.
+//   VCO 1    - five waveforms: TRIANGLE, SAW, SQUARE, PULSE (narrow, set by PW) and PWM (the pulse width swept by the
+//              main LFO, PWM sets how far). FEET: 64' 32' 16' 8' 4' 2' (8' = concert pitch, 64' = three octaves down).
+//   VCO 2    - SAW, RING (VCO 2's saw ring-modulated with VCO 1), or noise: WHITE, PINK, BLUE (bright, hissy).
+//              INTERVAL (semitones) and DETUNE (cents) offset it from VCO 1. BLEND mixes VCO 1 (left) and VCO 2 (right).
+//   FILTERS  - a 12 dB high-pass into a 12 dB low-pass in series, each set by a horizontal TRAVELLER slider on one shared
+//              scale. LINK: drag either slider and both travel together (the gap between them kept), and the EG / LFO / KBD
+//              movement then moves the high-pass too, so the pass-band travels as one window.
+//              RESONANCE: LOW / MID / HIGH (HIGH rings close to self-oscillation, soft-limited). EG, LFO and KBD set how
+//              far the envelope (+/-), the main LFO and the keyboard move the cut-offs.
+//   EG / VCA - one envelope drives the filter and the VCA. ATTACK; DECAY / RELEASE is one shared time (the decay after
+//              the attack peak and the fall after the key is let go, as on the early units); the EG MODE tabs choose
+//              how the two interact:
+//                AD     - attack, then decay to silence even while the key is held (percussive)
+//                ADS    - attack, decay to SUSTAIN, hold there while the key is down, release with the DECAY time
+//                HOLD   - attack to full and stay there while the key is down (organ gate), release with DECAY
+//                REPEAT - AD cycles that re-trigger while the key is held (attack, decay, attack ...), release with DECAY
+//              VEL: the original had no velocity; VEL (default low) lets playing harder open the VCA and filter a little.
+//   PITCH    - AUTO BEND: every new note slides into its pitch: DEPTH semitones (+ rises from below, - falls from
+//              above), TIME how long the slide takes. VIBRATO: its own sine LFO (separate from the main LFO) - RATE,
+//              DEPTH (cents) and DELAY (the vibrato waits DELAY after a new note, then fades in over a quarter second).
+//   LFO      - main LFO, RATE and SHAPE (TRIANGLE / SQUARE), routed to the filters (FILTERS: LFO) and to PWM (VCO 1: PWM).
+//   PERFORM  - GLIDE (portamento) on every note (ALL) or only between overlapping notes (LEGATO). TRIGGER: SINGLE
+//              (legato - overlapping notes do not restart the EG or the auto bend) or MULTI (every note restarts them,
+//              from the current level, without clicks). Last-note priority.
+//   MIDI     - pitch bend (BEND sets the range, +/- semitones), CC 120 / 123 all notes off, CHANNEL (0 = omni).
+//   DRIFT    - the GFX instrument drift: the tuning wanders slowly (up to +/-20 cents at 100 %), VCO 2 drifts against
+//              VCO 1, the pulse width and the filter cut-offs wander, and every new note lands a little off in tune.
+// IN / OUT: SAT (band saturation) and the OUT stage (OFF / CLIP / LIMIT) in the MASTER section.
+
+import gfx-drift.jsfx-inc
+import gfx-voice.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+// ---------- VCO 1 / VCO 2 ----------
+slider1:1<0,4,1{Triangle,Sawtooth,Square,Pulse,PWM}>-VCO 1 waveform
+slider2:3<0,5,1{64',32',16',8',4',2'}>-VCO 1 feet
+slider3:0<0,4,1{Sawtooth,Ring mod,White noise,Pink noise,Blue noise}>-VCO 2 mode
+slider4:0<-24,24,1>-VCO 2 interval (st)
+slider5:0<-50,50,0.1>-VCO 2 detune (cents)
+slider6:0<0,100,1>-Blend (% VCO 2)
+slider7:25<5,50,1>-Pulse width (%)
+slider8:60<0,100,1>-PWM depth (%)
+// ---------- FILTERS ----------
+slider9:4000<20,18000,1>-Low-pass traveller (Hz)
+slider10:20<20,18000,1>-High-pass traveller (Hz)
+slider11:0<0,1,1{Off,On}>-Traveller link
+slider12:0<0,2,1{Low,Mid,High}>-Resonance
+slider13:30<-100,100,1>-EG to filter (%)
+slider14:0<0,100,1>-LFO to filter (%)
+slider15:50<0,100,1>-Keyboard follow (%)
+// ---------- EG / VCA ----------
+slider16:2<0.5,5000,0.1>-Attack (ms)
+slider17:600<10,10000,1>-Decay / release (ms)
+slider18:1<0,3,1{AD,ADS,Hold,Repeat}>-EG mode
+slider19:80<0,100,1>-Sustain level (%)
+slider20:15<0,100,1>-Velocity (%)
+// ---------- LFO / PITCH ----------
+slider21:4<0.05,30,0.01>-LFO rate (Hz)
+slider22:0<0,1,1{Triangle,Square}>-LFO shape
+slider23:5.5<1,12,0.01>-Vibrato rate (Hz)
+slider24:0<0,100,1>-Vibrato depth (cents)
+slider25:400<0,3000,1>-Vibrato delay (ms)
+slider26:0<-12,12,0.1>-Auto bend depth (st)
+slider27:150<5,2000,1>-Auto bend time (ms)
+// ---------- PERFORMANCE ----------
+slider28:0<0,2000,1>-Glide (ms)
+slider29:1<0,1,1{All notes,Legato only}>-Glide mode
+slider30:0<0,1,1{Single,Multi}>-Trigger
+slider31:2<0,12,1>-Pitch bend range (st)
+slider32:0<0,16,1>-MIDI channel (0 = omni)
+slider33:25<0,100,1>-Drift (%)
+slider34:0<-24,6,0.1>-Volume (dB)
+// ---------- OUTPUT STAGE ----------
+slider35:0<0,100,1>-Band sat (%)
+slider36:30<0,100,1>-Bias (%)
+slider37:120<40,400,1>-Sat low band (Hz)
+slider38:6000<2000,16000,10>-Sat high band (Hz)
+slider39:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider40:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-traveller";                                  // the ? pop-up links to this manual
+
+// ---------- memory map ----------
+TV_HN = 1000;                                     // held-note stack (last-note priority), 128 slots
+memset(TV_HN, 0, 128);
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();      // the output stage uses 20000 .. 24095
+
+// ---------- presets ----------
+function tv_po(w, ft, m2, iv, dt, bl, pw, pwm) (
+  slider1 = w; slider2 = ft; slider3 = m2; slider4 = iv; slider5 = dt; slider6 = bl; slider7 = pw; slider8 = pwm;
+);
+function tv_pf(lp, hp, lk, rs, eg, lf, kb) ( slider9 = lp; slider10 = hp; slider11 = lk; slider12 = rs; slider13 = eg; slider14 = lf; slider15 = kb; );
+function tv_pe(a, d, md, su, vl) ( slider16 = a; slider17 = d; slider18 = md; slider19 = su; slider20 = vl; );
+function tv_pl(lr, ls, vr, vd, vy, bd, bt) ( slider21 = lr; slider22 = ls; slider23 = vr; slider24 = vd; slider25 = vy; slider26 = bd; slider27 = bt; );
+function tv_pp(gl, gm, tr) ( slider28 = gl; slider29 = gm; slider30 = tr; );
+function load_preset(p) (
+  p == 1 ? (                                                                  // Init
+    tv_po(1, 3, 0, 0, 0, 0, 25, 60); tv_pf(4000, 20, 0, 0, 30, 0, 50); tv_pe(2, 600, 1, 80, 15);
+    tv_pl(4, 0, 5.5, 0, 400, 0, 150); tv_pp(0, 1, 0);
+  ) : p == 2 ? (                                                              // 64' Sub Bass
+    tv_po(2, 0, 0, 12, 0, 30, 25, 60); tv_pf(700, 20, 0, 0, 25, 0, 40); tv_pe(1, 500, 1, 90, 20);
+    tv_pl(4, 0, 5.5, 0, 400, 0, 150); tv_pp(40, 1, 0);
+  ) : p == 3 ? (                                                              // Traveller Sweep
+    tv_po(1, 3, 0, 0, 7, 50, 25, 60); tv_pf(320, 20, 0, 2, 0, 45, 50); tv_pe(15, 1500, 2, 100, 10);
+    tv_pl(0.25, 0, 5.5, 0, 400, 0, 150); tv_pp(80, 1, 0);
+  ) : p == 4 ? (                                                              // Ring Bell
+    tv_po(0, 4, 1, 11, 35, 85, 25, 60); tv_pf(9000, 180, 0, 0, 0, 0, 30); tv_pe(0.5, 2600, 0, 0, 35);
+    tv_pl(4, 0, 5.5, 0, 400, 0, 150); tv_pp(0, 1, 1);
+  ) : p == 5 ? (                                                              // Wind Noise
+    tv_po(0, 3, 3, 0, 0, 100, 25, 60); tv_pf(1400, 500, 1, 2, 20, 55, 30); tv_pe(900, 3000, 1, 100, 10);
+    tv_pl(0.18, 0, 5.5, 0, 400, 0, 150); tv_pp(0, 1, 0);
+  ) : p == 6 ? (                                                              // Auto-Bend Lead
+    tv_po(1, 3, 0, 0, 9, 40, 25, 60); tv_pf(2400, 60, 0, 1, 35, 0, 60); tv_pe(3, 800, 1, 85, 20);
+    tv_pl(4, 0, 5.6, 18, 600, 2, 90); tv_pp(60, 1, 0);
+  ) : p == 7 ? (                                                              // Pulse Funk Bass
+    tv_po(3, 2, 0, 0, 0, 0, 18, 60); tv_pf(500, 60, 0, 1, 60, 0, 40); tv_pe(0.5, 280, 0, 0, 40);
+    tv_pl(4, 0, 5.5, 0, 400, 0, 150); tv_pp(0, 1, 1);
+  ) : p == 8 ? (                                                              // Vibrato Flute
+    tv_po(0, 4, 2, 0, 0, 12, 25, 60); tv_pf(3200, 320, 0, 0, 12, 0, 50); tv_pe(60, 350, 1, 90, 25);
+    tv_pl(4, 0, 5.2, 22, 700, 0.4, 60); tv_pp(40, 1, 0);
+  ) : p == 9 ? (                                                              // Resonant Zap
+    tv_po(1, 2, 0, 0, 0, 0, 25, 60); tv_pf(110, 20, 0, 2, 100, 0, 50); tv_pe(0.5, 240, 0, 0, 30);
+    tv_pl(4, 0, 5.5, 0, 400, 0, 150); tv_pp(0, 1, 1);
+  ) : p == 10 ? (                                                             // PWM Brass
+    tv_po(4, 3, 0, 0, 6, 35, 25, 65); tv_pf(650, 20, 0, 0, 55, 0, 50); tv_pe(70, 900, 1, 70, 25);
+    tv_pl(0.8, 0, 5, 8, 500, 1, 70); tv_pp(30, 1, 0);
+  ) : p == 11 ? (                                                             // Synth Tom
+    tv_po(2, 2, 2, 0, 0, 22, 25, 60); tv_pf(900, 40, 0, 1, 40, 0, 40); tv_pe(0.5, 480, 0, 0, 60);
+    tv_pl(4, 0, 5.5, 0, 400, -7, 260); tv_pp(0, 1, 1);
+  ) : p == 12 ? (                                                             // Drone Seashore
+    tv_po(1, 1, 3, 0, 0, 55, 25, 60); tv_pf(600, 110, 1, 1, 25, 60, 20); tv_pe(2500, 3500, 3, 100, 10);
+    tv_pl(0.12, 0, 5.5, 0, 400, 0, 150); tv_pp(0, 1, 0);
+  );
+  p >= 1 && p <= 12 ? slider_automate(2 ^ 30 - 1);                         // sliders 1 - 30
+);
+#tv_pm = "Init|64' Sub Bass|Traveller Sweep|Ring Bell|Wind Noise|Auto-Bend Lead|Pulse Funk Bass|Vibrato Flute|Resonant Zap|PWM Brass|Synth Tom|Drone Seashore";
+// per-preset level trim (measured: legato runs and chords of notes at full velocity, peaks held around -3 dBFS)
+function tv_trim(p) (
+  p == 2 ? 1.30 : p == 3 ? 1.30 : p == 4 ? 1.25 : p == 5 ? 1.25 : p == 6 ? 1.25 : p == 7 ? 1.25 : p == 8 ? 1.80 :
+  p == 9 ? 1.15 : p == 10 ? 1.40 : p == 11 ? 1.35 : p == 12 ? 1.60 : 1;
+);
+
+// ---------- the envelope: one EG for the filter and the VCA ----------
+// st 0 idle, 1 attack, 2 decay (to SUSTAIN in ADS, to 0 in AD / REPEAT), 3 hold (HOLD mode), 4 release
+function tv_eg_gate(on, retrig) (
+  on ? ( retrig || tv_st == 0 || tv_st == 4 ? tv_st = 1; ) : ( tv_st > 0 ? tv_st = 4; );
+);
+function tv_eg() (
+  tv_st == 1 ? (
+    tv_lv += (1.3 - tv_lv) * tv_ac;
+    tv_lv >= 1 ? ( tv_lv = 1; tv_st = tv_mode == 2 ? 3 : 2; );
+  ) : tv_st == 2 ? (
+    tv_lv += ((tv_mode == 1 ? tv_sus : 0) - tv_lv) * tv_dc;
+    tv_mode == 3 && tv_lv < 0.02 ? tv_st = 1;                               // REPEAT: attack again
+  ) : tv_st == 3 ? (
+    tv_lv += (1 - tv_lv) * tv_dc;
+  ) : tv_st == 4 ? (
+    tv_lv += (0 - tv_lv) * tv_dc;
+    tv_lv < 0.00002 ? ( tv_lv = 0; tv_st = 0; );
+  );
+  tv_lv;
+);
+
+// ---------- notes ----------
+function tv_note_on(n, v) local(i, f, legato, trig) (
+  legato = tv_hc > 0;
+  f = -1; i = 0; loop(tv_hc, TV_HN[i] == n ? f = i; i += 1; );
+  f >= 0 ? ( i = f; loop(tv_hc - f - 1, TV_HN[i] = TV_HN[i + 1]; i += 1; ); tv_hc -= 1; );
+  tv_hc < 127 ? ( TV_HN[tv_hc] = n; tv_hc += 1; );
+  tv_tgt = n; tv_vel = v / 127;
+  !legato ? tv_nd = ins_note_detune();
+  tv_gon = tv_glms > 0 && (tv_gmode == 0 || legato);
+  !tv_gon ? tv_cur = n;
+  !tv_played ? ( tv_cur = n; tv_played = 1; );
+  trig = !legato || tv_trig;
+  trig ? ( tv_eg_gate(1, 1); tv_ab = -tv_abd; ) : tv_eg_gate(1, 0);
+  !legato ? ( tv_vcnt = 0; tv_venv = 0; );
+  ins_midi_hit();
+);
+function tv_note_off(n) local(i, f) (
+  f = -1; i = 0; loop(tv_hc, TV_HN[i] == n ? f = i; i += 1; );
+  f >= 0 ? (
+    i = f; loop(tv_hc - f - 1, TV_HN[i] = TV_HN[i + 1]; i += 1; ); tv_hc -= 1;
+    tv_hc > 0 ? ( tv_tgt = TV_HN[tv_hc - 1]; tv_gon = tv_glms > 0; !tv_gon ? tv_cur = tv_tgt; ) : tv_eg_gate(0, 0);
+  );
+);
+function tv_all_off() ( tv_hc = 0; tv_eg_gate(0, 0); );
+
+// ---------- parameters ----------
+function tv_update() local(r) (
+  tv_w1 = slider1; tv_oct = slider2 - 3;
+  tv_m2 = slider3;
+  tv_r2 = 2 ^ ((slider4 + slider5 / 100) / 12);
+  tv_blt = slider6 / 100;
+  tv_pw = slider7 / 100; tv_pwm = slider8 / 100;
+  tv_lpt = log(max(slider9, 20)) / log(2); tv_hpt = log(max(slider10, 20)) / log(2);
+  tv_link = slider11;
+  r = slider12; tv_res = r == 0 ? 0.18 : r == 1 ? 0.62 : 0.93;
+  tv_klp = 2 - 2 * tv_res; tv_khp = 2 - 1.3 * tv_res;
+  tv_rin = 1 / (1 + tv_res * 0.9);                                          // the resonant peak's extra level, held back
+  tv_egamt = slider13 / 100 * 7; tv_lfamt = slider14 / 100 * 3; tv_kb = slider15 / 100;
+  tv_ac = vo_coef(slider16); tv_dc = vo_coef(slider17); tv_mode = slider18; tv_sus = slider19 / 100;
+  tv_vs = slider20 / 100;
+  tv_lrate = slider21; tv_lshape = slider22;
+  tv_vrate = slider23; tv_vdep = slider24 / 100; tv_vdel = floor(slider25 * 0.001 * srate);
+  tv_vfi = 1 / (0.25 * srate);
+  tv_abd = slider26; tv_abc = exp(-4.6 / (max(slider27, 1) * 0.001 * srate));
+  tv_glms = slider28; tv_gmode = slider29; tv_gc = slider28 > 0 ? vo_coef(slider28) : 1;
+  tv_trig = slider30; tv_brange = slider31; tv_chan = slider32;
+  tv_drift = slider33 / 100;
+  tv_volt = 10 ^ (slider34 / 20);
+  ins_output_setup(35);
+);
+
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );            // a new instance opens Large, on Init
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1; !ui_dflt ? ui_kstyle = 0;
+ins_drift_init();
+tv_dW.drift_init(0.8 + rand(0.5));                // pulse-width wander (the pitch / VCO 2 / filter wander come from ins_drift)
+tv_bend = 1; tv_nd = 1; tv_cur = 60; tv_tgt = 60; tv_vel = 0.8; tv_hc = 0; tv_st = 0; tv_lv = 0; tv_ab = 0;
+tv_p1 = 0; tv_p2 = 0.37; tv_lph = 0; tv_vph = 0; tv_venv = 0; tv_vcnt = 0; tv_played = 0;
+tv_dxp = tv_dyp = 0; tv_pk0 = tv_pk1 = 0;
+tv_sm = vo_coef(30); tv_smf = vo_coef(8);
+tv_update();
+tv_bls = tv_blt; tv_vols = tv_volt; tv_lps = tv_lpt; tv_hps = tv_hpt;
+ui_dflt = 1;   // the defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved state
+
+@slider
+tv_update();
+
+@block
+tv_update();                                      // knobs moved on the panel do not run @slider, so read them here
+while (midirecv(mofs, m1, m2, m3)) (
+  ins_chan_ok(m1, tv_chan) ? (
+    tv_sb = m1 & 0xF0;
+    tv_sb == 0x90 && m3 > 0 ? tv_note_on(m2, m3) :
+    tv_sb == 0x80 || (tv_sb == 0x90 && m3 == 0) ? tv_note_off(m2) :
+    tv_sb == 0xB0 && (m2 == 123 || m2 == 120) ? tv_all_off() :
+    tv_sb == 0xE0 ? tv_bend = ins_bend(m2, m3, tv_brange);
+  );
+  midisend(mofs, m1, m2, m3);
+);
+ins_drift_block(tv_drift, samplesblock);          // GFX instrument drift
+tv_dpw = tv_dW.drift_tick(0.35 * samplesblock / srate) * tv_drift * 0.06;
+tv_r2d = tv_r2 * 2 ^ (ins_aux / 12);              // VCO 2 drifts against VCO 1
+tv_fk = ins_pitch * 2 ^ tv_oct;                   // drifting tuning and the FEET setting
+
+@sample
+// ---------- pitch: glide, auto bend, vibrato, bend, drift ----------
+tv_cur += (tv_tgt - tv_cur) * (tv_gon ? tv_gc : 1);
+tv_ab *= tv_abc; abs(tv_ab) < 0.00001 ? tv_ab = 0;
+tv_vcnt < tv_vdel ? tv_vcnt += 1 : tv_venv = min(tv_venv + tv_vfi, 1);
+tv_vph += tv_vrate / srate; tv_vph -= floor(tv_vph);
+tv_vib = tv_vdep > 0 ? sin(2 * $pi * tv_vph) * tv_vdep * tv_venv : 0;
+tv_f = 440 * 2 ^ ((tv_cur + tv_ab + tv_vib - 69) / 12) * tv_bend * tv_nd * tv_fk;
+tv_i1 = min(tv_f / srate, 0.45);
+
+// ---------- main LFO (triangle / square) ----------
+tv_lph += tv_lrate / srate; tv_lph -= floor(tv_lph);
+tv_lfo = tv_lshape ? (tv_lph < 0.5 ? 1 : -1) : 1 - 4 * abs(tv_lph - 0.5);
+
+// ---------- VCO 1 ----------
+tv_p1 += tv_i1; tv_p1 -= floor(tv_p1);
+tv_w1 == 0 ? (
+  tv_v1 = 1 - 4 * abs(tv_p1 - 0.5);                                          // triangle (soft harmonics, little aliasing)
+) : tv_w1 == 1 ? (
+  tv_v1 = 2 * tv_p1 - 1 - vo_blep(tv_p1, tv_i1);
+) : (
+  tv_pwv = tv_w1 == 2 ? 0.5 : tv_w1 == 3 ? tv_pw + tv_dpw : 0.5 - 0.44 * tv_pwm * (0.5 + 0.5 * tv_lfo) + tv_dpw;
+  tv_pwv = min(max(tv_pwv, 0.05), 0.95);
+  tv_q = tv_p1 + 1 - tv_pwv; tv_q -= floor(tv_q);
+  tv_v1 = (2 * tv_p1 - 1 - vo_blep(tv_p1, tv_i1)) - (2 * tv_q - 1 - vo_blep(tv_q, tv_i1));
+  tv_v1 *= 0.8;                                                              // pulse peaks sit with the saw's
+);
+
+// ---------- VCO 2 ----------
+tv_m2 < 2 ? (
+  tv_i2 = min(tv_i1 * tv_r2d, 0.45);
+  tv_p2 += tv_i2; tv_p2 -= floor(tv_p2);
+  tv_v2 = 2 * tv_p2 - 1 - vo_blep(tv_p2, tv_i2);
+  tv_m2 == 1 ? tv_v2 *= tv_v1 * 1.4;                                         // ring modulator
+) : (
+  tv_wn = rand(2) - 1;
+  tv_m2 == 2 ? tv_v2 = tv_wn * 0.75 :
+  tv_m2 == 3 ? (                                                             // pink (-3 dB / octave)
+    tv_b0 = 0.99765 * tv_b0 + tv_wn * 0.0990460;
+    tv_b1 = 0.96300 * tv_b1 + tv_wn * 0.2965164;
+    tv_b2 = 0.57000 * tv_b2 + tv_wn * 1.0526913;
+    tv_v2 = (tv_b0 + tv_b1 + tv_b2 + tv_wn * 0.1848) * 0.32;
+  ) : (                                                                      // blue / bright: white tilted up
+    tv_v2 = (tv_wn - tv_wp * 0.85) * 0.55; tv_wp = tv_wn;
+  );
+);
+tv_bls += (tv_blt - tv_bls) * tv_sm;
+tv_y = tv_v1 * (1 - tv_bls) + tv_v2 * tv_bls;
+
+// ---------- EG, velocity, filter movement ----------
+tv_e = tv_eg();
+tv_vg = 1 - tv_vs + tv_vs * tv_vel;
+tv_mod = tv_e * tv_egamt + tv_lfo * tv_lfamt + tv_kb * (tv_cur - 60) / 12 + ins_cut + tv_vs * (tv_vel - 0.75) * 1.5;
+tv_lps += (tv_lpt - tv_lps) * tv_smf; tv_hps += (tv_hpt - tv_hps) * tv_smf;
+tv_fhp = min(max(2 ^ (tv_hps + (tv_link ? tv_mod : ins_cut * 0.5)), 16), srate * 0.45);
+tv_flp = min(max(2 ^ (tv_lps + tv_mod), 16), srate * 0.45);
+
+// ---------- high-pass (12 dB) into low-pass (12 dB), TPT state-variable ----------
+tv_g = tan($pi * tv_fhp / srate);
+tv_a1 = 1 / (1 + tv_g * (tv_g + tv_khp)); tv_a2 = tv_g * tv_a1; tv_a3 = tv_g * tv_a2;
+tv_x3 = tv_y - tv_h2; tv_x1 = tv_a1 * tv_h1 + tv_a2 * tv_x3; tv_x2 = tv_h2 + tv_a2 * tv_h1 + tv_a3 * tv_x3;
+tv_h1 = 2 * tv_x1 - tv_h1; tv_h2 = 2 * tv_x2 - tv_h2;
+tv_y = tv_y - tv_khp * tv_x1 - tv_x2;
+abs(tv_h1) < 0.0000000001 ? tv_h1 = 0; abs(tv_h2) < 0.0000000001 ? tv_h2 = 0;
+
+tv_g = tan($pi * tv_flp / srate);
+tv_a1 = 1 / (1 + tv_g * (tv_g + tv_klp)); tv_a2 = tv_g * tv_a1; tv_a3 = tv_g * tv_a2;
+tv_x3 = tv_y * tv_rin - tv_l2; tv_x1 = tv_a1 * tv_l1 + tv_a2 * tv_x3; tv_x2 = tv_l2 + tv_a2 * tv_l1 + tv_a3 * tv_x3;
+tv_l1 = 2 * tv_x1 - tv_l1; tv_l2 = 2 * tv_x2 - tv_l2;
+tv_l1 = vo_tanh(tv_l1 * 0.4) * 2.5;                                          // soft-limits the ringing near self-oscillation
+abs(tv_l1) < 0.0000000001 ? tv_l1 = 0; abs(tv_l2) < 0.0000000001 ? tv_l2 = 0;
+tv_y = vo_tanh(tv_x2 * 0.9) / 0.9;
+
+// ---------- VCA ----------
+tv_y *= tv_e * tv_vg;
+
+// DC block, level, output stage
+tv_dy = tv_y - tv_dxp + 0.997 * tv_dyp; tv_dxp = tv_y; tv_dyp = tv_dy;
+abs(tv_dyp) < 0.0000000001 ? tv_dyp = 0;
+tv_vols += (tv_volt - tv_vols) * tv_sm;
+tv_o = tv_dy * 0.6 * tv_vols * tv_trim(pr_cur);
+tv_oL = ostL.ost_band(tv_o);
+tv_oR = ostR.ost_band(tv_o);
+ost_out(tv_oL, tv_oR);
+spl0 = ost_l;
+spl1 = ost_r;
+tv_pk0 = max(tv_pk0, abs(spl0)); tv_pk1 = max(tv_pk1, abs(spl1));
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@gfx 1000 450
+ui_thm = 5; ui_hw = 1;
+ui_begin(1000, 450);
+ui_knonum = 1;
+
+// ---------- palette: black front, brushed aluminium strips, white / light-blue / orange print ----------
+TG_BLK = 0x121315; TG_WHT = 0xEEEFEA; TG_BLU = 0x8CCBF0; TG_ORG = 0xF28A2C; TG_CAP = 0x1A1B1D;
+TG_SH1 = 0x1B1C1F; TG_SH2 = 0x18191C; TG_SH3 = 0x1D1E21; TG_SH4 = 0x161719;
+
+// ---------- panel helpers (GUI thread only) ----------
+// brushed aluminium strip with the section title printed in black
+function tg_strip(x, y, w, h, title) local(i, a) (
+  gfx_gradrect(x * sc, y * sc, w * sc, h * sc, 0.80, 0.81, 0.83, 1, 0, 0, 0, 0, -0.22 / (h * sc), -0.22 / (h * sc), -0.21 / (h * sc), 0);
+  i = 0; loop(floor(h * sc),
+    a = 0.03 + 0.04 * (0.5 + 0.5 * sin(i * 7.31 + sin(i * 0.53) * 2));
+    ui_cola(i % 2 ? 0xFFFFFF : 0x000000, a); gfx_line(x * sc, y * sc + i, (x + w) * sc - 1, y * sc + i);
+    i += 1; );
+  ui_cola(0xFFFFFF, 0.55); gfx_line(x * sc, y * sc, (x + w) * sc - 1, y * sc);
+  ui_cola(0x000000, 0.6); gfx_line(x * sc, (y + h) * sc, (x + w) * sc - 1, (y + h) * sc);
+  gfx_setfont(2); ui_col(0x141414); ui_keytext((x + w * 0.5) * sc, (y + h * 0.5) * sc, title);
+);
+// a section: recessed black tray with an aluminium title strip across its top
+function tg_sect(x, y, w, h, sh, title, shade) (
+  pk_inset(x * sc, y * sc, w * sc, h * sc, shade);
+  tg_strip(x, y, w, sh, title);
+  C_INK = TG_WHT;
+);
+// tab / rocker switch: returns 1 when clicked. Lit tabs are orange and sit pressed in.
+function tg_tab(x, y, w, h, label, on) local(hov, hit, d) (
+  hov = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hit = pressed && drag_id == 0 && hov; hit ? drag_id = -1;
+  d = on ? 1 : 0;
+  ui_cola(0x000000, 0.6); gfx_rect((x + 1) * sc, (y + 2) * sc, w * sc, h * sc);
+  ui_col(0x050506); gfx_rect(x * sc, y * sc, w * sc, h * sc);
+  on ? (
+    ui_col(0xB85E14); gfx_rect((x + 1) * sc, (y + 1) * sc, (w - 2) * sc, (h - 2) * sc);
+    ui_col(TG_ORG); gfx_rect((x + 1) * sc, (y + 1 + d) * sc, (w - 2) * sc, (h - 3) * sc);
+    ui_cola(0xFFFFFF, 0.3); gfx_rect((x + 2) * sc, (y + 2) * sc, (w - 4) * sc, max(1, sc));
+    ui_cola(0xFFE0A0, 0.25); gfx_rect((x + 2) * sc, (y + 2) * sc, (w - 4) * sc, (h - 4) * sc * 0.4);
+  ) : (
+    ui_col(0x2C2D31); gfx_rect((x + 1) * sc, (y + 1) * sc, (w - 2) * sc, (h - 2) * sc);
+    ui_col(hov ? 0x46484E : 0x3A3C41); gfx_rect((x + 1) * sc, (y + 1) * sc, (w - 2) * sc, (h - 5) * sc);
+    ui_cola(0xFFFFFF, 0.16); gfx_rect((x + 2) * sc, (y + 1) * sc, (w - 4) * sc, max(1, sc));
+  );
+  gfx_setfont(4); ui_col(on ? 0x141414 : TG_WHT);
+  ui_keytext((x + w * 0.5) * sc, (y + (h - 2 + d) * 0.5) * sc, label);
+  hit;
+);
+// a column (or row) of tabs bound to slider idx; vertical when dy > 0
+function tg_tabs(x, y, w, h, dx, dy, idx, n, labels) local(i) (
+  i = 0;
+  loop(n,
+    tg_tab(x + i * dx, y + i * dy, w, h, pk_pitem(labels, i + 1, #tg_tl), slider(idx) == i) ? ( slider(idx) = i; ui_auto(idx); );
+    i += 1;
+  );
+);
+// a knob in the panel style: small black cap on a silver skirt
+function tg_knob(cx, cy, idx, vmin, vmax, vdef, lg, label, fmt) (
+  ui_section(0); C_INK = TG_WHT; ui_kcap = TG_CAP;
+  ui_knob(cx * sc, cy * sc, idx, vmin, vmax, vdef, lg, label, fmt);
+);
+// a small printed sub-heading with rules either side
+function tg_head(cx, y, w, s) local(tw, th) (
+  gfx_setfont(4); gfx_measurestr(s, tw, th);
+  ui_cola(TG_BLU, 0.55);
+  gfx_line((cx - w * 0.5) * sc, y * sc, cx * sc - tw * 0.5 - 5 * sc, y * sc);
+  gfx_line(cx * sc + tw * 0.5 + 5 * sc, y * sc, (cx + w * 0.5) * sc, y * sc);
+  ui_col(TG_BLU); ui_keytext(cx * sc, y * sc, s);
+);
+// value <-> position on the TRAVELLER scale (20 Hz .. 18 kHz, log)
+function tg_tn(v) ( log(v / 20) / log(900); );
+function tg_tv(n) ( 20 * 900 ^ min(max(n, 0), 1); );
+// a horizontal TRAVELLER slide control for slider idx; track from x0 to x0 + w at height y (unscaled).
+// other = the partner slider moved with it when LINK is on. kind 1 = HP (yellow insert), 2 = LP (black insert)
+function tg_trav(x0, y, w, idx, other, vdef, kind) local(n, cx, hov, onc, nv, r, ov, i, t) (
+  n = tg_tn(slider(idx)); cx = x0 + n * w;
+  hov = mouse_x >= (x0 - 10) * sc && mouse_x < (x0 + w + 10) * sc && mouse_y >= (y - 15) * sc && mouse_y < (y + 15) * sc;
+  onc = abs(mouse_x - cx * sc) <= 10 * sc;
+  pressed && drag_id == 0 && hov ? (
+    time_precise() - lastclick_t < 0.35 && lastclick_id == 200 + idx ? (
+      nv = vdef; drag_id = -1; lastclick_t = 0;
+    ) : (
+      drag_id = 200 + idx; tg_grab = onc ? mouse_x - cx * sc : 0;
+      lastclick_t = time_precise(); lastclick_id = 200 + idx;
+      nv = onc ? slider(idx) : tg_tv((mouse_x / sc - x0) / w);
+    );
+  ) : drag_id == 200 + idx ? (
+    nv = tg_tv(((mouse_x - tg_grab) / sc - x0) / w);
+  ) : hov && mouse_wheel != 0 && drag_id == 0 ? (
+    nv = tg_tv(n + mouse_wheel / 120 * ((mouse_cap & 8) ? 0.004 : 0.02)); mouse_wheel = 0;
+  ) : nv = 0;
+  nv > 0 && abs(nv - slider(idx)) > 0.0001 ? (
+    nv = floor(nv + 0.5);
+    tg_link ? (                                                                // LINK: the partner travels by the same ratio
+      r = nv / slider(idx);
+      r > 1 ? r = min(r, 18000 / max(slider(other), 20)) : r = max(r, 20 / max(slider(other), 20));
+      nv = min(max(floor(slider(idx) * r + 0.5), 20), 18000); ov = min(max(floor(slider(other) * r + 0.5), 20), 18000);
+      slider(other) = ov; ui_auto(other);
+    );
+    slider(idx) = nv; ui_auto(idx);
+    n = tg_tn(slider(idx)); cx = x0 + n * w;
+  );
+  // groove
+  ui_col(0x050506); ui_rrect((x0 - 6) * sc, (y - 4) * sc, (w + 12) * sc, 8 * sc, 3 * sc);
+  ui_cola(0xFFFFFF, 0.12); gfx_line((x0 - 4) * sc, (y + 4) * sc, (x0 + w + 4) * sc, (y + 4) * sc);
+  ui_col(0x2A2B2F); gfx_rect((x0 - 2) * sc, (y - 1) * sc, (w + 4) * sc, 2 * sc);
+  // the cap: a silver block with a coloured insert and grip ridges
+  ui_cola(0x000000, 0.55); gfx_rect((cx - 9 + 1.5) * sc, (y - 13 + 2.5) * sc, 18 * sc, 26 * sc);
+  ui_col(0x6E7277); gfx_rect((cx - 9) * sc, (y - 13) * sc, 18 * sc, 26 * sc);
+  gfx_gradrect((cx - 8) * sc, (y - 12) * sc, 16 * sc, 24 * sc, 0.86, 0.87, 0.89, 1, 0, 0, 0, 0, -0.012 / sc, -0.012 / sc, -0.011 / sc, 0);
+  i = 0; loop(4, t = y - 9 + i * 3; ui_cola(0x000000, 0.25); gfx_line((cx - 6) * sc, t * sc, (cx + 6) * sc, t * sc); i += 1; );
+  i = 0; loop(4, t = y + 1 + i * 3; ui_cola(0x000000, 0.25); gfx_line((cx - 6) * sc, t * sc, (cx + 6) * sc, t * sc); i += 1; );
+  ui_col(kind == 1 ? 0xF2C21B : 0x141416); gfx_rect((cx - 7) * sc, (y - 1.5) * sc, 14 * sc, 3 * sc);
+  (hov || drag_id == 200 + idx) ? (
+    ui_cola(0xFFFFFF, 0.14); gfx_rect((cx - 9) * sc, (y - 13) * sc, 18 * sc, 26 * sc);
+    slider(idx) >= 1000 ? sprintf(#tg_tval, "%.2f kHz", slider(idx) / 1000) : sprintf(#tg_tval, "%.0f Hz", slider(idx));
+    gfx_setfont(4); gfx_measurestr(#tg_tval, t, i);
+    ui_cola(0x000000, 0.85); gfx_rect(cx * sc - t * 0.5 - 4 * sc, (y - 29) * sc, t + 8 * sc, 14 * sc);
+    ui_col(TG_ORG); ui_keytext(cx * sc, (y - 22) * sc, #tg_tval);
+  );
+);
+// the envelope's shape for the current settings, in a small display window
+function tg_egview(x, y, w, h) local(na, nd, wa, wd, x0, y0, yt, ys, k, px, py, i, t, e) (
+  pk_lcd(x * sc, y * sc, w * sc, h * sc, 0);
+  na = log(slider16 / 0.5) / log(10000); nd = log(slider17 / 10) / log(1000);
+  wa = 4 + 26 * na; wd = 8 + 26 * nd;
+  x0 = (x + 6) * sc; y0 = (y + h - 6) * sc; yt = (y + 6) * sc; ys = y0 - (y0 - yt) * slider19 / 100;
+  ui_col(pk_lcdc);
+  // attack (a straight rise), then by mode
+  px = x0; py = y0; k = x0 + wa * sc; gfx_line(px, py, k, yt, 1); gfx_line(px, py + 1, k, yt + 1, 1); px = k; py = yt;
+  slider18 == 0 || slider18 == 3 ? (
+    i = 0; loop(slider18 == 3 ? 3 : 1,
+      i > 0 ? ( k = px + wa * sc; gfx_line(px, py, k, yt, 1); gfx_line(px, py + 1, k, yt + 1, 1); px = k; py = yt; );
+      t = 0; loop(16, t += 1; e = exp(-4 * t / 16); k = px + wd * sc * t / 16;
+        gfx_line(px + wd * sc * (t - 1) / 16, y0 - (y0 - yt) * exp(-4 * (t - 1) / 16), k, y0 - (y0 - yt) * e, 1); );
+      px += wd * sc; py = y0 - (y0 - yt) * exp(-4);
+      i += 1; );
+    gfx_line(px, py, (x + w - 6) * sc, y0, 1);
+  ) : (
+    slider18 == 1 ? (
+      t = 0; loop(16, t += 1; gfx_line(px + wd * sc * (t - 1) / 16, ys + (yt - ys) * exp(-4 * (t - 1) / 16), px + wd * sc * t / 16, ys + (yt - ys) * exp(-4 * t / 16), 1); );
+      px += wd * sc; py = ys;
+    );
+    k = (x + w - 8) * sc - wd * sc; gfx_line(px, py, k, py, 1); gfx_line(px, py + 1, k, py + 1, 1); px = k;
+    t = 0; loop(16, t += 1; gfx_line(px + wd * sc * (t - 1) / 16, y0 - (y0 - py) * exp(-4 * (t - 1) / 16), px + wd * sc * t / 16, y0 - (y0 - py) * exp(-4 * t / 16), 1); );
+  );
+);
+
+// ---------- chassis ----------
+ui_col(0x080809); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 8 * sc, 984 * sc, 434 * sc, TG_BLK);
+pk_screw(20 * sc, 20 * sc); pk_screw(980 * sc, 20 * sc); pk_screw(20 * sc, 430 * sc); pk_screw(980 * sc, 430 * sc);
+// header: badge, name, preset bar, MIDI light, S / M / L / ?
+ui_col(0xC9CDD2); gfx_circle(50 * sc, 36 * sc, 15 * sc, 1, 1);
+ui_col(0x9DA2A8); gfx_circle(50 * sc, 36 * sc, 15 * sc, 0, 1);
+gfx_setfont(4); ui_col(TG_BLK); ui_text(50 * sc, 31 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(TG_WHT); gfx_x = 74 * sc; gfx_y = 15 * sc; gfx_drawstr("G-TRAVELLER");
+gfx_setfont(4); ui_col(TG_BLU); gfx_x = 75 * sc; gfx_y = 43 * sc; gfx_drawstr("MONOPHONIC SYNTHESIZER");
+tg_ps = pk_preset(300 * sc, 19 * sc, 470 * sc, 34 * sc, pr_cur, #tv_pm);
+tg_ps > 0 ? ( load_preset(tg_ps); pr_cur = tg_ps; );
+pk_led(800 * sc, 36 * sc, 4 * sc, ins_midi_lit(), TG_ORG);
+gfx_setfont(4); ui_col(TG_WHT); gfx_x = 811 * sc; gfx_y = 31 * sc; gfx_drawstr("MIDI");
+ui_size_picker(912 * sc, 27 * sc);
+tg_link = slider11;
+
+// ---------- VCO 1 ----------
+tg_sect(26, 76, 168, 244, 22, "VCO 1", TG_SH1);
+tg_tabs(36, 108, 66, 20, 0, 24, 1, 5, "TRIANGLE|SAW|SQUARE|PULSE|PWM");
+tg_tabs(116, 108, 66, 16, 0, 20.8, 2, 6, "64'|32'|16'|8'|4'|2'");
+gfx_setfont(4); ui_col(TG_BLU); ui_text(69 * sc, 232 * sc, "WAVEFORM"); ui_text(149 * sc, 232 * sc, "FEET");
+tg_knob(69, 274, 7, 5, 50, 25, 0, "PW", "%.0f%%");
+tg_knob(149, 274, 8, 0, 100, 60, 0, "PWM", "%.0f%%");
+
+// ---------- VCO 2 ----------
+tg_sect(206, 76, 154, 244, 22, "VCO 2", TG_SH2);
+tg_tabs(216, 108, 66, 20, 0, 24, 3, 5, "SAW|RING|WHITE|PINK|BLUE");
+gfx_setfont(4); ui_col(TG_BLU); ui_text(249 * sc, 232 * sc, "MODE");
+knob_step = 1; tg_knob(323, 132, 4, -24, 24, 0, 0, "INTERVAL", "%+.0f st");
+tg_knob(323, 202, 5, -50, 50, 0, 0, "DETUNE", "%+.1f ct");
+tg_knob(283, 274, 6, 0, 100, 0, 0, "BLEND", slider6 < 1 ? "VCO 1" : slider6 > 99 ? "VCO 2" : "%.0f%% VCO 2");
+gfx_setfont(4); ui_col(TG_BLU); ui_text(244 * sc, 268 * sc, "1"); ui_text(323 * sc, 268 * sc, "2");
+
+// ---------- FILTERS ----------
+tg_sect(372, 76, 274, 244, 22, "TRAVELLER FILTERS", TG_SH3);
+// the shared printed scale
+gi = 0;
+loop(7,
+  gv = gi == 0 ? 20 : gi == 1 ? 50 : gi == 2 ? 200 : gi == 3 ? 500 : gi == 4 ? 2000 : gi == 5 ? 5000 : 18000;
+  gx = 412 + tg_tn(gv) * 214;
+  gfx_setfont(4); ui_col(TG_BLU);
+  ui_keytext(gx * sc, 110 * sc, gi == 0 ? "20" : gi == 1 ? "50" : gi == 2 ? "200" : gi == 3 ? "500" : gi == 4 ? "2k" : gi == 5 ? "5k" : "18k");
+  ui_cola(TG_BLU, 0.5); gfx_line(gx * sc, 118 * sc, gx * sc, 122 * sc); gfx_line(gx * sc, 196 * sc, gx * sc, 200 * sc);
+  gi += 1;
+);
+gi = 0; loop(31, gx = 412 + gi / 30 * 214; ui_cola(TG_WHT, 0.25); gfx_line(gx * sc, 157 * sc, gx * sc, 161 * sc); gi += 1; );
+gfx_setfont(2); ui_col(TG_WHT);
+gfx_x = 382 * sc; gfx_y = 132 * sc; gfx_drawstr("HP");
+gfx_x = 382 * sc; gfx_y = 177 * sc; gfx_drawstr("LP");
+tg_trav(412, 139, 214, 10, 9, 20, 1);
+tg_trav(412, 182, 214, 9, 10, 4000, 2);
+gfx_setfont(4); ui_col(TG_BLU); ui_text(398 * sc, 219 * sc, "RES");
+tg_tabs(416, 212, 46, 20, 49, 0, 12, 3, "LOW|MID|HIGH");
+tg_tab(576, 212, 56, 20, "LINK", slider11) ? ( slider11 = 1 - slider11; ui_auto(11); );
+tg_knob(428, 274, 13, -100, 100, 30, 0, "EG", "%+.0f%%");
+tg_knob(509, 274, 14, 0, 100, 0, 0, "LFO", "%.0f%%");
+tg_knob(590, 274, 15, 0, 100, 50, 0, "KBD", "%.0f%%");
+
+// ---------- EG / VCA ----------
+tg_sect(658, 76, 150, 244, 22, "EG / VCA", TG_SH1);
+tg_tabs(666, 106, 32, 20, 34, 0, 18, 4, "AD|ADS|HOLD|REP");
+tg_knob(696, 154, 16, 0.5, 5000, 2, 1, "ATTACK", slider16 >= 1000 ? sprintf(#tg_v1, "%.2f s", slider16 / 1000) : "%.1f ms");
+tg_knob(772, 154, 17, 10, 10000, 600, 1, "DEC/REL", slider17 >= 1000 ? sprintf(#tg_v2, "%.2f s", slider17 / 1000) : "%.0f ms");
+tg_knob(696, 222, 19, 0, 100, 80, 0, slider18 == 1 ? "SUSTAIN" : "(SUS)", "%.0f%%");
+tg_knob(772, 222, 20, 0, 100, 15, 0, "VEL", "%.0f%%");
+tg_egview(668, 266, 130, 46);
+
+// ---------- PITCH: auto bend and vibrato ----------
+tg_sect(820, 76, 154, 244, 22, "PITCH", TG_SH2);
+tg_head(897, 110, 136, "AUTO BEND");
+tg_knob(856, 146, 26, -12, 12, 0, 0, "DEPTH", slider26 == 0 ? "OFF" : slider26 > 0 ? "UP %.1f st" : "DOWN %.1f st");
+tg_knob(938, 146, 27, 5, 2000, 150, 1, "TIME", "%.0f ms");
+tg_head(897, 206, 136, "VIBRATO");
+// the vibrato light pulses with the vibrato LFO
+pk_led(966 * sc, 206 * sc, 3 * sc, slider24 > 0 && tv_venv > 0.05 && sin(2 * $pi * tv_vph) > 0, TG_ORG);
+tg_knob(848, 244, 23, 1, 12, 5.5, 0, "RATE", "%.1f Hz");
+tg_knob(897, 244, 24, 0, 100, 0, 0, "DEPTH", "%.0f ct");
+tg_knob(946, 244, 25, 0, 3000, 400, 0, "DELAY", "%.0f ms");
+gfx_setfont(4); ui_cola(TG_BLU, 0.9);
+ui_text(897 * sc, 290 * sc, "+ RISES INTO THE NOTE");
+ui_text(897 * sc, 303 * sc, "- FALLS INTO THE NOTE");
+
+// ---------- bottom row: LFO | PERFORMANCE | MIDI | MASTER ----------
+tg_sect(26, 336, 222, 92, 18, "LFO", TG_SH4);
+tg_knob(66, 384, 21, 0.05, 30, 4, 1, "RATE", "%.2f Hz");
+tg_tabs(104, 364, 64, 20, 0, 24, 22, 2, "TRIANGLE|SQUARE");
+pk_led(190 * sc, 374 * sc, 4 * sc, tv_lfo > 0, TG_ORG);
+gfx_setfont(4); ui_col(TG_BLU); gfx_x = 200 * sc; gfx_y = 369 * sc; gfx_drawstr("LFO");
+ui_col(TG_BLU); gfx_x = 182 * sc; gfx_y = 393 * sc; gfx_drawstr("> FILTER");
+gfx_x = 182 * sc; gfx_y = 406 * sc; gfx_drawstr("> PWM");
+
+tg_sect(260, 336, 224, 92, 18, "PERFORMANCE", TG_SH4);
+tg_knob(298, 384, 28, 0, 2000, 0, 0, "GLIDE", slider28 < 1 ? "OFF" : "%.0f ms");
+tg_tabs(336, 364, 64, 20, 0, 24, 29, 2, "ALL|LEGATO");
+tg_tabs(410, 364, 64, 20, 0, 24, 30, 2, "SINGLE|MULTI");
+gfx_setfont(4); ui_col(TG_BLU); ui_text(368 * sc, 412 * sc, "GLIDE"); ui_text(442 * sc, 412 * sc, "TRIGGER");
+
+tg_sect(496, 336, 150, 92, 18, "MIDI", TG_SH4);
+knob_step = 1; tg_knob(536, 384, 31, 0, 12, 2, 0, "BEND", slider31 == 0 ? "OFF" : "+/-%.0f st");
+knob_step = 1; tg_knob(606, 384, 32, 0, 16, 0, 0, "CHANNEL", slider32 == 0 ? "OMNI" : "CH %.0f");
+
+tg_sect(658, 336, 316, 92, 18, "MASTER", TG_SH4);
+ui_section(1); C_INK = TG_WHT;
+ui_knob(694 * sc, 384 * sc, 33, 0, 100, 25, 0, "DRIFT", "%.0f%%");
+tg_knob(758, 384, 34, -24, 6, 0, 0, "VOLUME", "%+.1f dB");
+gfx_setfont(4); ui_cola(TG_WHT, 0.75); gfx_x = 798 * sc; gfx_y = 358 * sc; gfx_drawstr("IN / OUT");
+ins_io(800, 378, 35, TG_WHT);
+meL.ui_ledm(924 * sc, 360 * sc, 10 * sc, 62 * sc, tv_pk0);
+meR.ui_ledm(940 * sc, 360 * sc, 10 * sc, 62 * sc, tv_pk1);
+tv_pk0 *= 0.85; tv_pk1 *= 0.85;
+gfx_setfont(4); ui_col(TG_BLU); ui_text(960 * sc, 368 * sc, "L"); ui_text(960 * sc, 404 * sc, "R");
+
+pk_end();
+ui_end();
