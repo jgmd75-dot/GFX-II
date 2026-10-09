@@ -4,7 +4,7 @@ GFX - free JSFX plug-ins for REAPER
 Designed by JGWizrad.
 Website: https://www.gardenfx.uk/
 
-98 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
+97 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
 space, mastering and summing - plus the CC-80 chord script. Every sound is
 synthesised: there are no samples. All plug-ins share one look, resizable
 S / M / L panels and the same output stage.
@@ -138,17 +138,16 @@ DYNAMICS
   Transient       gfx-transient.jsfx
   Twin Comp       gfx-twin-comp.jsfx
   VB30            gfx-vb30.jsfx
+  Wingspan        gfx-wingspan.jsfx
 
 EQ & FILTERS
   Baxendale       gfx-baxendale.jsfx
   Bern EQ         gfx-bern-eq.jsfx
   Board EQ        gfx-board-q.jsfx
   Contour         gfx-contour.jsfx
-  Echofish        gfx-echofish.jsfx
   Equaliser       gfx-equaliser.jsfx
   Graphic EQ      gfx-graphic-eq.jsfx
   Skye            gfx-skye.jsfx
-  Starfish        gfx-starfish.jsfx
   Surgical EQ     gfx-surgical-eq.jsfx
   Tilt EQ         gfx-tilt-eq.jsfx
   TransEQ         gfx-transeq.jsfx
@@ -161,7 +160,8 @@ MODULATION & SPACE
   Dynatron        gfx-dynatron.jsfx
   E-Delay         gfx-e-delay.jsfx
   E-Verb          gfx-e-verb.jsfx
-  EC-444          gfx-Ec444.jsfx
+  Echo 34         gfx-echo-34.jsfx
+  Echofish        gfx-echofish.jsfx
   Echomax         gfx-echomax.jsfx
   Flanger         gfx-flanger.jsfx
   Haas Doubler    gfx-haas-doubler.jsfx
@@ -183,7 +183,6 @@ MASTERING
   MasterSuite     gfx-mastersuite.jsfx
   Optimiser       gfx-optimiser.jsfx
   Quad22          gfx-quad22.jsfx
-  Wingspan        gfx-wingspan.jsfx
 
 SUMMING
   Bern 16         gfx-bern-16.jsfx
