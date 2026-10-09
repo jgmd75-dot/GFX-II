@@ -48,7 +48,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-echo";
+#ui_man = "gfx-echomax";
 
 dlen = ceil(4.2 * srate) + 8;
 bufL = 100000; bufR = bufL + dlen;
@@ -297,8 +297,8 @@ ui_col(BLU); gfx_rect(26 * sc, 62 * sc, 1008 * sc, 3 * sc);
 
 // ---------- HEADER ----------
 rd_badge(60, 34, 15, INK, FACE);
-rd_title(84, 18, "ECHO", 26, INK);
-rd_sub(170, 30, "MULTI-MODE DELAY LINE", DIM, 1);
+rd_title(84, 18, "ECHOMAX", 26, INK);
+rd_sub(244, 30, "MULTI-MODE DELAY LINE", DIM, 1);
 
 rd_sq(380, 20, 60, 24, slider1 == 0, BLU, "TAPE")     ? setv(1, 0);
 rd_sq(445, 20, 66, 24, slider1 == 1, BLU, "BUCKET")   ? setv(1, 1);
