@@ -470,9 +470,13 @@ ui_cola(0x000000, 0.35); gfx_circle(477 * sc, 302 * sc, 51 * sc, 1, 1);
 ui_col(FACE); gfx_circle(476 * sc, 300 * sc, 50 * sc, 1, 1);
 ui_cola(COP, 0.6); gfx_circle(476 * sc, 300 * sc, 50 * sc, 0, 1);
 dy_kst = 1; dy_ntick = 13;
-sprintf(#v, "%+.1f dB", slider11); dy_knob(476, 300, 36, 11, -6, 6, 0, 0, COP, "TILT", #v);
+sprintf(#v, "%+.1f dB", slider11); dy_knob(476, 300, 36, 11, -6, 6, 0, 0, COP, "", "");
 dy_kst = 7; dy_ntick = 11;
-rd_lbl(446, 236, "DARK", DIM, 0.9); rd_lbl(506, 236, "BRIGHT", DIM, 0.9);
+// its name on a small dark plate under the ring (the value shows there while the knob is touched)
+ui_col(0x000000); rd_rr(439 * sc, 359 * sc, 76 * sc, 28 * sc, 5 * sc);
+ui_col(0x071A1D); rd_rr(440 * sc, 360 * sc, 74 * sc, 26 * sc, 4 * sc);
+gfx_setfont(6, "Trebuchet MS", (dy_act ? 13 : 17) * sc, 'b'); ui_col(dy_act ? COP : INK);
+ui_text(476 * sc, (dy_act ? 366 : 363) * sc, dy_act ? #v : "TILT");
 
 // 4 PUNCH + LIMITER
 bt_sect(702, CY, 210, CH, "SUM", c2_on);
