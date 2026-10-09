@@ -403,7 +403,7 @@ function sq(ph) ( ph - floor(ph) < 0.5 ? 1 : -1 );
 // collisions; TAM holds each resonator's coefficients and state (7 fields x 6)
 TAM = 30000; memset(TAM, 0, 64);
 function tam_trig(l, t, d) local(k, f, a, tau, r) (
-  k = 0;
+  cwm_k = 0;
   loop(6,
     f = (k == 0 ? 5150 : k == 1 ? 5235 : k == 2 ? 6880 : k == 3 ? 7015 : k == 4 ? 8640 : 11250) * t;
     a = k == 0 ? 1 : k == 1 ? 0.8 : k == 2 ? 0.9 : k == 3 ? 0.65 : k == 4 ? 0.7 : 0.4;
@@ -411,7 +411,7 @@ function tam_trig(l, t, d) local(k, f, a, tau, r) (
     r = f < srate * 0.45 ? exp(-1 / (tau * srate)) : 0;
     TAM[k * 7] = 2 * r * cos(2 * $pi * min(f, srate * 0.45) / srate); TAM[k * 7 + 1] = r * r;
     TAM[k * 7 + 2] = a * (1 - r); TAM[k * 7 + 3] = 0; TAM[k * 7 + 4] = 0;
-    k += 1;
+    cwm_k += 1;
   );
   ta_l = l; ta_t = 0; ta_on = 1; ta_env = 1; ta_ec = tcoef(0.5 * d);
 );
@@ -705,13 +705,15 @@ pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
 @gfx 1180 588
 // ---------------------------------------------------------------------------------------------------------
-// GFX drum machine panel (the G-Pulse family): header with the LCD and the rhythm keys, the 15 voices in two
+// GFX drum machine panel (the G-Pulse family): header with the rhythm keys and LCD, the 15 voices in two
 // columns (voice tab - click to hear it -, TUNE / DECAY / LEVEL on a band in its colour, a hit light), then
 // RHYTHM / KITS / MASTER and PHASER / DRIFT.
 // ---------------------------------------------------------------------------------------------------------
 fh = 582;
 ui_thm = 5; ui_hw = 0;
 ui_begin(1180, fh + 6);
+// the panel's own label fonts (bigger than the house small print): 10 = labels, 11 = headers, 12 = scales
+gfx_setfont(10, "Arial", 11.5 * sc, 'b'); gfx_setfont(11, "Arial", 12 * sc, 'b'); gfx_setfont(12, "Arial", 10 * sc, 'b');
 // champagne keyboard-case skin
 BODY = 0xCDBFA6; BODYL = 0xDCD1BC; BODYD = 0xB3A48A; INKB = 0x3A2C20; BRN = 0x5B3A22; CRM = 0xF1E6D0;
 C_BG = BODY; C_ACC = BRN; C_S0 = 0x8A5A34; C_S2 = 0x8A5A34; C_KC = 0x2A2018; C_KNOB = 0x6B4A30; C_KEDGE = 0x4A3220;
@@ -725,9 +727,9 @@ ui_col(BODYL); gfx_rect(14 * sc, 8 * sc, 1152 * sc, 2 * sc);
 ui_col(INKB); gfx_circle(40 * sc, 38 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(CRM); ui_text(40 * sc, 33 * sc, "GFX");
 gfx_setfont(6, "Arial", 24 * sc, 'b'); ui_col(INKB); gfx_x = 62 * sc; gfx_y = 24 * sc; gfx_drawstr("CLOCKWORK");
-gfx_setfont(4); ui_cola(INKB, 0.7); gfx_x = 232 * sc; gfx_y = 34 * sc; gfx_drawstr("ANALOGUE RHYTHM BOX");
-ui_col(BRN); gfx_rect(14 * sc, 70 * sc, 1152 * sc, 12 * sc);
-gfx_setfont(8, "Arial", 8 * sc, 'b'); ui_col(CRM); gfx_x = 30 * sc; gfx_y = 72 * sc; gfx_drawstr("rhythm   -   32 preset rhythms  -  15 analogue voices  -  phaser  -  drift");
+gfx_setfont(10); ui_cola(INKB, 0.75); gfx_x = 232 * sc; gfx_y = 33 * sc; gfx_drawstr("ANALOGUE RHYTHM BOX");
+ui_col(BRN); gfx_rect(14 * sc, 70 * sc, 1152 * sc, 17 * sc);
+gfx_setfont(10); ui_col(CRM); gfx_x = 30 * sc; gfx_y = 72 * sc; gfx_drawstr("rhythm   -   32 preset rhythms  -  15 analogue voices  -  phaser  -  drift");
 // keyboard-style keys in place of the LED keys
 function ptk(x, y, w, h, on, ledc) local(inb, hit) (
   inb = mouse_x >= x && mouse_x < x + w && mouse_y >= y && mouse_y < y + h;
@@ -736,6 +738,13 @@ function ptk(x, y, w, h, on, ledc) local(inb, hit) (
   ui_col(on ? 0xE5A637 : 0xCFCBC4); gfx_rect(x, y + on * 1.5 * sc, w, h);
   ui_cola(0xFFFFFF, on ? 0.15 : 0.4); gfx_rect(x, y + on * 1.5 * sc, w, 2 * sc);
   ui_cola(0x000000, 0.2); gfx_rect(x, y + h - 4 * sc + on * 1.5 * sc, w, 4 * sc);
+  hit;
+);
+// a key with its label on the cap (unscaled x, y, w, h)
+function cw_key(x, y, w, h, on, label) local(hit, tw, th) (
+  hit = ptk(x * sc, y * sc, w * sc, h * sc, on, REDL);
+  gfx_setfont(10); ui_col(INKB); gfx_measurestr(label, tw, th);
+  gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y + (h - 4) * 0.5 + on * 1.5) * sc - th * 0.5; gfx_drawstr(label);
   hit;
 );
 
@@ -752,40 +761,39 @@ function rhythm_menu(x, y) local(i, sel) (
   gfx_x = x; gfx_y = y; sel = gfx_showmenu(#rm);
   sel > 0 ? ( slider1 = sel - 1; slider_automate(slider1); );
 );
-// header: < > keys, the red LCD (click it for the rhythm list), RHYTHMS, MIDI, size, OUTPUT
-ptk(752 * sc, 18 * sc, 32 * sc, 38 * sc, 0, REDL) ? ( slider1 = (slider1 + 31) % 32; slider_automate(1); );
-ptk(788 * sc, 18 * sc, 32 * sc, 38 * sc, 0, REDL) ? ( slider1 = (slider1 + 1) % 32; slider_automate(1); );
-gfx_setfont(4); ui_col(WHT); ui_text(768 * sc, 44 * sc, "<"); ui_text(804 * sc, 44 * sc, ">");
-ui_col(0x1E1D1C); ui_rrect(396 * sc, 12 * sc, 348 * sc, 54 * sc, 4 * sc); ui_col(0xB8BC9C); gfx_rect(402 * sc, 17 * sc, 336 * sc, 44 * sc); pk_lcdc = 0x262A1E;
+// header, the house preset layout: [RHYTHMS][◄][►][LCD] (RHYTHMS or a click on the LCD opens the list), MIDI, size
+cw_key(392, 18, 92, 40, 0, "RHYTHMS") ? rhythm_menu(392 * sc, 60 * sc);
+cw_key(490, 18, 36, 40, 0, "◄") ? ( slider1 = (slider1 + 31) % 32; slider_automate(1); );
+cw_key(530, 18, 36, 40, 0, "►") ? ( slider1 = (slider1 + 1) % 32; slider_automate(1); );
+ui_col(0x1E1D1C); ui_rrect(574 * sc, 12 * sc, 372 * sc, 54 * sc, 4 * sc); ui_col(0xB8BC9C); gfx_rect(580 * sc, 17 * sc, 360 * sc, 44 * sc); pk_lcdc = 0x262A1E;
 rh = slider1; rn_d = pn[rh];
-pk_lcdfont(7, 14 * sc); ui_col(pk_lcdc);
-sprintf(#rt, "%02d %s", rh + 1, 100 + rh); gfx_x = 412 * sc; gfx_y = 19 * sc; gfx_drawstr(#rt);
-pk_lcdfont(8, 10 * sc);
+pk_lcdfont(7, 16 * sc); ui_col(pk_lcdc);
+sprintf(#rt, "%02d %s", rh + 1, 100 + rh); gfx_x = 590 * sc; gfx_y = 19 * sc; gfx_drawstr(#rt);
+pk_lcdfont(8, 12 * sc);
 sprintf(#rt, "%s  %s  %s", rh >= 16 ? "PERCUSSION" : "KIT RHYTHM", slider3 ? "VAR B" : "VAR A", psb[rh] > 0.3 ? "TRIPLET" : rn_d == 12 ? "3/4" : "4/4");
-gfx_x = 412 * sc; gfx_y = 42 * sc; gfx_drawstr(#rt);
+gfx_x = 590 * sc; gfx_y = 42 * sc; gfx_drawstr(#rt);
 slider2 ? ( (play_state & 1) ? sprintf(#rt, "BAR %d%s", cur_bar + 1, cur_fill ? " FILL" : "") : strcpy(#rt, "WAIT") ) : strcpy(#rt, "MIDI ONLY");
-gfx_measurestr(#rt, gw_, gh_); gfx_x = 730 * sc - gw_; gfx_y = 42 * sc; gfx_drawstr(#rt);
-pressed && drag_id == 0 && mouse_x >= 400 * sc && mouse_x < 740 * sc && mouse_y >= 14 * sc && mouse_y < 62 * sc ? ( drag_id = -1; rhythm_menu(400 * sc, 62 * sc); );
-ui_noled = 1;
-ui_button(832 * sc, 22 * sc, 92 * sc, 30 * sc, "RHYTHMS", 0, 1) ? rhythm_menu(832 * sc, 52 * sc);
-ui_noled = 0;
-pk_led(942 * sc, 38 * sc, 3 * sc, ins_midi_lit(), 0x3ADF6A);
-gfx_setfont(4); ui_col(WHT); gfx_x = 950 * sc; gfx_y = 33 * sc; gfx_drawstr("MIDI");
-ui_size_picker(990 * sc, 28 * sc);
+gfx_measurestr(#rt, gw_, gh_); gfx_x = 932 * sc - gw_; gfx_y = 42 * sc; gfx_drawstr(#rt);
+pressed && drag_id == 0 && mouse_x >= 578 * sc && mouse_x < 942 * sc && mouse_y >= 14 * sc && mouse_y < 62 * sc ? ( drag_id = -1; rhythm_menu(578 * sc, 64 * sc); );
+pk_led(980 * sc, 38 * sc, 4 * sc, ins_midi_lit(), 0x3ADF6A);
+gfx_setfont(10); ui_col(WHT); gfx_x = 990 * sc; gfx_y = 32 * sc; gfx_drawstr("MIDI");
+ui_size_picker(1092 * sc, 28 * sc);
 
 // ---------- the voices: two columns, each voice a tab (click to hear it), TUNE / DECAY / LEVEL and a hit light ----------
-ui_col(BODYL); ui_rrect(24 * sc, 88 * sc, 1132 * sc, 260 * sc, 6 * sc);
+ui_col(BODYL); ui_rrect(24 * sc, 93 * sc, 1132 * sc, 257 * sc, 6 * sc);
 gi = 0;
 loop(2,
   gx0 = gi ? 596 : 32;
-  gfx_setfont(4); ui_cola(WHT, 0.7); gfx_x = (gx0 + 12) * sc; gfx_y = 94 * sc; gfx_drawstr("VOICE                    NOTE");
-  ui_text((gx0 + 240) * sc, 94 * sc, "TUNE"); ui_text((gx0 + 330) * sc, 94 * sc, "DECAY"); ui_text((gx0 + 420) * sc, 94 * sc, "LEVEL");
-  ui_text((gx0 + 500) * sc, 94 * sc, "HIT");
+  gfx_setfont(11); ui_cola(WHT, 0.75); gfx_x = (gx0 + 12) * sc; gfx_y = 98 * sc; gfx_drawstr("VOICE");
+  gfx_measurestr("NOTE", gw_, gh_); gfx_x = (gx0 + 162) * sc - gw_; gfx_drawstr("NOTE");
+  ui_text((gx0 + 240) * sc, 98 * sc, "TUNE"); ui_text((gx0 + 330) * sc, 98 * sc, "DECAY"); ui_text((gx0 + 420) * sc, 98 * sc, "LEVEL");
+  ui_text((gx0 + 500) * sc, 98 * sc, "HIT");
   gi += 1;
 );
+gfx_setfont(4, "Arial", 11.5 * sc, 'b');           // the note numbers on the voice tabs, bigger than the house small print
 v = 0;
 loop(NVO,
-  gx0 = v < 8 ? 32 : 596; gy = 110 + (v % 8) * 28; gc = dr_vcol(v);
+  gx0 = v < 8 ? 32 : 596; gy = 116 + (v % 8) * 28; gc = dr_vcol(v);
   dr_tab(gx0, gy, 170, 24, gc,
     v == 0 ? "KICK" : v == 1 ? "SNARE" : v == 2 ? "RIMSHOT" : v == 3 ? "CLOSED HAT" : v == 4 ? "OPEN HAT" : v == 5 ? "CYMBAL" : v == 6 ? "BONGO HIGH" :
     v == 7 ? "BONGO LOW" : v == 8 ? "CONGA" : v == 9 ? "CLAVE" : v == 10 ? "MARACAS" : v == 11 ? "GUIRO" : v == 12 ? "TAMBOURINE" : v == 13 ? "COWBELL" : "METAL BEAT",
@@ -798,96 +806,153 @@ loop(NVO,
   ui_knob((gx0 + 330) * o_sc, (gy + 12) * o_sc, 8 + v * 3, 25, 400, 100, 1, "", "%.0f%%");
   ui_knob((gx0 + 420) * o_sc, (gy + 12) * o_sc, 9 + v * 3, 0, 100, lvdef[v], 0, "", "%.0f%%");
   sc = o_sc; ui_kmini = 0;
-  pk_led((gx0 + 500) * sc, (gy + 12) * sc, 3.5 * sc, lt_d > 0.15, gc);
+  pk_led((gx0 + 500) * sc, (gy + 12) * sc, 4 * sc, lt_d > 0.15, gc);
   v += 1;
 );
-gfx_setfont(4); ui_cola(WHT, 0.45);
-ui_text(870 * sc, 336 * sc, "click a voice's name to hear it  -  double-click a knob to reset it");
+gfx_setfont(4, "Trebuchet MS", ui_fs4, 'b');       // back to the house small font
+// the free slot under METAL BEAT carries the hint
+ui_cola(dr_tabc, 0.6); gfx_rect(596 * sc, (116 + 7 * 28) * sc, 548 * sc, 24 * sc);
+gfx_setfont(10); ui_cola(WHT, 0.62); gfx_measurestr("x", gw_, gh_);
+ui_text(870 * sc, (116 + 7 * 28 + 12) * sc - gh_ * 0.5, "click a voice's name to hear it  -  double-click a knob to reset it");
 
 function sgroup(x, y, w, h, title) (
   ui_col(BODYL); ui_rrect(x * sc, y * sc, w * sc, h * sc, 5 * sc);
-  ui_col(BRN); gfx_rect((x + 10) * sc, (y + 6) * sc, (w - 20) * sc, 11 * sc);
-  gfx_setfont(8, "Arial", 8 * sc, 'b'); ui_col(CRM); gfx_x = (x + 16) * sc; gfx_y = (y + 7) * sc; gfx_drawstr(title); C_INK = INKB;
+  ui_col(BRN); gfx_rect((x + 10) * sc, (y + 6) * sc, (w - 20) * sc, 15 * sc);
+  gfx_setfont(10); ui_col(CRM); gfx_x = (x + 16) * sc; gfx_y = (y + 7) * sc; gfx_drawstr(title); C_INK = INKB;
 );
 // ---------- RHYTHM ----------
 ui_flatk = 0.62;   // the knobs below RHYTHM, MASTER, PHASER and DRIFT are drawn a size smaller
-sgroup(24, 358, 430, 108, "RHYTHM");
-ptk(38 * sc, 384 * sc, 44 * sc, 36 * sc, slider2 == 1, REDL) ? ( slider2 = 1 - slider2; slider_automate(2); );
-ptk(92 * sc, 384 * sc, 44 * sc, 36 * sc, slider3 == 1, AMBL) ? ( slider3 = 1 - slider3; slider_automate(4); );
-ptk(146 * sc, 384 * sc, 44 * sc, 36 * sc, slider1 >= 16, AMBL) ? ( slider1 = slider1 >= 16 ? slider1 - 16 : slider1 + 16; slider_automate(1); );
-gfx_setfont(4); ui_col(WHT); ui_text(60 * sc, 428 * sc, "PLAY"); ui_text(114 * sc, 428 * sc, "VAR B"); ui_text(168 * sc, 428 * sc, "PERC");
-ui_cola(WHT, 0.55); ui_text(114 * sc, 446 * sc, "plays with the transport");
+sgroup(24, 358, 402, 108, "RHYTHM");
+ptk(38 * sc, 388 * sc, 44 * sc, 34 * sc, slider2 == 1, REDL) ? ( slider2 = 1 - slider2; slider_automate(2); );
+ptk(92 * sc, 388 * sc, 44 * sc, 34 * sc, slider3 == 1, AMBL) ? ( slider3 = 1 - slider3; slider_automate(4); );
+ptk(146 * sc, 388 * sc, 44 * sc, 34 * sc, slider1 >= 16, AMBL) ? ( slider1 = slider1 >= 16 ? slider1 - 16 : slider1 + 16; slider_automate(1); );
+gfx_setfont(10); ui_col(WHT); ui_text(60 * sc, 428 * sc, "PLAY"); ui_text(114 * sc, 428 * sc, "VAR B"); ui_text(168 * sc, 428 * sc, "PERC");
+ui_cola(WHT, 0.62); ui_text(114 * sc, 446 * sc, "plays with the transport");
 knob_step = 1;
-ui_knob(250 * sc, 424 * sc, 4, 0, 3, 0, 0, "FILL", slider4 == 0 ? "OFF" : slider4 == 1 ? "EVERY 2" : slider4 == 2 ? "EVERY 4" : "EVERY 8");
-ui_knob(320 * sc, 424 * sc, 6, 0, 100, 50, 0, "ACCENT", "%.0f%%");
-ui_knob(390 * sc, 424 * sc, 5, 0, 100, 0, 0, "SWING", "%.0f%%");
+ui_knob(246 * sc, 428 * sc, 4, 0, 3, 0, 0, "FILL", slider4 == 0 ? "OFF" : slider4 == 1 ? "EVERY 2" : slider4 == 2 ? "EVERY 4" : "EVERY 8");
+ui_knob(310 * sc, 428 * sc, 6, 0, 100, 50, 0, "ACCENT", "%.0f%%");
+ui_knob(374 * sc, 428 * sc, 5, 0, 100, 0, 0, "SWING", "%.0f%%");
 
-// ---------- KITS ----------
-sgroup(462, 358, 392, 108, "KITS");
+// ---------- KITS: ten kit keys, the name on each cap, RESET ALL beside them ----------
+sgroup(434, 358, 420, 108, "KITS");
 gi = 0;
 loop(10,
-  gkx = 474 + (gi % 5) * 76; gky = gi < 5 ? 384 : 420;
-  ptk(gkx * sc, gky * sc, 30 * sc, 24 * sc, cur_kit_v == gi, REDL) ? ( load_kit(gi + 1); cur_kit_v = gi; );
-  gfx_setfont(4); ui_col(WHT); gfx_x = (gkx + 34) * sc; gfx_y = (gky + 8) * sc;
-  gfx_drawstr(gi == 0 ? "CLASSIC" : gi == 1 ? "TIGHT" : gi == 2 ? "DEEP" : gi == 3 ? "BRIGHT" : gi == 4 ? "LONG" :
-              gi == 5 ? "DISCO" : gi == 6 ? "LATIN" : gi == 7 ? "LO-FI" : gi == 8 ? "ELECTRO" : "BRUSHES");
+  gkx = 446 + (gi % 5) * 68; gky = gi < 5 ? 388 : 424;
+  cw_key(gkx, gky, 64, 30, cur_kit_v == gi,
+         gi == 0 ? "CLASSIC" : gi == 1 ? "TIGHT" : gi == 2 ? "DEEP" : gi == 3 ? "BRIGHT" : gi == 4 ? "LONG" :
+         gi == 5 ? "DISCO" : gi == 6 ? "LATIN" : gi == 7 ? "LO-FI" : gi == 8 ? "ELECTRO" : "BRUSHES") ? ( load_kit(gi + 1); cur_kit_v = gi; );
   gi += 1;
 );
-ui_noled = 1; ui_button(780 * sc, 446 * sc, 66 * sc, 16 * sc, "RESET ALL", 0, 1) ? ( load_preset(6); cur_kit_v = 0; ); ui_noled = 0;
+cw_key(790, 388, 54, 66, 0, "") ? ( load_preset(6); cur_kit_v = 0; );
+gfx_setfont(10); ui_col(INKB); ui_text(817 * sc, 405 * sc, "RESET"); ui_text(817 * sc, 421 * sc, "ALL");
 
-// ---------- MASTER ----------
+// ---------- MASTER: SPREAD, OUTPUT, CHANNEL and the output meter ----------
 sgroup(862, 358, 294, 108, "MASTER");
 ui_section(2); C_INK = WHT;
-ui_knob(902 * sc, 424 * sc, 55, 0, 100, 60, 0, "SPREAD", "%.0f%%");
-ui_knob(964 * sc, 424 * sc, 56, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
+ui_knob(898 * sc, 428 * sc, 55, 0, 100, 60, 0, "SPREAD", "%.0f%%");
+ui_knob(958 * sc, 428 * sc, 56, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
 ui_section(3); C_INK = WHT; knob_step = 1;
-ui_knob(1030 * sc, 424 * sc, 54, 0, 16, 0, 0, "CHANNEL", slider54 == 0 ? "OMNI" : "CH %.0f");
+ui_knob(1020 * sc, 428 * sc, 54, 0, 16, 0, 0, "CHANNEL", slider54 == 0 ? "OMNI" : "CH %.0f");
 ui_section(2); C_INK = WHT;
-ui_col(0x2A231C); gfx_rect(1102 * sc, 384 * sc, 34 * sc, 72 * sc);
-gi = 0; loop(2, gm = gi ? pkR : pkL; gm = min(max((20 * log10(max(gm, 0.00001)) + 48) / 48, 0), 1);
-  ui_col(gm > 0.92 ? 0xE5453A : 0xE5A637); gfx_rect((1106 + gi * 15) * sc, (452 - gm * 64) * sc, 11 * sc, gm * 64 * sc); gi += 1; );
+// L / R peak meter (pkL / pkR from the audio), -48 .. 0 dB in 16 segments, with a peak hold that falls back after a second
+ui_col(0x2A231C); ui_rrect(1058 * sc, 384 * sc, 88 * sc, 76 * sc, 3 * sc);
+cw_now = time_precise();
+gi = 0;
+loop(2,
+  gm = gi ? pkR : pkL; gm = min(max((20 * log10(max(gm, 0.00001)) + 48) / 48, 0), 1);
+  gi ? ( gm >= cwm_hr || cw_now - cwm_tr > 1.2 ? ( cwm_hr = gm; cwm_tr = cw_now; ); cwm_h = cwm_hr; )
+     : ( gm >= cwm_hl || cw_now - cwm_tl > 1.2 ? ( cwm_hl = gm; cwm_tl = cw_now; ); cwm_h = cwm_hl; );
+  cwm_k = 0;
+  loop(16,
+    cwm_sy = 444 - cwm_k * 3.5;
+    ui_col(cwm_k >= 14 ? 0xE5453A : cwm_k >= 11 ? 0xE5C437 : 0xE5A637);
+    gfx_a = gm * 16 > cwm_k + 0.5 ? 1 : floor(cwm_h * 16 - 0.5) == cwm_k && cwm_h > 0.02 ? 0.9 : 0.14;
+    gfx_rect((1066 + gi * 18) * sc, cwm_sy * sc, 14 * sc, 2.5 * sc);
+    cwm_k += 1;
+  );
+  gfx_setfont(12); ui_col(0xC9BCA6); ui_text((1073 + gi * 18) * sc, 448 * sc, gi ? "R" : "L");
+  gi += 1;
+);
+// dB scale beside the bars
+gfx_setfont(12); ui_col(0xC9BCA6);
+gi = 0;
+loop(4,
+  cwm_db = gi == 0 ? 0 : gi == 1 ? -12 : gi == 2 ? -24 : -48;
+  cwm_sy = 444 - ((cwm_db + 48) / 48 * 16 - 1) * 3.5;
+  sprintf(#cwm, "%d", cwm_db); gfx_measurestr(#cwm, gw_, gh_);
+  gfx_x = 1140 * sc - gw_; gfx_y = (cwm_sy + 1.25) * sc - gh_ * 0.5; gfx_drawstr(#cwm);
+  gi += 1;
+);
 pkL *= 0.85; pkR *= 0.85;
 
 // ---------- PHASER ----------
 sgroup(24, 478, 640, 104, "PHASER");
-ptk(38 * sc, 506 * sc, 40 * sc, 34 * sc, slider66 == 1, REDL) ? ( slider66 = 1 - slider66; slider_automate(slider66); );
-gfx_setfont(4); ui_col(WHT); ui_text(58 * sc, 548 * sc, "ON");
+ptk(38 * sc, 508 * sc, 40 * sc, 34 * sc, slider66 == 1, REDL) ? ( slider66 = 1 - slider66; slider_automate(slider66); );
+gfx_setfont(10); ui_col(WHT); ui_text(58 * sc, 550 * sc, "ON");
 ui_section(1); C_INK = WHT;
-ui_knob(124 * sc, 542 * sc, 67, 0.05, 8, 0.3, 1, "RATE", "%.2f Hz");
-ui_knob(184 * sc, 542 * sc, 68, 0, 100, 70, 0, "DEPTH", "%.0f%%");
-ui_knob(244 * sc, 542 * sc, 69, 0, 95, 50, 0, "FEEDBACK", "%.0f%%");
-ui_knob(304 * sc, 542 * sc, 70, 0, 100, 100, 0, "MIX", "%.0f%%");
-ui_knob(364 * sc, 542 * sc, 71, 0, 180, 90, 0, "STEREO", "%.0f deg");
-ui_col(0x1E1D1C); gfx_rect(408 * sc, 504 * sc, 244 * sc, 70 * sc); ui_col(0xB8BC9C); gfx_rect(412 * sc, 508 * sc, 236 * sc, 62 * sc); pk_lcdc = 0x262A1E;
-ph_a = ph_aL; ph_g = slider66 ? slider70 / 100 : 0; ph_fbk = slider69 / 100 * 0.8;
+ui_knob(120 * sc, 546 * sc, 67, 0.05, 8, 0.3, 1, "RATE", "%.2f Hz");
+ui_knob(176 * sc, 546 * sc, 68, 0, 100, 70, 0, "DEPTH", "%.0f%%");
+ui_knob(238 * sc, 546 * sc, 69, 0, 95, 50, 0, "FEEDBACK", "%.0f%%");
+ui_knob(298 * sc, 546 * sc, 70, 0, 100, 100, 0, "MIX", "%.0f%%");
+ui_knob(354 * sc, 546 * sc, 71, 0, 180, 90, 0, "STEREO", "%.0f deg");
+// the screen: the phaser's response (left solid, right dotted) at the LFO's present position, drawn from the current
+// settings, and below it the sweep range with the left and right sweep positions. Dimmed while the phaser is off;
+// the LFO is the audio's own while the phaser runs, otherwise a copy at RATE.
+ui_col(0x1E1D1C); ui_rrect(392 * sc, 502 * sc, 262 * sc, 74 * sc, 3 * sc); ui_col(0xB8BC9C); gfx_rect(396 * sc, 506 * sc, 254 * sc, 66 * sc); pk_lcdc = 0x262A1E;
+cwp_dt = cw_now - cwp_t0; cwp_t0 = cw_now; cwp_dt = min(max(cwp_dt, 0), 0.1);
+ph_mx > 0.0005 ? cwp_lp = ph_lp : ( cwp_lp += slider67 * cwp_dt; cwp_lp -= floor(cwp_lp); );
+cwp_on = slider66 ? 1 : 0.4;
+function cwp_x(f) ( (398 + 250 * log(f / 30) / log(18000 / 30)) * sc );
+// frequency grid
+gfx_setfont(12);
 gi = 0;
-loop(105,
-  ph_f = 30 * (18000 / 30) ^ (gi / 104); ph_w = 2 * $pi * ph_f / srate;
-  ph_nr = ph_a + cos(ph_w); ph_ni = -sin(ph_w); ph_dr = 1 + ph_a * cos(ph_w); ph_di = -ph_a * sin(ph_w);
-  ph_sr = (ph_nr * ph_dr + ph_ni * ph_di) / (ph_dr * ph_dr + ph_di * ph_di);
-  ph_si = (ph_ni * ph_dr - ph_nr * ph_di) / (ph_dr * ph_dr + ph_di * ph_di);
-  ph_cr = 1; ph_ci = 0;
-  loop(6, ph_t = ph_cr * ph_sr - ph_ci * ph_si; ph_ci = ph_cr * ph_si + ph_ci * ph_sr; ph_cr = ph_t; );
-  ph_dr = 1 - ph_fbk * ph_cr; ph_di = -ph_fbk * ph_ci;
-  ph_t = (ph_cr * ph_dr + ph_ci * ph_di) / (ph_dr * ph_dr + ph_di * ph_di);
-  ph_ci = (ph_ci * ph_dr - ph_cr * ph_di) / (ph_dr * ph_dr + ph_di * ph_di); ph_cr = ph_t;
-  ph_m = sqrt(sqr(1 + ph_g * (ph_cr - 1) * 0.5) + sqr(ph_g * ph_ci * 0.5));
-  ph_db = 20 * log10(max(ph_m, 0.001));
-  ph_x = (414 + gi * 232 / 104) * sc; ph_y = (508 + 62 * (0.3 - max(min(ph_db, 9), -27) / 40)) * sc;
-  ui_cola(pk_lcdc, slider66 ? 0.95 : 0.35); gi > 0 ? gfx_line(ph_px, ph_py, ph_x, ph_y);
-  ph_px = ph_x; ph_py = ph_y; gi += 1;
+loop(3,
+  cwp_f = gi == 0 ? 100 : gi == 1 ? 1000 : 10000;
+  ui_cola(pk_lcdc, 0.18); gfx_line(cwp_x(cwp_f), 518 * sc, cwp_x(cwp_f), 556 * sc);
+  ui_cola(pk_lcdc, 0.55); ui_text(cwp_x(cwp_f), 508 * sc, gi == 0 ? "100" : gi == 1 ? "1k" : "10k");
+  gi += 1;
 );
+ui_cola(pk_lcdc, 0.18); gfx_line(398 * sc, 524 * sc, 648 * sc, 524 * sc);   // 0 dB
+!slider66 ? ( ui_cola(pk_lcdc, 0.7); gfx_x = 404 * sc; gfx_y = 508 * sc; gfx_drawstr("OFF"); );
+ph_g = slider70 / 100; ph_fbk = slider69 / 100 * 0.8;
+cwp_ch = 0;
+loop(slider71 > 0 ? 2 : 1,
+  ph_a = ph_coef(ph_freq(cwp_lp + cwp_ch * ph_off));
+  gi = 0;
+  loop(105,
+    ph_f = 30 * (18000 / 30) ^ (gi / 104); ph_w = 2 * $pi * ph_f / srate;
+    ph_nr = ph_a + cos(ph_w); ph_ni = -sin(ph_w); ph_dr = 1 + ph_a * cos(ph_w); ph_di = -ph_a * sin(ph_w);
+    ph_sr = (ph_nr * ph_dr + ph_ni * ph_di) / (ph_dr * ph_dr + ph_di * ph_di);
+    ph_si = (ph_ni * ph_dr - ph_nr * ph_di) / (ph_dr * ph_dr + ph_di * ph_di);
+    ph_cr = 1; ph_ci = 0;
+    loop(6, ph_t = ph_cr * ph_sr - ph_ci * ph_si; ph_ci = ph_cr * ph_si + ph_ci * ph_sr; ph_cr = ph_t; );
+    ph_dr = 1 - ph_fbk * ph_cr; ph_di = -ph_fbk * ph_ci;
+    ph_t = (ph_cr * ph_dr + ph_ci * ph_di) / (ph_dr * ph_dr + ph_di * ph_di);
+    ph_ci = (ph_ci * ph_dr - ph_cr * ph_di) / (ph_dr * ph_dr + ph_di * ph_di); ph_cr = ph_t;
+    ph_m = sqrt(sqr(1 + ph_g * (ph_cr - 1) * 0.5) + sqr(ph_g * ph_ci * 0.5));
+    ph_db = 20 * log10(max(ph_m, 0.001));
+    ph_x = (398 + gi * 250 / 104) * sc; ph_y = (524 + 32 * (0 - max(min(ph_db, 3), -24)) / 24) * sc;
+    ui_cola(pk_lcdc, cwp_on * (cwp_ch ? 0.5 : 0.95));
+    gi > 0 && (cwp_ch == 0 || (gi & 1)) ? ( gfx_line(ph_px, ph_py, ph_x, ph_y); cwp_ch == 0 ? gfx_line(ph_px, ph_py + 1 * sc, ph_x, ph_y + 1 * sc); );
+    ph_px = ph_x; ph_py = ph_y; gi += 1;
+  );
+  cwp_ch += 1;
+);
+// sweep range and positions
+ui_cola(pk_lcdc, 0.25 * cwp_on + 0.1); gfx_rect(cwp_x(ph_freq(0.75)), 562 * sc, max(cwp_x(ph_freq(0.25)) - cwp_x(ph_freq(0.75)), 2 * sc), 6 * sc);
+ui_cola(pk_lcdc, cwp_on); gfx_rect(cwp_x(ph_freq(cwp_lp)) - 1.5 * sc, 559 * sc, 3 * sc, 12 * sc);
+slider71 > 0 ? ( ui_cola(pk_lcdc, cwp_on * 0.55); gfx_rect(cwp_x(ph_freq(cwp_lp + ph_off)) - 1.5 * sc, 559 * sc, 3 * sc, 12 * sc); );
 
 // ---------- DRIFT ----------
 sgroup(672, 478, 484, 104, "DRIFT  +  FEEL");
 ui_section(1); C_INK = WHT;
-ui_knob(740 * sc, 542 * sc, 63, 0, 100, 25, 0, "DRIFT", "%.0f%%");
-ui_knob(830 * sc, 542 * sc, 52, 0, 100, 30, 0, "HITS", "%.0f%%");
-ui_knob(920 * sc, 542 * sc, 53, 0, 20, 0, 0, "TIMING", "%.1f ms");
-gfx_setfont(4); ui_cola(WHT, 0.55);
-gfx_x = 980 * sc; gfx_y = 500 * sc; gfx_drawstr("DRIFT: the analogue wander");
-gfx_x = 980 * sc; gfx_y = 516 * sc; gfx_drawstr("HITS: every hit a little different");
-gfx_x = 980 * sc; gfx_y = 532 * sc; gfx_drawstr("TIMING: loosens the groove");
+ui_knob(726 * sc, 546 * sc, 63, 0, 100, 25, 0, "DRIFT", "%.0f%%");
+ui_knob(806 * sc, 546 * sc, 52, 0, 100, 30, 0, "HITS", "%.0f%%");
+ui_knob(886 * sc, 546 * sc, 53, 0, 20, 0, 0, "TIMING", "%.1f ms");
+gfx_setfont(10); ui_cola(WHT, 0.72);
+gfx_x = 942 * sc; gfx_y = 510 * sc; gfx_drawstr("DRIFT: the analogue wander");
+gfx_x = 942 * sc; gfx_y = 530 * sc; gfx_drawstr("HITS: each hit a little different");
+gfx_x = 942 * sc; gfx_y = 550 * sc; gfx_drawstr("TIMING: loosens the groove");
 ui_flatk = 0.8;
 
 // ---------- IN / OUT strip: SAT, OUT, STEREO ----------

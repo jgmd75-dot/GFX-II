@@ -2,17 +2,17 @@ desc:GFX Grunt
 //tags: amp preamp drive saturation console grunt
 //author: JGWizrad / Garden FX (GFX)
 //
-// Requires gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
+// Requires gfx-input, gfx-output, gfx-ui, gfx-panel and gfx-dyn (.jsfx-inc) in the same folder.
 //
 // "Waka" faceplate: a fixed warm sunrise-orange/red skin (not tied to the usual theme swatches),
-// with an off-white ivory-bakelite cap on the GAIN knob.
+// with a row of matching ribbed black amp knobs (cream pointers) on a recessed control strip.
 //
 // Signal path: input (trim + guard) -> 140Hz low-shelf bypass splits off the sub-140Hz band ->
 // boost / gain drive -> soft pre-clip -> grunt waveshaping (cubic warmth) -> low band rejoins ->
 // band saturation / tone -> dynamic 330Hz dip -> stereo-linked clipper / limiter -> master.
-//   GAIN   - drive into the stage (ivory bakelite cap). The higher it goes, the more of the
+//   GAIN   - drive into the stage. The higher it goes, the more of the
 //            sub-140Hz content is routed around the gain/grunt stage untouched (tighter low end).
-//   BOOST  - small gold-cap knob: extra drive on top of GAIN, plus an asymmetric warmth bias
+//   BOOST  - smaller amp knob (gold pointer): extra drive on top of GAIN, plus an asymmetric warmth bias
 //   GRUNT  - amount of cubic waveshaping character. Together with SAG, dynamically pulls gain
 //            out at 330Hz (up to ~6 dB) so heavier settings don't turn boxy/congested.
 //   SAG    - output-stage saturation bias
@@ -24,6 +24,7 @@ import gfx-input.jsfx-inc
 import gfx-output.jsfx-inc
 import gfx-ui.jsfx-inc
 import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
 
 slider1:0<-24,12,0.1>-Gain (dB)
 slider2:0<0,100,1>-Boost (%)
@@ -45,7 +46,6 @@ in_init();
 ost_init(16384); ostL.ost_ch_init(); ostR.ost_ch_init();
 pkL = 0; pkR = 0;   // stereo output meter peaks
 ui_thm = 15; ui_hw = 1;   // "Waka" skin is fixed (Ember: burnt orange / warm brown) - no theme picker on this panel
-pk_kstyle = 4;            // ivory bakelite cap (used for the GAIN knob overlay only)
 
 // one-pole lowpass, used to split out the sub-140Hz band so it can bypass the gain/grunt stage
 function lp140_set(freq) instance(a) (
@@ -82,12 +82,22 @@ function update() (
 
 update();
 
-// ivory-bakelite cap overlay drawn on top of the GAIN knob, reusing pk_bkcap() from gfx-panel
-// (ui_knob underneath still handles all drag / wheel / double-click-reset interaction).
-function gr_bake(cx, cy, r, idx, vmin, vmax) local(n, a1) (
-  n = (slider(idx) - vmin) / (vmax - vmin);
-  a1 = -0.75 * $pi + n * 1.5 * $pi;
-  pk_bkcap(cx, cy, r, a1);
+// amp knob + a big label underneath that shows the value while touched (house style)
+function gx_knob(cx, r, idx, lo, hi, def, ptr, label, fmt) (
+  dy_knob(cx, gx_y, r, idx, lo, hi, def, 0, ptr, "", "");
+  gfx_setfont(2); ui_col(dy_act ? 0xFFFDD0 : dy_ink);
+  dy_act ? sprintf(#gx_lbl, fmt, slider(idx)) : strcpy(#gx_lbl, label);
+  ui_text(cx * sc, (gx_y + 39) * sc, #gx_lbl);
+);
+
+// printed section outline with its title set into the top edge (readable font 5)
+function gx_box(x, title) local(tw, th) (
+  gfx_setfont(5); gfx_measurestr(title, tw, th); ui_cola(0xE6CDB4, 0.75);
+  gfx_line(x * sc, 84 * sc, (x + 73) * sc - tw * 0.5 - 5 * sc, 84 * sc);
+  gfx_line((x + 73) * sc + tw * 0.5 + 5 * sc, 84 * sc, (x + 146) * sc, 84 * sc);
+  gfx_line(x * sc, 84 * sc, x * sc, 204 * sc); gfx_line((x + 146) * sc, 84 * sc, (x + 146) * sc, 204 * sc);
+  gfx_line(x * sc, 204 * sc, (x + 146) * sc, 204 * sc);
+  ui_col(0xE6CDB4); ui_text((x + 73) * sc, 84 * sc - th * 0.5, title);
 );
 
 @slider
@@ -161,17 +171,15 @@ spl1 = ost_r * master_g;
 
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));   // post-master stereo output peaks
 
-@gfx 480 300
-ui_begin(480, 300);
+@gfx 620 252
+ui_begin(620, 252);
 
 // warm sunrise wash (burnt orange -> red ember), under everything else - the "Waka" mood
 gfx_gradrect(0, 0, gfx_w, gfx_h, 0.62, 0.22, 0.08, 0.16, 0, 0, 0, 0, 0.14 / gfx_h, 0.02 / gfx_h, -0.03 / gfx_h, 0);
 
-// --- Top Bar ---
+// --- Header: logo + name, preset bar [PRESETS][<][>][LCD], S/M/L/? ---
 ui_header("GRUNT");
-
-// the preset row under the header: PRESETS, prev / next, LCD (click it for the list), at the right
-k_ = pk_preset(164 * sc, 52 * sc, 300 * sc, 30 * sc, pr_cur, "Default|Warm Console|American Crunch|British Punch");
+k_ = pk_preset(134 * sc, 7 * sc, 396 * sc, 30 * sc, pr_cur, "Default|Warm Console|American Crunch|British Punch");
 k_ > 0 ? (
     preset = k_; pr_cur = k_;
     preset == 1 ? ( slider1 = 0; slider2 = 0;   slider3 = 0.5; slider4 = 0.2; slider5 = 0.5; slider6 = 0;  slider7 = 1; );
@@ -180,30 +188,33 @@ k_ > 0 ? (
     preset == 4 ? ( slider1 = 4; slider2 = 0;   slider3 = 0.6; slider4 = 0.5; slider5 = 0.8; slider6 = -1; slider7 = 2; );
     preset > 0 ? slider_automate(127);   // sliders 1-7
 );
-
 // Size picker & help (no theme picker - this panel's "Waka" skin is fixed)
 // ui_begin() already clamps sc to the picked Size preset (never scales past it, only down
 // to fit a smaller window), so the panel content stops growing once the host window is
 // dragged bigger - it just leaves the warm gradient background around it instead of stretching.
-ui_size_picker(400 * sc, 13 * sc);
+ui_size_picker(546 * sc, 15 * sc);
 
-// --- Second Row: Gain // Boost // Grunt // Sag ---
-y2 = 138 * sc;
-ui_knob(65 * sc, y2, 1, -24, 12, 0, 0, "GAIN", "%+.1f dB");
-gr_bake(65 * sc, y2, 21 * sc, 1, -24, 12);                                       // ivory bakelite cap
-ui_kcap = 0xD8B040; ui_knob(185 * sc, y2, 2, 0, 100, 0, 0, "BOOST", "%.0f%%");   // small yellow-cap knob (from Head)
-ui_knob(305 * sc, y2, 3, 0, 1, 0.5, 0, "GRUNT", "%.2f");
-ui_knob(425 * sc, y2, 4, 0, 1, 0.2, 0, "SAG", "%.2f");
+// --- Recessed amp control strip: six matching amp knobs + the output meter ---
+pk_inset(26 * sc, 64 * sc, 568 * sc, 162 * sc, 0x2F1A0F);
+gfx_gradrect(26 * sc, 140 * sc, 568 * sc, 86 * sc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.12 / (86 * sc));   // shade towards the bottom
+dy_ink = 0xF6E6D4; dy_numc = 0xE6CDB4; dy_kst = 33; dy_num = 1;
+gx_y = 146;
+// printed section brackets over the knob pairs
+gfx_setfont(5);
+gx_box( 37, "PREAMP"); gx_box(197, "CHARACTER"); gx_box(357, "OUTPUT");
+gx_knob(70, 24, 1, -24, 12, 0,   0xFFFDD0, "GAIN",   "%+.1f dB");
+gx_knob(150, 17, 2, 0, 100, 0,    0xD8B040, "BOOST",  "%.0f%%");
+gx_knob(230, 24, 3, 0, 1, 0.5,    0xFFFDD0, "GRUNT",  "%.2f");
+gx_knob(310, 24, 4, 0, 1, 0.2,    0xFFFDD0, "SAG",    "%.2f");
+gx_knob(390, 24, 5, 0, 1, 0.5,    0xFFFDD0, "SQUASH", "%.2f");
+gx_knob(470, 24, 6, -24, 12, 0,   0xFFFDD0, "MASTER", "%+.1f dB");
 
-// --- Third Row: Squash // Master // Meters ---
-y3 = 238 * sc;
-ui_knob(65 * sc, y3, 5, 0, 1, 0.5, 0, "SQUASH", "%.2f");
-ui_knob(185 * sc, y3, 6, -24, 12, 0, 0, "MASTER", "%+.1f dB");
-
-// Meters on the right of the third row (stereo: L on top, R below)
-ui_screen(260 * sc, y3 - 22 * sc, 190 * sc, 52 * sc);
-mL.ui_ledm(275 * sc, y3 - 16 * sc, 160 * sc, 9 * sc, pkL);
-mR.ui_ledm(275 * sc, y3 - 2 * sc, 160 * sc, 9 * sc, pkR);
+// stereo output meter tucked into the right end of the strip (L | R, bottom to top)
+ui_screen(518 * sc, 76 * sc, 64 * sc, 128 * sc);
+mL.ui_ledm(531 * sc, 86 * sc, 14 * sc, 108 * sc, pkL);
+mR.ui_ledm(555 * sc, 86 * sc, 14 * sc, 108 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;   // per-redraw decay of the held peaks
+gfx_setfont(5); ui_col(dy_ink);
+ui_text(538 * sc, 208 * sc, "L"); ui_text(562 * sc, 208 * sc, "R");
 
 ui_end();

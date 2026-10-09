@@ -299,9 +299,8 @@ function fa_pos() local(lo, hi) (
 
 // ---------- chassis ----------
 ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
-rd_plate(26, 0, 1008, 320, FACE, 0);
-rd_rack(0, 0, 1060, 320, 0x9EA1A4);
-ui_cola(0x000000, 0.35); gfx_rect(26 * sc, 0, 1008 * sc, 1.5 * sc); gfx_rect(26 * sc, 318 * sc, 1008 * sc, 2 * sc);
+rd_plate(0, 0, 1060, 320, FACE, 0);
+ui_cola(0x000000, 0.35); gfx_rect(0, 0, 1060 * sc, 1.5 * sc); gfx_rect(0, 318 * sc, 1060 * sc, 2 * sc);
 // blue print stripes
 ui_col(BLU); gfx_rect(44 * sc, 58 * sc, 972 * sc, 3 * sc); gfx_rect(44 * sc, 306 * sc, 972 * sc, 1.5 * sc);
 

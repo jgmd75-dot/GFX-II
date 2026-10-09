@@ -122,18 +122,19 @@ function ps(md, ft, f, d, pk, dr, rg, sn, rs, rt, ml, gl, lp, dv) (
   slider10 = rt; slider11 = ml; slider12 = gl; slider13 = lp; slider14 = dv; slider15 = 100; slider16 = 0; slider17 = 1; slider18 = 0;
 );
 function load_preset(p) (
-  p == 1  ? ps(0, 1, 250, 3.5, 5, 1, 0, 60, 30, 2, 0, 15, 1, 20) :     // Funk Up
-  p == 2  ? ps(0, 0, 900, 3, 6, 0, 0, 65, 35, 2, 0, 15, 1, 30) :       // Bass Quack (down)
-  p == 3  ? ps(1, 1, 300, 4, 7, 1, 0, 60, 40, 3, 0, 5, 1, 25) :        // Ship Steps (1/16 loop)
-  p == 4  ? ps(1, 0, 200, 4.5, 8, 1, 0, 60, 40, 2, 1, 45, 0, 15) :     // Random Gurgle
-  p == 5  ? ps(2, 1, 250, 4, 6, 1, 0, 70, 30, 3, 0, 10, 1, 20) :       // Envelope Steps
-  p == 6  ? ps(0, 3, 300, 4, 3, 1, 0, 55, 60, 2, 0, 15, 1, 0) :        // Notch Sweep
-  p == 7  ? ps(0, 1, 180, 3.5, 9, 1, 0, 60, 90, 2, 0, 15, 1, 10) :     // Slow Talker
-  p == 8  ? ps(0, 1, 400, 3, 6, 1, 1, 70, 15, 2, 0, 15, 1, 35) :       // Clav Wah
-  p == 9  ? ps(1, 1, 500, 3.5, 10, 1, 1, 60, 40, 4, 0, 0, 1, 10) :     // Synth Blips (1/32)
-  p == 10 ? ps(0, 0, 120, 5, 2, 1, 0, 50, 70, 2, 0, 15, 1, 0);         // Lowpass Bloom
-  p >= 1 && p <= 10 ? slider_automate(262143);     // sliders 1-18
-  p == 11 ? (                                       // Reset all to defaults
+  p == 1  ? ps(0, 1, 250, 3.5, 4, 1, 0, 60, 40, 2, 0, 15, 1, 20) :     // Init (the defaults)
+  p == 2  ? ps(0, 1, 250, 3.5, 5, 1, 0, 60, 30, 2, 0, 15, 1, 20) :     // Funk Up
+  p == 3  ? ps(0, 0, 900, 3, 6, 0, 0, 65, 35, 2, 0, 15, 1, 30) :       // Bass Quack (down)
+  p == 4  ? ps(1, 1, 300, 4, 7, 1, 0, 60, 40, 3, 0, 5, 1, 25) :        // Ship Steps (1/16 loop)
+  p == 5  ? ps(1, 0, 200, 4.5, 8, 1, 0, 60, 40, 2, 1, 45, 0, 15) :     // Random Gurgle
+  p == 6  ? ps(2, 1, 250, 4, 6, 1, 0, 70, 30, 3, 0, 10, 1, 20) :       // Envelope Steps
+  p == 7  ? ps(0, 3, 300, 4, 3, 1, 0, 55, 60, 2, 0, 15, 1, 0) :        // Notch Sweep
+  p == 8  ? ps(0, 1, 180, 3.5, 9, 1, 0, 60, 90, 2, 0, 15, 1, 10) :     // Slow Talker
+  p == 9  ? ps(0, 1, 400, 3, 6, 1, 1, 70, 15, 2, 0, 15, 1, 35) :       // Clav Wah
+  p == 10 ? ps(1, 1, 500, 3.5, 10, 1, 1, 60, 40, 4, 0, 0, 1, 10) :     // Synth Blips (1/32)
+  p == 11 ? ps(0, 0, 120, 5, 2, 1, 0, 50, 70, 2, 0, 15, 1, 0);         // Lowpass Bloom
+  p >= 1 && p <= 11 ? slider_automate(262143);     // sliders 1-18
+  p == 12 ? (                                       // Reset all to defaults
     ps(0, 1, 250, 3.5, 4, 1, 0, 60, 40, 2, 0, 15, 1, 20);
     slider19 = 0; slider20 = 1; slider21 = 0; slider22 = 30; slider23 = 120; slider24 = 6000; slider25 = -0.3; slider26 = 1;
     slider_automate(67108863);
@@ -333,6 +334,7 @@ function q_proc(cb_inl, cb_inr) (
   q_out_l = q_oL; q_out_r = q_oR;
 );
 q_ord = slider45;
+!ui_dflt ? pr_cur = 1;                            // a new instance opens on Init
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
@@ -353,7 +355,10 @@ binc = bpm / 60 / srate;
 
 
 @serialize
-file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
+file_avail(0) != 0 ? (                           // the preset in use (older projects end before it)
+  file_var(0, pr_cur); pr_ver = 2;
+  file_avail(0) != 0 ? file_var(0, pr_ver) : pr_cur >= 1 ? pr_cur += 1;   // saved before INIT became preset 1
+) : pr_cur = 0;
 @sample
 in_process(spl0, spl1);
 !q_ord ? ( q_proc(in_l, in_r); in_l = q_out_l; in_r = q_out_r; );   // EQ first
@@ -475,8 +480,8 @@ gfx_setfont(4); ui_col(WHT); gfx_x = 432 * sc; gfx_y = 25 * sc; gfx_drawstr("HOL
 pk_ledbtn(474 * sc, 19 * sc, 26 * sc, 22 * sc, slider17, dy_grn) ? ( slider17 = 1 - slider17; ui_auto(17); );
 gfx_setfont(4); ui_col(WHT); gfx_x = 506 * sc; gfx_y = 25 * sc; gfx_drawstr("ON");
 pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
-k_ = pk_preset(540 * sc, 12 * sc, 282 * sc, 34 * sc, pr_cur, "Funk Up|Bass Quack (down)|Ship Steps|Random Gurgle|Envelope Steps|Notch Sweep|Slow Talker|Clav Wah|Synth Blips|Lowpass Bloom");
-k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+k_ = pk_preset(540 * sc, 12 * sc, 282 * sc, 34 * sc, pr_cur, "Init|Funk Up|Bass Quack (down)|Ship Steps|Random Gurgle|Envelope Steps|Notch Sweep|Slow Talker|Clav Wah|Synth Blips|Lowpass Bloom");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 11 ? 0 : k_; );
 ui_size_picker(834 * sc, 20 * sc);
 
 

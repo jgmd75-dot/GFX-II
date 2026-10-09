@@ -176,16 +176,16 @@ pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 @gfx 1060 300
 ui_begin(1060, 300);
 
-FACE = 0x49796B; INK = 0xF3EBD3; BLU = 0xF3EBD3; DIM = 0xA2B5AC; RED = 0xFF3A22;
+FACE = 0x1E2A44; INK = 0xF3EBD3; BLU = 0xF3EBD3; DIM = 0xA3ABBE; RED = 0xFF3A22;
 dy_ink = INK; dy_bg = FACE; dy_nov = 1;
 
 function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
 
 ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
-ui_col(FACE); gfx_rect(26 * sc, 0, 1008 * sc, 300 * sc);
-rd_rack(0, 0, 1060, 300, 0xA8ACB2);
-ui_cola(0x000000, 0.35); gfx_rect(26 * sc, 0, 1008 * sc, 2 * sc); gfx_rect(26 * sc, 298 * sc, 1008 * sc, 2 * sc);
-ui_col(BLU); gfx_rect(26 * sc, 62 * sc, 1008 * sc, 3 * sc);
+ui_col(FACE); gfx_rect(0, 0, 1060 * sc, 300 * sc);
+ui_col(ui_mix(FACE, 0x3A4A6E, 0.35)); gfx_rect(0, 0, 1060 * sc, 62 * sc);   // header: a lighter shade of the navy
+ui_cola(0x000000, 0.35); gfx_rect(0, 0, 1060 * sc, 2 * sc); gfx_rect(0, 298 * sc, 1060 * sc, 2 * sc);
+ui_col(BLU); gfx_rect(0, 62 * sc, 1060 * sc, 3 * sc);
 
 // ---------- HEADER: title, the preset LCD (click it for every preset), size ----------
 rd_badge(60, 34, 15, INK, FACE);
@@ -211,7 +211,7 @@ ui_size_picker(940 * sc, 24 * sc);
 // ---------- PREAMP ----------
 rd_sub(44, 74, "PREAMP", BLU, 1);
 sprintf(#v, "%+.1f dB", slider11);
-dy_knob(94, 160, 24, 11, -24, 12, 0, 0, 0x2A2D33, "TRIM", hover_txt(94, 160, 24, #v));
+dy_knob(94, 160, 24, 11, -24, 12, 0, 0, 0x9DA2A8, "TRIM", hover_txt(94, 160, 24, #v));
 sprintf(#v, "%.0f%%", slider4);
 dy_knob(174, 160, 24, 4, 0, 100, 30, 0, 0xC4C6C3, "DRIVE", hover_txt(174, 160, 24, #v));
 
@@ -233,9 +233,9 @@ ui_cola(INK, 0.15); gfx_rect(549 * sc, 78 * sc, 1 * sc, 208 * sc);
 // ---------- TONE ----------
 rd_sub(564, 74, "TONE", BLU, 1);
 sprintf(#v, "%.0f Hz", slider5);
-dy_knob(614, 160, 24, 5, 1000, 8000, 3500, 1, 0x2A2D33, "CLOCK LPF", hover_txt(614, 160, 24, #v));
+dy_knob(614, 160, 24, 5, 1000, 8000, 3500, 1, 0x9DA2A8, "CLOCK LPF", hover_txt(614, 160, 24, #v));
 sprintf(#v, "%.0f%%", slider6);
-dy_knob(694, 160, 24, 6, 0, 100, 15, 0, 0x2A2D33, "NOISE", hover_txt(694, 160, 24, #v));
+dy_knob(694, 160, 24, 6, 0, 100, 15, 0, 0x9DA2A8, "NOISE", hover_txt(694, 160, 24, #v));
 
 ui_cola(INK, 0.15); gfx_rect(744 * sc, 78 * sc, 1 * sc, 208 * sc);
 
@@ -244,7 +244,7 @@ rd_sub(759, 74, "MASTER", BLU, 1);
 sprintf(#v, "%.0f%%", slider9);
 dy_knob(796, 160, 24, 9, 0, 100, 35, 0, 0xF3EBD3, "MIX", hover_txt(796, 160, 24, #v));
 sprintf(#v, "%.0f%%", slider12);
-dy_knob(866, 160, 20, 12, 0, 100, 50, 0, 0x2A2D33, "DRIFT", hover_txt(866, 160, 20, #v));
+dy_knob(866, 160, 20, 12, 0, 100, 50, 0, 0x9DA2A8, "DRIFT", hover_txt(866, 160, 20, #v));
 sprintf(#v, "%+.1f dB", slider10);
 dy_knob(936, 160, 24, 10, -24, 12, 0, 0, 0xC4C6C3, "OUTPUT", hover_txt(936, 160, 24, #v));
 

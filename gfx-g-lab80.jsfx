@@ -919,23 +919,21 @@ ui_size_picker(448 * sc, 13 * sc);
 pk_ledbtn(520 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;
 gfx_setfont(4); ui_col(INKL); gfx_x = 558 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
 
-// ---------- SOUND: < > | green LCD (click it for the list) | PRESETS ----------
+// ---------- SOUND: PRESETS | < > | green LCD (click it for the list) ----------
 cur_pos = snd_pos(slider1); cur_grp = pos_grp(cur_pos);
-pk_ledbtn(20 * sc, 56 * sc, 34 * sc, 38 * sc, 0, TEAL) ? ( slider1 = mord[(cur_pos + NSND - 1) % NSND]; slider_automate(1); );
-pk_ledbtn(58 * sc, 56 * sc, 34 * sc, 38 * sc, 0, TEAL) ? ( slider1 = mord[(cur_pos + 1) % NSND]; slider_automate(1); );
-gfx_setfont(4); ui_col(INKL); ui_text(37 * sc, 82 * sc, "<"); ui_text(75 * sc, 82 * sc, ">");
-pk_lcd(102 * sc, 52 * sc, 400 * sc, 46 * sc, 1);
-pk_lcdfont(7, 18 * sc); ui_col(pk_lcdc);
-gfx_x = 114 * sc; gfx_y = 57 * sc; gfx_drawstr(sname(slider1));
-pk_lcdfont(8, 10 * sc);
-sprintf(#ks, "%s %d/%d   %02d SOUNDING%s", grp_name(cur_grp), cur_pos - GST[cur_grp] + 1, GSZ[cur_grp], nact, pedal ? "  SUS" : "");
-gfx_x = 114 * sc; gfx_y = 81 * sc; gfx_drawstr(#ks);
-pressed && drag_id == 0 && mouse_x >= 102 * sc && mouse_x < 502 * sc && mouse_y >= 52 * sc && mouse_y < 98 * sc ? (
-  drag_id = -1; snd_menu(102 * sc, 98 * sc);
-);
-ui_noled = 1;
-ui_button(514 * sc, 60 * sc, 106 * sc, 30 * sc, "PRESETS", 0, 1) ? snd_menu(514 * sc, 90 * sc);
+ui_noled = 1; ui_button(20 * sc, 56 * sc, 86 * sc, 38 * sc, "PRESETS", 0, 1) ? snd_menu(20 * sc, 98 * sc);
+ui_noled = 1; ui_button(110 * sc, 56 * sc, 32 * sc, 38 * sc, "◄", 0, 1) ? ( slider1 = mord[(cur_pos + NSND - 1) % NSND]; slider_automate(1); );
+ui_noled = 1; ui_button(146 * sc, 56 * sc, 32 * sc, 38 * sc, "►", 0, 1) ? ( slider1 = mord[(cur_pos + 1) % NSND]; slider_automate(1); );
 ui_noled = 0;
+pk_lcd(188 * sc, 52 * sc, 436 * sc, 46 * sc, 1);
+pk_lcdfont(7, 18 * sc); ui_col(pk_lcdc);
+gfx_x = 200 * sc; gfx_y = 56 * sc; gfx_drawstr(sname(slider1));
+pk_lcdfont(8, 11 * sc);
+sprintf(#ks, "%s %d/%d   %02d SOUNDING%s", grp_name(cur_grp), cur_pos - GST[cur_grp] + 1, GSZ[cur_grp], nact, pedal ? "  SUS" : "");
+gfx_x = 200 * sc; gfx_y = 80 * sc; gfx_drawstr(#ks);
+pressed && drag_id == 0 && mouse_x >= 188 * sc && mouse_x < 624 * sc && mouse_y >= 52 * sc && mouse_y < 98 * sc ? (
+  drag_id = -1; snd_menu(188 * sc, 98 * sc);
+);
 
 // ---------- MACROS ----------
 mgroup(16, 112, 608, 92, 0, "MACROS", SH1);
@@ -953,7 +951,7 @@ mgroup(16, 214, 608, 92, 0, "REVERB", SH2);
 i = 0;
 loop(3,
   pk_ledbtn(34 * sc, (224 + i * 26) * sc, 26 * sc, 22 * sc, slider19 == i, TEAL) ? ( slider19 = i; slider_automate(262144); );
-  gfx_setfont(4); ui_col(INKL); gfx_x = 66 * sc; gfx_y = (230 + i * 26) * sc; gfx_drawstr(i == 0 ? "ROOM" : i == 1 ? "HALL" : "PLATE");
+  gfx_setfont(5); ui_col(INKL); gfx_x = 68 * sc; gfx_y = (229 + i * 26) * sc; gfx_drawstr(i == 0 ? "ROOM" : i == 1 ? "HALL" : "PLATE");
   i += 1;
 );
 ui_knob(190 * sc, 258 * sc, 20, 0, 150, 15, 0, "PRE-DELAY", "%.0f ms");
@@ -962,26 +960,27 @@ ui_knob(410 * sc, 258 * sc, 22, 0, 100, 50, 0, "DAMPING", "%.0f%%");
 ui_knob(540 * sc, 258 * sc, 23, 0, 100, 25, 0, "MIX", "%.0f%%");
 
 // ---------- DRIFT ----------
-mgroup(16, 316, 170, 92, 1, "DRIFT", SH3);
-ui_knob(101 * sc, 360 * sc, 8, 0, 100, 25, 0, "DRIFT", "%.0f%%");
+mgroup(16, 316, 112, 92, 1, "DRIFT", SH3);
+ui_knob(72 * sc, 360 * sc, 8, 0, 100, 25, 0, "DRIFT", "%.0f%%");
 
 // ---------- MIDI ----------
-mgroup(194, 316, 170, 92, 3, "MIDI", SH3);
+mgroup(136, 316, 214, 92, 3, "MIDI", SH3);
 knob_step = 1;
-ui_knob(240 * sc, 360 * sc, 9, 0, 16, 0, 0, "CHANNEL", slider9 == 0 ? "OMNI" : "CH %.0f");
-pk_led(294 * sc, 340 * sc, 3 * sc, ins_midi_lit() || nact > 0, REDL);
-gfx_setfont(4); ui_col(INKL);
-gfx_x = 304 * sc; gfx_y = 336 * sc; gfx_drawstr("MIDI IN");
-gfx_x = 286 * sc; gfx_y = 356 * sc; gfx_drawstr("CC64 sustain");
-gfx_x = 286 * sc; gfx_y = 370 * sc; gfx_drawstr("CC1 vibrato");
+ui_knob(186 * sc, 360 * sc, 9, 0, 16, 0, 0, "CHANNEL", slider9 == 0 ? "OMNI" : "CH %.0f");
+pk_led(246 * sc, 345 * sc, 4 * sc, ins_midi_lit() || nact > 0, REDL);
+gfx_setfont(5); ui_col(INKL);
+gfx_x = 258 * sc; gfx_y = 338 * sc; gfx_drawstr("MIDI IN");
+ui_cola(INKL, 0.8);
+gfx_x = 240 * sc; gfx_y = 360 * sc; gfx_drawstr("CC64  SUSTAIN");
+gfx_x = 240 * sc; gfx_y = 378 * sc; gfx_drawstr("CC1  VIBRATO");
 
 // ---------- MASTER ----------
-mgroup(372, 316, 252, 92, 2, "MASTER", SH3);
-ui_knob(422 * sc, 360 * sc, 10, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
-mL.ui_ledm(578 * sc, 326 * sc, 14 * sc, 70 * sc, pkL);
-mR.ui_ledm(598 * sc, 326 * sc, 14 * sc, 70 * sc, pkR);
+mgroup(358, 316, 266, 92, 2, "MASTER", SH3);
+ui_knob(460 * sc, 360 * sc, 10, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
+mL.ui_ledm(570 * sc, 326 * sc, 16 * sc, 70 * sc, pkL);
+mR.ui_ledm(592 * sc, 326 * sc, 16 * sc, 70 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;
-gfx_setfont(4); ui_col(INKL); ui_text(595 * sc, 398 * sc, "OUT");
+gfx_setfont(4); ui_col(INKL); ui_text(590 * sc, 398 * sc, "OUT");
 
 // ---------- IN / OUT strip: SAT, OUT, STEREO ----------
 // ins_strip(16, 414, 608, 11, 24, TEAL, SH3);
