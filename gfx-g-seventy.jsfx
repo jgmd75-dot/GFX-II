@@ -1,0 +1,386 @@
+desc:GFX G Seventy
+//tags: instrument synth mono lead bass analog 70s
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-voice, gfx-output, gfx-ui, gfx-panel, gfx-instrument, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// A monophonic synth in the spirit of the mid-70s two-oscillator Japanese monos:
+//   VCO 1      triangle, saw, square, pulse, or pulse-width modulated by the MG; six octaves, 64' to 2'.
+//   VCO 2      saw, ring-modulated against VCO 1, or white / pink / red noise; TUNE offsets it from VCO 1.
+//   BLEND      the mix of the two sources.
+//   TRAVELER   the two horizontal sliders: a high-pass and a low-pass filter in series, 12 dB each,
+//              with a three-step RESONANCE switch; EG and MG switches set how far the envelope and the MG move them.
+//   AUTO BEND  a pitch bend into every new note (up or down, with its own time); VIBRATO has its own LFO.
+//   ENVELOPE   attack, decay, sustain, release for the filter and the amp. Last-note priority, portamento.
+//
+// DRIFT (heavy, 70s unstable; 60% by default): the universal GFX instrument drift pushed harder - pitch,
+// VCO 2 detune, pulse width and the Traveler filters wander, with a random tuning offset on each new note -
+// and the envelope's timing wanders too, a little different on every note. 0% = steady.
+// IN / OUT: the GFX band saturation and output stage (SAT and OFF / CLIP / LIM on the panel).
+
+import gfx-drift.jsfx-inc
+import gfx-voice.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:1<0,4,1{Triangle,Saw,Square,Pulse,PWM}>-VCO 1 wave
+slider2:3<0,5,1{64',32',16',8',4',2'}>-VCO 1 octave
+slider3:0<0,4,1{Saw,Ring,White noise,Pink noise,Red noise}>-VCO 2 source
+slider4:0.1<-12,12,0.01>-VCO 2 tune (semitones)
+slider5:30<0,100,1>-Blend (VCO 1 - VCO 2, %)
+slider6:5<0.1,30,0.01>-MG rate (Hz)
+slider7:50<0,100,1>-PWM depth (%)
+slider8:5.5<1,12,0.01>-Vibrato rate (Hz)
+slider9:0<0,100,1>-Vibrato depth (cents)
+slider10:20<20,8000,1>-Traveler HPF (Hz)
+slider11:2000<60,18000,1>-Traveler LPF (Hz)
+slider12:0<0,2,1{Low,Mid,High}>-Resonance
+slider13:1<0,2,1{Off,Half,Full}>-EG to filter
+slider14:0<0,2,1{Off,Half,Full}>-MG to filter
+slider15:5<1,5000,0.1>-Attack (ms)
+slider16:600<10,8000,1>-Decay (ms)
+slider17:60<0,100,1>-Sustain (%)
+slider18:300<10,8000,1>-Release (ms)
+slider19:0<-12,12,0.1>-Auto bend depth (semitones)
+slider20:200<10,2000,1>-Auto bend time (ms)
+slider21:0<0,1500,1>-Portamento (ms)
+slider22:0<0,100,1>-Velocity (%)
+slider23:60<0,100,1>-Drift (%)
+slider24:0<-24,6,0.1>-Volume (dB)
+slider25:0<0,11,1{Seventy Lead,64' Bass,Traveler Sweep,Ring Bells,PWM Strings,Auto Bend Brass,Whistle,Wind,Squelch,Theremin,Zap Drum,Hollow Pipe}>-Patch
+slider26:0<0,100,1>-Band sat (%)
+slider27:30<0,100,1>-Bias (%)
+slider28:120<40,400,1>-Sat low band (Hz)
+slider29:6000<2000,16000,10>-Sat high band (Hz)
+slider30:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider31:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-seventy";
+HN = 1000; hcount = 0;                       // held-note stack (last-note priority)
+memset(HN, 0, 128);
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+ins_drift_init();
+sv_dE.drift_init(0.8 + rand(0.5));            // the envelope's slow timing wander
+bend = 1; nd_mul = 1; cur = 60; tgt = 60; vel = 0.8; gate = 0; ab_v = 0;
+sm = vo_coef(30);
+dxp = dyp = 0; last_patch = -1; edited = 0;
+
+// ---------- the Traveler filters: 12 dB state-variable (TPT), low-pass and high-pass outputs ----------
+function sv_svf(x, fc, k) instance(ic1, ic2, lp, hp) local(g, a1, a2, a3, v1, v2, v3) (
+  g = tan($pi * min(fc, srate * 0.45) / srate);
+  a1 = 1 / (1 + g * (g + k)); a2 = g * a1; a3 = g * a2;
+  v3 = x - ic2; v1 = a1 * ic1 + a2 * v3; v2 = ic2 + a2 * ic1 + a3 * v3;
+  ic1 = 2 * v1 - ic1; ic2 = 2 * v2 - ic2;
+  lp = v2; hp = x - k * v1 - v2;
+);
+// a naive triangle is clean enough (its harmonics fall fast); own phase
+function sv_tri(inc) instance(ph) ( ph += inc; ph -= floor(ph); ph < 0.5 ? 4 * ph - 1 : 3 - 4 * ph; );
+
+// per-patch level trim (keeps the hottest patches out of the output clipper; quieter ones are left alone)
+function patch_trim(p) (
+  p == 0 ? 1.000 : p == 1 ? 1.000 : p == 2 ? 0.440 : p == 3 ? 1.000 : p == 4 ? 0.720 : p == 5 ? 1.000 :
+  p == 6 ? 0.320 : p == 7 ? 0.620 : p == 8 ? 1.000 : p == 9 ? 0.530 : p == 10 ? 1.000 : 1.000;
+);
+
+// ---------- patches ----------
+function setvco(w, o, s2, tu, bl) ( slider1 = w; slider2 = o; slider3 = s2; slider4 = tu; slider5 = bl; );
+function setmod(mr, pd, vr, vd) ( slider6 = mr; slider7 = pd; slider8 = vr; slider9 = vd; );
+function settrv(hp, lp, rs, eg, mg) ( slider10 = hp; slider11 = lp; slider12 = rs; slider13 = eg; slider14 = mg; );
+function setenv(a, d, s, r) ( slider15 = a; slider16 = d; slider17 = s; slider18 = r; );
+function setperf(bd, bt, pt, vl) ( slider19 = bd; slider20 = bt; slider21 = pt; slider22 = vl; );
+function load_patch(p) (
+  p == 0  ? ( setvco(1, 3, 0, 0.12, 35); setmod(5, 50, 5.5, 12);  settrv(20, 1800, 1, 1, 0);  setenv(5, 700, 70, 300);   setperf(0, 200, 40, 0);   ) :   // Seventy Lead
+  p == 1  ? ( setvco(2, 1, 0, 12.05, 30);setmod(5, 50, 5.5, 0);   settrv(20, 700, 1, 1, 0);   setenv(2, 450, 40, 120);   setperf(0, 200, 0, 30);   ) :   // 64' Bass (32' + VCO 2 an octave up)
+  p == 2  ? ( setvco(1, 2, 0, 0.2, 50);  setmod(0.25, 50, 5, 0);  settrv(60, 900, 2, 0, 2);   setenv(10, 1000, 100, 600);setperf(0, 200, 0, 0);    ) :   // Traveler Sweep
+  p == 3  ? ( setvco(2, 3, 1, 7.0, 75);  setmod(5, 50, 5, 0);     settrv(200, 6000, 1, 1, 0); setenv(1, 1600, 0, 1400);  setperf(0, 200, 0, 40);   ) :   // Ring Bells
+  p == 4  ? ( setvco(4, 3, 0, 0.15, 25); setmod(0.6, 80, 5, 6);   settrv(150, 3200, 0, 0, 0); setenv(250, 800, 85, 700); setperf(0, 200, 0, 0);    ) :   // PWM Strings
+  p == 5  ? ( setvco(1, 3, 0, 0.1, 40);  setmod(5, 50, 5.5, 8);   settrv(60, 1200, 1, 2, 0);  setenv(40, 500, 70, 250);  setperf(-1.5, 120, 0, 40);) :   // Auto Bend Brass
+  p == 6  ? ( setvco(0, 4, 3, 0, 8);     setmod(5, 50, 6, 18);    settrv(400, 5000, 2, 0, 0); setenv(30, 300, 90, 400);  setperf(0.6, 90, 60, 0);  ) :   // Whistle
+  p == 7  ? ( setvco(0, 3, 3, 0, 100);   setmod(0.15, 50, 5, 0);  settrv(300, 1500, 2, 0, 2); setenv(800, 2000, 90, 2000);setperf(0, 200, 0, 0);    ) :   // Wind
+  p == 8  ? ( setvco(3, 2, 0, 0.1, 20);  setmod(5, 50, 5, 0);     settrv(20, 250, 2, 2, 0);   setenv(1, 280, 10, 120);   setperf(0, 200, 30, 50);  ) :   // Squelch
+  p == 9  ? ( setvco(0, 3, 0, 0, 0);     setmod(5, 50, 6.2, 30);  settrv(20, 2500, 0, 0, 0); setenv(120, 500, 100, 500);setperf(0, 200, 180, 0);  ) :   // Theremin
+  p == 10 ? ( setvco(0, 1, 2, 0, 35);    setmod(5, 50, 5, 0);     settrv(20, 3000, 1, 2, 0);  setenv(1, 180, 0, 150);    setperf(12, 70, 0, 60);   ) :   // Zap Drum
+            ( setvco(2, 3, 0, 12.0, 45); setmod(4, 50, 5, 4);     settrv(250, 2200, 0, 1, 0); setenv(20, 600, 80, 350);  setperf(0, 200, 20, 20);  );    // Hollow Pipe
+  slider25 = p; last_patch = p; edited = 0;
+  slider_automate(2 ^ 22 - 1 + 2 ^ 24);          // sliders 1-22 and 25
+);
+function patch_name(p) (
+  p == 0 ? "SEVENTY LEAD" : p == 1 ? "64' BASS" : p == 2 ? "TRAVELER SWEEP" : p == 3 ? "RING BELLS" :
+  p == 4 ? "PWM STRINGS" : p == 5 ? "AUTO BEND BRASS" : p == 6 ? "WHISTLE" : p == 7 ? "WIND" :
+  p == 8 ? "SQUELCH" : p == 9 ? "THEREMIN" : p == 10 ? "ZAP DRUM" : "HOLLOW PIPE";
+);
+
+// ---------- notes ----------
+// the envelope's timing (DRIFT): slow wander plus a fresh offset on every new note
+function env_times() local(f) (
+  f = 2 ^ ((sv_ew + (rand(2) - 1) * 0.6) * drift * 0.35);
+  aenv.vo_adsr_set(slider15 * f, slider16 * f, slider17 / 100, slider18 * f);
+);
+function note_on(n, v) local(i, f, legato) (
+  legato = hcount > 0;
+  f = -1; i = 0; loop(hcount, HN[i] == n ? f = i; i += 1; );
+  f >= 0 ? ( i = f; loop(hcount - f - 1, HN[i] = HN[i + 1]; i += 1; ); hcount -= 1; );
+  hcount < 127 ? ( HN[hcount] = n; hcount += 1; );
+  tgt = n; vel = v / 127;
+  !legato ? ( nd_mul = ins_note_detune() * 2 ^ ((rand(2) - 1) * drift * 0.05 / 12); env_times(); );
+  porta_ms <= 0 ? cur = n;                       // PORTA glides between every note when it is up
+  ab_v = ab_d;                                    // AUTO BEND starts from its depth on every new note
+  aenv.vo_adsr_gate(1, !legato);
+  gate = 1;
+  ins_midi_hit();
+);
+function note_off(n) local(i, f) (
+  f = -1; i = 0; loop(hcount, HN[i] == n ? f = i; i += 1; );
+  f >= 0 ? (
+    i = f; loop(hcount - f - 1, HN[i] = HN[i + 1]; i += 1; ); hcount -= 1;
+    hcount > 0 ? ( tgt = HN[hcount - 1]; porta_ms <= 0 ? cur = tgt; ) : ( aenv.vo_adsr_gate(0, 0); gate = 0; );
+  );
+);
+
+// ---------- parameters ----------
+function update() (
+  w1 = floor(slider1 + 0.5); oc1 = 2 ^ (floor(slider2 + 0.5) - 3);
+  src2 = floor(slider3 + 0.5); tune2 = slider4; blend = slider5 / 100;
+  mg_rate = slider6; pwm_d = slider7 / 100; vib_r = slider8; vib_d = slider9;
+  hpf = slider10; lpf = slider11;
+  rk = floor(slider12 + 0.5); rk = rk == 0 ? 1.7 : rk == 1 ? 0.85 : 0.22;
+  eg_i = floor(slider13 + 0.5) * 2.6; mg_i = floor(slider14 + 0.5) * 1.1;
+  ab_d = slider19; ab_c = 1 - exp(-1 / (max(slider20, 1) * 0.001 * srate / 4.6));
+  porta_ms = slider21; porta_c = slider21 > 0 ? vo_coef(slider21) : 1;
+  velsens = slider22 / 100;
+  drift = slider23 / 100 * 1.6;                   // heavy: the universal drift pushed further
+  vol_t = 10 ^ (slider24 / 20);
+  ins_output_setup(26);
+);
+// recessed front-panel section (the GFX instrument inset): sloped walls, corner creases, light from the top left
+function inset(x, y, w, h, col) local(b, ox, oy, ow, oh) (
+  x *= sc; y *= sc; w *= sc; h *= sc; b = 5 * sc;
+  ox = x - b; oy = y - b; ow = w + 2 * b; oh = h + 2 * b;
+  ui_col(ui_mix(col, 0x000000, 0.30)); gfx_triangle(ox, oy, ox + ow, oy, x + w, y, x, y);
+  ui_col(ui_mix(col, 0x000000, 0.18)); gfx_triangle(ox, oy, x, y, x, y + h, ox, oy + oh);
+  ui_col(ui_mix(col, 0xFFFFFF, 0.30)); gfx_triangle(ox, oy + oh, x, y + h, x + w, y + h, ox + ow, oy + oh);
+  ui_col(ui_mix(col, 0xFFFFFF, 0.12)); gfx_triangle(ox + ow, oy, ox + ow, oy + oh, x + w, y + h, x + w, y);
+  ui_col(col); gfx_rect(x, y, w, h);
+  gfx_gradrect(x, y, w, 6 * sc, 0, 0, 0, 0.14, 0, 0, 0, 0, 0, 0, 0, -0.14 / (6 * sc));
+  ui_cola(0x000000, 0.30); gfx_line(ox, oy, x, y, 1); gfx_line(ox + ow, oy, x + w, y, 1);
+  ui_cola(0xFFFFFF, 0.35); gfx_line(ox, oy + oh, x, y + h, 1); gfx_line(ox + ow, oy + oh, x + w, y + h, 1);
+);
+update();
+vol_s = vol_t;
+env_times();
+ui_dflt = 1;
+
+@slider
+last_patch < 0 ? ( last_patch = slider25; ) : ( slider25 != last_patch ? load_patch(slider25); );
+update();
+
+@block
+update();
+while (midirecv(mofs, m1, m2, m3)) (
+  st = m1 & 0xF0;
+  st == 0x90 && m3 > 0 ? note_on(m2, m3) :
+  st == 0x80 || (st == 0x90 && m3 == 0) ? note_off(m2) :
+  st == 0xB0 && (m2 == 123 || m2 == 120) ? ( hcount = 0; aenv.vo_adsr_gate(0, 0); gate = 0; ) :
+  st == 0xE0 ? bend = ins_bend(m2, m3, 2);
+  midisend(mofs, m1, m2, m3);
+);
+ins_drift_block(drift, samplesblock);              // GFX instrument drift (heavy)
+sv_ew = sv_dE.drift_tick(0.3 * samplesblock / srate);
+
+@sample
+// pitch: portamento, auto bend, vibrato, drift
+cur += (tgt - cur) * porta_c;
+ab_v -= ab_v * ab_c;
+vb_ph += vib_r / srate; vb_ph -= floor(vb_ph);
+semi = cur + ab_v + sin(2 * $pi * vb_ph) * vib_d / 100;
+f1 = 440 * 2 ^ ((semi - 69) / 12) * bend * ins_pitch * nd_mul * oc1;
+inc1 = min(f1 / srate, 0.45);
+inc2 = min(inc1 * 2 ^ ((tune2 + ins_aux) / 12), 0.45);
+
+// MG: the main LFO (triangle), for PWM and the filters
+mg_ph += mg_rate / srate; mg_ph -= floor(mg_ph);
+mg = mg_ph < 0.5 ? 4 * mg_ph - 1 : 3 - 4 * mg_ph;
+
+// VCO 1
+v1 = w1 == 0 ? t1.sv_tri(inc1) : w1 == 1 ? o1.vo_saw(inc1) : w1 == 2 ? o1.vo_pulse(inc1, 0.5) :
+     w1 == 3 ? o1.vo_pulse(inc1, min(max(0.25 + ins_cut * 0.04, 0.08), 0.92)) :
+               o1.vo_pulse(inc1, min(max(0.5 + mg * pwm_d * 0.44 + ins_cut * 0.04, 0.06), 0.94));
+
+// VCO 2: saw, ring (VCO 1 x VCO 2), or noise
+wn = rand(2) - 1;
+src2 == 0 ? v2 = o2.vo_saw(inc2) :
+src2 == 1 ? v2 = v1 * o2.vo_saw(inc2) :
+src2 == 2 ? v2 = wn :
+src2 == 3 ? ( pb0 = 0.99765 * pb0 + wn * 0.0990460; pb1 = 0.96300 * pb1 + wn * 0.2965164; pb2 = 0.57000 * pb2 + wn * 1.0526913;
+              v2 = (pb0 + pb1 + pb2 + wn * 0.1848) * 0.22; ) :
+            ( rn += (wn - rn) * 0.03; v2 = rn * 4; );
+y = (v1 * (1 - blend) + v2 * blend) * 0.45;
+
+// the Traveler: HPF then LPF, moved by the EG and the MG (and DRIFT)
+ae = aenv.vo_adsr();
+oct = eg_i * ae + mg_i * mg + ins_cut;
+fh.sv_svf(y, min(max(hpf * 2 ^ oct, 15), srate * 0.45), rk); y = fh.hp;
+fl.sv_svf(y, min(max(lpf * 2 ^ oct, 30), srate * 0.45), rk); y = fl.lp;
+y = vo_tanh(y * 0.8) / 0.8;
+
+// VCA
+y *= ae * (1 - velsens + velsens * vel);
+
+// DC block, volume, the GFX output stage
+dy = y - dxp + 0.9995 * dyp; dxp = y; dyp = dy; y = dy;      // DC block low enough for 64' notes
+vol_s += (vol_t - vol_s) * sm;
+y *= patch_trim(slider25) * vol_s;
+oL = ostL.ost_band(y); oR = ostR.ost_band(y);
+ost_out(oL, oR);
+spl0 = ost_l; spl1 = ost_r;
+pkL = max(pkL, abs(spl0));
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, edited);
+
+@gfx 960 540
+ui_begin(960, 540);
+
+CREAM = 0xF2E8D0; SH1 = 0xEADDBF; SH2 = 0xE3D4B2; SH3 = 0xDCCBA6; ORG = 0xE0701E; INK = 0x3A2A1E; DIMI = 0x7A6450;
+CAPD = 0x3B2A20; CAPO = 0xE0701E; CAPC = 0xF6EFDF; CAPG = 0x9DA2A8;
+dy_ink = INK; dy_bg = CREAM; dy_nov = 1; rd_sqbg = 0x5A4636;
+
+function setv(idx, v) ( slider(idx) = v; slider_automate(2 ^ (idx - 1)); edited = 1; );
+// section title: an orange band across the top of the inset
+function band(x, y, w, s) ( ui_col(ORG); gfx_rect(x * sc, y * sc, w * sc, 18 * sc); gfx_setfont(4); ui_col(CREAM); gfx_x = (x + 8) * sc; gfx_y = (y + 3) * sc; gfx_drawstr(s); );
+// a row of lit keys for a stepped slider
+function keys(x, y, w, h, gap, idx, n, names) local(i) (
+  i = 0;
+  loop(n,
+    strcpy_substr(#kn, names, i * 4, 4);
+    while (strlen(#kn) > 0 && str_getchar(#kn, strlen(#kn) - 1) == ' ') ( strcpy_substr(#kn, #kn, 0, strlen(#kn) - 1); );
+    rd_sq(x + i * (w + gap), y, w, h, floor(slider(idx) + 0.5) == i, ORG, #kn) ? setv(idx, i);
+    i += 1;
+  );
+);
+// the Traveler: a horizontal slider (log), orange handle; double-click resets; value shows on hover
+function trav(x, y, w, idx, lo, hi, def, label) local(v, n, hx, did, hov) (
+  did = 1700 + idx; v = slider(idx); n = log(v / lo) / log(hi / lo); hx = x + n * w;
+  hov = mouse_x >= (x - 10) * sc && mouse_x <= (x + w + 10) * sc && mouse_y >= (y - 14) * sc && mouse_y <= (y + 14) * sc;
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - tv_lt < 0.35 && tv_lid == idx ? ( setv(idx, def); drag_id = -1; tv_lt = 0; ) :
+    ( drag_id = did; tv_lt = time_precise(); tv_lid = idx; );
+  );
+  drag_id == did ? (
+    n = min(max((mouse_x / sc - x) / w, 0), 1); v = lo * (hi / lo) ^ n;
+    slider(idx) != v ? ( slider(idx) = v; slider_automate(2 ^ (idx - 1)); edited = 1; );
+  );
+  n = log(slider(idx) / lo) / log(hi / lo); hx = x + n * w;
+  ui_col(0x2A1E16); gfx_rect(x * sc, (y - 3) * sc, w * sc, 6 * sc);                       // the slot
+  ui_cola(0xFFFFFF, 0.35); gfx_rect(x * sc, (y + 3) * sc, w * sc, 1 * sc);
+  i = 0; loop(11, ui_cola(INK, 0.55); gfx_rect((x + i * w / 10) * sc, (y + 9) * sc, 1 * sc, (i % 5 == 0 ? 7 : 4) * sc); i += 1; );
+  ui_cola(0x000000, 0.3); gfx_rect((hx - 9) * sc, (y - 10) * sc, 20 * sc, 22 * sc);      // the handle
+  ui_col(ORG); gfx_rect((hx - 10) * sc, (y - 11) * sc, 20 * sc, 22 * sc);
+  ui_cola(0xFFFFFF, 0.35); gfx_rect((hx - 10) * sc, (y - 11) * sc, 20 * sc, 3 * sc);
+  ui_col(CREAM); gfx_rect((hx - 1) * sc, (y - 9) * sc, 2 * sc, 18 * sc);
+  gfx_setfont(5); ui_col(INK); gfx_x = (x - 44) * sc; gfx_y = (y - 6) * sc; gfx_drawstr(label);
+  (hov || drag_id == did) ? ( sprintf(#tv, "%.0f Hz", slider(idx)); rd_lbl(x + w + 34, y - 5, #tv, INK, 1); );
+);
+
+// ---------- panel ----------
+ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(CREAM); gfx_rect(0, 0, 960 * sc, 540 * sc);
+gfx_gradrect(0, 0, 960 * sc, 270 * sc, 1, 1, 1, 0.10, 0, 0, 0, 0, 0, 0, 0, -0.10 / (270 * sc));
+ui_col(ORG); gfx_rect(0, 64 * sc, 960 * sc, 4 * sc);
+ui_cola(0x000000, 0.25); gfx_rect(0, 536 * sc, 960 * sc, 4 * sc);
+
+// header: badge, name, presets [PRESETS][◄][►][LCD], MIDI, size
+rd_badge(36, 32, 16, INK, CREAM);
+rd_title(62, 14, "SEVENTY", 28, INK);
+rd_sub(66, 46, "MONOPHONIC SYNTHESIZER", DIMI, 1);
+pm_ = rd_sq(376, 17, 78, 32, 0, ORG, "PRESETS");
+rd_sq(458, 17, 32, 32, 0, ORG, "◄") ? load_patch(slider25 <= 0 ? 11 : slider25 - 1);
+rd_sq(494, 17, 32, 32, 0, ORG, "►") ? load_patch(slider25 >= 11 ? 0 : slider25 + 1);
+pk_lcd(534 * sc, 9 * sc, 236 * sc, 48 * sc, 0);
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+sprintf(#l1, edited ? "PATCH %02d/12 *" : "PATCH %02d/12", slider25 + 1); gfx_x = 546 * sc; gfx_y = 15 * sc; gfx_drawstr(#l1);
+pk_lcdfont(9, 15 * sc); gfx_x = 546 * sc; gfx_y = 31 * sc; gfx_drawstr(patch_name(slider25));
+pm_ || (pressed && drag_id == 0 && mouse_x >= 534 * sc && mouse_x < 770 * sc && mouse_y >= 9 * sc && mouse_y < 57 * sc) ? (
+  drag_id = -1; strcpy(#pm, ""); k_ = 0;
+  loop(12, k_ == slider25 ? strcat(#pm, "!"); strcat(#pm, patch_name(k_)); k_ < 11 ? strcat(#pm, "|"); k_ += 1; );
+  gfx_x = 376 * sc; gfx_y = 58 * sc; k_ = gfx_showmenu(#pm); k_ > 0 ? load_patch(k_ - 1);
+);
+rd_led(796, 33, 5, ins_midi_lit(), 0x3ADF6A); rd_lbl(796, 44, "MIDI", DIMI, 1);
+ui_size_picker(830 * sc, 24 * sc);
+
+// ---------- row 1: VCO 1, VCO 2, MODULATION ----------
+inset(16, 88, 330, 132, SH1); band(16, 88, 330, "VCO 1");
+rd_lbl(40, 116, "WAVE", DIMI, 1);
+keys(26, 126, 58, 30, 6, 1, 5, "TRI SAW SQR PLS PWM ");
+rd_lbl(44, 168, "OCTAVE", DIMI, 1);
+keys(26, 178, 48, 30, 5, 2, 6, "64' 32' 16' 8'  4'  2'  ");
+
+inset(358, 88, 300, 132, SH2); band(358, 88, 300, "VCO 2");
+rd_lbl(386, 116, "SOURCE", DIMI, 1);
+keys(368, 126, 54, 30, 4, 3, 5, "SAW RINGWHT PNK RED ");
+sprintf(#v, "%+.2f st", slider4); dy_knob(420, 178, 20, 4, -12, 12, 0.1, 0, CAPD, "TUNE", #v);
+sprintf(#v, "%.0f%%", slider5); dy_knob(560, 176, 22, 5, 0, 100, 30, 0, CAPO, "BLEND", #v);
+rd_lbl(516, 176, "1", DIMI, 1); rd_lbl(604, 176, "2", DIMI, 1);
+
+inset(670, 88, 274, 132, SH3); band(670, 88, 274, "MODULATION");
+sprintf(#v, "%.2f Hz", slider6); dy_knob(708, 152, 20, 6, 0.1, 30, 5, 1, CAPD, "MG RATE", #v);
+sprintf(#v, "%.0f%%", slider7); dy_knob(774, 152, 20, 7, 0, 100, 50, 0, CAPD, "PWM", #v);
+sprintf(#v, "%.2f Hz", slider8); dy_knob(840, 152, 20, 8, 1, 12, 5.5, 0, CAPD, "VIB RATE", #v);
+sprintf(#v, "%.0f ct", slider9); dy_knob(906, 152, 20, 9, 0, 100, 0, 0, CAPD, "VIB DEPTH", #v);
+rd_led(686, 108, 4, mg_ph < 0.5, ORG);
+
+// ---------- row 2: TRAVELER, FILTER MOD, AUTO BEND ----------
+inset(16, 240, 450, 132, SH2); band(16, 240, 450, "TRAVELER");
+trav(76, 288, 280, 10, 20, 8000, 20, "HPF");
+trav(76, 336, 280, 11, 60, 18000, 2000, "LPF");
+rd_lbl(424, 266, "RESONANCE", DIMI, 1);
+keys(396, 276, 56, 26, 0, 12, 1, "LOW ");
+rd_sq(396, 306, 56, 26, slider12 == 1, ORG, "MID") ? setv(12, 1);
+rd_sq(396, 336, 56, 26, slider12 == 2, ORG, "HIGH") ? setv(12, 2);
+
+inset(478, 240, 180, 132, SH1); band(478, 240, 180, "FILTER MOD");
+rd_lbl(524, 268, "EG", DIMI, 1); keys(492, 280, 32, 26, 0, 13, 1, "OFF ");
+rd_sq(492, 310, 32, 26, slider13 == 1, ORG, "1/2") ? setv(13, 1);
+rd_sq(492, 340, 32, 26, slider13 == 2, ORG, "1") ? setv(13, 2);
+rd_lbl(612, 268, "MG", DIMI, 1); keys(580, 280, 32, 26, 0, 14, 1, "OFF ");
+rd_sq(580, 310, 32, 26, slider14 == 1, ORG, "1/2") ? setv(14, 1);
+rd_sq(580, 340, 32, 26, slider14 == 2, ORG, "1") ? setv(14, 2);
+
+inset(670, 240, 274, 132, SH3); band(670, 240, 274, "AUTO BEND  /  GLIDE");
+sprintf(#v, "%+.1f st", slider19); dy_knob(716, 312, 22, 19, -12, 12, 0, 0, CAPO, "BEND", #v);
+sprintf(#v, "%.0f ms", slider20); dy_knob(806, 312, 22, 20, 10, 2000, 200, 1, CAPD, "TIME", #v);
+sprintf(#v, "%.0f ms", slider21); dy_knob(896, 312, 22, 21, 0, 1500, 0, 0, CAPD, "PORTA", #v);
+
+// ---------- row 3: ENVELOPE, PERFORMANCE, MASTER ----------
+inset(16, 392, 330, 132, SH3); band(16, 392, 330, "ENVELOPE");
+sprintf(#v, "%.1f ms", slider15); dy_knob(60, 462, 22, 15, 1, 5000, 5, 1, CAPD, "ATTACK", #v);
+sprintf(#v, "%.0f ms", slider16); dy_knob(138, 462, 22, 16, 10, 8000, 600, 1, CAPD, "DECAY", #v);
+sprintf(#v, "%.0f%%", slider17); dy_knob(216, 462, 22, 17, 0, 100, 60, 0, CAPD, "SUSTAIN", #v);
+sprintf(#v, "%.0f ms", slider18); dy_knob(294, 462, 22, 18, 10, 8000, 300, 1, CAPD, "RELEASE", #v);
+
+inset(358, 392, 160, 132, SH1); band(358, 392, 160, "PLAYING");
+sprintf(#v, "%.0f%%", slider22); dy_knob(438, 462, 22, 22, 0, 100, 0, 0, CAPD, "VELOCITY", #v);
+
+inset(530, 392, 414, 132, SH2); band(530, 392, 414, "MASTER");
+sprintf(#v, "%.0f%%", slider23); dy_knob(572, 466, 18, 23, 0, 100, 60, 0, CAPG, "DRIFT", #v);
+sprintf(#v, "%+.1f dB", slider24); dy_knob(652, 462, 24, 24, -24, 6, 0, 0, CAPC, "VOLUME", #v);
+sprintf(#v, "%.0f%%", slider26); dy_knob(732, 466, 18, 26, 0, 100, 0, 0, CAPG, "SAT", #v);
+rd_lbl(830, 418, "OUT", DIMI, 1);
+rd_sq(780, 428, 100, 22, slider31 == 0, ORG, "OFF") ? setv(31, 0);
+rd_sq(780, 454, 100, 22, slider31 == 1, ORG, "CLIP") ? setv(31, 1);
+rd_sq(780, 480, 100, 22, slider31 == 2, ORG, "LIMIT") ? setv(31, 2);
+mL.ui_ledm(906 * sc, 420 * sc, 10 * sc, 92 * sc, pkL); pkL *= 0.85;
+
+(drag_id > 1600 && drag_id <= 1622) || drag_id == 1710 || drag_id == 1711 ? edited = 1;
+pk_end();
+ui_end();
