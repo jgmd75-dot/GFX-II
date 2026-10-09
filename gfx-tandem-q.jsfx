@@ -37,8 +37,8 @@ import gfx-output.jsfx-inc
 import gfx-ui.jsfx-inc
 import gfx-panel.jsfx-inc
 import gfx-instrument.jsfx-inc
-import gfx-headsmooth.jsfx-inc
 import gfx-dyn.jsfx-inc
+import gfx-headsmooth.jsfx-inc
 
 slider1:1<0,1,1{Out,In}>-Stage 1 in
 slider2:-24<-60,0,0.1>-Stage 1 threshold (dB)
