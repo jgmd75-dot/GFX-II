@@ -188,7 +188,7 @@ gfx_setfont(12, "Trebuchet MS", 34*qs, 'b');
 gfx_setfont(13, "Trebuchet MS", 17*qs, 'b');
 GRN = 0x46D86A; AMB = 0xFFB030; RED = 0xFF3A2A;
 PNL = 0xE3D8D8; INK = 0x2A2424; INK2 = 0x5E5454; SCR = 0x0E1418; TRACE = 0x7FD8E8;
-C1 = 0x8B5A2B; C2 = 0x3D70CC; C3 = 0x33A052; C4 = 0xD02E28; KG = 0x55595F;
+C1 = 0x8B5A2B; C2 = 0x3D70CC; C3 = 0x33A052; C4 = 0xD02E28; KG = 0x9DA2A8;
 
 function R(x, y, w, h) ( gfx_rect(x*qs, y*qs, max(1, w*qs), max(1, h*qs)); );
 function CIRC(x, y, rr, f) ( gfx_circle(x*qs, y*qs, rr*qs, f, 1); );
@@ -230,7 +230,7 @@ function band(k, cx, lo, hi, def, col, name) local(i0, on) (
   sprintf(#bg, "%+.1f dB", slider(i0 + 2));
   knob(i0 + 2, cx + 48, 186, 32, -16, 16, 0, 0, col, "GAIN", #bg); touch(i0 + 2, name, #bg);
   sprintf(#bb, "%.2f oct", slider(i0 + 1));
-  knob(i0 + 1, cx - 48, 318, 22, 0.1, 4, 1, 1, 0x3A3A3E, "BW", #bb); touch(i0 + 1, name, #bb);
+  knob(i0 + 1, cx - 48, 318, 22, 0.1, 4, 1, 1, 0xC7BEB3, "BW", #bb); touch(i0 + 1, name, #bb);
   k == 0 || k == 3 ? (
     // BAND 1 and BAND 4: SHELF key beside IN
     sh_ = k == 0 ? 28 : 29;
