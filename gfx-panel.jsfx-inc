@@ -86,7 +86,7 @@ function pk_lcd(x, y, w, h, kind) (
 );
 function pk_lcdfont(idx, size) ( gfx_setfont(idx, "Courier New", size, 'b'); );
 
-// ---------- the house preset display: [◄] [LCD: PRESET nn/NN + name] [►]; click the LCD for the list ----------
+// ---------- the house preset display: [LCD: PRESET nn/NN + name] [◄][►]; click the LCD for the list ----------
 // menu = "Name 1|Name 2|...|Name n" (1-based). cur = the preset in use (0 = none). pk_pextra (optional) = one more
 // item shown only in the drop-down, e.g. "Reset all to defaults"; choosing it returns n + 1.
 // Returns the preset to load (1 .. n, or n + 1 for the extra item), 0 for nothing. x, y, w, h in pixels.
@@ -102,8 +102,8 @@ function pk_pitem(menu, i, dst) local(k, k0, n, c, len) (
 );
 function pk_pcount(menu) local(k, n) ( n = 1; k = 0; loop(strlen(menu), str_getchar(menu, k) == 124 ? n += 1; k += 1; ); n; );
 function pk_preset(x, y, w, h, cur, menu) local(n, bw, sel, i, lx, hov) (
-  n = pk_pcount(menu); bw = floor(h * 0.7); sel = 0; lx = x + bw + 4 * sc;
-  ui_button(x, y, bw, h, "◄", 0, 1) ? sel = cur <= 1 || cur > n ? n : cur - 1;
+  n = pk_pcount(menu); bw = floor(h * 0.7); sel = 0; lx = x;     // prev / next sit side by side, right of the LCD
+  ui_button(x + w - 2 * bw - 2 * sc, y, bw, h, "◄", 0, 1) ? sel = cur <= 1 || cur > n ? n : cur - 1;
   ui_button(x + w - bw, y, bw, h, "►", 0, 1) ? sel = cur >= n || cur < 1 ? 1 : cur + 1;
   pk_lcd(lx, y, w - 2 * bw - 8 * sc, h, 0);
   ui_col(pk_lcdc);
@@ -113,7 +113,7 @@ function pk_preset(x, y, w, h, cur, menu) local(n, bw, sel, i, lx, hov) (
   pk_lcdfont(9, max(8, h * 0.38));
   cur >= 1 && cur <= n ? pk_pitem(menu, cur, #pk_pl2) : strcpy(#pk_pl2, "click for list");
   gfx_x = lx + 8 * sc; gfx_y = y + h * 0.42; gfx_drawstr(#pk_pl2);
-  hov = mouse_x >= lx && mouse_x < x + w - bw && mouse_y >= y && mouse_y < y + h;
+  hov = mouse_x >= lx && mouse_x < x + w - 2 * bw - 8 * sc && mouse_y >= y && mouse_y < y + h;
   pressed && drag_id == 0 && hov ? (
     drag_id = -1; strcpy(#pk_pm, ""); i = 1;
     loop(n, i == cur ? strcat(#pk_pm, "!"); strcat(#pk_pm, pk_pitem(menu, i, #pk_pt)); i < n ? strcat(#pk_pm, "|"); i += 1; );
