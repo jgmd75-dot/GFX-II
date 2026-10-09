@@ -2,7 +2,7 @@ GFX - free JSFX plug-ins for REAPER
 ===================================
 
 Designed by JGWizrad.
-Website: https://gardenfx.jgmd75.workers.dev/
+Website: https://www.gardenfx.uk/
 
 89 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
 space, mastering and summing - plus the CC-80 chord script. Every sound is
