@@ -125,7 +125,7 @@ DYNAMICS
   Gate            gfx-gate.jsfx
   Headsmoother    gfx-headsmoother.jsfx
   MK3             gfx-mk3.jsfx
-  Quad            gfx-quad.jsfx
+  Quad11          gfx-quad11.jsfx
   RND             gfx-rnd.jsfx
   Smooth          gfx-smooth.jsfx
   Tandem          gfx-tandem.jsfx

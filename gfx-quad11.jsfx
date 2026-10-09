@@ -1,4 +1,4 @@
-desc:GFX Quad
+desc:GFX Quad11
 //tags: multiband compressor bus eq saturation dynamics
 //author: JGWizrad / Garden FX (GFX)
 //
@@ -107,7 +107,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-quad";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-quad11";                                  // the ? pop-up links to this manual
 
 // ---------- biquads (RBJ); fs = the rate the filter runs at ----------
 // type: 0 low-pass, 1 high-pass, 2 peak, 3 high shelf, 4 low shelf, 5 all-pass
@@ -482,8 +482,8 @@ C_INK = INKL;
 // header
 ui_col(INKL); gfx_circle(40 * sc, 38 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 33 * sc, "GFX");
-gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKL); gfx_x = 62 * sc; gfx_y = 24 * sc; gfx_drawstr("QUAD");
-gfx_setfont(4); ui_cola(INKL, 0.6); gfx_x = 142 * sc; gfx_y = 34 * sc; gfx_drawstr("4-BAND BUS COMPRESSOR  -  EQ + SATURATION PER BAND");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKL); gfx_x = 62 * sc; gfx_y = 24 * sc; gfx_drawstr("QUAD11");
+gfx_setfont(4); ui_cola(INKL, 0.6); gfx_x = 172 * sc; gfx_y = 34 * sc; gfx_drawstr("4-BAND BUS COMPRESSOR  -  EQ + SATURATION PER BAND");
 pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
 k_ = pk_preset(560 * sc, 18 * sc, 300 * sc, 36 * sc, pr_cur, "Gentle Glue|Mix Bus Punch|Drum Bus Smash (parallel)|Transient Lift (expand)|Vocal Control|Bass Tighten|De-Mud & Air|Tape Warmth|Master Gentle|Parallel Crush");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
