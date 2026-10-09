@@ -215,6 +215,7 @@ file_var(0, ui_sz);
 file_var(0, ui_hw);
 // added with the new panel: older projects end here and keep the defaults
 file_avail(0) != 0 ? ( file_var(0, op_thm); file_var(0, op_pre); );
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // input stage: DC block, trim, guard
@@ -326,20 +327,21 @@ d_agc = agc_db;
 mIn = max(mIn * 0.9998, max(abs(inL), abs(inR)));
 d_g1 = max(d_g1, g1); d_g2 = max(d_g2, g2); d_g3 = max(d_g3, g3); d_g4 = max(d_g4, g4);
 
-@gfx 640 452
+@gfx 640 500
 ui_hovval = 1;   // house style: knob values show on hover only
-ui_begin(640, 452);
+ui_begin(640, 500);
 ui_header("OPTIMISER");
 
 // ---------- header controls ----------
-ui_noled = 1;
-ui_button(136 * sc, 10 * sc, 56 * sc, 24 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 136 * sc; gfx_y = 34 * sc;
-  load_preset(gfx_showmenu("Gentle FM|Rock FM|Pop Loud|Talk Radio|Classical|Dance Smash|Vintage AM|Master Polish|Podcast Voice|Parallel Punch|Reset all to defaults"));
-);
-ui_theme_picker(200 * sc, 15 * sc);
-ui_size_picker(304 * sc, 13 * sc);
-ui_hw_toggle(364 * sc, 13 * sc);
+ui_theme_picker(148 * sc, 17 * sc);
+ui_size_picker(184 * sc, 13 * sc);
+ui_hw_toggle(248 * sc, 13 * sc);
+
+// the preset strip along the foot: PRESETS, prev / next, LCD (click it for the list)
+ui_cola(F_INK, 0.25); gfx_line(16 * sc, 454 * sc, gfx_w - 16 * sc, 454 * sc);
+pk_pextra = "Reset all to defaults";
+k_ = pk_preset(16 * sc, 462 * sc, 380 * sc, 30 * sc, pr_cur, "Gentle FM|Rock FM|Pop Loud|Talk Radio|Classical|Dance Smash|Vintage AM|Master Polish|Podcast Voice|Parallel Punch");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 
 ui_button(410 * sc, 10 * sc, 68 * sc, 24 * sc, "SLOW", slider1 == 0, 1) ? ( slider1 = 0; slider_automate(slider1); );
 ui_button(482 * sc, 10 * sc, 68 * sc, 24 * sc, "MED",  slider1 == 1, 1) ? ( slider1 = 1; slider_automate(slider1); );

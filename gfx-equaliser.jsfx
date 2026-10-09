@@ -268,6 +268,7 @@ band_coefs(dspd * samplesblock / srate);
 file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // input stage: DC block, trim, guard
@@ -311,8 +312,8 @@ spl0 = ost_l;
 spl1 = ost_r;
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
-@gfx 1100 396
-ui_begin(1100, 396);
+@gfx 1100 442
+ui_begin(1100, 442);
 lz_colours();
 pk_shad = 0.3; pk_shoff = 0.8;
 CP0 = 0x9A6238; CP1 = 0x3A78C0; CP2 = 0x3C9A6C; CP3 = 0xC0423B;   // knob caps per band: brown, blue, green, red
@@ -343,7 +344,7 @@ function slopes(x, y, v) local(i) (
 );
 
 // ---------- the faceplate ----------
-fh = 388;
+fh = 388 + 46;
 ui_col(0x0B0C0C); gfx_rect(0, 0, gfx_w, gfx_h);
 lz_chassis(6, 4, 1088, fh);
 lz_brand("EQUALISER");
@@ -442,13 +443,9 @@ loop(4,
 );
 // the strip along the bottom: presets, colour, size, help, HW / flat, stereo / M-S
 ui_col(lz_dk); lz_rr(240, 342, 496, 30, 4);
-ui_button(246 * sc, 348 * sc, 70 * sc, 18 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 246 * sc; gfx_y = 366 * sc;
-  load_preset(gfx_showmenu("Vocal Presence|Kick Weight|Bass Clarity|Acoustic Sparkle|Mix Air|Mud Cut|Telephone|De-Harsh|Hum Notch 50 Hz|M/S Wide Air|M/S Centre Focus|Reset all to defaults"));
-);
-lz_pick(324, 348);
-ui_size_picker(350 * sc, 348 * sc);
-lz_hw(412, 348);
+lz_pick(250, 348);
+ui_size_picker(276 * sc, 348 * sc);
+lz_hw(338, 348);
 lz_key(598, 345, 64, slider1 == 0, 0xFFC830, "STEREO") ? ( slider1 = 0; ui_auto(1); );
 lz_key(666, 345, 64, slider1 == 1, 0xFFC830, "M / S") ? ( slider1 = 1; ui_auto(1); );
 
@@ -469,6 +466,12 @@ lz_meter(1003, 108, 48, 158, mvL, mvR);
 sprintf(#v, "%+.1f", slider25); lz_lw = 50; lz_knob(1027, 332, 14, 25, -24, 12, 0, 0, "LEVEL", #v);
 
 pk_shad = 0.45; pk_shoff = 1;
+
+// the preset row along the foot: PRESETS, prev / next, LCD (click it for the list)
+lz_sect(84, 384, 974, 42);
+pk_pextra = "Reset all to defaults";
+k_ = pk_preset(96 * sc, 390 * sc, 420 * sc, 30 * sc, pr_cur, "Vocal Presence|Kick Weight|Bass Clarity|Acoustic Sparkle|Mix Air|Mud Cut|Telephone|De-Harsh|Hum Notch 50 Hz|M/S Wide Air|M/S Centre Focus");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 11 ? 0 : k_; );
 
 pk_end();
 ui_end();

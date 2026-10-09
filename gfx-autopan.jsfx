@@ -137,6 +137,7 @@ lfo1.lfo_block(syncmode, div, frate);
 file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // input stage: DC block, trim, guard
@@ -198,19 +199,20 @@ pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 // for display
 dispPos = pos; dispG = g; dispPh = p; dispMod = lv; dispCe = ce; dispDe = de;
 
-@gfx 640 348
-ui_begin(640, 348);
+@gfx 640 396
+ui_begin(640, 396);
 ui_header("AUTOPAN");
 
 // ---------- header controls ----------
-ui_noled = 1;
-ui_button(136 * sc, 10 * sc, 56 * sc, 24 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 136 * sc; gfx_y = 34 * sc;
-  load_preset(gfx_showmenu("Gentle Sway|Classic Auto-Pan|Hard Ping-Pong|Wandering|Slow Swirl|Amp Trem|Choppy Trem|Warble Trem|Reset all to defaults"));
-);
-ui_theme_picker(200 * sc, 17 * sc);
-ui_size_picker(312 * sc, 13 * sc);
-ui_hw_toggle(372 * sc, 13 * sc);
+ui_theme_picker(148 * sc, 17 * sc);
+ui_size_picker(184 * sc, 13 * sc);
+ui_hw_toggle(248 * sc, 13 * sc);
+
+// the preset strip along the foot: PRESETS, prev / next, LCD (click it for the list)
+ui_cola(F_INK, 0.25); gfx_line(16 * sc, 350 * sc, gfx_w - 16 * sc, 350 * sc);
+pk_pextra = "Reset all to defaults";
+k_ = pk_preset(16 * sc, 358 * sc, 380 * sc, 30 * sc, pr_cur, "Gentle Sway|Classic Auto-Pan|Hard Ping-Pong|Wandering|Slow Swirl|Amp Trem|Choppy Trem|Warble Trem");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 8 ? 0 : k_; );
 
 ui_button(484 * sc, 10 * sc, 68 * sc, 24 * sc, "PAN",  slider1 == 0, 1) ? ( slider1 = 0; slider_automate(slider1); );
 ui_button(556 * sc, 10 * sc, 68 * sc, 24 * sc, "TREM", slider1 == 1, 1) ? ( slider1 = 1; slider_automate(slider1); );

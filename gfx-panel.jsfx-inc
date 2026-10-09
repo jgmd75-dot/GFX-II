@@ -111,7 +111,7 @@ function pk_fitstr(s, x, y, size, maxw) local(fs, tw, th, n) (
   gfx_x = x; gfx_y = y; gfx_drawstr(#pk_fs);
 );
 function pk_preset(x, y, w, h, cur, menu) local(n, kw, bw, sel, i, lx, lw, open, tw, th) (
-  n = pk_pcount(menu); kw = floor(h * 1.65); bw = floor(h * 0.7); sel = 0; open = 0;
+  n = pk_pcount(menu); kw = floor(max(h * 1.65, 64 * sc)); bw = floor(h * 0.7); sel = 0; open = 0;
   lx = x + kw + 2 * bw + 12 * sc; lw = x + w - lx;
   ui_noled = 1; ui_button(x, y, kw, h, "PRESETS", 0, 1) ? open = 1;
   ui_noled = 1; ui_button(x + kw + 4 * sc, y, bw, h, "◄", 0, 1) ? sel = cur <= 1 || cur > n ? n : cur - 1;

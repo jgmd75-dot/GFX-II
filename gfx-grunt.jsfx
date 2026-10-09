@@ -98,6 +98,7 @@ update();
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 // ui_thm and ui_hw are fixed for this skin and not saved/restored (no theme picker on this panel)
 
 @sample
@@ -169,9 +170,10 @@ gfx_gradrect(0, 0, gfx_w, gfx_h, 0.62, 0.22, 0.08, 0.16, 0, 0, 0, 0, 0.14 / gfx_
 // --- Top Bar ---
 ui_header("GRUNT");
 
-// Presets dropdown menu with working preset assignments
-ui_button(235 * sc, 12 * sc, 72 * sc, 20 * sc, "PRESETS", 0, 1) ? (
-    preset = gfx_showmenu("Default|Warm Console|American Crunch|British Punch");
+// the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(128 * sc, 7 * sc, 256 * sc, 30 * sc, pr_cur, "Default|Warm Console|American Crunch|British Punch");
+k_ > 0 ? (
+    preset = k_; pr_cur = k_;
     preset == 1 ? ( slider1 = 0; slider2 = 0;   slider3 = 0.5; slider4 = 0.2; slider5 = 0.5; slider6 = 0;  slider7 = 1; );
     preset == 2 ? ( slider1 = 6; slider2 = 100; slider3 = 0.3; slider4 = 0.4; slider5 = 0.7; slider6 = -2; slider7 = 2; );
     preset == 3 ? ( slider1 = 9; slider2 = 100; slider3 = 0.8; slider4 = 0.1; slider5 = 0.3; slider6 = -4; slider7 = 1; );

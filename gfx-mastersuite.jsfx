@@ -386,6 +386,7 @@ file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
 file_var(0, clip_last);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // ======================================================================
@@ -508,12 +509,9 @@ opL = max(opL, abs(spl0)); opR = max(opR, abs(spl1));
 @gfx 1120 422
 ui_begin(1120, 422);
 ui_header("MASTERSUITE");
-ui_noled = 1;
-ui_button(400 * sc, 10 * sc, 76 * sc, 24 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 400 * sc; gfx_y = 34 * sc;
-  load_preset(gfx_showmenu("Transparent|Warm Glue|Loud & Punchy|Vintage Tape|Bright Pop|Bass Heavy|Acoustic / Classical|Podcast / Voice|Parallel Punch|Streaming Safe (-1 dBTP)|Reset to defaults"));
-);
-ui_noled = 0;
+pk_pextra = "Reset to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
+k_ = pk_preset(400 * sc, 7 * sc, 380 * sc, 30 * sc, pr_cur, "Transparent|Warm Glue|Loud & Punchy|Vintage Tape|Bright Pop|Bass Heavy|Acoustic / Classical|Podcast / Voice|Parallel Punch|Streaming Safe (-1 dBTP)");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 ui_theme_picker(176 * sc, 15 * sc);
 ui_size_picker(280 * sc, 13 * sc);
 ui_hw_toggle(340 * sc, 13 * sc);

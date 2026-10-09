@@ -465,6 +465,7 @@ update();
 file_var(0, ui_thm);
 file_var(0, ui_sz);
 file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 // input stage: DC block, trim, guard
@@ -524,8 +525,8 @@ pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
 dispLdb = ld; grPk = max(grPk, max(grL, grR)); dispGr = max(grL, grR);
 
-@gfx 1000 504
-ui_begin(1000, 504);
+@gfx 1000 550
+ui_begin(1000, 550);
 ui_swb();   // drawn off-screen, then shown with the units in signal order (EQ FIRST / EQ AFTER)
 lz_colours();
 pk_shad = 0.3; pk_shoff = 0.8;
@@ -546,7 +547,7 @@ function vsel(x, y, pos) local(i, cx, cy, tw, th, s) (
 );
 
 // ---------- the faceplate ----------
-fh = 376 + 120;
+fh = 376 + 120 + 46;
 ui_col(0x0B0C0C); gfx_rect(0, 0, gfx_w, gfx_h);
 lz_chassis(6, 4, 988, fh);
 lz_brand("COMPRESSOR Q");
@@ -594,15 +595,11 @@ gi = 0; loop(24, gx_ = 107 + (23 - gi) * 8.6;
   ui_col(gi < grd ? (gi < 12 ? 0xE8241A : 0xFF6A2A) : 0x3A1A18); gfx_rect(gx_ * sc, 297 * sc, 6.4 * sc, 8 * sc); gi += 1; );
 gi = 0; loop(5, gd_ = gi == 0 ? 24 : gi == 1 ? 18 : gi == 2 ? 12 : gi == 3 ? 6 : 0; sprintf(#gl, gi == 4 ? "0" : "-%d", gd_);
   lz_small(107 + (24 - gd_) * 8.6 - (gi == 4 ? 3 : 0), 312, #gl, 0.9); gi += 1; );
-// the strip along the bottom: presets, colour, size, help, HW / flat
-ui_col(lz_dk); lz_rr(94, 338, 230, 24, 4);
-ui_button(98 * sc, 341 * sc, 64 * sc, 18 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 98 * sc; gfx_y = 359 * sc;
-  load_preset(gfx_showmenu("Vocal Ride|Drum Smash|Bass Glue|Bus Glue|Negative Pump|Gentle Level|Parallel Crush|Mastering Touch|Opto Vocal|Opto Lows Only|Reset all to defaults"));
-);
-lz_pick(170, 341);
-ui_size_picker(196 * sc, 341 * sc);
-lz_hw(258, 341);
+// the strip along the bottom: colour, size, help, HW / flat
+ui_col(lz_dk); lz_rr(146, 338, 126, 24, 4);
+lz_pick(150, 341);
+ui_size_picker(176 * sc, 341 * sc);
+lz_hw(238, 341);
 
 // ---------- COMPRESSOR ----------
 lz_sect(338, 12, 300, 240);
@@ -672,5 +669,11 @@ lz_key(832, 456, 96, cq_held, 0x6AD0FF, slider52 ? "EQ AFTER" : "EQ FIRST") ? ( 
 !mdown ? cq_held = 0;
 
 ui_swe(80, 962, 10, 372, 378, 492, slider52 == 0);
+
+// the preset row along the foot: PRESETS, prev / next, LCD (click it for the list)
+lz_sect(84, 496, 874, 42);
+pk_pextra = "Reset all to defaults";
+k_ = pk_preset(96 * sc, 502 * sc, 420 * sc, 30 * sc, pr_cur, "Vocal Ride|Drum Smash|Bass Glue|Bus Glue|Negative Pump|Gentle Level|Parallel Crush|Mastering Touch|Opto Vocal|Opto Lows Only");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 pk_end();
 ui_end();
