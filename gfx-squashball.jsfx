@@ -4,7 +4,7 @@ desc:GFX Squashball
 //
 // Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
 //
-// An analogue delay stompbox in the spirit of the classic bucket-brigade pedals with a pitch-stretch footswitch.
+// An analogue delay stompbox in the spirit of the classic bucket-brigade pedals with a pitch-stretch switch.
 // Signal path: input (trim + guard) -> GAIN: op-amp style overdrive (asymmetric, warm) -> BBD delay line ->
 // clock / TONE filter (inside the loop, so every repeat comes back darker than the last) -> REGEN feedback
 // (soft-limited inside the loop: past 100 % it howls into steady self-oscillation but never runs away) ->
@@ -40,7 +40,7 @@ slider5:55<0,100,1>-Tone (%)
 slider6:25<0,100,1>-Gain (%)
 slider7:0<-24,6,0.1>-Level (dB)
 slider8:35<0,100,1>-Mix (%)
-slider9:0<0,1,1{Off,On}>-Stretch (footswitch)
+slider9:0<0,1,1{Off,On}>-Stretch
 slider10:0<0,1,1{Hold,Latch}>-Stretch switch mode
 slider11:900<30,2000,1>-Stretch time (ms)
 slider12:50<0,100,1>-Stretch rate (%)
@@ -100,7 +100,7 @@ function qb_soft(x) local(a) (
   a = abs(x); a < 0.55 ? x : sign(x) * (0.55 + 0.45 * ost_tanh((a - 0.55) / 0.45));
 );
 
-// ---------- presets (OUTPUT, the I/O row and the footswitch itself are left alone) ----------
+// ---------- presets (OUTPUT, the I/O row and the STRETCH key itself are left alone) ----------
 function qb_set(t, sy, dv, rg, tn, gn, lv, mx, md, stt, str, dr) (
   slider1 = t; slider2 = sy; slider3 = dv; slider4 = rg; slider5 = tn; slider6 = gn; slider7 = lv; slider8 = mx;
   slider9 = 0; slider10 = md; slider11 = stt; slider12 = str; slider13 = dr;
@@ -314,7 +314,7 @@ dy_num = 0;
 rd_sq(28, 360, 92, 28, slider10 == 0, QG_YEL, "HOLD")  ? qg_setv(10, 0);
 rd_sq(132, 360, 92, 28, slider10 == 1, QG_YEL, "LATCH") ? qg_setv(10, 1);
 
-// ---------- centre: readout, LEDs, the footswitch ----------
+// ---------- centre: readout, LEDs, the STRETCH key ----------
 ui_col(0x0B0B0C); rd_rr(250 * sc, 218 * sc, 96 * sc, 40 * sc, 4 * sc);
 ui_col(0x1A0705); gfx_rect(254 * sc, 222 * sc, 88 * sc, 32 * sc);
 sprintf(#qg_ms, "%d", floor(min(qb_tdisp, 9999) + 0.5));

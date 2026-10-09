@@ -4,7 +4,7 @@ GFX - free JSFX plug-ins for REAPER
 Designed by JGWizrad.
 Website: https://www.gardenfx.uk/
 
-89 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
+98 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
 space, mastering and summing - plus the CC-80 chord script. Every sound is
 synthesised: there are no samples. All plug-ins share one look, resizable
 S / M / L panels and the same output stage.
@@ -96,6 +96,8 @@ INSTRUMENTS
   G Voce 90       gfx-g-voce-90.jsfx
 
 DRUM MACHINES
+  G Anvil         gfx-g-anvil.jsfx
+  G Byte 6        gfx-g-byte-6.jsfx
   G Clockwork     gfx-g-clockwork.jsfx
   G Deep 16       gfx-g-deep.jsfx
   G PCM 12        gfx-g-pcm12.jsfx
@@ -112,6 +114,7 @@ AMPS & DRIVE
   PenguinDrive    gfx-penguindrive.jsfx
   Preamp          gfx-preamp.jsfx
   Preamp Q        gfx-preamp-q.jsfx
+  Ten Rack        gfx-ten-rack.jsfx
   TS-7            gfx-ts7.jsfx
 
 DYNAMICS
@@ -128,6 +131,7 @@ DYNAMICS
   Quad11          gfx-quad11.jsfx
   RND             gfx-rnd.jsfx
   Smooth          gfx-smooth.jsfx
+  Squish          gfx-squish.jsfx
   Tandem          gfx-tandem.jsfx
   Tandem Q        gfx-tandem-q.jsfx
   Thrust          gfx-thrust.jsfx
@@ -137,6 +141,7 @@ DYNAMICS
 
 EQ & FILTERS
   Baxendale       gfx-baxendale.jsfx
+  Bern EQ         gfx-bern-eq.jsfx
   Board EQ        gfx-board-q.jsfx
   Contour         gfx-contour.jsfx
   Echofish        gfx-echofish.jsfx
@@ -164,10 +169,12 @@ MODULATION & SPACE
   J-Verb          gfx-j-verb.jsfx
   Mid/Side        gfx-midside.jsfx
   Mod Rack        gfx-modrack.jsfx
+  Oontecho        gfx-oontecho.jsfx
   Phaser          gfx-phaser.jsfx
   Polyvibe        gfx-polyvibe.jsfx
   Rotary          gfx-rotary.jsfx
   Space           gfx-space.jsfx
+  Squashball      gfx-squashball.jsfx
 
 MASTERING
   Aureus          gfx-aureus.jsfx
@@ -176,8 +183,10 @@ MASTERING
   MasterSuite     gfx-mastersuite.jsfx
   Optimiser       gfx-optimiser.jsfx
   Quad22          gfx-quad22.jsfx
+  Wingspan        gfx-wingspan.jsfx
 
 SUMMING
+  Bern 16         gfx-bern-16.jsfx
   Cassette 4      gfx-cassette-4.jsfx
   Compact 12      gfx-compact-12.jsfx
   Lustre          gfx-lustre.jsfx

@@ -23,7 +23,8 @@ desc:GFX Squish
 // no zipper or pumping artefacts. Make-up gain is automatic (about 70% of the reduction at a typical level).
 // DRIFT (0 - 100 %, default 15 %): an uneven supply - the OTA bias (the grit's asymmetry) and the threshold
 //         wander very slightly (up to about +/- 1.5 dB of threshold at 100 %).
-// Footswitch: ON / bypass (a 10 ms crossfade, the bypass takes the input before TRIM); the OUT stage stays in.
+// Bypass (REAPER parameter list only, slider 10): a 10 ms crossfade, the bypass takes the input before TRIM;
+//         the OUT stage stays in. BLEND is the big knob beside the IN / OUT tray.
 // IN / OUT: TRIM (click it for GUARD), DRIFT and the OUT stage (OFF / CLIP / LIMIT; LIMIT adds 3 ms latency).
 //
 // GUI: drag knobs (Shift = fine), double-click = reset. Click the LCD for the preset list. S / M / L / ? = size and help.
@@ -45,7 +46,7 @@ slider6:100<0,100,1>-Blend (%)
 slider7:0<-100,100,1>-Tone (%)
 slider8:0<-24,12,0.1>-Level (dB)
 slider9:15<0,100,1>-Drift (%)
-slider10:1<0,1,1{Bypass,On}>-Footswitch
+slider10:1<0,1,1{Bypass,On}>-On / bypass
 slider11:0<-24,12,0.1>-Input trim (dB)
 slider12:1<0,1,1{Off,On}>-Input guard
 slider13:1<0,2,1{Off,Clip,Limit}>-Output stage
@@ -121,7 +122,7 @@ function sq_load(p) (
 // ---------- state ----------
 sq_sm  = sq_tc(30);                                   // parameter smoothing
 sq_c2  = sq_tc(0.7);                                  // rounds the corners of the gain curve
-sq_cfs = sq_tc(10);                                   // footswitch crossfade
+sq_cfs = sq_tc(10);                                   // on / bypass crossfade
 sq_envr = exp(-1 / (0.008 * srate));                  // peak detector: instant rise, 8 ms fall
 sq_dcr = 1 - 2 * $pi * 5 / srate;                     // DC blocker on the OTA grit (5 Hz)
 sqD1.drift_init(0.8 + rand(0.5)); sqD2.drift_init(0.8 + rand(0.5));
