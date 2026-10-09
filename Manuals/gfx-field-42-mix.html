@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Field 42 Mix - manual</title><meta name="description" content="Four stereo pairs into one stereo master, with Field 42 preamps, M/S decoding, limiters, VU and iron output.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://www.gardenfx.uk/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-field-42-mix">
+<div class="cat">Summing</div><h1>Field 42 Mix</h1>
+<p class="tagline">Four stereo pairs into one stereo master, with Field 42 preamps, M/S decoding, limiters, VU and iron output.</p>
+<div class="shot"><img src="img/gfx-field-42-mix.webp" alt="The Field 42 Mix panel" loading="lazy"></div>
+<h2>Overview</h2><p>Field 42 Mix is the Field 42 channel as a four-pair location mixer: four stereo inputs summed to one stereo master. Each pair has the Field 42 front end (sweep HPF, transformer preamp, safety limiter), M/S decoding, pan, fader, mute and solo. The master has its own fader, the output limiter, the output transformer and a line-up tone. The VU reads the mix before the master fader; the LEDs read the master output.</p><p><b>Routing:</b> the inputs arrive on the track's channels 1/2, 3/4, 5/6 and 7/8 and the master leaves on 1/2. Set the track to 8 channels (or more) in REAPER's routing window, then send each source to its pair - for example, a send to channels 3/4 for the second pair.</p>
+<h3>Reach for it for</h3><ul class="when"><li>A submix of up to four stereo sources with location-mixer character</li><li>Mid / side mic pairs, decoded with adjustable width</li><li>Drum, band or field-recording submixes with a safety limiter on the master</li></ul>
+<h2>Controls</h2><h3>Each pair (1 - 2, 3 - 4, 5 - 6, 7 - 8)</h3><dl class="ctl"><dt>Lights</dt><dd>Red: the preamp's output above -1 dBFS. Amber: the input limiter working.</dd><dt>HPF</dt><dd>80 to 240 Hz, 12 dB per octave, before the preamp; fully left is OFF.</dd><dt>TRIM</dt><dd>Gain into the preamp, -20 to +40 dB.</dd><dt>LIM</dt><dd>The input safety limiter (-2 dBFS, 20:1). On by default.</dd><dt>Ø</dt><dd>Polarity reverse. With M/S on it flips the side signal, swapping left and right.</dd><dt>M/S</dt><dd>Treats the pair as a mid / side mic: left = mid, right = side. PAN becomes WIDTH (0 - 200%, 100% by default).</dd><dt>PAN / WIDTH</dt><dd>Constant-loudness pan, +3 dB at the sides (a balance on stereo pairs), or the M/S width.</dd><dt>FADER</dt><dd>Unity at 0 dB; -40 dB (OFF) to +10 dB.</dd><dt>MUTE / SOLO</dt><dd>Mute the pair, or solo it (any solo mutes the pairs that aren't soloed).</dd></dl><h3>MASTER</h3><dl class="ctl"><dt>VU meter</dt><dd>The mix before the master fader, VU ballistics, 0 VU = -20 dBFS.</dd><dt>OFF / ON / LINK</dt><dd>The output limiter: off, each side on its own, or stereo-linked (the default). The light shows it working.</dd><dt>LIMIT</dt><dd>Its threshold, +4 to +20 dBu (-16 to 0 dBFS), 20:1.</dd><dt>IRON</dt><dd>The output transformer.</dd><dt>DRIFT</dt><dd>See Drift below.</dd><dt>MASTER</dt><dd>The master fader.</dd><dt>TONE</dt><dd>A line-up oscillator that replaces the mix: 1 kHz, 400 Hz or 100 Hz, -20 to +8 dBu.</dd><dt>OUT meters</dt><dd>The master output, left and right.</dd></dl><h3>Presets and size</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets (or click the preset display).</dd><dt>◄ / ►</dt><dd>Step through the presets.</dd><dt>Preset display</dt><dd>Shows the preset number and name. Click it for the list.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><h3>Parameter list only</h3><p>INPUT IRON (the input transformer's colour, 30% by default), LIMITER ATTACK and RELEASE (1 ms and 200 ms by default, as on the original), and the GFX output stage: OUTPUT STAGE (CLIP by default, a soft clipper just under 0 dB; LIMIT; OFF), its ceiling, and the house band saturation.</p><h3>Drift</h3><p>DRIFT (0 - 100%, 50% by default) is battery sag. The supply voltage wanders slowly and droops under heavy, sustained level, so the preamps' headroom, the limiter thresholds and the transformers' drive all move a little - you hear it most when the unit is pushed. 50% is the standard amount, 100% twice that; 0% is a fresh battery.</p>
+<h2>Presets</h2><p>The presets set the four pairs' HPF, TRIM and M/S and the master limiter and iron; faders, pans, mutes and solos are left alone.</p><dl class="ctl"><dt>Init</dt><dd>Everything clean and flat.</dd><dt>Drum Kit</dt><dd>Gain on each pair, light HPFs on the toms and overheads, more iron and a lower master limit.</dd><dt>Field Rig</dt><dd>Pair 1 as an M/S mic, HPFs for location work.</dd><dt>Band Sub</dt><dd>Gentle HPFs and gain across the pairs.</dd><dt>Dialogue Pair</dt><dd>Two dialogue pairs with HPF at 140 Hz.</dd><dt>Glue Bus</dt><dd>A little gain everywhere, heavy iron and a low master limit.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Watch the VU while setting the pair TRIMs, then use the faders to balance.</li><li>For an M/S pair, record mid on the left and side on the right of one stereo item, then send it to a pair with M/S on.</li></ul>
+<p class="file">File: gfx-field-42-mix.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://www.gardenfx.uk/">https://www.gardenfx.uk/</a></div></footer></body></html>
