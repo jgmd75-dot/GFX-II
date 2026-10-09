@@ -1,0 +1,579 @@
+desc:GFX G Anvil
+//tags: instrument drum machine analog kick snare metal industrial techno sequencer
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
+//
+// A dual-voice analog percussion module in the spirit of the heavy-duty German drum modules that built
+// industrial and techno: one big KICK and one SNARE / METAL voice, no samples.
+//   KICK   - a bridged-T style oscillator, WAVE morphs it from sine to triangle. PITCH is where it lands,
+//            SWEEP the exponential pitch drop above it (semitones) and S.TIME how fast it falls; DECAY the
+//            amplitude decay (-60 dB). CLICK adds the transient (a short pulse + noise burst, C.TONE from a
+//            dark thud to a bright tick). DRIVE is a hard, asymmetric analog saturation (DC blocked).
+//   SNARE  - two detuned square oscillators (band-limited) - METAL spreads them from a fat unison body to
+//            an inharmonic clang with ring modulation - plus white noise. TONE and NOISE have their own
+//            decays (T.DECAY, N.DECAY), NOISE balances the two, then a resonant multi-mode filter (LP / BP / HP,
+//            CUTOFF, RESO), SNAP (a VCA transient and a pitch blip on the attack) and DRIVE.
+//   MASTER - LEVEL, BUS SAT (asymmetric saturation of the whole kit), STEREO / MONO.
+//   MIDI   - C1 (36) and 35 = kick; D1 (38), 39 (clap) and 40 = snare; 37 = rim (the snare voice, short and
+//            tonal). Velocity sets the level and a little brightness. MIDI CH 0 = omni.
+//   SEQUENCER - two rows of 16 steps (1/16), plays with Reaper's transport (PLAY on). Click a step to set it
+//            (drag to paint), Shift-click or right-click for an accent. ACCENT = how much louder accents are,
+//            SWING delays the off-beat 16ths. Click a voice's LED to hear it. The pattern is saved with the
+//            project and with each preset.
+//   DRIFT  - the GFX instrument drift: every hit is detuned a little at random, and the tunings, the snare
+//            filter and the click tone wander slowly (0 - 100 %).
+// IN / OUT: SAT (band saturation) and the OUT stage (OFF / CLIP / LIMIT) along the bottom strip.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+// ---------- KICK ----------
+slider1:50<30,150,0.1>-Kick pitch (Hz)
+slider2:24<0,48,0.1>-Kick sweep depth (st)
+slider3:28<2,250,0.1>-Kick sweep time (ms)
+slider4:420<40,2500,1>-Kick decay (ms)
+slider5:10<0,100,1>-Kick wave (sine > triangle %)
+slider6:35<0,100,1>-Kick click level (%)
+slider7:50<0,100,1>-Kick click tone (%)
+slider8:25<0,100,1>-Kick drive (%)
+slider9:85<0,100,1>-Kick level (%)
+slider10:0<-100,100,1>-Kick pan
+// ---------- SNARE / METAL ----------
+slider11:210<80,1200,0.1>-Snare tune (Hz)
+slider12:20<0,100,1>-Snare metal / detune (%)
+slider13:110<10,2000,1>-Snare tone decay (ms)
+slider14:190<10,2000,1>-Snare noise decay (ms)
+slider15:60<0,100,1>-Snare tone <> noise (% noise)
+slider16:0<0,2,1{LP,BP,HP}>-Snare filter mode
+slider17:7500<100,16000,1>-Snare filter cutoff (Hz)
+slider18:20<0,100,1>-Snare filter resonance (%)
+slider19:50<0,100,1>-Snare snap (%)
+slider20:15<0,100,1>-Snare drive (%)
+slider21:75<0,100,1>-Snare level (%)
+slider22:0<-100,100,1>-Snare pan
+// ---------- MASTER ----------
+slider23:10<0,100,1>-Bus saturation (%)
+slider24:0<-24,12,0.1>-Master level (dB)
+slider25:0<0,1,1{Stereo,Mono}>-Stereo / mono
+slider26:30<0,100,1>-Drift (%)
+slider27:0<0,16,1>-MIDI channel (0 = omni)
+// ---------- SEQUENCER ----------
+slider28:1<0,1,1{Off,On}>-Play (with transport)
+slider29:0<0,75,1>-Swing (%)
+slider30:50<0,100,1>-Accent (%)
+// ---------- OUTPUT STAGE ----------
+slider31:0<0,100,1>-Band sat (%)
+slider32:30<0,100,1>-Bias (%)
+slider33:120<40,400,1>-Sat low band (Hz)
+slider34:6000<2000,16000,10>-Sat high band (Hz)
+slider35:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider36:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-anvil";                                  // the ? pop-up links to this manual
+
+// ---------- memory map ----------
+PAT = 1000;                                       // pattern: 2 rows x 16 steps (0 rest, 1 hit, 2 accent)
+EVQ = 1100;                                       // MIDI hits this block (2 x 512)
+LT = 2200;                                        // trigger lights (audio sets 1, the panel fades them)
+
+// ---------- building blocks ----------
+function an_blep(t, dt) ( t < dt ? ( t /= dt; t + t - t * t - 1; ) : t > 1 - dt ? ( t = (t - 1) / dt; t * t + t + t + 1; ) : 0; );
+// band-limited square (polyBLEP), phase p 0..1, increment dt
+function an_sq(p, dt) local(q) ( q = p + 0.5; q -= floor(q); (p < 0.5 ? 1 : -1) + an_blep(p, dt) - an_blep(q, dt); );
+// hard, asymmetric analog saturation: tanh blended towards a hard clip as d rises, peaks stay near 1
+function an_sat(x, d) local(g, b, u, y, h) (
+  d <= 0.001 ? x : (
+    g = 1 + d * 3 + d * d * 28; b = 0.22 * d; u = x * g + b;
+    y = ost_tanh(u) - ost_tanh(b);
+    h = min(max(u, -1), 1) - b;
+    y += (h - y) * d * 0.45;
+    x + (y - x) * min(d * 5, 1);
+  );
+);
+function an_dc(x) instance(x1, y1) ( y1 = x - x1 + an_dcr * y1; x1 = x; abs(y1) < 0.0000000001 ? y1 = 0; y1; );
+function an_pan(p) ( (p / 100 + 1) * $pi * 0.25; );
+
+// ---------- voices ----------
+function kk_trig(vel) (
+  kk_tl += kk_out; kk_out = 0;                    // the old ring fades in ~1.5 ms instead of stepping
+  kk_ph = 0; kk_pe = 1; kk_ae = 1; kk_ce = 1; kk_ct = 0; kk_on = 1;
+  kk_det = ins_note_detune();
+  kk_vg = vel * (0.4 + 0.6 * vel); kk_vb = 0.55 + 0.45 * vel;
+  kk_cf = min(500 * 2 ^ (kk_ctn * 4.7 + ins_tone) * (0.8 + 0.2 * vel), srate * 0.45);
+  kk_cg = tan($pi * kk_cf / srate); kk_ca1 = 1 / (1 + kk_cg * (kk_cg + 1.4)); kk_ca2 = kk_cg * kk_ca1; kk_ca3 = kk_cg * kk_ca2;
+  kk_c1 = 0; kk_c2 = 0;
+  LT[0] = 1;
+);
+function sn_fset() local(fc) (
+  fc = min(max(sn_fc * sn_vbr * (sn_rimp ? 1.6 : 1), 20), srate * 0.45);
+  sn_g = tan($pi * fc / srate);
+  sn_a1 = 1 / (1 + sn_g * (sn_g + sn_k)); sn_a2 = sn_g * sn_a1; sn_a3 = sn_g * sn_a2;
+);
+function sn_trig(vel, rim) (
+  sn_tl += sn_out; sn_out = 0;
+  sn_p1 = 0; sn_p2 = 0; sn_tz = 0; sn_te = 1; sn_ne = 1; sn_sp = 1; sn_pe = 1; sn_on = 1;
+  sn_det = ins_note_detune();
+  sn_vg = vel * (0.4 + 0.6 * vel);
+  sn_vbr = 2 ^ ((vel - 1) * 0.9);                 // softer hits are a little darker
+  sn_tecH = rim ? sn_tec ^ 3.3 : sn_tec;          // rim: short and tonal
+  sn_necH = rim ? sn_nec ^ 3.3 : sn_nec;
+  sn_wnH = rim ? sn_wn * 0.45 : sn_wn; sn_wtH = rim ? max(sn_wt, 0.7) : sn_wt;
+  sn_rimp = rim;
+  sn_fset();
+  LT[1] = 1;
+);
+
+// ---------- presets: the kit sound (sliders 1-23), SWING / ACCENT and the pattern ----------
+function an_kick(p, sw, st, dc, wv, cl, ct, dr, lv, pn) (
+  slider1 = p; slider2 = sw; slider3 = st; slider4 = dc; slider5 = wv; slider6 = cl; slider7 = ct; slider8 = dr; slider9 = lv; slider10 = pn;
+);
+function an_snare(tu, mt, td, nd, nz, md, cf, rs, sp, dr, lv, pn) (
+  slider11 = tu; slider12 = mt; slider13 = td; slider14 = nd; slider15 = nz; slider16 = md;
+  slider17 = cf; slider18 = rs; slider19 = sp; slider20 = dr; slider21 = lv; slider22 = pn;
+);
+function an_row(r, s) local(i, c) (
+  i = 0; loop(16, c = str_getchar(s, i); PAT[r * 16 + i] = c == 'X' ? 2 : c == 'x' ? 1 : 0; i += 1; );
+);
+function an_glob(bs, sw, ac) ( slider23 = bs; slider29 = sw; slider30 = ac; );
+function load_preset(p) (
+  p == 1 ? (                                                                   // Init
+    an_kick(50, 24, 28, 420, 10, 35, 50, 25, 85, 0); an_snare(210, 20, 110, 190, 60, 0, 7500, 20, 50, 15, 75, 0);
+    an_glob(10, 0, 50); an_row(0, "X...X...X...X..."); an_row(1, "....X.......X...");
+  ) : p == 2 ? (                                                               // Industrial Thud
+    an_kick(45, 30, 40, 620, 30, 45, 35, 55, 72, 0); an_snare(180, 35, 90, 260, 70, 1, 2200, 45, 70, 45, 72, 0);
+    an_glob(25, 0, 60); an_row(0, "X...X...X...X..."); an_row(1, "....X.......X..x");
+  ) : p == 3 ? (                                                               // Techno Rumble Kick
+    an_kick(42, 26, 35, 1400, 5, 25, 40, 40, 85, 0); an_snare(520, 90, 25, 40, 70, 2, 7000, 20, 30, 10, 72, 20);
+    an_glob(15, 0, 40); an_row(0, "X...X...X...X..."); an_row(1, "..x...x...X...x.");
+  ) : p == 4 ? (                                                               // Classic Punch
+    an_kick(55, 30, 20, 380, 20, 55, 70, 20, 85, 0); an_snare(200, 10, 120, 220, 60, 0, 9000, 10, 60, 10, 75, 0);
+    an_glob(10, 10, 50); an_row(0, "X...X...X...X..x"); an_row(1, "....X.......X...");
+  ) : p == 5 ? (                                                               // Distorted Hardcore
+    an_kick(52, 36, 45, 520, 40, 60, 60, 90, 64, 0); an_snare(240, 45, 110, 200, 55, 1, 1800, 55, 80, 80, 62, 0);
+    an_glob(40, 0, 60); an_row(0, "X...X...X...X.x."); an_row(1, "....X.......X...");
+  ) : p == 6 ? (                                                               // Metal Clank
+    an_kick(48, 22, 25, 300, 15, 40, 55, 30, 82, 0); an_snare(420, 100, 400, 60, 15, 1, 3200, 60, 60, 30, 78, 0);
+    an_glob(15, 0, 70); an_row(0, "X.....X...X....."); an_row(1, "..X..x.X..X..x.x");
+  ) : p == 7 ? (                                                               // Rimshot Tick
+    an_kick(58, 18, 15, 250, 0, 70, 85, 10, 82, 0); an_snare(820, 55, 22, 14, 20, 2, 1200, 30, 100, 20, 80, 0);
+    an_glob(10, 15, 50); an_row(0, "X.....X...X....."); an_row(1, "...x..x...X..x.x");
+  ) : p == 8 ? (                                                               // Deep Dub
+    an_kick(40, 14, 60, 1800, 0, 10, 15, 10, 88, 0); an_snare(160, 15, 200, 450, 65, 0, 2800, 30, 25, 10, 85, 0);
+    an_glob(10, 20, 50); an_row(0, "X.......X......."); an_row(1, "....X.......X...");
+  ) : p == 9 ? (                                                               // Gabber
+    an_kick(60, 40, 55, 450, 60, 70, 55, 100, 62, 0); an_snare(300, 40, 60, 120, 60, 2, 600, 35, 70, 70, 62, 0);
+    an_glob(50, 0, 50); an_row(0, "X...X...X...X..."); an_row(1, "..x...x...x...X.");
+  ) : p == 10 ? (                                                              // Minimal Click
+    an_kick(52, 20, 12, 220, 0, 80, 90, 5, 95, 0); an_snare(1100, 70, 15, 20, 50, 2, 5000, 40, 90, 5, 68, -15);
+    an_glob(5, 15, 50); an_row(0, "X...X...X...X..."); an_row(1, "..x...x..x..x.X.");
+  ) : p == 11 ? (                                                              // Warehouse Snare
+    an_kick(47, 24, 30, 500, 15, 40, 50, 35, 72, 0); an_snare(190, 25, 140, 380, 80, 1, 1400, 35, 65, 50, 78, 0);
+    an_glob(25, 0, 50); an_row(0, "X..x..X...X..x.."); an_row(1, "....X.......X...");
+  ) : p == 12 ? (                                                              // EBM Stomp
+    an_kick(44, 22, 50, 700, 50, 30, 30, 70, 68, 0); an_snare(150, 50, 180, 300, 50, 0, 4500, 50, 70, 60, 64, 0);
+    an_glob(30, 0, 60); an_row(0, "X...X...X...X..."); an_row(1, "....X..x....X...");
+  );
+  p >= 1 && p <= 12 ? slider_automate((2 ^ 23 - 1) + 2 ^ 28 + 2 ^ 29);   // sliders 1-23, 29, 30
+);
+#an_pm = "Init|Industrial Thud|Techno Rumble Kick|Classic Punch|Distorted Hardcore|Metal Clank|Rimshot Tick|Deep Dub|Gabber|Minimal Click|Warehouse Snare|EBM Stomp";
+
+// ---------- parameters ----------
+function update() local(m) (
+  an_dcr = 1 - 2 * $pi * 12 / srate;
+  an_tlc = exp(-1 / (0.0015 * srate));
+  // kick
+  kk_f0 = slider1; kk_sw = slider2 * log(2) / 12;
+  kk_pec = exp(-1 / (max(slider3, 1) * 0.001 * srate));
+  kk_aec = exp(-6.9 / (max(slider4, 10) * 0.001 * srate));
+  kk_wv = slider5 / 100; kk_cl = slider6 / 100; kk_ctn = slider7 / 100;
+  kk_cec = exp(-1 / ((0.0008 + 0.0025 * (1 - kk_ctn)) * srate));
+  kk_pn = floor(0.00035 * srate) + 1;
+  kk_drv = slider8 / 100; kk_lv = sqr(slider9 / 100) * 0.62;
+  m = an_pan(slider10); kk_gl = cos(m) * 1.4142; kk_gr = sin(m) * 1.4142;
+  // snare / metal
+  m = slider12 / 100;
+  sn_rat = 1.012 + m * 0.475;                     // a fat unison body ... the classic inharmonic metal ratio
+  sn_rm = m * 0.6;                                // ring modulation of the two squares
+  sn_tcf = min(slider11 * (2 + m * m * 22), srate * 0.45);
+  sn_ta = 1 - exp(-2 * $pi * sn_tcf / srate);
+  sn_tec = exp(-6.9 / (max(slider13, 5) * 0.001 * srate));
+  sn_nec = exp(-6.9 / (max(slider14, 5) * 0.001 * srate));
+  m = slider15 / 100; sn_wt = cos(m * $pi * 0.5); sn_wn = sin(m * $pi * 0.5) * 0.9;
+  sn_md = slider16;
+  sn_res = slider18 / 100; sn_k = 2 - 1.92 * sn_res;
+  sn_cg = sn_md == 1 ? (1 + sn_res * 1.5) * sn_k : 1 / (1 + sn_res * 1.1);   // keeps the level steady with RESO
+  sn_snp = slider19 / 100;
+  sn_pec = exp(-1 / (0.006 * srate)); sn_pd = 0.08 + 0.45 * sn_snp; sn_spc = exp(-1 / (0.0035 * srate));
+  sn_drv = slider20 / 100; sn_lv = sqr(slider21 / 100) * 0.5;
+  m = an_pan(slider22); sn_gl = cos(m) * 1.4142; sn_gr = sin(m) * 1.4142;
+  // master
+  an_bus = slider23 / 100; an_bg = 1 + an_bus * 5; an_bb = 0.3 * an_bus; an_btb = ost_tanh(an_bb); an_btg = ost_tanh(an_bg);
+  an_vol = 10 ^ (slider24 / 20); an_mono = slider25; an_drift = slider26 / 100;
+  an_chan = slider27; an_seq = slider28; an_swing = slider29 / 100; an_acc = slider30 / 100;
+  ins_output_setup(31);
+);
+
+ext_noinit = 1;                                   // keep the voices and the playhead when playback starts
+!an_pinit ? ( an_pinit = 1; an_row(0, "X...X...X...X..."); an_row(1, "....X.......X..."); );
+ins_drift_init();
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+an_vs = 1 - exp(-1 / (0.03 * srate)); an_vols = 1;
+an_lastg = -1; an_cur = -1; pkL = pkR = 0; LT[0] = LT[1] = 0;
+kk_on = 0; sn_on = 0; kk_out = sn_out = kk_tl = sn_tl = 0;
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );            // a new instance opens Large, on Init
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1; !ui_dflt ? ui_kstyle = 0;
+// ---------- faceplate: matte black and dark gunmetal, orange print, red / orange LEDs ----------
+PNL = 0x2B2D31; BLK = 0x141517; AN_INK = 0xEEEFEA; AN_INK2 = 0xC7BEB3; ORG = 0xFF6A1A; REDL = 0xFF3A2A; GRNL = 0x3ADF6A;
+SHK = 0x232428; SHS = 0x25262A; SHM = 0x202124; SHQ = 0x1C1D20; SHB = 0x1F2023;
+update();
+an_vols = an_vol;
+ui_dflt = 1;   // the defaults above apply once: @init re-runs (device reset) must not undo the saved state
+
+@slider
+update();
+
+@block
+update();                                         // knobs moved on the panel do not run @slider, so read them here
+ins_drift_block(an_drift, samplesblock);          // GFX instrument drift
+kk_dm = ins_pitch;
+sn_fh = slider11 * ins_pitch * 2 ^ (ins_aux / 12);
+sn_fc = slider17 * 2 ^ ins_cut;
+sn_fset();
+// MIDI in: queue the drum notes for @sample, pass everything through
+evn = 0;
+while (midirecv(mofs, m1, m2, m3)) (
+  (m1 & 0xF0) == 0x90 && m3 > 0 && ins_chan_ok(m1, an_chan) && evn < 512 ? (
+    an_v = m2 == 35 || m2 == 36 ? 0 : m2 == 38 || m2 == 39 || m2 == 40 ? 1 : m2 == 37 ? 2 : -1;
+    an_v >= 0 ? ( EVQ[evn * 2] = mofs; EVQ[evn * 2 + 1] = an_v + 4 * m3; evn += 1; );
+  );
+  midisend(mofs, m1, m2, m3);
+);
+evi = 0; spos = 0;
+an_play = (play_state & 1) && an_seq;
+an_bp0 = beat_position; an_bps = tempo / 60 / srate;
+!an_play ? ( an_lastg = -1; an_cur = -1; );
+an_aud == 1 ? kk_trig(0.9) : an_aud == 2 ? sn_trig(0.9, 0);      // a voice LED clicked on the panel
+an_aud = 0;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, an_pinit);
+file_mem(0, PAT, 32);
+file_avail(0) != 0 ? file_var(0, pr_cur);         // the preset in use
+
+@sample
+// MIDI hits
+while (evi < evn && EVQ[evi * 2] <= spos) (
+  az_e = EVQ[evi * 2 + 1]; az_ev = az_e % 4; az_vl = floor(az_e / 4) / 127;
+  az_ev == 0 ? kk_trig(az_vl) : sn_trig(az_vl, az_ev == 2);
+  ins_midi_hit();
+  evi += 1;
+);
+// sequencer, locked to the project's beat position
+an_play ? (
+  az_bt = an_bp0 + spos * an_bps;
+  az_bt >= 0 ? (
+    az_16 = az_bt * 4; az_sg = floor(az_16); az_fr = az_16 - az_sg;
+    (az_sg & 1) && az_fr < an_swing * 0.5 ? az_sg -= 1;              // swing: the off-beat 16ths come later
+    az_sg != an_lastg ? (
+      an_lastg = az_sg; an_cur = az_sg % 16;
+      az_sv = PAT[an_cur]; az_sv > 0 ? kk_trig(az_sv == 2 ? 1 : 1 - 0.45 * an_acc);
+      az_sv = PAT[16 + an_cur]; az_sv > 0 ? sn_trig(az_sv == 2 ? 1 : 1 - 0.45 * an_acc, 0);
+    );
+  );
+);
+spos += 1;
+
+// ---------- KICK ----------
+kk_on ? (
+  kk_pe *= kk_pec;
+  kk_ph += kk_f0 * kk_dm * kk_det * exp(kk_sw * kk_pe) / srate; kk_ph -= floor(kk_ph);
+  az_x = sin(2 * $pi * kk_ph);
+  az_t = kk_ph < 0.25 ? 4 * kk_ph : kk_ph < 0.75 ? 2 - 4 * kk_ph : 4 * kk_ph - 4;
+  az_y = (az_x + (az_t - az_x) * kk_wv) * kk_ae;
+  kk_ae *= kk_aec;
+  // click: a short pulse and a noise burst, dark (low-pass) to bright (high-pass) with C.TONE
+  kk_ce > 0.0001 ? (
+    az_c = ((rand(2) - 1) * 0.6 + (kk_ct < kk_pn ? 1.4 : 0)) * kk_ce; kk_ct += 1; kk_ce *= kk_cec;
+    az_v3 = az_c - kk_c2; az_v1 = kk_ca1 * kk_c1 + kk_ca2 * az_v3; az_v2 = kk_c2 + kk_ca2 * kk_c1 + kk_ca3 * az_v3;
+    kk_c1 = 2 * az_v1 - kk_c1; kk_c2 = 2 * az_v2 - kk_c2;
+    az_c = az_v2 + (az_c - 1.4 * az_v1 - az_v2 - az_v2) * kk_ctn;
+    az_y += az_c * kk_cl * kk_vb * 1.6;
+  );
+  az_y = kkdc.an_dc(an_sat(az_y, kk_drv));
+  kk_out = az_y * kk_lv * kk_vg;
+  kk_on = kk_ae > 0.00005 || kk_ce > 0.0001;
+) : kk_out = 0;
+kk_tl *= an_tlc; abs(kk_tl) < 0.0000001 ? kk_tl = 0;
+az_k = kk_out + kk_tl;
+
+// ---------- SNARE / METAL ----------
+sn_on ? (
+  sn_pe *= sn_pec;
+  az_f = sn_fh * sn_det * (1 + sn_pd * sn_pe);
+  az_dt = min(az_f / srate, 0.45); sn_p1 += az_dt; sn_p1 -= floor(sn_p1); az_q1 = an_sq(sn_p1, az_dt);
+  az_dt = min(az_f * sn_rat / srate, 0.45); sn_p2 += az_dt; sn_p2 -= floor(sn_p2); az_q2 = an_sq(sn_p2, az_dt);
+  az_x = 0.5 * (az_q1 + az_q2) * (1 - sn_rm) + az_q1 * az_q2 * sn_rm;
+  sn_tz += (az_x - sn_tz) * sn_ta;
+  az_x = sn_tz * sn_te * sn_wtH + (rand(2) - 1) * sn_ne * sn_wnH;
+  az_x *= 1 + sn_snp * 2.5 * sn_sp;
+  sn_te *= sn_tecH; sn_ne *= sn_necH; sn_sp *= sn_spc;
+  // resonant multi-mode filter (TPT state-variable)
+  az_v3 = az_x - sn_s2; az_v1 = sn_a1 * sn_s1 + sn_a2 * az_v3; az_v2 = sn_s2 + sn_a2 * sn_s1 + sn_a3 * az_v3;
+  sn_s1 = 2 * az_v1 - sn_s1; sn_s2 = 2 * az_v2 - sn_s2;
+  abs(sn_s1) < 0.0000000001 ? sn_s1 = 0; abs(sn_s2) < 0.0000000001 ? sn_s2 = 0;
+  az_y = (sn_md == 0 ? az_v2 : sn_md == 1 ? az_v1 : az_x - sn_k * az_v1 - az_v2) * sn_cg;
+  az_y = sndc.an_dc(an_sat(az_y, sn_drv));
+  sn_out = az_y * sn_lv * sn_vg;
+  sn_on = sn_te > 0.00005 || sn_ne > 0.00005;
+  !sn_on ? ( sn_s1 = 0; sn_s2 = 0; );
+) : sn_out = 0;
+sn_tl *= an_tlc; abs(sn_tl) < 0.0000001 ? sn_tl = 0;
+az_s = sn_out + sn_tl;
+
+// ---------- MASTER ----------
+az_l = az_k * kk_gl + az_s * sn_gl;
+az_r = az_k * kk_gr + az_s * sn_gr;
+an_bus > 0.001 ? (
+  az_m = min(an_bus * 4, 1);
+  az_l += ((ost_tanh(az_l * an_bg + an_bb) - an_btb) / an_btg - az_l) * az_m;
+  az_r += ((ost_tanh(az_r * an_bg + an_bb) - an_btb) / an_btg - az_r) * az_m;
+  az_l = bdL.an_dc(az_l); az_r = bdR.an_dc(az_r);
+);
+an_mono ? ( az_l = az_r = 0.5 * (az_l + az_r); );
+an_vols += (an_vol - an_vols) * an_vs;
+az_l = ostL.ost_band(az_l * an_vols);
+az_r = ostR.ost_band(az_r * an_vols);
+ost_out(az_l, az_r);
+spl0 = ost_l;
+spl1 = ost_r;
+pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
+
+@gfx 1000 480
+ui_thm = 5; ui_hw = 1;
+ui_begin(1000, 480);
+ui_knonum = 1;                                          // ticks only round the knobs
+
+// ---------- panel helpers (GUI thread only) ----------
+function g_brush(x, y, w, h, col) local(i, a) (
+  ui_col(col); gfx_rect(x * sc, y * sc, w * sc, h * sc);
+  i = 0; loop(floor(h * sc),
+    a = 0.02 + 0.03 * (0.5 + 0.5 * sin(i * 12.9898 + sin(i * 0.37) * 3));
+    ui_cola(i % 3 ? 0xFFFFFF : 0x000000, a); gfx_line(x * sc, y * sc + i, (x + w) * sc - 1, y * sc + i);
+    i += 1; );
+  gfx_gradrect(x * sc, y * sc, w * sc, h * sc * 0.5, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06 / (h * sc * 0.5));
+);
+function g_group(x, y, w, h, title, shade) (
+  pk_inset(x * sc, y * sc, w * sc, h * sc, shade);
+  pk_box(x * sc, y * sc, w * sc, h * sc, ORG, title);
+  C_INK = AN_INK;
+);
+// a trigger LED in a chrome bezel; lvl 0..1 (fades after a hit); click it to hear the voice
+function g_tled(x, y, lvl, v) local(r) (
+  r = 7 * sc;
+  ui_cola(0x000000, 0.5); gfx_circle(x * sc + 1, y * sc + 2, r + 3 * sc, 1, 1);
+  ui_col(0x9DA2A8); gfx_circle(x * sc, y * sc, r + 3 * sc, 1, 1);
+  ui_col(0x4A4D52); gfx_circle(x * sc, y * sc, r + 1.5 * sc, 1, 1);
+  ui_col(ui_mix(0x3A0E06, ORG, lvl)); gfx_circle(x * sc, y * sc, r, 1, 1);
+  lvl > 0.02 ? ( ui_cola(ORG, 0.35 * lvl); gfx_circle(x * sc, y * sc, r * 2.6, 1, 1);
+                 ui_cola(0xFFE0B0, 0.8 * lvl); gfx_circle(x * sc, y * sc, r * 0.45, 1, 1); );
+  ui_cola(0xFFFFFF, 0.3); gfx_circle((x - 2.2) * sc, (y - 2.2) * sc, r * 0.3, 1, 1);
+  pressed && drag_id == 0 && sqr(mouse_x - x * sc) + sqr(mouse_y - y * sc) < sqr(r + 5 * sc) ? ( drag_id = -1; an_aud = v; );
+);
+function g_sx(s) ( (120 + s * 34 + floor(s / 4) * 8) * sc; );
+function g_ry(r) ( (326 + r * 36) * sc; );
+
+// ---------- chassis ----------
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(8 * sc, 8 * sc, 984 * sc, 464 * sc, BLK);
+g_brush(12, 12, 976, 52, 0x34373C);                     // brushed gunmetal header plate
+ui_cola(0x000000, 0.5); gfx_line(12 * sc, 64 * sc, 988 * sc, 64 * sc);
+pk_screw(22 * sc, 22 * sc); pk_screw(978 * sc, 22 * sc); pk_screw(22 * sc, 462 * sc); pk_screw(978 * sc, 462 * sc);
+// header: badge, name, preset bar, MIDI light, S / M / L / ?
+ui_col(ORG); gfx_circle(52 * sc, 38 * sc, 15 * sc, 1, 1);
+gfx_setfont(4); ui_col(BLK); ui_text(52 * sc, 33 * sc, "GFX");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(AN_INK); gfx_x = 76 * sc; gfx_y = 17 * sc; gfx_drawstr("G-ANVIL");
+gfx_setfont(4); ui_cola(AN_INK2, 0.9); gfx_x = 77 * sc; gfx_y = 45 * sc; gfx_drawstr("ANALOG PERCUSSION MODULE");
+k_ = pk_preset(300 * sc, 21 * sc, 470 * sc, 34 * sc, pr_cur, #an_pm);
+k_ > 0 ? ( load_preset(k_); pr_cur = k_; );
+pk_led(800 * sc, 38 * sc, 4 * sc, ins_midi_lit(), REDL);
+gfx_setfont(4); ui_col(AN_INK); gfx_x = 811 * sc; gfx_y = 33 * sc; gfx_drawstr("MIDI");
+ui_size_picker(912 * sc, 29 * sc);
+// hazard stripe under the header
+ui_col(0x101112); gfx_rect(14 * sc, 68 * sc, 972 * sc, 5 * sc);
+gi = 0; loop(81, gx = 18 + gi * 12;
+  ui_cola(ORG, 0.85);
+  gfx_triangle(gx * sc, 73 * sc, (gx + 5) * sc, 73 * sc, (gx + 10) * sc, 68 * sc, (gx + 5) * sc, 68 * sc);
+  gi += 1; );
+ui_col(BLK); gfx_rect(8 * sc, 66 * sc, 10 * sc, 9 * sc); gfx_rect(982 * sc, 66 * sc, 10 * sc, 9 * sc);
+
+// trigger lights fade on the panel
+gl0 = max(gl0 * 0.8, LT[0]); LT[0] = 0;
+gl1 = max(gl1 * 0.8, LT[1]); LT[1] = 0;
+
+// ---------- KICK ----------
+g_group(24, 90, 368, 200, "KICK", SHK);
+g_tled(48, 112, gl0, 1);
+gfx_setfont(4); ui_cola(AN_INK2, 0.9); gfx_x = 72 * sc; gfx_y = 107 * sc; gfx_drawstr("BRIDGED-T OSC  -  CLICK TO HEAR");
+ui_section(0); C_INK = AN_INK;
+ui_knob(68 * sc,  150 * sc, 1, 30, 150, 50, 1, "PITCH",  "%.1f Hz");
+ui_knob(138 * sc, 150 * sc, 2, 0, 48, 24, 0, "SWEEP",   "%.1f st");
+ui_knob(208 * sc, 150 * sc, 3, 2, 250, 28, 1, "S.TIME", "%.1f ms");
+ui_knob(278 * sc, 150 * sc, 4, 40, 2500, 420, 1, "DECAY", "%.0f ms");
+ui_knob(348 * sc, 150 * sc, 5, 0, 100, 10, 0, "WAVE",   slider5 < 1 ? "SINE" : slider5 > 99 ? "TRIANGLE" : "%.0f%% TRI");
+ui_knob(68 * sc,  236 * sc, 6, 0, 100, 35, 0, "CLICK",  "%.0f%%");
+ui_knob(138 * sc, 236 * sc, 7, 0, 100, 50, 0, "C.TONE", "%.0f%%");
+ui_section(2); C_INK = AN_INK;
+ui_knob(208 * sc, 236 * sc, 8, 0, 100, 25, 0, "DRIVE",  "%.0f%%");
+ui_section(0); C_INK = AN_INK;
+ui_knob(278 * sc, 236 * sc, 9, 0, 100, 85, 0, "LEVEL",  "%.0f%%");
+ui_knob(348 * sc, 236 * sc, 10, -100, 100, 0, 0, "PAN", slider10 == 0 ? "CENTRE" : "%+.0f");
+
+// ---------- SNARE / METAL ----------
+g_group(408, 90, 438, 200, "SNARE / METAL", SHS);
+g_tled(432, 112, gl1, 2);
+gfx_setfont(4); ui_cola(AN_INK2, 0.9); gfx_x = 456 * sc; gfx_y = 107 * sc; gfx_drawstr("DUAL SQUARE + NOISE  -  MULTI-MODE VCF");
+ui_section(0); C_INK = AN_INK;
+ui_knob(452 * sc, 150 * sc, 11, 80, 1200, 210, 1, "TUNE",   "%.0f Hz");
+ui_knob(522 * sc, 150 * sc, 12, 0, 100, 20, 0, "METAL",     "%.0f%%");
+ui_knob(592 * sc, 150 * sc, 13, 10, 2000, 110, 1, "T.DECAY", "%.0f ms");
+ui_knob(662 * sc, 150 * sc, 14, 10, 2000, 190, 1, "N.DECAY", "%.0f ms");
+ui_knob(732 * sc, 150 * sc, 15, 0, 100, 60, 0, "NOISE",     slider15 < 1 ? "ALL TONE" : slider15 > 99 ? "ALL NOISE" : "%.0f%%");
+ui_knob(802 * sc, 150 * sc, 19, 0, 100, 50, 0, "SNAP",      "%.0f%%");
+ui_knob(452 * sc, 236 * sc, 17, 100, 16000, 7500, 1, "CUTOFF", slider17 >= 1000 ? sprintf(#gcf, "%.1f kHz", slider17 / 1000) : "%.0f Hz");
+ui_knob(522 * sc, 236 * sc, 18, 0, 100, 20, 0, "RESO",      "%.0f%%");
+// filter mode: three lit keys
+gi = 0;
+loop(3,
+  gx = 568; gy = 210 + gi * 18;
+  ghv = mouse_x >= gx * sc && mouse_x < (gx + 48) * sc && mouse_y >= gy * sc && mouse_y < (gy + 16) * sc;
+  ui_col(0x0E0F11); ui_rrect(gx * sc, gy * sc, 48 * sc, 16 * sc, 3 * sc);
+  ui_col(ghv ? 0x2C2E33 : 0x222428); ui_rrect((gx + 1) * sc, (gy + 1) * sc, 46 * sc, 14 * sc, 2 * sc);
+  pk_led((gx + 9) * sc, (gy + 8) * sc, 3.2 * sc, slider16 == gi, ORG);
+  gfx_setfont(4); ui_col(slider16 == gi ? AN_INK : AN_INK2); gfx_x = (gx + 19) * sc; gfx_y = (gy + 3) * sc;
+  gfx_drawstr(gi == 0 ? "LP" : gi == 1 ? "BP" : "HP");
+  pressed && drag_id == 0 && ghv ? ( drag_id = -1; slider16 = gi; ui_auto(16); );
+  gi += 1;
+);
+gfx_setfont(2); ui_col(AN_INK); ui_text(592 * sc, 266 * sc, "MODE");
+ui_section(2); C_INK = AN_INK;
+ui_knob(662 * sc, 236 * sc, 20, 0, 100, 15, 0, "DRIVE",     "%.0f%%");
+ui_section(0); C_INK = AN_INK;
+ui_knob(732 * sc, 236 * sc, 21, 0, 100, 75, 0, "LEVEL",     "%.0f%%");
+ui_knob(802 * sc, 236 * sc, 22, -100, 100, 0, 0, "PAN",     slider22 == 0 ? "CENTRE" : "%+.0f");
+
+// ---------- MASTER ----------
+g_group(862, 90, 114, 200, "MASTER", SHM);
+ui_section(2); C_INK = AN_INK;
+ui_knob(896 * sc, 150 * sc, 24, -24, 12, 0, 0, "LEVEL", "%+.1f dB");
+ui_knob(896 * sc, 236 * sc, 23, 0, 100, 10, 0, "BUS SAT", "%.0f%%");
+meL.ui_ledm(940 * sc, 112 * sc, 10 * sc, 150 * sc, pkL);
+meR.ui_ledm(956 * sc, 112 * sc, 10 * sc, 150 * sc, pkR);
+pkL *= 0.85; pkR *= 0.85;
+gfx_setfont(4); ui_col(AN_INK2); ui_text(945 * sc, 268 * sc, "L"); ui_text(961 * sc, 268 * sc, "R");
+
+// ---------- SEQUENCER ----------
+g_group(24, 306, 676, 106, "SEQUENCER", SHQ);
+gfx_setfont(4);
+gi = 0;
+loop(16,
+  ui_cola(AN_INK, gi % 4 == 0 ? 0.9 : 0.45); sprintf(#gsn, "%d", gi + 1);
+  ui_text(g_sx(gi) + 15 * sc, 312 * sc, #gsn);
+  gi += 1;
+);
+// where the mouse is in the grid
+gmx = mouse_x / sc - 120; gmg = floor(gmx / 144); gmw = gmx - gmg * 144; gms = gmg * 4 + floor(gmw / 34);
+gmr = floor((mouse_y / sc - 326) / 36);
+gin = gmx >= 0 && gmw < 136 && gms >= 0 && gms < 16 && gmr >= 0 && gmr < 2 && mouse_x >= g_sx(gms) && mouse_x < g_sx(gms) + 31 * sc &&
+      mouse_y >= g_ry(gmr) && mouse_y < g_ry(gmr) + 30 * sc;
+// click / drag to paint steps, Shift-click for accents, right-click toggles an accent
+pressed && drag_id == 0 && gin ? (
+  drag_id = 4000;
+  gpv = PAT[gmr * 16 + gms] > 0 && !(mouse_cap & 8) ? 0 : (mouse_cap & 8) ? 2 : 1;
+);
+drag_id == 4000 && mdown && gin ? ( PAT[gmr * 16 + gms] = gpv; );
+(mouse_cap & 2) && !pk_prevr && gin ? ( PAT[gmr * 16 + gms] = PAT[gmr * 16 + gms] == 2 ? 1 : 2; );
+grw = 0;
+loop(2,
+  gy = g_ry(grw); glv = grw == 0 ? gl0 : gl1;
+  // row header: LED and name
+  pk_led(44 * sc, gy + 15 * sc, 4 * sc, glv > 0.3, ORG);
+  gfx_setfont(2); ui_col(AN_INK); gfx_x = 56 * sc; gfx_y = gy + 8 * sc; gfx_drawstr(grw == 0 ? "KICK" : "SNARE");
+  gs = 0;
+  loop(16,
+    gx = g_sx(gs); gval = PAT[grw * 16 + gs];
+    ui_col(0x0B0B0C); ui_rrect(gx - 1 * sc, gy - 1 * sc, 33 * sc, 32 * sc, 3 * sc);
+    ui_col(floor(gs / 4) % 2 ? 0x2B2D32 : 0x34363C); ui_rrect(gx, gy, 31 * sc, 30 * sc, 3 * sc);
+    ui_cola(0xFFFFFF, 0.08); gfx_line(gx + 3 * sc, gy + 1 * sc, gx + 27 * sc, gy + 1 * sc);
+    gval > 0 ? (
+      ui_cola(gval == 2 ? REDL : ORG, gval == 2 ? 1 : 0.72); ui_rrect(gx + 2 * sc, gy + 2 * sc, 27 * sc, 26 * sc, 2 * sc);
+      gval == 2 ? ( ui_col(0xFFE6C8); gfx_rect(gx + 6 * sc, gy + 5 * sc, 19 * sc, 3 * sc); );
+    );
+    an_cur == gs ? ( ui_cola(0xFFFFFF, gval > 0 ? 0.5 : 0.16); ui_rrect(gx, gy, 31 * sc, 30 * sc, 3 * sc); );
+    gs += 1;
+  );
+  grw += 1;
+);
+
+// ---------- TRANSPORT ----------
+g_group(716, 306, 260, 106, "TRANSPORT", SHB);
+pk_ledbtn(732 * sc, 318 * sc, 44 * sc, 32 * sc, slider28, GRNL) ? ( slider28 = 1 - slider28; ui_auto(28); );
+gfx_setfont(4); ui_col(AN_INK); ui_text(754 * sc, 354 * sc, "PLAY");
+pk_lcd(788 * sc, 318 * sc, 176 * sc, 32 * sc, 2);
+pk_lcdfont(7, 13 * sc); ui_col(pk_lcdc); gfx_x = 798 * sc; gfx_y = 327 * sc;
+an_play ? sprintf(#gl, "STEP %02d   %.1f BPM", an_cur + 1, tempo) :
+  slider28 ? strcpy(#gl, "WAITING FOR PLAY") : strcpy(#gl, "SEQ OFF - MIDI ONLY");
+gfx_drawstr(#gl);
+ui_kmini = 1; ui_section(4); C_INK = AN_INK;
+ui_knob(808 * sc, 382 * sc, 29, 0, 75, 0, 0, "SWING", "%.0f%%");
+ui_kmini = 1; ui_section(4); C_INK = AN_INK;
+ui_knob(868 * sc, 382 * sc, 30, 0, 100, 50, 0, "ACCENT", "%.0f%%");
+ui_kmini = 0;
+gfx_setfont(4); ui_cola(AN_INK, 0.9);
+gx = 0; (drag_id == 29 || sqr(mouse_x - 808 * sc) + sqr(mouse_y - 382 * sc) < sqr(17 * sc)) ? gx = 1;
+!gx ? ( gfx_x = 824 * sc; gfx_y = 377 * sc; gfx_drawstr("SWING"); );
+gx = 0; (drag_id == 30 || sqr(mouse_x - 868 * sc) + sqr(mouse_y - 382 * sc) < sqr(17 * sc)) ? gx = 1;
+!gx ? ( gfx_x = 884 * sc; gfx_y = 377 * sc; gfx_drawstr("ACC"); );
+ui_noled = 1; ui_button(918 * sc, 370 * sc, 46 * sc, 24 * sc, "CLEAR", 0, 1) ? memset(PAT, 0, 32);
+gfx_setfont(4); ui_cola(AN_INK2, 0.8); ui_text(754 * sc, 380 * sc, "SYNCED TO"); ui_text(754 * sc, 393 * sc, "TRANSPORT");
+
+// ---------- bottom strip: DRIFT, MIDI, STEREO, IN / OUT ----------
+pk_inset(24 * sc, 424 * sc, 952 * sc, 40 * sc, SHQ);
+ui_kmini = 1; ui_section(1); C_INK = AN_INK;
+ui_knob(48 * sc, 444 * sc, 26, 0, 100, 30, 0, "DRIFT", "%.0f%%");
+ui_kmini = 0;
+gfx_setfont(4); ui_col(AN_INK); gfx_x = 64 * sc; gfx_y = 439 * sc; gfx_drawstr("DRIFT");
+ui_kmini = 1; ui_section(3); C_INK = AN_INK; knob_step = 1;
+ui_knob(130 * sc, 444 * sc, 27, 0, 16, 0, 0, "CH", slider27 == 0 ? "OMNI" : "CH %.0f");
+ui_kmini = 0;
+gfx_setfont(4); ui_col(AN_INK); gfx_x = 146 * sc; gfx_y = 439 * sc; gfx_drawstr(slider27 == 0 ? "MIDI OMNI" : sprintf(#gch, "MIDI CH %d", slider27));
+// stereo / mono keys
+gi = 0;
+loop(2,
+  gx = 250 + gi * 74; gy = 432;
+  ghv = mouse_x >= gx * sc && mouse_x < (gx + 68) * sc && mouse_y >= gy * sc && mouse_y < (gy + 24) * sc;
+  ui_col(0x0E0F11); ui_rrect(gx * sc, gy * sc, 68 * sc, 24 * sc, 3 * sc);
+  ui_col(ghv ? 0x2C2E33 : 0x222428); ui_rrect((gx + 1) * sc, (gy + 1) * sc, 66 * sc, 22 * sc, 2 * sc);
+  pk_led((gx + 11) * sc, (gy + 12) * sc, 3.5 * sc, slider25 == gi, ORG);
+  gfx_setfont(4); ui_col(slider25 == gi ? AN_INK : AN_INK2); gfx_x = (gx + 22) * sc; gfx_y = (gy + 7) * sc;
+  gfx_drawstr(gi == 0 ? "STEREO" : "MONO");
+  pressed && drag_id == 0 && ghv ? ( drag_id = -1; slider25 = gi; ui_auto(25); );
+  gi += 1;
+);
+gfx_setfont(4); ui_cola(AN_INK, 0.75); gfx_x = 418 * sc; gfx_y = 439 * sc; gfx_drawstr("IN / OUT");
+ins_io(472, 425, 31, AN_INK);
+gfx_setfont(4); ui_cola(AN_INK2, 0.85);
+gfx_x = 584 * sc; gfx_y = 432 * sc; gfx_drawstr("MIDI  C1 (36) KICK   D1 (38) SNARE   37 RIM   - VELOCITY = LEVEL");
+gfx_x = 584 * sc; gfx_y = 447 * sc; gfx_drawstr("STEPS  CLICK = HIT   SHIFT / RIGHT-CLICK = ACCENT   DRAG = PAINT");
+
+pk_end();
+ui_end();
