@@ -229,7 +229,7 @@ pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 ui_begin(1040, 540);
 
 KHAKI = 0xB9A97E; SH1 = 0xAE9E73; SH2 = 0xA6966B; INK = 0x1B1A16; DIMI = 0x4A4434; AMB = 0xFFB020; REDL = 0xFF3A22;
-CAP = 0x4E3524; HPFC = 0xF2C83E; CAPW = 0xEEEFEA; KEYL = 0xD8CBA4; GRN = 0x5BCB6A;
+CAP = 0x836F51; HPFC = 0xF2C83E; CAPW = 0xEEEFEA; KEYL = 0xD8CBA4; GRN = 0x5BCB6A;
 dy_ink = INK; dy_bg = KHAKI; dy_nov = 1; rd_sqbg = 0x2A2822;
 
 function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
