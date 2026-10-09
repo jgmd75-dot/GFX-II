@@ -359,7 +359,7 @@ slider1 == 2 ? strcpy(#v, "clean") : sprintf(#v, "%.0f%%", slider6);
 dy_knob(566, 132, 20, 6, 0, 100, 30, 0, 0xC4C6C3, "DRIVE", hover_txt(566, 132, 20, slider1 == 2 ? "clean" : #v));
 
 sprintf(#v, "%.0f Hz", slider7); dy_kf = 1;
-dy_knob(636, 132, 17, 7, 20, 1000, 120, 1, 0x2A2D33, "LO CUT", hover_txt(636, 132, 17, #v));
+dy_kf = 1; dy_knob(636, 132, 17, 7, 20, 1000, 120, 1, 0x2A2D33, "LO CUT", hover_txt(636, 132, 17, #v));
 
 sprintf(#v, "%.0f Hz", slider8); dy_kf = 2;
 dy_knob(702, 132, 17, 8, 1000, 20000, 6000, 1, 0x2A2D33, "HI CUT", hover_txt(702, 132, 17, #v));

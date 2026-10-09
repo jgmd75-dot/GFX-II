@@ -293,7 +293,7 @@ function key(x, y, on, s) local(h) (
 function kn(cx, cy, r, idx, lo, hi, def, lg, cap, nm, val, col) (
   dy_knob(cx, cy, r, idx, lo, hi, def, lg, cap, "", "");
   txt(cx, cy + r + 10, nm, 13, col, 1);
-  txt(cx, cy + r + 25, val, 10, col, 0.65);
+  dy_act ? txt(cx, cy + r + 25, val, 10, col, 1);   // value on hover / drag only
 );
 // blue bracket label over a group of knobs on the cream strip
 function bracket(x0, x1, y, s) local(tw, th, cx) (

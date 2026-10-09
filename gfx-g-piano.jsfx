@@ -674,18 +674,18 @@ grand ? (
   gfx_gradrect(9 * sc, (fh - 60) * sc, 842 * sc, 60 * sc, 0.45, 0.32, 0.12, 0, 0, 0, 0, 0, 0, 0, 0, 0.16 / (60 * sc));
   gfx_gradrect(9 * sc, 9 * sc, 70 * sc, gh_, 0.50, 0.36, 0.12, 0.12, 0, 0, 0, -0.12 / (70 * sc), 0, 0, 0, 0);
   gfx_gradrect(781 * sc, 9 * sc, 70 * sc, gh_, 0.50, 0.36, 0.12, 0, 0, 0, 0, 0.12 / (70 * sc), 0, 0, 0, 0);
-  k_ = 0;
+  gk_ = 0;
   loop(260,
-    ax_ = 14 + 832 * ui_hash(k_ * 3.17 + 1); ay_ = 14 + (fh - 12) * ui_hash(k_ * 7.31 + 2);
-    ui_cola(ui_hash(k_ * 1.91) > 0.3 ? 0x5A4020 : 0xFFFFFF, 0.05 + 0.08 * ui_hash(k_ * 5.03));
-    gfx_circle(ax_ * sc, ay_ * sc, (0.4 + 1.3 * ui_hash(k_ * 2.77)) * sc, 1, 1);
-    k_ += 1;
+    ax_ = 14 + 832 * ui_hash(gk_ * 3.17 + 1); ay_ = 14 + (fh - 12) * ui_hash(gk_ * 7.31 + 2);
+    ui_cola(ui_hash(gk_ * 1.91) > 0.3 ? 0x5A4020 : 0xFFFFFF, 0.05 + 0.08 * ui_hash(gk_ * 5.03));
+    gfx_circle(ax_ * sc, ay_ * sc, (0.4 + 1.3 * ui_hash(gk_ * 2.77)) * sc, 1, 1);
+    gk_ += 1;
   );
-  k_ = 0;
+  gk_ = 0;
   loop(40,
-    ax_ = 20 + 820 * ui_hash(k_ * 4.13 + 9);
-    ui_cola(0x6A5A40, 0.10 + 0.10 * ui_hash(k_ * 6.1)); gfx_line(ax_ * sc, (fh + 4) * sc, (ax_ + 4 + 10 * ui_hash(k_)) * sc, (fh + 2 - 4 * ui_hash(k_ * 3)) * sc, 1);
-    k_ += 1;
+    ax_ = 20 + 820 * ui_hash(gk_ * 4.13 + 9);
+    ui_cola(0x6A5A40, 0.10 + 0.10 * ui_hash(gk_ * 6.1)); gfx_line(ax_ * sc, (fh + 4) * sc, (ax_ + 4 + 10 * ui_hash(gk_)) * sc, (fh + 2 - 4 * ui_hash(gk_ * 3)) * sc, 1);
+    gk_ += 1;
   );
 );
 ui_cola(0xFFFFFF, grand ? 0.25 : 0.4); gfx_line(16 * sc, 9 * sc, 844 * sc, 9 * sc);

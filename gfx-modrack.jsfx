@@ -504,6 +504,7 @@ function btn(x, y, w, h, lbl, on, fnt, sty) local(sw, sh) (
 function knob(id, cx, cy, rad, v, vmin, vmax, lgt, def, sty) local(dx, dy, fr, nf, ang, sx, sy, sr, n, k, t, ca, sa, fa) (
   fr = lgt ? log(v/vmin)/log(vmax/vmin) : (v - vmin)/(vmax - vmin);
   dx = mx - cx; dy = my - cy;
+  kn_hot = drag_id == id || (dx*dx + dy*dy) < (rad*rad*1.6);   // house style: values show on hover / drag only
   (mouse_cap & 1) && !(pcap & 1) && drag_id == -1 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
     ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? (
       v = def; kc_t = 0; k_rst = id;
@@ -549,7 +550,7 @@ function touch(id, name, val) (
 // Label + value under a knob, in the current ink
 function klab(cx, y, lbl, val) (
   gfx_setfont(3); TC(cx, y, lbl);
-  gfx_setfont(4); TC(cx, y + 20, val);
+  kn_hot ? ( gfx_setfont(4); TC(cx, y + 20, val); );   // value on hover / drag only
 );
 
 function fhz(v)  ( v < 1 ? sprintf(#vt, "%.2f Hz", v) : sprintf(#vt, "%.1f Hz", v); #vt; );
@@ -586,8 +587,10 @@ function synck(id, cx, base, vmin, vmax, vdef, ddef, nm, istime) local(md, v) (
     TC(cx, 146, md == 1 ? "SYNC" : md == 2 ? "DOTTED" : "TRIPLET");
   ) : ( cink(); TC(cx, 146, istime ? "TIME" : "RATE"); );
   cink(); gfx_setfont(4);
-  TC(cx, 166, md > 0 ? fsync(slider(base + 9), md) : istime ? fms(slider(base)) : fhz(slider(base)));
-  clicked(cx - 35, 147, 70, 17) ? (
+  kn_hot ? TC(cx, 166, md > 0 ? fsync(slider(base + 9), md) : istime ? fms(slider(base)) : fhz(slider(base)));   // value on hover / drag only
+  // SYNC key: a visible switch for the same cycle (free -> sync -> dotted -> triplet)
+  btn(cx + 20, 62, 50, 20, "SYNC", md > 0, 5, 1) ? 0;
+  clicked(cx - 35, 147, 70, 17) || clicked(cx + 20, 62, 50, 20) ? (
     setk(base + 8, (md + 1) % 4);
     strcpy(#lcdn, nm);
     strcpy(#lcdv, md == 0 ? "SYNC STRAIGHT" : md == 1 ? "SYNC DOTTED" : md == 2 ? "SYNC TRIPLET" : istime ? "TIME IN MS" : "RATE IN HZ");

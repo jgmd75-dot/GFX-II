@@ -388,6 +388,7 @@ function v2k(v, a, b, m) ( max(0, min(1, m == 1 ? log(v/a)/log(b/a) : m == 2 ? s
 function knob(id, cx, cy, rad, v, a, b, m, def, dim) local(dx, dy, fr, nf, ang, sx, sy, sr, k, t, ca, sa, ta) (
   fr = v2k(v, a, b, m);
   dx = mx - cx; dy = my - cy;
+  kn_hot = drag_id == id || (dx*dx + dy*dy) < (rad*rad*1.6);   // house style: values show on hover / drag only
   (mouse_cap & 1) && !(pcap & 1) && drag_id == -1 && (dx*dx + dy*dy) < (rad*rad*1.6) ? (
     ((mouse_cap & 4) || (kc_id == id && time_precise() - kc_t < 0.35)) ? (
       v = def; kc_t = 0; k_rst = id;
@@ -433,9 +434,15 @@ function knob(id, cx, cy, rad, v, a, b, m, def, dim) local(dx, dy, fr, nf, ang, 
     k += 1;
   );
   // aluminium cap with a dark index
+  id == 11 ? (                                   // KEY HPF: house-style yellow cap
+    col(0.62, 0.50, 0.08); gfx_circle(sx, sy, sr*0.58, 1, 1);
+    col(0.95, 0.76, 0.11); gfx_circle(sx, sy, sr*0.53, 1, 1);
+    col(1.00, 0.88, 0.45); gfx_circle(sx - sr*0.16, sy - sr*0.18, sr*0.16, 1, 1);
+  ) : (
   col(0.46, 0.47, 0.49); gfx_circle(sx, sy, sr*0.58, 1, 1);
   dim ? col(0.52, 0.53, 0.55) : col(0.74, 0.75, 0.77); gfx_circle(sx, sy, sr*0.53, 1, 1);
   col(0.86, 0.87, 0.89); gfx_circle(sx - sr*0.16, sy - sr*0.18, sr*0.16, 1, 1);
+  );
   col(0.15, 0.15, 0.16);
   gfx_line(sx + sa*sr*0.12, sy - ca*sr*0.12, sx + sa*sr*0.50, sy - ca*sr*0.50, 1);
   gfx_line(sx + sa*sr*0.12 + ca, sy - ca*sr*0.12 + sa, sx + sa*sr*0.50 + ca, sy - ca*sr*0.50 + sa, 1);
@@ -638,8 +645,8 @@ loop(2,
   pass += 1;
 );
 // live operating point
-cl = max(-80, min(0, mLv));
-col(1.0, 0.70, 0.22); CIRC(tx_(cl), ty_((ext ? 0 : cl) + min(mGA, mGB)), 4, 1);
+gfx_mcl = max(-80, min(0, mLv));
+col(1.0, 0.70, 0.22); CIRC(tx_(gfx_mcl), ty_((ext ? 0 : gfx_mcl) + min(mGA, mGB)), 4, 1);
 gfx_setfont(9); col(0.20, 0.50, 0.30);
 TC(tX + tS*0.5, tY + tS + 4, ext ? "KEY dB" : "IN dB");
 TX(tX + 4, tY + 2, ext ? "GAIN" : "OUT");
@@ -685,31 +692,31 @@ TR(1452, 270, #lat);
 frame(52, 318, 790, 188, "DYNAMICS");
 kx = 102;
 setk(5, knob(1, kx, 400, 30, slider5, -80, 0, 0, -40, 0));
-cink(); gfx_setfont(3); TC(kx, 446, "THRESHOLD"); gfx_setfont(4); TC(kx, 468, fdb(slider5)); touch(1, "THRESHOLD", fdb(slider5));
+cink(); gfx_setfont(3); TC(kx, 446, "THRESHOLD"); gfx_setfont(4); kn_hot ? TC(kx, 468, fdb(slider5)); touch(1, "THRESHOLD", fdb(slider5));
 kx += 98;
 setk(6, knob(2, kx, 400, 30, slider6, 0, 80, 0, 60, 0));
-cink(); gfx_setfont(3); TC(kx, 446, "RANGE"); gfx_setfont(4); TC(kx, 468, fdb(-slider6)); touch(2, fnc ? "DUCK RANGE" : "RANGE", fdb(-slider6));
+cink(); gfx_setfont(3); TC(kx, 446, "RANGE"); gfx_setfont(4); kn_hot ? TC(kx, 468, fdb(-slider6)); touch(2, fnc ? "DUCK RANGE" : "RANGE", fdb(-slider6));
 kx += 98;
 setk(7, knob(3, kx, 400, 30, slider7, 1, 10, 1, 2, !mdl));
 !mdl ? col(0.62, 0.66, 0.71) : cink(); gfx_setfont(3); TC(kx, 446, "RATIO");
-sprintf(#rt, "1:%.1f", slider7); gfx_setfont(4); TC(kx, 468, mdl ? #rt : "GATE");
+sprintf(#rt, "1:%.1f", slider7); gfx_setfont(4); TC(kx, 468, mdl ? (kn_hot ? #rt : "") : "GATE");
 touch(3, "RATIO (EXP)", #rt);
 kx += 98;
 setk(8, knob(4, kx, 400, 30, slider8, 0.01, 100, 1, 0.5, 0));
-cink(); gfx_setfont(3); TC(kx, 446, "ATTACK"); gfx_setfont(4); TC(kx, 468, fms(slider8)); touch(4, "ATTACK", fms(slider8));
+cink(); gfx_setfont(3); TC(kx, 446, "ATTACK"); gfx_setfont(4); kn_hot ? TC(kx, 468, fms(slider8)); touch(4, "ATTACK", fms(slider8));
 kx += 98;
 setk(9, knob(5, kx, 400, 30, slider9, 0, 2000, 2, 50, 0));
-cink(); gfx_setfont(3); TC(kx, 446, "HOLD"); gfx_setfont(4); TC(kx, 468, fms(slider9)); touch(5, "HOLD", fms(slider9));
+cink(); gfx_setfont(3); TC(kx, 446, "HOLD"); gfx_setfont(4); kn_hot ? TC(kx, 468, fms(slider9)); touch(5, "HOLD", fms(slider9));
 kx += 98;
 setk(10, knob(6, kx, 400, 30, slider10, 5, 4000, 1, 150, 0));
-cink(); gfx_setfont(3); TC(kx, 446, "RELEASE"); gfx_setfont(4); TC(kx, 468, fms(slider10)); touch(6, "RELEASE", fms(slider10));
+cink(); gfx_setfont(3); TC(kx, 446, "RELEASE"); gfx_setfont(4); kn_hot ? TC(kx, 468, fms(slider10)); touch(6, "RELEASE", fms(slider10));
 kx += 98;
 setk(11, knob(7, kx, 400, 30, slider11, 0, 20, 0, 4, 0));
-cink(); gfx_setfont(3); TC(kx, 446, "HYSTERESIS"); sprintf(#hy, "%.1f dB", slider11); gfx_setfont(4); TC(kx, 468, #hy); touch(7, "HYSTERESIS", #hy);
+cink(); gfx_setfont(3); TC(kx, 446, "HYSTERESIS"); sprintf(#hy, "%.1f dB", slider11); gfx_setfont(4); kn_hot ? TC(kx, 468, #hy); touch(7, "HYSTERESIS", #hy);
 kx += 98;
 setk(12, knob(8, kx, 400, 30, slider12, 0, 10, 0, 0, 0));
 slider12 < 0.05 ? strcpy(#lk, "ZERO") : sprintf(#lk, "%.1f ms", slider12);
-cink(); gfx_setfont(3); TC(kx, 446, "LOOKAHEAD"); gfx_setfont(4); TC(kx, 468, #lk); touch(8, "LOOKAHEAD", #lk);
+cink(); gfx_setfont(3); TC(kx, 446, "LOOKAHEAD"); gfx_setfont(4); kn_hot ? TC(kx, 468, #lk); touch(8, "LOOKAHEAD", #lk);
 
 // ---- key section ----
 frame(856, 318, 420, 188, "KEY");
@@ -720,29 +727,29 @@ btn(1084, 334, 84, 30, "LISTEN", listen, 2) ? ( setk(21, !listen); setmsg("KEY L
 kx = 904;
 setk(17, knob(11, kx, 412, 23, slider17, 20, 5000, 1, 20, 0));
 slider17 < 20.5 ? strcpy(#fa, "OFF") : strcpy(#fa, fhz(slider17));
-cink(); gfx_setfont(3); TC(kx, 446, "HPF"); gfx_setfont(4); TC(kx, 468, #fa); touch(11, "KEY HPF", #fa);
+cink(); gfx_setfont(3); TC(kx, 446, "HPF"); gfx_setfont(4); TC(kx, 468, slider17 < 20.5 || kn_hot ? #fa : ""); touch(11, "KEY HPF", #fa);
 kx += 81;
 setk(18, knob(12, kx, 412, 23, slider18, 100, 20000, 1, 20000, 0));
 slider18 > 19999 ? strcpy(#fb, "OFF") : strcpy(#fb, fhz(slider18));
-cink(); gfx_setfont(3); TC(kx, 446, "LPF"); gfx_setfont(4); TC(kx, 468, #fb); touch(12, "KEY LPF", #fb);
+cink(); gfx_setfont(3); TC(kx, 446, "LPF"); gfx_setfont(4); TC(kx, 468, slider18 > 19999 || kn_hot ? #fb : ""); touch(12, "KEY LPF", #fb);
 kx += 81;
 setk(19, knob(13, kx, 412, 23, slider19, 100, 10000, 1, 1000, abs(slider20) < 0.05));
 strcpy(#fc, fhz(slider19));
-cink(); gfx_setfont(3); TC(kx, 446, "FOCUS"); gfx_setfont(4); TC(kx, 468, #fc); touch(13, "KEY FOCUS", #fc);
+cink(); gfx_setfont(3); TC(kx, 446, "FOCUS"); gfx_setfont(4); kn_hot ? TC(kx, 468, #fc); touch(13, "KEY FOCUS", #fc);
 kx += 81;
 setk(20, knob(14, kx, 412, 23, slider20, -12, 12, 0, 0, 0));
-cink(); gfx_setfont(3); TC(kx, 446, "F.GAIN"); gfx_setfont(4); TC(kx, 468, fdb(slider20)); touch(14, "FOCUS GAIN", fdb(slider20));
+cink(); gfx_setfont(3); TC(kx, 446, "F.GAIN"); gfx_setfont(4); kn_hot ? TC(kx, 468, fdb(slider20)); touch(14, "FOCUS GAIN", fdb(slider20));
 kx += 81;
 setk(16, knob(15, kx, 412, 23, slider16, 0, 100, 0, 100, smode == 0));
-smode == 0 ? col(0.62, 0.66, 0.71) : cink(); gfx_setfont(3); TC(kx, 446, "LINK"); gfx_setfont(4); TC(kx, 468, smode == 0 ? "FULL" : fpct(slider16));
+smode == 0 ? col(0.62, 0.66, 0.71) : cink(); gfx_setfont(3); TC(kx, 446, "LINK"); gfx_setfont(4); TC(kx, 468, smode == 0 ? "FULL" : kn_hot ? fpct(slider16) : "");
 touch(15, "STEREO LINK", fpct(slider16));
 
 // ---- master ----
 frame(1290, 318, 162, 188, "MASTER");
 setk(22, knob(21, 1331, 400, 25, slider22, 0, 100, 0, 100, 0));
-cink(); gfx_setfont(3); TC(1331, 446, "MIX"); gfx_setfont(4); TC(1331, 468, fpct(slider22)); touch(21, "MIX", fpct(slider22));
+cink(); gfx_setfont(3); TC(1331, 446, "MIX"); gfx_setfont(4); kn_hot ? TC(1331, 468, fpct(slider22)); touch(21, "MIX", fpct(slider22));
 setk(23, knob(22, 1411, 400, 25, slider23, -24, 12, 0, 0, 0));
-cink(); gfx_setfont(3); TC(1411, 446, "OUTPUT"); gfx_setfont(4); TC(1411, 468, fdb(slider23)); touch(22, "OUTPUT", fdb(slider23));
+cink(); gfx_setfont(3); TC(1411, 446, "OUTPUT"); gfx_setfont(4); kn_hot ? TC(1411, 468, fdb(slider23)); touch(22, "OUTPUT", fdb(slider23));
 
 screw(18, 20); screw(18, 500); screw(1482, 20); screw(1482, 500);
 

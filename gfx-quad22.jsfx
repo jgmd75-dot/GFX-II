@@ -574,7 +574,7 @@ function mknob(idx, cx, cy, r, lo, hi, def, m, cap, label, val) local(v, n, dx, 
   );
   act = hov || drag_id == did;
   gfx_setfont(6); ui_col(hw ? INK : NTX); TC(cx, cy + r + 19, label);
-  gfx_setfont(7); hw ? ui_cola(INK, act ? 1 : 0.75) : ui_col(act ? (cr ? 0x000000 : 0xFFFFFF) : NVX); TC(cx, cy + r + 39, val);
+  act ? ( gfx_setfont(7); ui_col(hw ? INK : (cr ? 0x000000 : 0xFFFFFF)); TC(cx, cy + r + 39, val); );   // house style: value on hover / drag only
 );
 
 

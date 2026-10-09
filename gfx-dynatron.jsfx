@@ -419,7 +419,7 @@ rd_lbl(726, 284, "MASTER", INK, 1);
 sprintf(#v, "%.0f%%", slider10); dy_knob(612, 326, 22, 10, 0, 100, 50, 0, 0x3A72C8, "MIX", #v);
 sprintf(#v, "%.0f%%", slider28); dy_knob(688, 326, 22, 28, 0, 100, 50, 0, DIM, "DRIFT", #v);
 slider27 <= 20.5 ? strcpy(#v, "off") : sprintf(#v, "%.0f Hz", slider27);
-dy_kf = 2; dy_knob(764, 326, 22, 27, 20, 500, 20, 1, 0, "HPF", #v);
+dy_kf = 1; dy_knob(764, 326, 22, 27, 20, 500, 20, 1, 0, "HPF", #v);
 sprintf(#v, "%+.1f dB", slider18); dy_knob(840, 326, 22, 18, -24, 12, 0, 0, DIM, "OUTPUT", #v);
 
 ui_col(0x1A1B1E); gfx_rect(930 * sc, 290 * sc, 70 * sc, 72 * sc);
