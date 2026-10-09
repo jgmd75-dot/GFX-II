@@ -15,7 +15,7 @@ desc:GFX Squashball
 //           as a slower BBD clock does.
 //   GAIN    drive into the delay line (the dry signal stays clean).
 //   LEVEL   volume of the repeats.  MIX  dry / wet balance (50 % = both at full level).
-//   STRETCH the footswitch: hold it (HOLD) or click it on and off (LATCH) and the delay time sweeps towards
+//   STRETCH the STRETCH key: hold it (HOLD) or click it on and off (LATCH) and the delay time sweeps towards
 //           STRETCH TIME at the STRETCH RATE (fast = a tape yank, slow = a lazy dive); let go and it glides back.
 //           The read point moves smoothly (cubic interpolation, slew-shaped), so the sweep is heard as a pitch
 //           bend / doppler warble of everything in the line. It is also a slider (Stretch) for REAPER automation.
@@ -257,32 +257,6 @@ function qg_dots(x, y, r, gap, lit) local(i) (
     i += 1;
   );
 );
-// the STRETCH footswitch: a chrome stomp button on a hex nut; a yellow halo while it is engaged
-function qg_foot(cx, cy, on, dn) local(i, a, r, k, c, o) (
-  r = 34;
-  on ? ( i = 4; loop(4, ui_cola(QG_YEL, 0.06); gfx_circle(cx * sc, cy * sc, (r + 3 + i * 3) * sc, 1, 1); i -= 1; ); );
-  ui_cola(0x000000, 0.5); gfx_circle((cx + 2) * sc, (cy + 4) * sc, r * sc, 1, 1);
-  i = 0;                                                      // hex nut
-  loop(6,
-    a = i * $pi / 3 + $pi / 6;
-    ui_col(i < 2 ? 0xC9CDD3 : i < 4 ? 0x9A9FA7 : 0x6E737B);
-    gfx_triangle(cx * sc, cy * sc, (cx + cos(a) * r) * sc, (cy + sin(a) * r) * sc, (cx + cos(a + $pi / 3) * r) * sc, (cy + sin(a + $pi / 3) * r) * sc);
-    i += 1;
-  );
-  ui_col(0x3A3D42); gfx_circle(cx * sc, cy * sc, 25 * sc, 1, 1);       // washer
-  ui_col(0x8D9198); gfx_circle(cx * sc, cy * sc, 24 * sc, 1, 1);
-  o = dn ? 1.5 : 0;                                           // the button travels when it is pressed
-  ui_col(0x24262A); gfx_circle(cx * sc, (cy + o) * sc, 19 * sc, 1, 1);
-  k = 0;
-  loop(9,
-    c = ui_mix(dn ? 0x5E636B : 0x777C84, dn ? 0xC8CCD2 : 0xF2F4F7, k / 8);
-    ui_col(c); gfx_circle((cx - k * 0.7) * sc, (cy + o - k * 0.8) * sc, (18 - k * 1.7) * sc, 1, 1);
-    k += 1;
-  );
-  ui_cola(0x000000, 0.35); gfx_circle(cx * sc, (cy + o) * sc, 18 * sc, 0, 1);
-  on ? ( ui_cola(QG_YEL, 0.5); gfx_circle(cx * sc, cy * sc, 25 * sc, 0, 1); gfx_circle(cx * sc, cy * sc, 25.8 * sc, 0, 1); );
-);
-
 // ---------- enclosure ----------
 ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
 pk_chassis(4 * sc, 4 * sc, 632 * sc, 412 * sc, QG_BLK);
@@ -351,15 +325,12 @@ qg_dots(312, 280, 5, 16, slider9 >= 0.5 || qb_sp > 0.01);
 rd_led(372, 280, 4, slider4 > 100 && qb_wpk > 0.05, 0xFF8A1E);
 qg_lbl(372, 290, "HOWL", QG_DIM);
 
-qg_hov = sqr(mouse_x - 320 * sc) + sqr(mouse_y - 346 * sc) <= sqr(34 * sc);
-pressed && qg_hov && drag_id == 0 ? (
-  drag_id = 2900; qg_fdn = 1;
+// the STRETCH key: hold it (HOLD) or click it on and off (LATCH)
+rd_sq(262, 318, 116, 52, slider9 >= 0.5, QG_YEL, "STRETCH") ? (
+  qg_fdn = 1;
   slider10 == 1 ? qg_setv(9, slider9 >= 0.5 ? 0 : 1) : qg_setv(9, 1);
 );
 !mdown && qg_fdn ? ( qg_fdn = 0; slider10 == 0 ? qg_setv(9, 0); );
-qg_foot(320, 346, slider9 >= 0.5, qg_fdn);
-qg_hov && !qg_fdn ? ( ui_cola(0xFFFFFF, 0.06); gfx_circle(320 * sc, 346 * sc, 34 * sc, 1, 1); );
-qg_lbl(320, 386, "STRETCH", QG_INK);
 
 // ---------- IN / OUT, DRIFT, OUTPUT, meter ----------
 qg_tray(404, 218, 220, 186, 0x1A1B1D, "");
