@@ -1,0 +1,380 @@
+desc:GFX Squashball
+//tags: delay bbd analog stretch pitch doppler tape modulation self-oscillation stompbox
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// An analogue delay stompbox in the spirit of the classic bucket-brigade pedals with a pitch-stretch footswitch.
+// Signal path: input (trim + guard) -> GAIN: op-amp style overdrive (asymmetric, warm) -> BBD delay line ->
+// clock / TONE filter (inside the loop, so every repeat comes back darker than the last) -> REGEN feedback
+// (soft-limited inside the loop: past 100 % it howls into steady self-oscillation but never runs away) ->
+// LEVEL (wet volume) -> MIX -> band saturation, output gain, OFF / CLIP / LIMIT stage.
+//   TIME    30 - 1500 ms, or a tempo division with SYNC. Turning it glides the clock, so the repeats bend in pitch.
+//   REGEN   feedback 0 - 130 %; past 100 % the loop oscillates and the soft limiter holds it.
+//   TONE    the high-frequency roll-off in the loop (about 700 Hz - 9 kHz). Long times also darken a little,
+//           as a slower BBD clock does.
+//   GAIN    drive into the delay line (the dry signal stays clean).
+//   LEVEL   volume of the repeats.  MIX  dry / wet balance (50 % = both at full level).
+//   STRETCH the footswitch: hold it (HOLD) or click it on and off (LATCH) and the delay time sweeps towards
+//           STRETCH TIME at the STRETCH RATE (fast = a tape yank, slow = a lazy dive); let go and it glides back.
+//           The read point moves smoothly (cubic interpolation, slew-shaped), so the sweep is heard as a pitch
+//           bend / doppler warble of everything in the line. It is also a slider (Stretch) for REAPER automation.
+//
+// DRIFT (50 % = standard): the BBD clock breathes - a slow, small wander of the delay time (a subtle wow,
+// a little different left and right) and of the repeats' tone. 0 % = steady, 100 % = twice the standard amount.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-lfo.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:350<30,1500,1>-Time (ms)
+slider2:0<0,1,1{Off,On}>-Sync to tempo
+slider3:6<0,15,1{4 bars,2 bars,1 bar,1/2,1/2 D,1/2 T,1/4,1/4 D,1/4 T,1/8,1/8 D,1/8 T,1/16,1/16 D,1/16 T,1/32}>-Time (sync)
+slider4:35<0,130,1>-Regen (%)
+slider5:55<0,100,1>-Tone (%)
+slider6:25<0,100,1>-Gain (%)
+slider7:0<-24,6,0.1>-Level (dB)
+slider8:35<0,100,1>-Mix (%)
+slider9:0<0,1,1{Off,On}>-Stretch (footswitch)
+slider10:0<0,1,1{Hold,Latch}>-Stretch switch mode
+slider11:900<30,2000,1>-Stretch time (ms)
+slider12:50<0,100,1>-Stretch rate (%)
+slider13:50<0,100,1>-Drift (%)
+slider14:0<-24,12,0.1>-Output (dB)
+slider15:0<0,100,1>-Band sat (%)
+slider16:30<0,100,1>-Bias (%)
+slider17:120<40,400,1>-Sat low band (Hz)
+slider18:6000<2000,16000,10>-Sat high band (Hz)
+slider19:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider20:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider21:0<-24,12,0.1>-Input trim (dB)
+slider22:0<0,1,1{Off,On}>-Input guard
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-squashball";
+
+// ---------- delay memory: two lines of 4.3 s (TIME, STRETCH and tempo sync all clamp to 4 s) ----------
+qb_len = ceil(4.3 * srate) + 8;
+qb_bL = 100000; qb_bR = qb_bL + qb_len;
+memset(qb_bL, 0, qb_len * 2);
+qb_wp = 0;
+
+// cubic (Catmull-Rom) read, d samples behind the write point
+function qb_rd(buf, d) local(p, i, f, x0, x1, x2, x3, im, ip, ip2) (
+  p = qb_wp - d; p < 0 ? p += qb_len; i = floor(p); f = p - i;
+  im = i - 1; im < 0 ? im += qb_len;
+  ip = i + 1; ip >= qb_len ? ip -= qb_len;
+  ip2 = ip + 1; ip2 >= qb_len ? ip2 -= qb_len;
+  x0 = buf[im]; x1 = buf[i]; x2 = buf[ip]; x3 = buf[ip2];
+  (((0.5 * (x3 - x0) + 1.5 * (x1 - x2)) * f + (x0 - 2.5 * x1 + 2 * x2 - 0.5 * x3)) * f + 0.5 * (x2 - x0)) * f + x1;
+);
+
+// GAIN: low cut, op-amp style asymmetric soft clip (unity at 0 %), a gentle top cut and a DC trap after it
+function qb_drive(x) instance(hz, lz, dx, dy) local(s, y) (
+  hz += (x - hz) * qb_dhc; x -= hz;                         // ~45 Hz: keeps the lows from flubbing the drive
+  s = x * qb_g;
+  y = (ost_tanh(s + 0.12) - qb_tb) * qb_mk;                  // bias = even harmonics, warm and a touch lopsided
+  lz += (y - lz) * qb_dlc; y = lz;                           // ~7 kHz: no fizz
+  dy = y - dx + 0.9993 * dy; dx = y;                         // DC trap (the bias)
+  dy;
+);
+
+// the BBD clock / TONE filter: two cascaded one-poles (each repeat passes through it again)
+function qb_lp2(x) instance(a, b) (
+  a += (x - a) * qb_la; b += (a - b) * qb_la; b;
+);
+// low cut inside the loop (~60 Hz), so a howling loop never builds up rumble or DC
+function qb_hp(x) instance(z) ( z += (x - z) * qb_lhc; x - z; );
+// soft limiter inside the loop: clean below 0.55, rounds into a 1.0 ceiling
+function qb_soft(x) local(a) (
+  a = abs(x); a < 0.55 ? x : sign(x) * (0.55 + 0.45 * ost_tanh((a - 0.55) / 0.45));
+);
+
+// ---------- presets (OUTPUT, the I/O row and the footswitch itself are left alone) ----------
+function qb_set(t, sy, dv, rg, tn, gn, lv, mx, md, stt, str, dr) (
+  slider1 = t; slider2 = sy; slider3 = dv; slider4 = rg; slider5 = tn; slider6 = gn; slider7 = lv; slider8 = mx;
+  slider9 = 0; slider10 = md; slider11 = stt; slider12 = str; slider13 = dr;
+);
+function load_preset(p) (
+  p == 1  ? qb_set( 350, 0,  6,  35, 55, 25,  0.0, 35, 0,  900, 50,  50) :   // Init
+  p == 2  ? qb_set(  95, 0,  6,   8, 72, 35,  0.0, 30, 0,  160, 60,  35) :   // Slapback
+  p == 3  ? qb_set( 420, 0,  6,  62, 20, 30,  0.0, 38, 0,  700, 45,  55) :   // Dark Repeats
+  p == 4  ? qb_set( 380, 1, 10,  45, 50, 40,  0.0, 32, 0,  520, 35,  60) :   // Rubbery Lead (1/8 D)
+  p == 5  ? qb_set( 720, 0,  6,  78, 38, 15, -1.0, 45, 1, 1100, 10,  75) :   // Ambient Swell
+  p == 6  ? qb_set( 300, 0,  6, 112, 45, 45, -3.0, 40, 0,  120, 55,  60) :   // Self-Oscillation
+  p == 7  ? qb_set( 450, 0,  6,  55, 48, 30,  0.0, 40, 0,   60, 92,  50) :   // Tape Yank
+  p == 8  ? qb_set( 450, 1,  7,  72, 32, 35,  0.0, 45, 0, 1200, 40,  55) :   // Dub Throw (1/4 D)
+  p == 9  ? qb_set(  42, 0,  6,  10, 65, 15,  0.0, 45, 1,   55, 25, 100) :   // Warble Double
+  p == 10 ? qb_set( 180, 0,  6,  50, 18, 85, -2.0, 40, 0,  240, 60,  65) :   // Lo-Fi Crunch
+  p == 11 ? qb_set( 260, 0,  6, 118, 62, 20, -4.0, 42, 1,   40, 30,  50);     // Siren Howl
+  p >= 1 && p <= 11 ? slider_automate(8191);                                   // sliders 1-13
+);
+
+function qb_update() local(q) (
+  qb_sync = slider2;
+  q = lfo_div_q(slider3);
+  qb_tms = qb_sync ? q * 60000 / max(tempo, 20) : slider1;
+  qb_tms = min(max(qb_tms, 20), 4000);
+  qb_sms = min(max(slider11, 20), 4000);
+  qb_fbt = min(max(slider4, 0), 130) / 100;
+  qb_tfc = 700 * (9000 / 700) ^ (slider5 / 100);
+  qb_g = 1 + 15 * sqr(slider6 / 100);                        // up to about +24 dB of drive
+  qb_mk = sqrt(qb_g) / (qb_g * (1 - qb_tb * qb_tb));          // small-signal gain = sqrt(drive): louder, but held in
+  qb_lvt = 10 ^ (slider7 / 20);
+  qb_mxt = slider8 / 100;
+  qb_st = slider9 >= 0.5;
+  qb_rinc = 1 / ((4 * (0.03 / 4) ^ (slider12 / 100)) * srate);   // STRETCH RATE: a 4 s dive .. a 30 ms yank
+  drift_macro(slider13);
+  qb_out = 10 ^ (slider14 / 20);
+  in_setup(slider21, slider22);
+  ost_setup(slider15 / 100, slider16 / 100, slider17, slider18, slider19, slider20);
+);
+
+// ---------- state ----------
+qb_tb = ost_tanh(0.12);
+qb_dhc = 1 - exp(-2 * $pi * 45 / srate);
+qb_dlc = 1 - exp(-2 * $pi * 7000 / srate);
+qb_lhc = 1 - exp(-2 * $pi * 60 / srate);
+qb_sm  = 1 - exp(-1 / (0.03 * srate));                       // knob smoothing (no zipper)
+qb_pw  = 1 / (0.02 * srate);                                 // the clock follows the target time (~20 ms) ...
+qb_vc  = 1 - exp(-1 / (0.005 * srate));                      // ... with its speed smoothed (~5 ms): bends, never clicks
+qb_vmax = 0.8;                                               // fastest clock change: pitch held within 0.2x - 1.8x
+drT.drift_init(0.8 + rand(0.5)); drR.drift_init(0.8 + rand(0.5)); drF.drift_init(0.8 + rand(0.5));
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+in_init();
+qb_update();
+qb_ds = qb_tms * 0.001 * srate; qb_vel = 0; qb_sp = qb_st ? 1 : 0;
+qb_fbs = qb_fbt; qb_lvs = qb_lvt; qb_mxs = qb_mxt; qb_outs = qb_out;
+qb_la = 1 - exp(-2 * $pi * min(qb_tfc, srate * 0.45) / srate);
+qb_bc = 0; qb_blk = 0; qb_tdisp = qb_tms; qb_pk0 = 0; qb_pk1 = 0; qb_wpk = 0;
+!ui_dflt ? ( ui_thm = 5; ui_hw = 1; ui_sz = 2; pr_cur = 1; );   // a new instance opens Large, on Init
+ui_dflt = 1;   // the defaults above apply once: @init re-runs (playback start, device reset) must not undo them
+
+@slider
+qb_update();
+
+@block
+qb_update();                                                 // knobs moved on the panel do not run @slider
+// the clock filter: TONE, a little darker as the clock slows (long times), and DRIFT's slow tone wander
+qb_vF = drF.drift_tick(0.2 * dm_s * samplesblock / srate);
+qb_fc = qb_tfc * min(1, (300 / max(qb_tdisp, 20)) ^ 0.3) * (1 + 0.12 * dm_a * qb_vF);
+qb_la = 1 - exp(-2 * $pi * min(max(qb_fc, 200), srate * 0.45) / srate);
+
+@serialize
+file_var(0, ui_thm);
+file_var(0, ui_sz);
+file_var(0, ui_hw);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use
+
+@sample
+in_process(spl0, spl1);
+qb_i0 = in_l; qb_i1 = in_r;
+qb_fbs += (qb_fbt - qb_fbs) * qb_sm;
+qb_lvs += (qb_lvt - qb_lvs) * qb_sm;
+qb_mxs += (qb_mxt - qb_mxs) * qb_sm;
+qb_outs += (qb_out - qb_outs) * qb_sm;
+
+// STRETCH: an S-shaped sweep from TIME to STRETCH TIME (on a log scale, so the bend holds a steady pitch)
+qb_sp += qb_st ? qb_rinc : -qb_rinc; qb_sp = min(max(qb_sp, 0), 1);
+qb_ss = qb_sp * qb_sp * (3 - 2 * qb_sp);
+qb_tt = qb_ss > 0 ? qb_tms * exp(qb_ss * log(qb_sms / qb_tms)) : qb_tms;
+
+// DRIFT: the clock breathes (slow wow), a little differently on each side
+qb_vT = drT.drift_tick(0.35 * dm_s / srate);
+qb_vR = drR.drift_tick(0.5 * dm_s / srate);
+qb_tgt = qb_tt * 0.001 * srate * (1 + 0.004 * dm_a * qb_vT);
+
+// the read point chases the target like a BBD clock / tape head being pulled: its speed is smoothed and
+// limited, so time changes come out as pitch bends instead of clicks
+qb_vd = min(max((qb_tgt - qb_ds) * qb_pw, -qb_vmax), qb_vmax);
+qb_vel += (qb_vd - qb_vel) * qb_vc;
+qb_ds = min(max(qb_ds + qb_vel, 4), qb_len - 6);
+qb_dL = qb_ds;
+qb_dR = min(max(qb_ds * (1 + 0.0015 * dm_a * qb_vR), 4), qb_len - 6);
+
+// BBD read, clock / TONE filter
+qb_w0 = qtL.qb_lp2(qb_rd(qb_bL, qb_dL));
+qb_w1 = qtR.qb_lp2(qb_rd(qb_bR, qb_dR));
+
+// REGEN loop (low cut in the loop) + GAIN stage, soft-limited where they meet; a whisper of clock hiss
+// lets a loop set past 100 % start howling on its own
+qb_f0 = qhL.qb_hp(qb_w0 * qb_fbs);
+qb_f1 = qhR.qb_hp(qb_w1 * qb_fbs);
+qb_hs = (rand(2) - 1) * 0.00002;
+qb_bL[qb_wp] = qb_soft(qdL.qb_drive(qb_i0) + qb_f0 + qb_hs);
+qb_bR[qb_wp] = qb_soft(qdR.qb_drive(qb_i1) + qb_f1 - qb_hs);
+qb_wp += 1; qb_wp >= qb_len ? qb_wp = 0;
+
+// LEVEL + MIX
+qb_dg = min(2 * (1 - qb_mxs), 1); qb_wg = min(2 * qb_mxs, 1) * qb_lvs;
+qb_o0 = qb_i0 * qb_dg + qb_w0 * qb_wg;
+qb_o1 = qb_i1 * qb_dg + qb_w1 * qb_wg;
+
+// output stage
+qb_o0 = ostL.ost_band(qb_o0) * qb_outs;
+qb_o1 = ostR.ost_band(qb_o1) * qb_outs;
+ost_out(qb_o0, qb_o1);
+spl0 = ost_l; spl1 = ost_r;
+
+// for the panel: the time in ms, a tick every repeat (TEMPO LED), wet level (HOWL LED), output peaks
+qb_tdisp = qb_ds * 1000 / srate;
+qb_bc += 1; qb_bc >= qb_ds ? ( qb_bc -= qb_ds; qb_blk += 1; );
+qb_wpk = max(qb_wpk * 0.99995, max(abs(qb_w0), abs(qb_w1)));
+qb_pk0 = max(qb_pk0, abs(spl0)); qb_pk1 = max(qb_pk1, abs(spl1));
+
+@gfx 640 420
+ui_begin(640, 420);
+
+QG_BLK = 0x161617; QG_INK = 0xF0E8C8; QG_DIM = 0xB3AB92; QG_YEL = 0xF2C21B; QG_RED = 0xFF3A22;
+dy_ink = QG_INK; dy_bg = QG_BLK; dy_numc = QG_DIM; dy_nov = 1;
+
+function qg_setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+function qg_lbl(x, y, s, col) ( gfx_setfont(4); ui_col(col); ui_text(x * sc, y * sc, s); );
+function qg_title(x, y, s) ( gfx_setfont(5); ui_col(QG_INK); gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+// recessed tray (matte black, a shade of its own) with its title printed in the top left
+function qg_tray(x, y, w, h, col, title) (
+  pk_inset(x * sc, y * sc, w * sc, h * sc, col);
+  strlen(title) ? qg_title(x + 8, y + 5, title);
+);
+// the yellow double dot
+function qg_dots(x, y, r, gap, lit) local(i) (
+  i = 0;
+  loop(2,
+    lit ? ( ui_cola(QG_YEL, 0.22); gfx_circle((x + i * gap) * sc, y * sc, (r + 4) * sc, 1, 1); );
+    ui_col(0x050505); gfx_circle((x + i * gap) * sc, y * sc, (r + 1.2) * sc, 1, 1);
+    ui_col(lit ? QG_YEL : ui_mix(QG_YEL, 0x000000, 0.25)); gfx_circle((x + i * gap) * sc, y * sc, r * sc, 1, 1);
+    ui_cola(0xFFFFFF, lit ? 0.55 : 0.2); gfx_circle((x + i * gap - r * 0.3) * sc, (y - r * 0.35) * sc, r * 0.33 * sc, 1, 1);
+    i += 1;
+  );
+);
+// the STRETCH footswitch: a chrome stomp button on a hex nut; a yellow halo while it is engaged
+function qg_foot(cx, cy, on, dn) local(i, a, r, k, c, o) (
+  r = 34;
+  on ? ( i = 4; loop(4, ui_cola(QG_YEL, 0.06); gfx_circle(cx * sc, cy * sc, (r + 3 + i * 3) * sc, 1, 1); i -= 1; ); );
+  ui_cola(0x000000, 0.5); gfx_circle((cx + 2) * sc, (cy + 4) * sc, r * sc, 1, 1);
+  i = 0;                                                      // hex nut
+  loop(6,
+    a = i * $pi / 3 + $pi / 6;
+    ui_col(i < 2 ? 0xC9CDD3 : i < 4 ? 0x9A9FA7 : 0x6E737B);
+    gfx_triangle(cx * sc, cy * sc, (cx + cos(a) * r) * sc, (cy + sin(a) * r) * sc, (cx + cos(a + $pi / 3) * r) * sc, (cy + sin(a + $pi / 3) * r) * sc);
+    i += 1;
+  );
+  ui_col(0x3A3D42); gfx_circle(cx * sc, cy * sc, 25 * sc, 1, 1);       // washer
+  ui_col(0x8D9198); gfx_circle(cx * sc, cy * sc, 24 * sc, 1, 1);
+  o = dn ? 1.5 : 0;                                           // the button travels when it is pressed
+  ui_col(0x24262A); gfx_circle(cx * sc, (cy + o) * sc, 19 * sc, 1, 1);
+  k = 0;
+  loop(9,
+    c = ui_mix(dn ? 0x5E636B : 0x777C84, dn ? 0xC8CCD2 : 0xF2F4F7, k / 8);
+    ui_col(c); gfx_circle((cx - k * 0.7) * sc, (cy + o - k * 0.8) * sc, (18 - k * 1.7) * sc, 1, 1);
+    k += 1;
+  );
+  ui_cola(0x000000, 0.35); gfx_circle(cx * sc, (cy + o) * sc, 18 * sc, 0, 1);
+  on ? ( ui_cola(QG_YEL, 0.5); gfx_circle(cx * sc, cy * sc, 25 * sc, 0, 1); gfx_circle(cx * sc, cy * sc, 25.8 * sc, 0, 1); );
+);
+
+// ---------- enclosure ----------
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_chassis(4 * sc, 4 * sc, 632 * sc, 412 * sc, QG_BLK);
+ui_col(0x1D1D1F); gfx_rect(10 * sc, 10 * sc, 620 * sc, 50 * sc);                  // header strip: a lighter matte
+gfx_gradrect(10 * sc, 10 * sc, 620 * sc, 25 * sc, 1, 1, 1, 0.05, 0, 0, 0, 0, 0, 0, 0, -0.05 / (25 * sc));
+ui_cola(QG_INK, 0.55); gfx_rect(10 * sc, 60 * sc, 620 * sc, 1 * sc);
+ui_cola(QG_YEL, 0.85); gfx_rect(10 * sc, 61 * sc, 620 * sc, 2 * sc);
+
+// ---------- header: badge, the double dot, title; presets; size ----------
+rd_badge(32, 35, 14, QG_INK, QG_BLK);
+qg_dots(60, 35, 6, 16, 1);
+rd_title(92, 11, "SQUASHBALL", 23, QG_INK);
+rd_sub(93, 40, "ANALOG DELAY  /  STRETCH", QG_DIM, 1);
+pk_pextra = "";
+k_ = pk_preset(268 * sc, 18 * sc, 294 * sc, 34 * sc, pr_cur,
+     "Init|Slapback|Dark Repeats|Rubbery Lead|Ambient Swell|Self-Oscillation|Tape Yank|Dub Throw|Warble Double|Lo-Fi Crunch|Siren Howl");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_; );
+ui_size_picker(572 * sc, 26 * sc);
+
+// ---------- main controls: GAIN | TIME REGEN TONE | LEVEL MIX ----------
+qg_tray(16, 72, 608, 132, 0x1B1B1D, "");
+ui_cola(QG_INK, 0.16); gfx_rect(124 * sc, 82 * sc, 1 * sc, 112 * sc); gfx_rect(432 * sc, 82 * sc, 1 * sc, 112 * sc);
+dy_kst = 1; dy_num = 1;
+sprintf(#v, "%.0f%%", slider6);
+dy_knob(70, 130, 24, 6, 0, 100, 25, 0, QG_INK, "GAIN", #v);
+slider2 ? (
+  dy_step = 16; dy_steps = "";
+  dy_knob(190, 130, 30, 3, 0, 15, 6, 0, QG_INK, "TIME", lfo_div_name(slider3));
+) : (
+  sprintf(#v, "%.0f ms", slider1);
+  dy_knob(190, 130, 30, 1, 30, 1500, 350, 1, QG_INK, "TIME", #v);
+);
+sprintf(#v, "%.0f%%", slider4);
+dy_knob(290, 130, 24, 4, 0, 130, 35, 0, QG_INK, "REGEN", #v);
+sprintf(#v, "%.0f Hz", qb_tfc);
+dy_knob(380, 130, 24, 5, 0, 100, 55, 0, QG_INK, "TONE", #v);
+sprintf(#v, "%+.1f dB", slider7);
+dy_knob(486, 130, 24, 7, -24, 6, 0, 0, QG_INK, "LEVEL", #v);
+sprintf(#v, "%.0f%%", slider8);
+dy_knob(566, 130, 24, 8, 0, 100, 35, 0, QG_INK, "MIX", #v);
+dy_num = 0;
+
+// ---------- STRETCH settings ----------
+qg_tray(16, 218, 220, 186, 0x1E1D1B, "STRETCH");
+dy_num = 1;
+sprintf(#v, "%.0f ms", slider11);
+dy_knob(72, 290, 22, 11, 30, 2000, 900, 1, QG_INK, "TIME", #v);
+sprintf(#v, "%.0f%%", slider12);
+dy_knob(180, 290, 22, 12, 0, 100, 50, 0, QG_INK, "RATE", #v);
+dy_num = 0;
+rd_sq(28, 360, 92, 28, slider10 == 0, QG_YEL, "HOLD")  ? qg_setv(10, 0);
+rd_sq(132, 360, 92, 28, slider10 == 1, QG_YEL, "LATCH") ? qg_setv(10, 1);
+
+// ---------- centre: readout, LEDs, the footswitch ----------
+ui_col(0x0B0B0C); rd_rr(250 * sc, 218 * sc, 96 * sc, 40 * sc, 4 * sc);
+ui_col(0x1A0705); gfx_rect(254 * sc, 222 * sc, 88 * sc, 32 * sc);
+sprintf(#qg_ms, "%d", floor(min(qb_tdisp, 9999) + 0.5));
+rd_seg(259, 228, 11, 20, 4, #qg_ms, QG_RED, 0x3A0C08);
+gfx_setfont(4); ui_col(QG_RED); gfx_x = 323 * sc; gfx_y = 238 * sc; gfx_drawstr("ms");
+rd_sq(352, 218, 46, 40, slider2, QG_YEL, "SYNC") ? qg_setv(2, 1 - slider2);
+
+qb_blk != qg_lb ? ( qg_lb = qb_blk; qg_lt = time_precise(); );
+rd_led(268, 280, 4, time_precise() - qg_lt < 0.07, QG_RED);
+qg_lbl(268, 290, "TEMPO", QG_DIM);
+qg_dots(312, 280, 5, 16, slider9 >= 0.5 || qb_sp > 0.01);
+rd_led(372, 280, 4, slider4 > 100 && qb_wpk > 0.05, 0xFF8A1E);
+qg_lbl(372, 290, "HOWL", QG_DIM);
+
+qg_hov = sqr(mouse_x - 320 * sc) + sqr(mouse_y - 346 * sc) <= sqr(34 * sc);
+pressed && qg_hov && drag_id == 0 ? (
+  drag_id = 2900; qg_fdn = 1;
+  slider10 == 1 ? qg_setv(9, slider9 >= 0.5 ? 0 : 1) : qg_setv(9, 1);
+);
+!mdown && qg_fdn ? ( qg_fdn = 0; slider10 == 0 ? qg_setv(9, 0); );
+qg_foot(320, 346, slider9 >= 0.5, qg_fdn);
+qg_hov && !qg_fdn ? ( ui_cola(0xFFFFFF, 0.06); gfx_circle(320 * sc, 346 * sc, 34 * sc, 1, 1); );
+qg_lbl(320, 386, "STRETCH", QG_INK);
+
+// ---------- IN / OUT, DRIFT, OUTPUT, meter ----------
+qg_tray(404, 218, 220, 186, 0x1A1B1D, "");
+rd_ioc1 = 0x2A2D33; rd_ioc2 = 0xD8B040; rd_ioc3 = 0xC8321E;
+rd_io(410, 228, 21, 22, 15, 20);
+ui_cola(QG_INK, 0.16); gfx_rect(414 * sc, 316 * sc, 200 * sc, 1 * sc);
+dy_kst = 20;
+sprintf(#v, "%.0f%%", slider13);
+dy_knob(444, 354, 16, 13, 0, 100, 50, 0, 0x9DA2A8, "DRIFT", #v);
+sprintf(#v, "%+.1f dB", slider14);
+dy_knob(514, 354, 16, 14, -24, 12, 0, 0, 0x9DA2A8, "OUTPUT", #v);
+qmL.ui_ledm(570 * sc, 326 * sc, 9 * sc, 56 * sc, qb_pk0); qmR.ui_ledm(588 * sc, 326 * sc, 9 * sc, 56 * sc, qb_pk1);
+qb_pk0 *= 0.85; qb_pk1 *= 0.85;
+qg_lbl(584, 388, "OUT", QG_DIM);
+dy_kst = 7;
+
+pk_end();
+ui_end();
