@@ -11,7 +11,7 @@ desc:GFX Ivans Echo
 //   BALANCE      - dry (fully left) to echo only (fully right).
 //   REPEAT       - from a single slap to runaway feedback past about 2 o'clock; the REPEAT light shows the loop's level.
 //   DELAY TIME   - 20 - 400 ms. The clock glides, so turning it bends the repeats. SYNC locks it to the project tempo.
-//   FOOTSWITCH   - echo on / off. Off stops new signal reaching the echo; the repeats already in it die away.
+//   MOMENTARY    - echo on / off. Off stops new signal reaching the echo; the repeats already in it die away.
 // The echo path is mono (as on the original); the dry signal stays stereo.
 //
 // DRIFT (50% = standard): the BBD clock wanders, so the delay time breathes, and the supply voltage sags and
@@ -33,7 +33,7 @@ slider3:35<0,100,1>-Balance (%)
 slider4:35<0,110,1>-Repeat (%)
 slider5:180<20,400,1>-Delay time (ms)
 slider6:0<0,8,1{Free,1/32,1/16T,1/16,1/8T,1/16D,1/8,1/4T,1/8D}>-Sync
-slider7:1<0,1,1{Off,On}>-Footswitch (echo)
+slider7:1<0,1,1{Off,On}>-Momentary (echo)
 slider8:50<0,100,1>-Drift (%)
 slider9:0<-24,12,0.1>-Output (dB)
 slider10:0<0,7,1{Init,Slapback,ADT Double,Metallic Room,Dub Repeats,Runaway,Mic Booth,Lo-Fi Haze}>-Preset
@@ -74,7 +74,7 @@ function divname(k) (
   k == 0 ? "FREE" : k == 1 ? "1/32" : k == 2 ? "1/16T" : k == 3 ? "1/16" : k == 4 ? "1/8T" : k == 5 ? "1/16D" : k == 6 ? "1/8" : k == 7 ? "1/4T" : "1/8D";
 );
 
-// presets: input, volume, balance, repeat, time, sync, drift (footswitch and output are left alone)
+// presets: input, volume, balance, repeat, time, sync, drift (momentary and output are left alone)
 function setp(ip, vo, ba, re, ti, sy, dr) (
   slider1 = ip; slider2 = vo; slider3 = ba; slider4 = re; slider5 = ti; slider6 = sy; slider8 = dr;
 );
@@ -145,7 +145,7 @@ g_sup = 1 + 0.03 * dm_a * vV;
 ie_x = pre_clip(ie_x * g_sup, hv);
 pkIn = max(pkIn, abs(ie_x) / hv);
 
-// send: the footswitch stops new signal; the repeats carry on
+// send: MOMENTARY off stops new signal; the repeats carry on
 snd = fsw ? ie_x : 0;
 
 // the clock (DRIFT: it breathes) and the delay time glide
@@ -225,7 +225,7 @@ ui_size_picker(800 * sc, 24 * sc);
 rd_sub(24, 76, "INPUT", INK, 1);
 rd_sq(30, 100, 58, 28, slider1 < 0.5, KEY, "INST") ? setv(1, 0);
 rd_sq(94, 100, 58, 28, slider1 > 0.5, KEY, "MIC")  ? setv(1, 1);
-rd_sq(30, 214, 122, 30, slider7 > 0.5, C_GRN, "FOOTSWITCH") ? setv(7, 1 - slider7);
+rd_sq(30, 214, 122, 30, slider7 > 0.5, C_GRN, "MOMENTARY") ? setv(7, 1 - slider7);
 rd_lbl(91, 250, slider7 > 0.5 ? "ECHO ON" : "ECHO OFF", DIM, 1);
 sprintf(#v, "%+.1f dB", slider2);
 dy_knob(212, 166, 32, 2, -24, 18, 0, 0, C_ORG, "VOLUME", #v);
