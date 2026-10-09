@@ -440,20 +440,24 @@ group(1068, 192, 112, 108, "OUTPUT");       disp(15, 1080, 202, "MIX", "%");
 
 // ---------- the data wheel, the program display and the memory keys ----------
 group(638, 52, 118, 248, "PARAMETERS");
-wheel(697, 112, 34);
-ctxt(697, 162, "SELECTED", 9, 0.6);
-ctxt(697, 174, vsel == 0 ? "REFL DELAY" : vsel == 1 ? "REFL LEVEL" : vsel == 2 ? "REV DELAY" : vsel == 3 ? "REV LEVEL" : vsel == 4 ? "RT HIGH" :
+wheel(697, 106, 34);
+ctxt(697, 150, "SELECTED", 9, 0.6);
+ctxt(697, 162, vsel == 0 ? "REFL DELAY" : vsel == 1 ? "REFL LEVEL" : vsel == 2 ? "REV DELAY" : vsel == 3 ? "REV LEVEL" : vsel == 4 ? "RT HIGH" :
      vsel == 5 ? "RT TIME" : vsel == 6 ? "RT LOW" : vsel == 7 ? "ROOM SIZE" : vsel == 8 ? "DENSITY" : vsel == 9 ? "DIFFUSION" : vsel == 10 ? "LO CUT" :
      vsel == 11 ? "HI CUT" : vsel == 12 ? "DRIVE" : vsel == 13 ? "WIDTH" : vsel == 14 ? "DRIFT" : vsel == 15 ? "MIX" : vsel == 16 ? "TRIM" : vsel == 17 ? "LEVEL" :
      vsel == 18 ? "DRIFT SPEED" : vsel == 19 ? "SAT" : vsel == 20 ? "BIAS" : vsel == 21 ? "LO BAND" : vsel == 22 ? "HI BAND" : "CEILING", 10, 0.95);
-// program number + memory keys 1 - 9, 0 = 10, LIST = all presets by name
-ui_col(S_WIN); lz_rr(650, 190, 46, 30, 4);
-sprintf(#pn, lastp > 0 ? "P%d" : "P-", lastp); seg_str(654 * sc, 195 * sc, 8 * sc, 20 * sc, 3, lastp > 0 ? #pn : "P--", S_ON, S_OFF);
-key(700, 190, 48, 30, "LIST", -1, 0) ? (
-  gfx_x = 700 * sc; gfx_y = 220 * sc;
+// program number + LIST (all presets by name), prev / next under them, then memory keys 1 - 9, 0 = 10
+ui_col(S_WIN); lz_rr(650, 180, 46, 30, 4);
+sprintf(#pn, lastp > 0 ? "P%d" : "P-", lastp); seg_str(654 * sc, 185 * sc, 8 * sc, 20 * sc, 3, lastp > 0 ? #pn : "P--", S_ON, S_OFF);
+key(650, 214, 47, 20, "", -1, 0) ? load_preset(lastp <= 1 ? 10 : lastp - 1);
+key(701, 214, 47, 20, "", -1, 0) ? load_preset(lastp >= 10 ? 1 : lastp + 1);
+ui_col(S_KT); gfx_triangle(677.25 * sc, 219 * sc, 677.25 * sc, 229 * sc, 669.75 * sc, 224 * sc);
+gfx_triangle(720.75 * sc, 219 * sc, 720.75 * sc, 229 * sc, 728.25 * sc, 224 * sc);   // the arrows
+key(700, 180, 48, 30, "LIST", -1, 0) ? (
+  gfx_x = 700 * sc; gfx_y = 210 * sc;
   load_preset(gfx_showmenu("Vocal Air|Concert Room|Drum Room|Broadcast Plate|Warm Hall (vintage)|Voice-Over Booth|Narration Space|Gated Snare|Reverse Swell|Tight Ambience|Reset all to defaults"));
 );
-gi = 0; loop(10, key(650 + (gi % 5) * 20, 228 + floor(gi / 5) * 24, 18, 21, gi == 9 ? "0" : sprintf(#kn, "%d", gi + 1), -1, 0) ? load_preset(gi + 1); gi += 1; );
+gi = 0; loop(10, key(650 + (gi % 5) * 20, 242 + floor(gi / 5) * 23, 18, 20, gi == 9 ? "0" : sprintf(#kn, "%d", gi + 1), -1, 0) ? load_preset(gi + 1); gi += 1; );
 // ---------- IN / OUT: trim + guard, the output level, saturation and the output stage ----------
 group(1192, 52, 232, 248, "IN / OUT");
 disp(16, 1206, 64, "TRIM", "dB");

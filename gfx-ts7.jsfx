@@ -498,6 +498,13 @@ wknob(3, 1282, 146, 50, -24, 12, 0, "OUTPUT", "%+.1f dB");
 
 // ---- bottom strip: preset, oversampling, output stage, mix ----
 gfx_setfont(6); ui_col(INK); TL(600, 238, "PRESET");
+// prev / next, left of the preset window (click the window for the list): step round the eight presets
+i = -1;
+wkey(530, 256, 32, 30) ? i = slider1 <= 0 ? 7 : slider1 - 1;
+wkey(566, 256, 32, 30) ? i = slider1 >= 7 ? 0 : slider1 + 1;
+ui_col(hw ? 0x3A3B3E : 0x3A352D);
+gfx_triangle(551*qs, 264*qs, 551*qs, 276*qs, 541*qs, 270*qs); gfx_triangle(577*qs, 264*qs, 577*qs, 276*qs, 587*qs, 270*qs);
+i >= 0 ? ( slider1 = i; apply_preset(i); lastPreset = i; slider_automate(255); );
 hw ? ( ui_col(0x050506); R(600, 256, 200, 30); ) : n_well(600, 256, 200, 30, 6);
 gfx_setfont(11); ui_col(hw ? 0xF4D23C : 0x3A352D); TL(610, 263, pname(slider1));
 pressed && drag_id == 0 && inbox(600, 256, 200, 30) ? (

@@ -343,13 +343,18 @@ gi = 0; loop(18, gd_ = -54 + gi * 3;
   ui_col(20 * log10(max(vi_, 0.000001)) >= gd_ ? (gi >= 16 ? RED : gi >= 13 ? ORN : GRN) : 0x1A1C20); gfx_rect((830 + gi * 13) * sc, 56 * sc, 10 * sc, 10 * sc);
   ui_col(20 * log10(max(vd_, 0.000001)) >= gd_ ? (gi >= 16 ? RED : gi >= 13 ? ORN : GRN) : 0x1A1C20); gfx_rect((830 + gi * 13) * sc, 84 * sc, 10 * sc, 10 * sc);
   gi += 1; );
-rkey(786, 110, 92, 30, sprintf(#bt, "BITS %d", slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16), -1) ? ( slider19 = (slider19 + 1) % 4; ui_auto(19); update(); );
-rkey(884, 110, 92, 30, "PRESETS", -1) ? (
-  gfx_x = 884 * sc; gfx_y = 140 * sc;
+rkey(786, 110, 80, 30, sprintf(#bt, "BITS %d", slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16), -1) ? ( slider19 = (slider19 + 1) % 4; ui_auto(19); update(); );
+rkey(874, 110, 80, 30, "PRESETS", -1) ? (
+  gfx_x = 874 * sc; gfx_y = 140 * sc;
   load_preset(gfx_showmenu("80s Chorus Delay|Lead Guitar Echo|Dimension Wide|Octave Cascade|Fifth Spiral|Octave Drop|Dark Vocal Echo|Compact Slap|Stutter Loop (press HOLD)|10-Bit Grit|Reset all to defaults"));
 );
-ui_col(WIN); lz_rr(982, 110, 70, 30, 4);
-seg_str(990 * sc, 116 * sc, 10 * sc, 18 * sc, 3, lastp > 0 ? sprintf(#pn, "P%d", lastp) : "P--", ORN, 0x1E1004);
+// prev / next beside PRESETS: step through the ten presets (wrapping round)
+rkey(958, 110, 28, 30, "", -1) ? load_preset(lastp <= 1 ? 10 : lastp - 1);
+rkey(990, 110, 28, 30, "", -1) ? load_preset(lastp >= 10 ? 1 : lastp + 1);
+ui_col(0xE8EAEE); gfx_triangle(976.5 * sc, 119 * sc, 976.5 * sc, 131 * sc, 967.5 * sc, 125 * sc);
+gfx_triangle(999.5 * sc, 119 * sc, 999.5 * sc, 131 * sc, 1008.5 * sc, 125 * sc);   // the arrows
+ui_col(WIN); lz_rr(1024, 110, 70, 30, 4);
+seg_str(1032 * sc, 116 * sc, 10 * sc, 18 * sc, 3, lastp > 0 ? sprintf(#pn, "P%d", lastp) : "P--", ORN, 0x1E1004);
 
 // ---------- the knobs: every parameter on the panel ----------
 ui_col(0x16181C); gfx_rect(24 * sc, 168 * sc, 1152 * sc, 1 * sc);

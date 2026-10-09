@@ -404,6 +404,11 @@ key(26, 274, 86, 34, S_KN, "READ", "PRESETS", -1, 0) ? (
 );
 ui_col(S_WIN); lz_rr(120, 274, 86, 34, 4);
 seg_str(130 * sc, 280 * sc, 11 * sc, 22 * sc, 3, lastp > 0 ? sprintf(#pn, "P%d", lastp) : "P--", S_ON, ui_mix(S_WIN, S_OFF, 0.4));
+// prev / next under them: step through the ten presets (wrapping round)
+key(26, 316, 86, 26, S_KN, "", "", -1, 0) ? load_preset(lastp <= 1 ? 10 : lastp - 1);
+key(120, 316, 86, 26, S_KN, "", "", -1, 0) ? load_preset(lastp >= 10 ? 1 : lastp + 1);
+ui_col(ui_ink(S_KN) == 0x1A1A1C ? 0x1A1E26 : 0xFFFFFF); gfx_triangle(73.5 * sc, 322 * sc, 73.5 * sc, 334 * sc, 64.5 * sc, 328 * sc);
+gfx_triangle(158.5 * sc, 322 * sc, 158.5 * sc, 334 * sc, 167.5 * sc, 328 * sc);   // the arrows
 
 // ---------- the lamp rows: quick settings ----------
 lamps(230, 52, "LOW CUT FREQ", 10, 30, 50, 100, 200, "30", "50", "100", "200");

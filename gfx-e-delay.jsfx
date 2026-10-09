@@ -360,8 +360,13 @@ lbtn(28, 262, 84, 26, "PRESETS", 0) ? (
   gfx_x = 28 * sc; gfx_y = 288 * sc;
   load_preset(gfx_showmenu("Slapback|Quarter Note Echo|Ping-Pong Eighths|Dynamic Vocal Echo|Wide Stereo Doubler|Rhythm Taps|Tap Chorus|Shimmer Up|Falling Echoes|Endless Wash|Reset all to defaults"));
 );
-ui_col(WIN); lz_rr(119, 262, 175, 26, 3);
-gfx_setfont(6, "Courier New", 15 * sc, 'b'); ui_col(CHR); gfx_x = 126 * sc; gfx_y = 267 * sc;
+// prev / next beside PRESETS: step through the ten presets (wrapping round)
+lbtn(116, 262, 28, 26, "", 0) ? load_preset(lastp <= 1 ? 10 : lastp - 1);
+lbtn(146, 262, 28, 26, "", 0) ? load_preset(lastp >= 10 ? 1 : lastp + 1);
+ui_col(0xD8D4CA); gfx_triangle(134.5 * sc, 269 * sc, 134.5 * sc, 281 * sc, 125.5 * sc, 275 * sc);
+gfx_triangle(155.5 * sc, 269 * sc, 155.5 * sc, 281 * sc, 164.5 * sc, 275 * sc);   // the arrows
+ui_col(WIN); lz_rr(180, 262, 114, 26, 3);
+gfx_setfont(6, "Courier New", 15 * sc, 'b'); ui_col(CHR); gfx_x = 187 * sc; gfx_y = 267 * sc;
 lastp > 0 ? gfx_printf("P%d %s", lastp, slider4 ? "SYNC" : "FREE") : gfx_drawstr(slider4 ? "P-- SYNC" : "P-- FREE");
 txt(196, 34, slider4 ? sprintf(#tb, "TEMPO %.1f BPM", tempo) : "TIME IN MILLISECONDS", 9, 0.7);
 
