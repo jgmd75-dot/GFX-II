@@ -637,7 +637,7 @@ hlp ? (
   TX(500, 204, "PITCH: 0 / UP (SHIFT) / +12.  FILTER: off / LP / HP.");
   TX(500, 228, "MIDI: one octave from the chosen C holds at 1/2 ... 1/32.");
   TX(500, 252, "DRIFT moves the pitch of the repeats only.");
-  TX(500, 276, "https://gardenfx.jgmd75.workers.dev/");
+  TX(500, 276, "https://www.gardenfx.uk/");
   col(0.52, 0.51, 0.49); TX(500, 322, "Click anywhere to close.");
 );
 pcap = mouse_cap;

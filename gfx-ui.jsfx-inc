@@ -396,7 +396,7 @@ function ui_begin(bw, bh) local(ret, want, fit) (
 
 // ---------- the ? button and its pop-up (design credit, website, this plug-in's manual) ----------
 // Every plug-in sets #ui_man (its file name, e.g. "gfx-tandem") in @init. The ? key lives in the size picker.
-#ui_site = "https://gardenfx.jgmd75.workers.dev/";
+#ui_site = "https://www.gardenfx.uk/";
 function ui_help() local(w, h, cw, ch, cx, cy, tw, th) (
   ui_help_open && pressed && !ui_help_new ? ui_help_open = 0;           // any click closes it
   ui_help_new = 0;
