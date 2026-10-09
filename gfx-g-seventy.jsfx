@@ -292,6 +292,15 @@ function wglyph(cx, cy, t, on) local(x0, x1, y0, y1, w, k) (
              gfx_line((x0 + 15 + 9) * sc, (cy + 10) * sc, (x0 + 15 + 6) * sc, (cy + 8) * sc, 1); gfx_line((x0 + 15 + 9) * sc, (cy + 10) * sc, (x0 + 15 + 6) * sc, (cy + 12) * sc, 1);
              gfx_line((x0 + 15 - 1) * sc, (cy + 10) * sc, (x0 + 15 + 2) * sc, (cy + 8) * sc, 1); gfx_line((x0 + 15 - 1) * sc, (cy + 10) * sc, (x0 + 15 + 2) * sc, (cy + 12) * sc, 1); );
 );
+// recolour a house filter knob's cap and pointer (same geometry as the house knob); n = position 0..1
+function fcap(cx, cy, r, n, cap, ptr) local(rr, a1) (
+  cx *= sc; cy *= sc; r *= sc; rr = r * 0.74; a1 = -0.75 * $pi + n * 1.5 * $pi;
+  ui_col(ui_mix(cap, 0x000000, 0.35)); gfx_circle(cx, cy, rr + 1 * sc, 1, 1);
+  ui_col(cap); gfx_circle(cx, cy, rr, 1, 1);
+  ui_cola(0xFFFFFF, 0.18); gfx_circle(cx - rr * 0.3, cy - rr * 0.35, rr * 0.45, 1, 1);
+  ui_col(cap); gfx_circle(cx + rr * 0.05, cy + rr * 0.1, rr * 0.62, 1, 1);
+  ui_kline(cx, cy, a1, rr * 0.15, r * 0.98, 2.2, ptr);
+);
 // a cycle key: click steps forward, right-click back
 function cyc(x, y, w, h, idx, n) local(hov, v) (
   v = floor(slider(idx) + 0.5);
@@ -369,8 +378,9 @@ rd_led(612, 110, 4, mg_ph < 0.5, ORG);
 
 // ---------- row 2: FILTER, FILTER MOD, AUTO BEND ----------
 inset(16, 240, 450, 132, SH2); band(16, 240, 450, "FILTER");
-sprintf(#v, "%.0f Hz", slider10); dy_knob(86, 306, 26, 10, 20, 8000, 20, 1, 0xF2C83E, "HPF", #v);
-sprintf(#v, "%.0f Hz", slider11); dy_knob(186, 306, 26, 11, 60, 18000, 2000, 1, 0x232323, "LPF", #v);
+sprintf(#v, "%.0f Hz", slider10); dy_kf = 1; dy_knob(86, 306, 26, 10, 20, 8000, 20, 1, 0xF2C83E, "HPF", #v);     // house HPF: yellow, black pointer
+sprintf(#v, "%.0f Hz", slider11); dy_kf = 1; dy_knob(186, 306, 26, 11, 60, 18000, 2000, 1, 0x232323, "LPF", #v);
+fcap(186, 306, 26, log(slider11 / 60) / log(18000 / 60), 0x2E7D4A, 0xF2E8D0);                                // LPF: green, cream pointer
 rd_lbl(344, 270, "RESONANCE", DIMI, 1);
 keys(252, 284, 58, 30, 4, 12, 3, "LOW MID HIGH");
 
