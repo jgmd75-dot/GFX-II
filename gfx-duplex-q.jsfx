@@ -317,6 +317,7 @@ update();
 
 @serialize
 file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
 in_process(spl0, spl1);
@@ -396,14 +397,13 @@ pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
 ui_col(dy_ink); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(dy_ink); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("DUPLEX Q");
-gfx_setfont(4); ui_cola(dy_ink, 0.6); gfx_x = 210 * sc; gfx_y = 30 * sc; gfx_drawstr("DUAL COMPRESSOR  -  DE-ESSER  -  PEAK LIMITER");
-ui_button(650 * sc, 20 * sc, 90 * sc, 28 * sc, "PRESETS", 0, 1) ? (
-  gfx_x = 650 * sc; gfx_y = 48 * sc;
-  load_preset(gfx_showmenu("Gentle Stereo Bus|Vocal Compressor|De-esser (split)|Broadcast Voice|Dual Mono Pair|M-S Glue|M-S Widen + Tame Sides|Brickwall Safety|Parallel Drums|Bass Leveller|Reset all to defaults"));
-);
-ui_size_picker(760 * sc, 22 * sc);
+gfx_setfont(4); ui_cola(dy_ink, 0.6); gfx_x = 196 * sc; gfx_y = 30 * sc; gfx_drawstr("COMP  -  DE-ESS  -  LIMIT");
+pk_pextra = "Reset all to defaults";   // the house preset display; click the LCD for the list
+k_ = pk_preset(508 * sc, 12 * sc, 308 * sc, 40 * sc, pr_cur, "Gentle Stereo Bus|Vocal Compressor|De-esser (split)|Broadcast Voice|Dual Mono Pair|M-S Glue|M-S Widen + Tame Sides|Brickwall Safety|Parallel Drums|Bass Leveller");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
+ui_size_picker(828 * sc, 22 * sc);
 // ORDER: in the top bar; the unit the signal meets first is shown on top
-ui_orderkey(480 * sc, 20 * sc, 154 * sc, 26 * sc, 44, "COMPRESSOR > EQ", "EQ > COMPRESSOR", 4);
+ui_orderkey(340 * sc, 20 * sc, 154 * sc, 26 * sc, 44, "COMPRESSOR > EQ", "EQ > COMPRESSOR", 4);
 ui_col(GRN); gfx_rect(14 * sc, 60 * sc, 872 * sc, 4 * sc);
 ui_col(INKD); gfx_rect(14 * sc, 64 * sc, 872 * sc, 1 * sc);
 
