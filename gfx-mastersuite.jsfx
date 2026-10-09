@@ -506,18 +506,20 @@ spl0 = xL;
 spl1 = xR;
 opL = max(opL, abs(spl0)); opR = max(opR, abs(spl1));
 
-@gfx 1120 422
-ui_begin(1120, 422);
+@gfx 1120 466
+ui_begin(1120, 466);
 ui_header("MASTERSUITE");
-pk_pextra = "Reset to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
-k_ = pk_preset(400 * sc, 7 * sc, 380 * sc, 30 * sc, pr_cur, "Transparent|Warm Glue|Loud & Punchy|Vintage Tape|Bright Pop|Bass Heavy|Acoustic / Classical|Podcast / Voice|Parallel Punch|Streaming Safe (-1 dBTP)");
-k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 ui_theme_picker(176 * sc, 15 * sc);
 ui_size_picker(280 * sc, 13 * sc);
 ui_hw_toggle(340 * sc, 13 * sc);
 gfx_setfont(4); ui_col(C_INK);
 sprintf(#lat, "LATENCY %d SMP  (%.1f ms)", lat_t, lat_t / srate * 1000);
 gfx_x = 820 * sc; gfx_y = 20 * sc; gfx_drawstr(#lat);
+
+// the preset row under the header: PRESETS, prev / next, LCD (click it for the list), at the right
+pk_pextra = "Reset to defaults";
+k_ = pk_preset(724 * sc, 52 * sc, 380 * sc, 30 * sc, pr_cur, "Transparent|Warm Glue|Loud & Punchy|Vintage Tape|Bright Pop|Bass Heavy|Acoustic / Classical|Podcast / Voice|Parallel Punch|Streaming Safe (-1 dBTP)");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 
 // ---------- helpers ----------
 // the IN / OUT strip: TRIM, SAT and the OUT stage dial (OFF / CLIP / LIM round it), knob centres at y + 30
@@ -558,7 +560,7 @@ dH = min(g2db(hf_grm), dH * 0.85); hf_grm = 1;
 dL = min(g2db(l_gm), dL * 0.85); l_gm = 1;
 
 // ================= row 1: INPUT > TUBE > TONE > STEREO =================
-Y = 54; GH = 172;
+Y = 98; GH = 172;
 ui_group(16 * sc, Y * sc, 260 * sc, GH * sc, 0, "IN / OUT");
 ms_io(56, Y + 36);
 gfx_setfont(4); ui_col(C_INK); ui_text(134 * sc, (Y + 118) * sc, "OVERSAMPLING");
@@ -589,7 +591,7 @@ ui_knob(946 * sc,  (Y + 96) * sc, 13, 20, 200, 20, 1, "MONO", slider13 < 20.5 ? 
 ui_knob(1036 * sc, (Y + 96) * sc, 14, 0, 200, 100, 0, "WIDTH", "%.0f%%");
 
 // ================= row 2: VARI-MU > HF LIMIT > CLIPPER > LIMITER > OUTPUT =================
-Y = 238;
+Y = 282;
 ui_group(16 * sc, Y * sc, 400 * sc, GH * sc, 0, "VARI-MU");
 st_on(372, Y + 8, 15);
 ui_knob(76 * sc,  (Y + 72) * sc, 16, -40, 0, -18, 0, "THRESH", "%.1f dB");

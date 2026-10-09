@@ -161,8 +161,8 @@ spl1 = ost_r * master_g;
 
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));   // post-master stereo output peaks
 
-@gfx 480 260
-ui_begin(480, 260);
+@gfx 480 300
+ui_begin(480, 300);
 
 // warm sunrise wash (burnt orange -> red ember), under everything else - the "Waka" mood
 gfx_gradrect(0, 0, gfx_w, gfx_h, 0.62, 0.22, 0.08, 0.16, 0, 0, 0, 0, 0.14 / gfx_h, 0.02 / gfx_h, -0.03 / gfx_h, 0);
@@ -170,8 +170,8 @@ gfx_gradrect(0, 0, gfx_w, gfx_h, 0.62, 0.22, 0.08, 0.16, 0, 0, 0, 0, 0.14 / gfx_
 // --- Top Bar ---
 ui_header("GRUNT");
 
-// the house preset display: PRESETS, prev / next, LCD (click it for the list)
-k_ = pk_preset(128 * sc, 7 * sc, 256 * sc, 30 * sc, pr_cur, "Default|Warm Console|American Crunch|British Punch");
+// the preset row under the header: PRESETS, prev / next, LCD (click it for the list), at the right
+k_ = pk_preset(164 * sc, 52 * sc, 300 * sc, 30 * sc, pr_cur, "Default|Warm Console|American Crunch|British Punch");
 k_ > 0 ? (
     preset = k_; pr_cur = k_;
     preset == 1 ? ( slider1 = 0; slider2 = 0;   slider3 = 0.5; slider4 = 0.2; slider5 = 0.5; slider6 = 0;  slider7 = 1; );
@@ -188,7 +188,7 @@ k_ > 0 ? (
 ui_size_picker(400 * sc, 13 * sc);
 
 // --- Second Row: Gain // Boost // Grunt // Sag ---
-y2 = 98 * sc;
+y2 = 138 * sc;
 ui_knob(65 * sc, y2, 1, -24, 12, 0, 0, "GAIN", "%+.1f dB");
 gr_bake(65 * sc, y2, 21 * sc, 1, -24, 12);                                       // ivory bakelite cap
 ui_kcap = 0xD8B040; ui_knob(185 * sc, y2, 2, 0, 100, 0, 0, "BOOST", "%.0f%%");   // small yellow-cap knob (from Head)
@@ -196,7 +196,7 @@ ui_knob(305 * sc, y2, 3, 0, 1, 0.5, 0, "GRUNT", "%.2f");
 ui_knob(425 * sc, y2, 4, 0, 1, 0.2, 0, "SAG", "%.2f");
 
 // --- Third Row: Squash // Master // Meters ---
-y3 = 198 * sc;
+y3 = 238 * sc;
 ui_knob(65 * sc, y3, 5, 0, 1, 0.5, 0, "SQUASH", "%.2f");
 ui_knob(185 * sc, y3, 6, -24, 12, 0, 0, "MASTER", "%+.1f dB");
 
