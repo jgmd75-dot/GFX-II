@@ -330,101 +330,102 @@ rd_plate(26, 0, 1008, 400, FACE, 0);
 rd_rack(0, 0, 1060, 400, 0x322D38);
 ui_col(ORG); gfx_rect(26 * sc, 66 * sc, 1008 * sc, 2 * sc);
 
-// ---------- header ----------
+// ---------- header: badge, title, the preset LCD (click it for every preset), size ----------
 rd_badge(60, 32, 15, ORG, FACE);
 rd_title(84, 14, "DYNATRON", 26, INK);
 rd_sub(260, 30, "DYNAMIC FLANGE  ·  PHASE  ·  FILTER", DIM, 1);
-rd_sq(758, 18, 26, 24, 0, 0x6A7484, "<") ? (
+rd_sq(640, 20, 30, 30, 0, 0x6A7484, "◄") ? (
   cur_preset = cur_preset <= 1 ? PRESET_N : cur_preset - 1;
   load_preset(cur_preset);
 );
-rd_sq(786, 18, 26, 24, 0, 0x6A7484, ">") ? (
+rd_sq(914, 20, 30, 30, 0, 0x6A7484, "►") ? (
   cur_preset = cur_preset >= PRESET_N ? 1 : cur_preset + 1;
   load_preset(cur_preset);
 );
-rd_sq(820, 18, 80, 24, 0, DIM, "PRESETS") ? (
-  gfx_x = 820 * sc; gfx_y = 44 * sc;
-  cur_preset = gfx_showmenu("Classic Bubble Flange|Zappa Dynaflange|Smooth Phase Sweep|Square Throb Phase|Vocal Auto-Wah|Random Bubble Filter|Stepped Jump Flange|Synced Wide Phase|Envelope Squelch|Hollow Negative Flange|Reset all to defaults");
-  cur_preset > 0 ? load_preset(cur_preset);
-);
-ui_size_picker(940 * sc, 21 * sc);
-pk_lcd(820 * sc, 45 * sc, 224 * sc, 16 * sc, 0);
+pk_lcd(676 * sc, 12 * sc, 232 * sc, 46 * sc, 0);
 pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-gfx_x = 826 * sc; gfx_y = 48 * sc; gfx_drawstr("PATCH: " + pname(cur_preset));
+sprintf(#plcd, "PRESET %02d/%02d", cur_preset, PRESET_N); gfx_x = 688 * sc; gfx_y = 18 * sc; gfx_drawstr(#plcd);
+pk_lcdfont(9, 15 * sc); gfx_x = 688 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+pressed && drag_id == 0 && mouse_x >= 676 * sc && mouse_x < 908 * sc && mouse_y >= 12 * sc && mouse_y < 58 * sc ? (
+  drag_id = -1;
+  strcpy(#pmenu, ""); k_ = 1;
+  loop(11, k_ == cur_preset ? strcat(#pmenu, "!"); strcat(#pmenu, pname(k_)); k_ < 11 ? strcat(#pmenu, "|"); k_ += 1; );
+  gfx_x = 676 * sc; gfx_y = 58 * sc;
+  k_ = gfx_showmenu(#pmenu);
+  k_ > 0 ? ( load_preset(k_); k_ <= PRESET_N ? cur_preset = k_; );
+);
+ui_size_picker(956 * sc, 26 * sc);
 
+// ---------- band 1: MODE / SWEEP SOURCE / FILTER TYPE ----------
+rd_lbl(179, 80, "MODE", INK, 1);
+rd_sq(44, 96, 86, 28, mode == 0, CFL, "FLANGE") ? setv(1, 0);
+rd_sq(136, 96, 86, 28, mode == 1, CPH, "PHASE")  ? setv(1, 1);
+rd_sq(228, 96, 86, 28, mode == 2, CFI, "FILTER") ? setv(1, 2);
+rd_lbl(479, 80, "SWEEP SOURCE", INK, 1);
+rd_sq(344, 96, 86, 28, sweep == 0, DIM, "LFO")  ? setv(11, 0);
+rd_sq(436, 96, 86, 28, sweep == 1, DIM, "HOLD") ? setv(11, 1);
+rd_sq(528, 96, 86, 28, sweep == 2, DIM, "ENV")  ? setv(11, 2);
+rd_lbl(764, 80, "FILTER TYPE", INK, mode == 2 ? 1 : 0.4);
+rd_sq(644, 96, 76, 28, ftype == 0, CFI, "LP") ? setv(13, 0);
+rd_sq(726, 96, 76, 28, ftype == 1, CFI, "BP") ? setv(13, 1);
+rd_sq(808, 96, 76, 28, ftype == 2, CFI, "HP") ? setv(13, 2);
+mode != 2 ? ( ui_cola(FACE, 0.6); gfx_rect(640 * sc, 92 * sc, 248 * sc, 36 * sc); );   // only used in FILTER mode
+// the sweep readout: delay time (FLANGE) or cutoff (PHASE / FILTER)
+pk_lcd(904 * sc, 82 * sc, 112 * sc, 46 * sc, 0);
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+gfx_x = 914 * sc; gfx_y = 88 * sc; gfx_drawstr(mode == 0 ? "DELAY" : "CUTOFF");
+mode == 0 ? sprintf(#rdo, "%.2f ms", dispMain) : sprintf(#rdo, "%.0f Hz", dispMain);
+pk_lcdfont(9, 15 * sc); gfx_x = 914 * sc; gfx_y = 104 * sc; gfx_drawstr(#rdo);
 
-// ---------- MODE / SWEEP / FILTER TYPE ----------
-rd_sq(44, 84, 86, 26, mode == 0, CFL, "FLANGE") ? setv(1, 0);
-rd_sq(136, 84, 86, 26, mode == 1, CPH, "PHASE")  ? setv(1, 1);
-rd_sq(228, 84, 86, 26, mode == 2, CFI, "FILTER") ? setv(1, 2);
-rd_lbl(185, 116, "MODE", INK, 1);
+ui_cola(INK, 0.2); gfx_rect(44 * sc, 140 * sc, 972 * sc, 1 * sc);
 
-rd_sq(44, 146, 86, 22, sweep == 0, DIM, "LFO")  ? setv(11, 0);
-rd_sq(136, 146, 86, 22, sweep == 1, DIM, "HOLD") ? setv(11, 1);
-rd_sq(228, 146, 86, 22, sweep == 2, DIM, "ENV")  ? setv(11, 2);
-rd_lbl(185, 172, "SWEEP SOURCE", INK, 1);
+// ---------- band 2: the sweep (shared across all three modes) ----------
+rd_sub(44, 150, "SWEEP", ORG, 1);
+sprintf(#v, "%.0f%%", slider6); dy_knob(170, 200, 28, 6, 0, 100, 40, 0, CFL, "CENTRE", #v);
+sprintf(#v, "%.0f%%", slider7); dy_knob(330, 200, 28, 7, 0, 100, 70, 0, CFL, "DEPTH", #v);
+fbk_lbl = mode == 2 ? "RESONANCE" : "FEEDBACK";
+mode == 2 ? sprintf(#v, "%.0f%%", abs(slider8)) : sprintf(#v, "%+.0f%%", slider8);
+dy_knob(490, 200, 28, 8, -95, 95, 50, 0, CFI, fbk_lbl, #v);
+sprintf(#v, "%.0f deg", slider9); dy_knob(650, 200, 28, 9, 0, 180, 0, 0, CPH, "SPREAD", #v);
+sprintf(#v, "%.0f%%", slider12); dy_knob(810, 200, 28, 12, 0, 100, 50, 0, CPH, "SENS", #v);
+sweep != 2 ? ( ui_cola(FACE, 0.55); gfx_circle(810 * sc, 200 * sc, 38 * sc, 1, 1); );   // SENS only matters for ENV
+rd_lbl(810, 262, sweep == 2 ? "" : "(ENV only)", DIM, 0.8);
 
-rd_sq(44, 204, 56, 20, ftype == 0, CFI, "LP") ? setv(13, 0);
-rd_sq(104, 204, 56, 20, ftype == 1, CFI, "BP") ? setv(13, 1);
-rd_sq(164, 204, 56, 20, ftype == 2, CFI, "HP") ? setv(13, 2);
-rd_lbl(140, 228, "FILTER TYPE (FILTER mode)", INK, 1);
+ui_cola(INK, 0.2); gfx_rect(44 * sc, 276 * sc, 972 * sc, 1 * sc);
 
-ui_cola(INK, 0.2); gfx_rect(336 * sc, 72 * sc, 1 * sc, 188 * sc);
+// ---------- band 3: IN / OUT, LFO, MASTER, meters ----------
+rd_lbl(66, 284, "IN / OUT", INK, 1);
+rd_ioc1 = 0x2A2A2E; rd_ioc2 = CFI; rd_ioc3 = 0xC83A2A;
+rd_io(44, 300, 25, 26, 19, 24);
 
-// ---------- LFO ----------
-rd_sq(352, 84, 34, 20, shape == 0, 0xF2F0E6, "SIN") ? setv(2, 0);
-rd_sq(390, 84, 34, 20, shape == 1, 0xF2F0E6, "TRI") ? setv(2, 1);
-rd_sq(428, 84, 34, 20, shape == 2, 0xF2F0E6, "SQR") ? setv(2, 2);
-rd_sq(466, 84, 34, 20, shape == 3, 0xF2F0E6, "RND") ? setv(2, 3);
-rd_lbl(426, 112, "SHAPE", INK, 1);
-rd_sq(352, 140, 46, 20, syncmode == 0, 0xF2F0E6, "FREE") ? setv(3, 0);
-rd_sq(403, 140, 46, 20, syncmode == 1, 0xF2F0E6, "SYNC") ? setv(3, 1);
-rd_sq(454, 140, 46, 20, syncmode == 2, 0xF2F0E6, "FLOW") ? setv(3, 2);
-rd_lbl(426, 166, "RATE MODE", INK, 1);
+rd_lbl(392, 284, "LFO", INK, 1);
+rd_sq(272, 300, 38, 22, shape == 0, 0xF2F0E6, "SIN") ? setv(2, 0);
+rd_sq(314, 300, 38, 22, shape == 1, 0xF2F0E6, "TRI") ? setv(2, 1);
+rd_sq(356, 300, 38, 22, shape == 2, 0xF2F0E6, "SQR") ? setv(2, 2);
+rd_sq(398, 300, 38, 22, shape == 3, 0xF2F0E6, "RND") ? setv(2, 3);
+rd_sq(272, 334, 52, 22, syncmode == 0, 0xF2F0E6, "FREE") ? setv(3, 0);
+rd_sq(328, 334, 52, 22, syncmode == 1, 0xF2F0E6, "SYNC") ? setv(3, 1);
+rd_sq(384, 334, 52, 22, syncmode == 2, 0xF2F0E6, "FLOW") ? setv(3, 2);
+rd_lbl(354, 362, "SHAPE  ·  RATE MODE", DIM, 0.9);
 dy_kst = 7;
 syncmode == 1 ? (
   dy_step = 16; dy_steps = "";
-  dy_knob(426, 212, 22, 5, 0, 15, 2, 0, DIM, "RATE", lfo_div_name(floor(slider5 + 0.5)));
+  dy_knob(492, 326, 22, 5, 0, 15, 2, 0, DIM, "RATE", lfo_div_name(floor(slider5 + 0.5)));
 ) : (
-  sprintf(#v, "%.2f Hz", slider4); dy_knob(426, 212, 22, 4, 0.02, 10, 0.25, 1, DIM, "RATE", sweep == 1 ? "stopped" : #v);
+  sprintf(#v, "%.2f Hz", slider4); dy_knob(492, 326, 22, 4, 0.02, 10, 0.25, 1, DIM, "RATE", sweep == 1 ? "stopped" : #v);
 );
 
-ui_cola(INK, 0.2); gfx_rect(506 * sc, 72 * sc, 1 * sc, 188 * sc);
-
-// ---------- the engine knobs (shared across all three modes) ----------
-rd_sub(560, 70, "CENTRE  ·  DEPTH  ·  FEEDBACK / RESONANCE  ·  SPREAD  ·  SENS", ORG, 1);
-sprintf(#v, "%.0f%%", slider6); dy_knob(548, 138, 26, 6, 0, 100, 40, 0, CFL, "CENTRE", #v);
-sprintf(#v, "%.0f%%", slider7); dy_knob(618, 138, 26, 7, 0, 100, 70, 0, CFL, "DEPTH", #v);
-fbk_lbl = mode == 2 ? "RESONANCE" : "FDBK";
-mode == 2 ? sprintf(#v, "%.0f%%", abs(slider8)) : sprintf(#v, "%+.0f%%", slider8);
-dy_knob(690, 138, 26, 8, -95, 95, 50, 0, CFI, fbk_lbl, #v);
-sprintf(#v, "%.0f deg", slider9); dy_knob(762, 138, 22, 9, 0, 180, 0, 0, CPH, "SPREAD", #v);
-sprintf(#v, "%.0f%%", slider12); dy_knob(834, 138, 22, 12, 0, 100, 50, 0, CPH, "SENS", #v);
-
-// readout: delay time (FLANGE) or cutoff frequency (PHASE / FILTER)
-mode == 0 ? sprintf(#rdo, "%.2f ms", dispMain) : sprintf(#rdo, "%.0f Hz", dispMain);
-rd_lbl(548, 192, #rdo, DIM, 1);
-rd_lbl(548, 204, mode == 0 ? "DELAY (sweep)" : "CUTOFF (sweep)", DIM, 0.8);
-
-// ---------- IN / OUT (far left) ----------
-ui_cola(INK, 0.2); gfx_rect(44 * sc, 262 * sc, 992 * sc, 1 * sc);
-rd_lbl(44, 272, "IN / OUT", INK, 1);
-rd_ioc1 = 0x2A2A2E; rd_ioc2 = CFI; rd_ioc3 = 0xC83A2A;
-rd_io(44, 290, 25, 26, 19, 24);
-
-// ---------- MASTER (moved right, Low Cut relabelled HPF) ----------
-rd_lbl(420, 272, "MASTER", INK, 1);
-sprintf(#v, "%.0f%%", slider10); dy_knob(466, 312, 20, 10, 0, 100, 50, 0, 0x3A72C8, "MIX", #v);
-sprintf(#v, "%.0f%%", slider28); dy_knob(536, 312, 18, 28, 0, 100, 50, 0, DIM, "DRIFT", #v);
+rd_lbl(726, 284, "MASTER", INK, 1);
+sprintf(#v, "%.0f%%", slider10); dy_knob(612, 326, 22, 10, 0, 100, 50, 0, 0x3A72C8, "MIX", #v);
+sprintf(#v, "%.0f%%", slider28); dy_knob(688, 326, 22, 28, 0, 100, 50, 0, DIM, "DRIFT", #v);
 slider27 <= 20.5 ? strcpy(#v, "off") : sprintf(#v, "%.0f Hz", slider27);
-dy_kf = 1; dy_knob(604, 312, 16, 27, 20, 500, 20, 1, 0, "HPF", #v);
-sprintf(#v, "%+.1f dB", slider18); dy_knob(672, 312, 18, 18, -24, 12, 0, 0, DIM, "OUTPUT", #v);
+dy_kf = 2; dy_knob(764, 326, 22, 27, 20, 500, 20, 1, 0, "HPF", #v);
+sprintf(#v, "%+.1f dB", slider18); dy_knob(840, 326, 22, 18, -24, 12, 0, 0, DIM, "OUTPUT", #v);
 
-// ---------- meters ----------
-ui_col(0x1A1B1E); gfx_rect(930 * sc, 286 * sc, 70 * sc, 72 * sc);
-mL.ui_ledm(936 * sc, 290 * sc, 28 * sc, 64 * sc, pkL); mR.ui_ledm(966 * sc, 290 * sc, 28 * sc, 64 * sc, pkR);
+ui_col(0x1A1B1E); gfx_rect(930 * sc, 290 * sc, 70 * sc, 72 * sc);
+mL.ui_ledm(936 * sc, 294 * sc, 28 * sc, 64 * sc, pkL); mR.ui_ledm(966 * sc, 294 * sc, 28 * sc, 64 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;
-rd_lbl(947, 364, "OUT", INK, 1);
+rd_lbl(965, 368, "OUT", INK, 1);
 
 pk_end();
 ui_end();
