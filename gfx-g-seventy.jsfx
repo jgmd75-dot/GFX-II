@@ -8,13 +8,13 @@ desc:GFX G Seventy
 //   VCO 1      triangle, saw, square, pulse, or pulse-width modulated by the MG; six octaves, 64' to 2'.
 //   VCO 2      saw, ring-modulated against VCO 1, or white / pink / red noise; TUNE offsets it from VCO 1.
 //   BLEND      the mix of the two sources.
-//   TRAVELER   the two horizontal sliders: a high-pass and a low-pass filter in series, 12 dB each,
-//              with a three-step RESONANCE switch; EG and MG switches set how far the envelope and the MG move them.
+//   FILTER     a high-pass and a low-pass filter in series (HPF and LPF knobs), 12 dB each, with a three-step
+//              RESONANCE switch; EG and MG switches set how far the envelope and the MG move them.
 //   AUTO BEND  a pitch bend into every new note (up or down, with its own time); VIBRATO has its own LFO.
 //   ENVELOPE   attack, decay, sustain, release for the filter and the amp. Last-note priority, portamento.
 //
 // DRIFT (heavy, 70s unstable; 60% by default): the universal GFX instrument drift pushed harder - pitch,
-// VCO 2 detune, pulse width and the Traveler filters wander, with a random tuning offset on each new note -
+// VCO 2 detune, pulse width and the filters wander, with a random tuning offset on each new note -
 // and the envelope's timing wanders too, a little different on every note. 0% = steady.
 // IN / OUT: the GFX band saturation and output stage (SAT and OFF / CLIP / LIM on the panel).
 
@@ -36,8 +36,8 @@ slider6:5<0.1,30,0.01>-MG rate (Hz)
 slider7:50<0,100,1>-PWM depth (%)
 slider8:5.5<1,12,0.01>-Vibrato rate (Hz)
 slider9:0<0,100,1>-Vibrato depth (cents)
-slider10:20<20,8000,1>-Traveler HPF (Hz)
-slider11:2000<60,18000,1>-Traveler LPF (Hz)
+slider10:20<20,8000,1>-Filter HPF (Hz)
+slider11:2000<60,18000,1>-Filter LPF (Hz)
 slider12:0<0,2,1{Low,Mid,High}>-Resonance
 slider13:1<0,2,1{Off,Half,Full}>-EG to filter
 slider14:0<0,2,1{Off,Half,Full}>-MG to filter
@@ -51,7 +51,7 @@ slider21:0<0,1500,1>-Portamento (ms)
 slider22:0<0,100,1>-Velocity (%)
 slider23:60<0,100,1>-Drift (%)
 slider24:0<-24,6,0.1>-Volume (dB)
-slider25:0<0,11,1{Seventy Lead,64' Bass,Traveler Sweep,Ring Bells,PWM Strings,Auto Bend Brass,Whistle,Wind,Squelch,Theremin,Zap Drum,Hollow Pipe}>-Patch
+slider25:0<0,11,1{Seventy Lead,64' Bass,Filter Sweep,Ring Bells,PWM Strings,Auto Bend Brass,Whistle,Wind,Squelch,Theremin,Zap Drum,Hollow Pipe}>-Patch
 slider26:0<0,100,1>-Band sat (%)
 slider27:30<0,100,1>-Bias (%)
 slider28:120<40,400,1>-Sat low band (Hz)
@@ -69,13 +69,13 @@ HN = 1000; hcount = 0;                       // held-note stack (last-note prior
 memset(HN, 0, 128);
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 ins_drift_init();
-sv_pal = 0;                                    // faceplate colour (trial)
+!ui_dflt ? sv_pal = 0;                         // faceplate colour: olive (saved with the project)
 sv_dE.drift_init(0.8 + rand(0.5));            // the envelope's slow timing wander
 bend = 1; nd_mul = 1; cur = 60; tgt = 60; vel = 0.8; gate = 0; ab_v = 0;
 sm = vo_coef(30);
 dxp = dyp = 0; last_patch = -1; edited = 0;
 
-// ---------- the Traveler filters: 12 dB state-variable (TPT), low-pass and high-pass outputs ----------
+// ---------- the filters: 12 dB state-variable (TPT), low-pass and high-pass outputs ----------
 function sv_svf(x, fc, k) instance(ic1, ic2, lp, hp) local(g, a1, a2, a3, v1, v2, v3) (
   g = tan($pi * min(fc, srate * 0.45) / srate);
   a1 = 1 / (1 + g * (g + k)); a2 = g * a1; a3 = g * a2;
@@ -101,7 +101,7 @@ function setperf(bd, bt, pt, vl) ( slider19 = bd; slider20 = bt; slider21 = pt; 
 function load_patch(p) (
   p == 0  ? ( setvco(1, 3, 0, 0.12, 35); setmod(5, 50, 5.5, 12);  settrv(20, 1800, 1, 1, 0);  setenv(5, 700, 70, 300);   setperf(0, 200, 40, 0);   ) :   // Seventy Lead
   p == 1  ? ( setvco(2, 1, 0, 12.05, 30);setmod(5, 50, 5.5, 0);   settrv(20, 700, 1, 1, 0);   setenv(2, 450, 40, 120);   setperf(0, 200, 0, 30);   ) :   // 64' Bass (32' + VCO 2 an octave up)
-  p == 2  ? ( setvco(1, 2, 0, 0.2, 50);  setmod(0.25, 50, 5, 0);  settrv(60, 900, 2, 0, 2);   setenv(10, 1000, 100, 600);setperf(0, 200, 0, 0);    ) :   // Traveler Sweep
+  p == 2  ? ( setvco(1, 2, 0, 0.2, 50);  setmod(0.25, 50, 5, 0);  settrv(60, 900, 2, 0, 2);   setenv(10, 1000, 100, 600);setperf(0, 200, 0, 0);    ) :   // Filter Sweep
   p == 3  ? ( setvco(2, 3, 1, 7.0, 75);  setmod(5, 50, 5, 0);     settrv(200, 6000, 1, 1, 0); setenv(1, 1600, 0, 1400);  setperf(0, 200, 0, 40);   ) :   // Ring Bells
   p == 4  ? ( setvco(4, 3, 0, 0.15, 25); setmod(0.6, 80, 5, 6);   settrv(150, 3200, 0, 0, 0); setenv(250, 800, 85, 700); setperf(0, 200, 0, 0);    ) :   // PWM Strings
   p == 5  ? ( setvco(1, 3, 0, 0.1, 40);  setmod(5, 50, 5.5, 8);   settrv(60, 1200, 1, 2, 0);  setenv(40, 500, 70, 250);  setperf(-1.5, 120, 0, 40);) :   // Auto Bend Brass
@@ -115,7 +115,7 @@ function load_patch(p) (
   slider_automate(2 ^ 22 - 1 + 2 ^ 24);          // sliders 1-22 and 25
 );
 function patch_name(p) (
-  p == 0 ? "SEVENTY LEAD" : p == 1 ? "64' BASS" : p == 2 ? "TRAVELER SWEEP" : p == 3 ? "RING BELLS" :
+  p == 0 ? "SEVENTY LEAD" : p == 1 ? "64' BASS" : p == 2 ? "FILTER SWEEP" : p == 3 ? "RING BELLS" :
   p == 4 ? "PWM STRINGS" : p == 5 ? "AUTO BEND BRASS" : p == 6 ? "WHISTLE" : p == 7 ? "WIND" :
   p == 8 ? "SQUELCH" : p == 9 ? "THEREMIN" : p == 10 ? "ZAP DRUM" : "HOLLOW PIPE";
 );
@@ -226,7 +226,7 @@ src2 == 3 ? ( pb0 = 0.99765 * pb0 + wn * 0.0990460; pb1 = 0.96300 * pb1 + wn * 0
             ( rn += (wn - rn) * 0.03; v2 = rn * 4; );
 y = (v1 * (1 - blend) + v2 * blend) * 0.45;
 
-// the Traveler: HPF then LPF, moved by the EG and the MG (and DRIFT)
+// the FILTER: HPF then LPF, moved by the EG and the MG (and DRIFT)
 ae = aenv.vo_adsr();
 oct = eg_i * ae + mg_i * mg + ins_cut;
 fh.sv_svf(y, min(max(hpf * 2 ^ oct, 15), srate * 0.45), rk); y = fh.hp;
@@ -248,18 +248,15 @@ pkL = max(pkL, abs(spl0));
 @serialize
 file_var(0, ui_sz);
 file_var(0, edited);
+file_avail(0) != 0 ? file_var(0, sv_pal);          // faceplate colour (older saves end before it)
 
 @gfx 960 540
 ui_begin(960, 540);
 
-// faceplate colours (sv_pal: 0 cream, 1 oxblood, 2 olive, 3 petrol, 4 chocolate, 5 slate) - colour trial
-ORG = 0xE0701E; CAPO = 0xE0701E; CAPC = 0xF6EFDF; CAPG = 0x9DA2A8;
-sv_pal == 0 ? ( PANEL = 0xF2E8D0; SH1 = 0xEADDBF; SH2 = 0xE3D4B2; SH3 = 0xDCCBA6; INK = 0x3A2A1E; DIMI = 0x7A6450; CAPD = 0x3B2A20; SQBG = 0x5A4636; BTX = 0xF2E8D0; ) :
-sv_pal == 1 ? ( PANEL = 0x4A1D1F; SH1 = 0x572427; SH2 = 0x502023; SH3 = 0x461B1D; INK = 0xF2E8D0; DIMI = 0xCDAEA2; CAPD = 0xF2E8D0; SQBG = 0x2A1113; BTX = 0xFFF6E8; ) :
-sv_pal == 2 ? ( PANEL = 0x3F4227; SH1 = 0x4A4D2F; SH2 = 0x43462A; SH3 = 0x393C23; INK = 0xEFE9D4; DIMI = 0xBDB89A; CAPD = 0xEFE9D4; SQBG = 0x23251A; BTX = 0xFFF6E8; ORG = 0xE08A1E; CAPO = 0xE08A1E; ) :
-sv_pal == 3 ? ( PANEL = 0x1E4448; SH1 = 0x255157; SH2 = 0x21494E; SH3 = 0x1B3E42; INK = 0xEAF0E8; DIMI = 0x9FBDB9; CAPD = 0xEAF0E8; SQBG = 0x10272A; BTX = 0xFFF6E8; ) :
-sv_pal == 4 ? ( PANEL = 0x3E2B21; SH1 = 0x4A3428; SH2 = 0x433024; SH3 = 0x39281E; INK = 0xF2E8D0; DIMI = 0xC2A68F; CAPD = 0xF2E8D0; SQBG = 0x231811; BTX = 0xFFF6E8; ) :
-              ( PANEL = 0x3A4552; SH1 = 0x445160; SH2 = 0x3E4A58; SH3 = 0x35404C; INK = 0xEEF0F2; DIMI = 0xA9B4C0; CAPD = 0xEEF0F2; SQBG = 0x1F252D; BTX = 0xFFF6E8; );
+// faceplate colours: sv_pal 0 = olive (default), 1 = slate (the two swatches in the header)
+ORG = 0xE08A1E; CAPO = 0xE08A1E; CAPC = 0xF6EFDF; CAPG = 0x9DA2A8;
+sv_pal == 1 ? ( PANEL = 0x3A4552; SH1 = 0x445160; SH2 = 0x3E4A58; SH3 = 0x35404C; INK = 0xEEF0F2; DIMI = 0xA9B4C0; CAPD = 0xEEF0F2; SQBG = 0x1F252D; BTX = 0xFFF6E8; ORG = 0xE0701E; CAPO = 0xE0701E; ) :
+              ( PANEL = 0x3F4227; SH1 = 0x4A4D2F; SH2 = 0x43462A; SH3 = 0x393C23; INK = 0xEFE9D4; DIMI = 0xBDB89A; CAPD = 0xEFE9D4; SQBG = 0x23251A; BTX = 0xFFF6E8; );
 SLOT = ui_mix(PANEL, 0x000000, 0.65);
 dy_ink = INK; dy_bg = PANEL; dy_nov = 1; rd_sqbg = SQBG;
 
@@ -295,28 +292,17 @@ function wglyph(cx, cy, t, on) local(x0, x1, y0, y1, w, k) (
              gfx_line((x0 + 15 + 9) * sc, (cy + 10) * sc, (x0 + 15 + 6) * sc, (cy + 8) * sc, 1); gfx_line((x0 + 15 + 9) * sc, (cy + 10) * sc, (x0 + 15 + 6) * sc, (cy + 12) * sc, 1);
              gfx_line((x0 + 15 - 1) * sc, (cy + 10) * sc, (x0 + 15 + 2) * sc, (cy + 8) * sc, 1); gfx_line((x0 + 15 - 1) * sc, (cy + 10) * sc, (x0 + 15 + 2) * sc, (cy + 12) * sc, 1); );
 );
-// the Traveler: a horizontal slider (log), orange handle; double-click resets; value shows on hover
-function trav(x, y, w, idx, lo, hi, def, label) local(v, n, hx, did, hov) (
-  did = 1700 + idx; v = slider(idx); n = log(v / lo) / log(hi / lo); hx = x + n * w;
-  hov = mouse_x >= (x - 10) * sc && mouse_x <= (x + w + 10) * sc && mouse_y >= (y - 14) * sc && mouse_y <= (y + 14) * sc;
-  pressed && hov && drag_id == 0 ? (
-    time_precise() - tv_lt < 0.35 && tv_lid == idx ? ( setv(idx, def); drag_id = -1; tv_lt = 0; ) :
-    ( drag_id = did; tv_lt = time_precise(); tv_lid = idx; );
-  );
-  drag_id == did ? (
-    n = min(max((mouse_x / sc - x) / w, 0), 1); v = lo * (hi / lo) ^ n;
-    slider(idx) != v ? ( slider(idx) = v; slider_automate(2 ^ (idx - 1)); edited = 1; );
-  );
-  n = log(slider(idx) / lo) / log(hi / lo); hx = x + n * w;
-  ui_col(SLOT); gfx_rect(x * sc, (y - 3) * sc, w * sc, 6 * sc);                            // the slot
-  ui_cola(0xFFFFFF, 0.35); gfx_rect(x * sc, (y + 3) * sc, w * sc, 1 * sc);
-  i = 0; loop(11, ui_cola(INK, 0.55); gfx_rect((x + i * w / 10) * sc, (y + 9) * sc, 1 * sc, (i % 5 == 0 ? 7 : 4) * sc); i += 1; );
-  ui_cola(0x000000, 0.3); gfx_rect((hx - 9) * sc, (y - 10) * sc, 20 * sc, 22 * sc);      // the handle
-  ui_col(ORG); gfx_rect((hx - 10) * sc, (y - 11) * sc, 20 * sc, 22 * sc);
-  ui_cola(0xFFFFFF, 0.35); gfx_rect((hx - 10) * sc, (y - 11) * sc, 20 * sc, 3 * sc);
-  ui_col(0xFFF6E8); gfx_rect((hx - 1) * sc, (y - 9) * sc, 2 * sc, 18 * sc);
-  gfx_setfont(5); ui_col(INK); gfx_x = (x - 44) * sc; gfx_y = (y - 6) * sc; gfx_drawstr(label);
-  (hov || drag_id == did) ? ( sprintf(#tv, "%.0f Hz", slider(idx)); rd_lbl(x + w + 34, y - 5, #tv, INK, 1); );
+// a cycle key: click steps forward, right-click back
+function cyc(x, y, w, h, idx, n) local(hov, v) (
+  v = floor(slider(idx) + 0.5);
+  rd_sq(x, y, w, h, 1, ORG, "") ? setv(idx, (v + 1) % n);
+  hov = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hov && (mouse_cap & 2) && !(sv_rcap & 2) ? setv(idx, (v + n - 1) % n);
+);
+// position dots under a cycle key
+function dots(cx, y, n, cur) local(i, x0) (
+  x0 = cx - (n - 1) * 5; i = 0;
+  loop(n, i == cur ? ui_col(ORG) : ui_cola(INK, 0.35); gfx_circle((x0 + i * 10) * sc, y * sc, 2.6 * sc, 1, 1); i += 1; );
 );
 
 // ---------- panel ----------
@@ -344,37 +330,49 @@ pm_ || (pressed && drag_id == 0 && mouse_x >= 534 * sc && mouse_x < 770 * sc && 
 );
 rd_led(796, 33, 5, ins_midi_lit(), 0x3ADF6A); rd_lbl(796, 44, "MIDI", DIMI, 1);
 ui_size_picker(830 * sc, 24 * sc);
+// colour swatches: olive / slate
+rd_sq(898, 22, 18, 18, sv_pal == 0, 0x6E7342, "") ? sv_pal = 0;
+rd_sq(922, 22, 18, 18, sv_pal == 1, 0x6A7A8E, "") ? sv_pal = 1;
+rd_lbl(919, 46, "COLOUR", DIMI, 1);
 
 // ---------- row 1: VCO 1, VCO 2, MODULATION ----------
-inset(16, 88, 330, 132, SH1); band(16, 88, 330, "VCO 1");
-rd_lbl(40, 116, "WAVE", DIMI, 1);
-i_ = 0; loop(5, rd_sq(26 + i_ * 64, 126, 58, 30, floor(slider1 + 0.5) == i_, ORG, "") ? setv(1, i_); wglyph(55 + i_ * 64, 141, i_, floor(slider1 + 0.5) == i_); i_ += 1; );
-rd_lbl(44, 168, "OCTAVE", DIMI, 1);
-keys(26, 178, 48, 30, 5, 2, 6, "64' 32' 16' 8'  4'  2'  ");
+// one cycle key each for WAVE, OCTAVE and SOURCE: click for the next setting, right-click for the one before;
+// the dots underneath show where you are
+inset(16, 88, 226, 132, SH1); band(16, 88, 226, "VCO 1");
+rd_lbl(68, 116, "WAVE", DIMI, 1);
+w_ = floor(slider1 + 0.5);
+cyc(28, 128, 80, 40, 1, 5) ? 0;
+w_ == 4 ? ( gfx_setfont(5); ui_col(0x1A1210); ui_text(68 * sc, 141 * sc, "PW"); ) : wglyph(68, 148, w_, 1);
+dots(68, 182, 5, w_);
+rd_lbl(176, 116, "OCTAVE", DIMI, 1);
+cyc(136, 128, 80, 40, 2, 6) ? 0;
+o_ = floor(slider2 + 0.5);
+gfx_setfont(5); ui_col(0x1A1210); ui_text(176 * sc, 141 * sc, o_ == 0 ? "64'" : o_ == 1 ? "32'" : o_ == 2 ? "16'" : o_ == 3 ? "8'" : o_ == 4 ? "4'" : "2'");
+dots(176, 182, 6, o_);
 
-inset(358, 88, 300, 132, SH2); band(358, 88, 300, "VCO 2");
-rd_lbl(386, 114, "SOURCE", DIMI, 1);
-keys(368, 124, 54, 28, 4, 3, 5, "    RINGWHT PNK RED ");
-wglyph(395, 138, 1, floor(slider3 + 0.5) == 0);
-sprintf(#v, "%+.2f st", slider4); dy_knob(440, 182, 20, 4, -12, 12, 0.1, 0, CAPD, "TUNE", #v);
-sprintf(#v, "%.0f%%", slider5); dy_knob(576, 182, 20, 5, 0, 100, 30, 0, CAPO, "BLEND", #v);
-rd_lbl(540, 196, "1", DIMI, 1); rd_lbl(612, 196, "2", DIMI, 1);
+inset(254, 88, 330, 132, SH2); band(254, 88, 330, "VCO 2");
+rd_lbl(304, 116, "SOURCE", DIMI, 1);
+cyc(264, 128, 80, 40, 3, 5) ? 0;
+s_ = floor(slider3 + 0.5);
+s_ == 0 ? wglyph(304, 148, 1, 1) : ( gfx_setfont(5); ui_col(0x1A1210); ui_text(304 * sc, 141 * sc, s_ == 1 ? "RING" : s_ == 2 ? "WHITE" : s_ == 3 ? "PINK" : "RED"); );
+dots(304, 182, 5, s_);
+sprintf(#v, "%+.2f st", slider4); dy_knob(420, 158, 22, 4, -12, 12, 0.1, 0, CAPD, "TUNE", #v);
+sprintf(#v, "%.0f%%", slider5); dy_knob(524, 158, 22, 5, 0, 100, 30, 0, CAPO, "BLEND", #v);
+rd_lbl(498, 186, "1", DIMI, 1); rd_lbl(550, 186, "2", DIMI, 1);
 
-inset(670, 88, 274, 132, SH3); band(670, 88, 274, "MODULATION");
-sprintf(#v, "%.2f Hz", slider6); dy_knob(708, 152, 20, 6, 0.1, 30, 5, 1, CAPD, "MG RATE", #v);
-sprintf(#v, "%.0f%%", slider7); dy_knob(774, 152, 20, 7, 0, 100, 50, 0, CAPD, "PWM", #v);
-sprintf(#v, "%.2f Hz", slider8); dy_knob(840, 152, 20, 8, 1, 12, 5.5, 0, CAPD, "VIB RATE", #v);
-sprintf(#v, "%.0f ct", slider9); dy_knob(906, 152, 20, 9, 0, 100, 0, 0, CAPD, "VIB DEPTH", #v);
-rd_led(686, 108, 4, mg_ph < 0.5, ORG);
+inset(596, 88, 348, 132, SH3); band(596, 88, 348, "MODULATION");
+sprintf(#v, "%.2f Hz", slider6); dy_knob(642, 156, 22, 6, 0.1, 30, 5, 1, CAPD, "MG RATE", #v);
+sprintf(#v, "%.0f%%", slider7); dy_knob(724, 156, 22, 7, 0, 100, 50, 0, CAPD, "PWM", #v);
+sprintf(#v, "%.2f Hz", slider8); dy_knob(806, 156, 22, 8, 1, 12, 5.5, 0, CAPD, "VIB RATE", #v);
+sprintf(#v, "%.0f ct", slider9); dy_knob(888, 156, 22, 9, 0, 100, 0, 0, CAPD, "VIB DEPTH", #v);
+rd_led(612, 110, 4, mg_ph < 0.5, ORG);
 
-// ---------- row 2: TRAVELER, FILTER MOD, AUTO BEND ----------
-inset(16, 240, 450, 132, SH2); band(16, 240, 450, "TRAVELER");
-trav(76, 288, 280, 10, 20, 8000, 20, "HPF");
-trav(76, 336, 280, 11, 60, 18000, 2000, "LPF");
-rd_lbl(424, 266, "RESONANCE", DIMI, 1);
-keys(396, 276, 56, 26, 0, 12, 1, "LOW ");
-rd_sq(396, 306, 56, 26, slider12 == 1, ORG, "MID") ? setv(12, 1);
-rd_sq(396, 336, 56, 26, slider12 == 2, ORG, "HIGH") ? setv(12, 2);
+// ---------- row 2: FILTER, FILTER MOD, AUTO BEND ----------
+inset(16, 240, 450, 132, SH2); band(16, 240, 450, "FILTER");
+sprintf(#v, "%.0f Hz", slider10); dy_knob(86, 306, 26, 10, 20, 8000, 20, 1, 0xF2C83E, "HPF", #v);
+sprintf(#v, "%.0f Hz", slider11); dy_knob(186, 306, 26, 11, 60, 18000, 2000, 1, 0x232323, "LPF", #v);
+rd_lbl(344, 270, "RESONANCE", DIMI, 1);
+keys(252, 284, 58, 30, 4, 12, 3, "LOW MID HIGH");
 
 inset(478, 240, 180, 132, SH1); band(478, 240, 180, "FILTER MOD");
 rd_lbl(524, 268, "EG", DIMI, 1); keys(492, 280, 32, 26, 0, 13, 1, "OFF ");
@@ -409,6 +407,7 @@ rd_sq(780, 454, 100, 22, slider31 == 1, ORG, "CLIP") ? setv(31, 1);
 rd_sq(780, 480, 100, 22, slider31 == 2, ORG, "LIMIT") ? setv(31, 2);
 mL.ui_ledm(906 * sc, 420 * sc, 10 * sc, 92 * sc, pkL); pkL *= 0.85;
 
-(drag_id > 1600 && drag_id <= 1622) || drag_id == 1710 || drag_id == 1711 ? edited = 1;
+(drag_id > 1600 && drag_id <= 1622) ? edited = 1;
+sv_rcap = mouse_cap;
 pk_end();
 ui_end();
