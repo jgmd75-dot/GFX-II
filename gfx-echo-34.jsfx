@@ -1,4 +1,4 @@
-desc:GFX EC-444
+desc:GFX Echo 34
 //tags: delay bbd analog chorus saturation
 //author: JGWizrad / Garden FX (GFX)
 //
@@ -36,7 +36,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-Ec444";
+#ui_man = "gfx-echo-34";
 
 // Delay memory (MN3005 / MN3207 buffers)
 dlen = ceil(1.0 * srate) + 8;
@@ -189,7 +189,7 @@ ui_col(BLU); gfx_rect(0, 62 * sc, 1060 * sc, 3 * sc);
 
 // ---------- HEADER: title, the preset LCD (click it for every preset), size ----------
 rd_badge(60, 34, 15, INK, FACE);
-rd_title(84, 18, "ECHORDER EC-444", 24, INK);
+rd_title(84, 18, "ECHO 34", 24, INK);
 rd_sub(334, 30, "ANALOG BBD DELAY LINE", DIM, 1);
 pm_ = rd_sq(516, 18, 78, 30, 0, BLU, "PRESETS");   // PRESETS, prev / next, then the LCD (click either for every preset)
 rd_sq(600, 18, 30, 30, 0, BLU, "◄") ? ( setv(13, (floor(slider13 + 0.5) + 7) % 8); apply_preset(slider13); lastp = slider13; );

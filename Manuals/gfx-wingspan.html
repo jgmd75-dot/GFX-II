@@ -43,7 +43,7 @@ footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;colo
 <nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://www.gardenfx.uk/">Website</a></nav></div></header>
 
 <main class="wrap"><section class="manual" id="gfx-wingspan">
-<div class="cat">Mastering</div><h1>Wingspan</h1>
+<div class="cat">Dynamics</div><h1>Wingspan</h1>
 <p class="tagline">A dynamic mid/side width processor that opens the stereo image (or pulls it in) when the music gets loud.</p>
 <div class="shot"><img src="img/gfx-wingspan.webp" alt="The Wingspan panel" loading="lazy"></div>
 <h2>Overview</h2><p>Wingspan splits the stereo signal into Mid (what is common to both sides - the centre) and Side (the difference - the width). It then turns the Side up or down as the level rises above a threshold, so the image can open out when a chorus lifts, or pull in towards the centre when things get loud and busy.</p><p>A detector listens to the Mid, the Side or a blend of the two. When it passes THRESHOLD, the Side moves by AMOUNT: positive amounts widen, negative amounts narrow. The movement is smoothed in decibels and rounded off, so the image glides rather than pumps or clicks. A static BASE WIDTH, a LOW MONO filter that keeps the bass in the centre, and a parallel MIX complete the chain.</p><p>The Mid is never touched, so the mono sum stays exactly as it was: Wingspan is mono-safe by design. It has no drift - like the other mastering tools it is deliberately steady - and no latency unless the output stage is set to LIMIT.</p>
