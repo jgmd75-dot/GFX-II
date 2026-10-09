@@ -1,5 +1,5 @@
 desc:GFX TransEQ
-//tags: equaliser eq passive program pultec transformer hybrid
+//tags: equaliser eq passive program transformer hybrid
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-headsmooth (.jsfx-inc)

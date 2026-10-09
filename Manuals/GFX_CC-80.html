@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX CC-80 - manual</title><meta name="description" content="A pocket-calculator chord generator that writes voice-led chords into a MIDI item at the edit cursor.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="GFX_CC-80">
+<div class="cat">MIDI tools</div><h1>CC-80</h1>
+<p class="tagline">A pocket-calculator chord generator that writes voice-led chords into a MIDI item at the edit cursor.</p>
+<h2>Overview</h2><p>CC-80 is a chord scratchpad in the style of an 80s pocket calculator. Build a chord from a root (A - G, flat or sharp), a quality (maj, min, dim, aug, sus4), a seventh and an extension (9, 11, 13), choose a duration and press = to write it into a MIDI item at the edit cursor. The cursor then moves on, ready for the next chord.</p><p>Each new chord is voiced close to the last one (voice leading), so a progression moves smoothly instead of jumping around. REST skips time, the memory keys store a sequence of chords and write it out in one go, and DRIFT humanises the velocity and timing.</p><p>It is a ReaScript, not a plugin: it runs in its own window and needs the free ReaImGui extension.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Sketching chord progressions quickly</li><li>Writing pad and keys parts with smooth voice leading</li><li>Trying out extended chords without working out the notes</li><li>Storing a progression and writing it again elsewhere in the song</li></ul>
+<h2>Installing</h2><h3>1. Install ReaImGui (once)</h3><ol class="steps"><li>If you don't have ReaPack yet, install it from reapack.com and restart REAPER.</li><li>Open Extensions &gt; ReaPack &gt; Browse packages.</li><li>Search for ReaImGui (from the ReaTeam Extensions repository), right-click it and choose Install, then Apply.</li><li>Restart REAPER. CC-80 needs ReaImGui 0.9 or newer; if it is missing, the script tells you so when you run it.</li></ol><h3>2. Load the script</h3><ol class="steps"><li>Open Actions &gt; Show action list.</li><li>Choose New action &gt; Load ReaScript and pick GFX_CC-80.lua.</li><li>Select it in the list and press Run. The CC-80 window opens.</li><li>To open it quickly next time, assign it a shortcut or add it to a toolbar from the action list.</li></ol>
+<h2>Where the chords go</h2><ul class="tips"><li>If a MIDI editor is open, the chords go into the take it is editing.</li><li>Otherwise they go on the first selected track: into the latest MIDI item that starts at or before the edit cursor (as long as it doesn't end more than 8 beats before it), or into a new MIDI item.</li><li>The item is lengthened automatically if the chord runs past its end.</li><li>Notes are written at the edit cursor on MIDI channel 1 at velocity 100, and the edit cursor moves to the end of the chord. Each entry can be undone.</li></ul>
+<h2>Controls</h2><h3>The display</h3><dl class="ctl"><dt>Top line</dt><dd>The chord name as you build it (e.g. Cmaj7), or ERR.</dd><dt>Second line</dt><dd>The chord spelled note by note (e.g. C - E - G - B), or the error message.</dd><dt>Bottom line</dt><dd>Left: the current duration. Middle: Mn when chords are stored in memory, Dnn when DRIFT is on. Right: the last action (READY, INS Am7, REST 1/4 and so on).</dd></dl><h3>Building a chord</h3><p>Keys that hold a setting have a small red light.</p><dl class="ctl"><dt>C D E F G A B</dt><dd>Choose the root. Pressing a root always starts a new chord.</dd><dt>b / #</dt><dd>Flat or sharp the root. Press again to cancel.</dd><dt>maj / min / dim / aug / sus4</dt><dd>The quality. With none chosen, the chord is major.</dd><dt>7</dt><dd>Adds a seventh: a flat 7th on most chords, but a major 7th after maj (maj + 7 = maj7) and a diminished 7th after dim (dim7).</dd><dt>M7</dt><dd>Adds a major 7th.</dd><dt>m7</dt><dd>The minor-seventh chord: it implies min (so A + m7 = Am7); with dim it gives the half-diminished m7b5.</dd><dt>9 / 11 / 13</dt><dd>Adds an extension; the last one pressed wins. An extension brings its seventh with it (a major 7th after maj, otherwise a flat 7th) and the 9th. 11 drops the major 3rd to avoid a clash; 13 leaves out the 11th.</dd></dl><p>Some combinations are refused, with a message on the display: two different qualities or sevenths, m7 with maj, aug or sus4 (m7 CLASH), any extension on dim (DIM EXT), and 11 on sus4 or aug.</p><h3>Duration and writing</h3><dl class="ctl"><dt>1/1 / 1/2 / 1/4 / 1/8</dt><dd>The length of the next chord or rest: whole note, half note, quarter note or eighth note.</dd><dt>=</dt><dd>Writes the chord at the edit cursor and moves the cursor on.</dd><dt>REST</dt><dd>Moves the edit cursor on by the current duration without writing anything.</dd><dt>CLEAR</dt><dd>Clears the chord you are building. Pressed again with nothing entered, it resets the voice leading (VOICE RESET), so the next chord is voiced fresh around the middle of the range.</dd></dl><h3>Memory and drift</h3><dl class="ctl"><dt>M+</dt><dd>Stores the current chord, with its duration, at the end of the memory.</dd><dt>MR</dt><dd>Writes every stored chord in order at the edit cursor (its light shows the memory holds something).</dd><dt>MC</dt><dd>Clears the memory.</dd><dt>DRIFT</dt><dd>Steps through 0, 25, 50, 75 and 100%. It humanises each note: at 100% velocity varies by up to 25 either side of 100 and timing by up to 12 ms.</dd></dl><p>The duration, DRIFT setting and memory are remembered the next time you run the script.</p><h3>Keyboard shortcuts</h3><p>While the CC-80 window has focus: A - G choose the root, Enter is =, Space is REST, Backspace is CLEAR, and 1, 2, 4 and 8 choose the duration.</p><h3>Voice leading</h3><p>CC-80 picks the inversion and octave of each chord that moves the fewest semitones from the previous one, keeping the notes between E2 and C6 and avoiding close, muddy intervals low down. The first chord (or the first after VOICE RESET) is placed around the middle of that range in root position where it can.</p>
+<h2>Messages</h2><dl class="ctl"><dt>NO ROOT / NO CHORD</dt><dd>Choose a root first.</dd><dt>2 QUALITIES / 2 SEVENTHS</dt><dd>Only one quality and one seventh per chord - press CLEAR or a new root to start again.</dd><dt>MEM EMPTY</dt><dd>MR was pressed with nothing stored.</dd><dt>NO TRACK</dt><dd>No MIDI editor is open and no track is selected.</dd><dt>NOT MIDI / NO ITEM</dt><dd>The target take is not MIDI, or a new item could not be made.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Open the MIDI editor on the item you are working on and the chords go straight into it.</li><li>Store a progression with M+ as you try it out, then place the edit cursor at the next section and press MR to write it all again.</li><li>Use REST between chords for rhythmic stabs, or 1/8 chords for pushes before the bar.</li><li>If a progression has drifted too high or low, press CLEAR twice to reset the voice leading.</li></ul>
+<p class="file">File: GFX_CC-80.lua</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

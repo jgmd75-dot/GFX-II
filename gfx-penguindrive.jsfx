@@ -4,8 +4,8 @@ desc:GFX PenguinDrive
 //
 // Requires gfx-drift, gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
 //
-// Inspired by Frank's Roxy live guitar setup:
-// Integrated Mu-Tron style resonant envelope state-variable filter, 4-pole sweep phaser,
+// Inspired by a 70s art-rock live guitar setup:
+// Integrated resonant envelope state-variable filter (classic envelope-filter style), 4-pole sweep phaser,
 // asymmetric valve drive stage, and end-of-chain optical dynamic compressor.
 
 import gfx-drift.jsfx-inc
@@ -53,7 +53,7 @@ out_pin:right output
 #v_dr = ""; #v_se = ""; #v_pk = ""; #v_q = ""; #v_ph = ""; #v_sq = "";
 #v_mix = ""; #v_df = ""; #v_lc = ""; #v_out = "";
 
-// State Variable Filter implementation (Mu-Tron style)
+// State Variable Filter implementation (classic envelope-filter style)
 function svf_run(in, f, q) instance(hp, bp, lp) local(g, R) (
   g = tan($pi * min(f, srate * 0.45) / srate);
   R = 1 - q;
@@ -113,7 +113,7 @@ function update() (
 );
 
 function load_preset(p) (
-  p == 1 ? ( slider1 = 0; slider2 = 4.5; slider3 = 65; slider4 = 1200; slider5 = 75; slider6 = 45; slider7 = 0.35; slider8 = 60; slider9 = 85; ) : // Roxy Lead
+  p == 1 ? ( slider1 = 0; slider2 = 4.5; slider3 = 65; slider4 = 1200; slider5 = 75; slider6 = 45; slider7 = 0.35; slider8 = 60; slider9 = 85; ) : // Art-Rock Lead
   p == 2 ? ( slider1 = 0; slider2 = 2.0; slider3 = 80; slider4 = 800;  slider5 = 85; slider6 = 20; slider7 = 0.20; slider8 = 80; slider9 = 75; ) : // Funk Envelope
   p == 3 ? ( slider1 = 1; slider2 = 6.0; slider3 = 0;  slider4 = 1400; slider5 = 60; slider6 = 50; slider7 = 0.50; slider8 = 30; slider9 = 100; ) : // Cocked Wah
   p == 4 ? ( slider1 = 0; slider2 = 1.0; slider3 = 40; slider4 = 2000; slider5 = 40; slider6 = 0;  slider7 = 0.10; slider8 = 20; slider9 = 50; ); // Mild Auto-Sweep
@@ -264,7 +264,7 @@ rd_led(475, 15, 2.5, slider1 == 0, YELLOW);
 rd_led(535, 15, 2.5, slider1 == 1, ORANGE);
 
 pk_pextra = "";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
-k_ = pk_preset(670 * sc, 20 * sc, 216 * sc, 28 * sc, pr_cur, "Roxy Lead ('73)|Funk Envelope|Cocked Wah Drive|Mild Auto-Sweep");
+k_ = pk_preset(670 * sc, 20 * sc, 216 * sc, 28 * sc, pr_cur, "Art-Rock Lead ('73)|Funk Envelope|Cocked Wah Drive|Mild Auto-Sweep");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 4 ? 0 : k_; );
 ui_size_picker(370 * sc, 24 * sc);
 

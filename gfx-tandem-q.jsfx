@@ -205,7 +205,7 @@ mix_s = mix_t;
 // ================= EQ (the TransEQ engine, names q_..., sliders 24 - 45) =================
 // a preset mask of the EQ unit, one slider at a time
 function cb_auto(m, off) local(k) ( k = 1; loop(63, m - 2 * floor(m / 2) ? ui_auto(k + off); m = floor(m / 2); k += 1; ); );
-#ui_man = "gfx-transeq";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-tandem-q";                                  // the ? pop-up links to this manual
 
 // ---------- biquads (RBJ) ----------
 // type: 0 low-pass, 1 high-pass, 2 peak, 3 high shelf, 4 low shelf

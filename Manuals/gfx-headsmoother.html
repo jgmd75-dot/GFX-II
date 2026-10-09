@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Headsmoother - manual</title><meta name="description" content="A tape saturator and an optical compressor as two stacked units, in either order.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-headsmoother">
+<div class="cat">Dynamics</div><h1>Headsmoother</h1>
+<p class="tagline">A tape saturator and an optical compressor as two stacked units, in either order.</p>
+<div class="shot"><img src="img/gfx-headsmoother.webp" alt="The Headsmoother panel" loading="lazy"></div>
+<h2>Overview</h2><p>Headsmoother puts two units in one plug-in. HEAD is a tape saturator, the same as the Head plug-in. SMOOTH is an optical-style compressor with a valve-style colour stage. Each can be switched out on its own, and one key swaps their order.</p><p>The units swap places on screen when you change the order, so the top unit is always the one the signal meets first. Compress then saturate (SMOOTH &gt; HEAD) for a controlled signal that gets tape colour on the way out; saturate then compress (HEAD &gt; SMOOTH) to let the compressor level out what the tape adds.</p><p>SMOOTH behaves like an optical compressor: it listens to the average level (with the deep bass filtered out of what it hears), lets go quickly after short peaks and more slowly after long passages of compression. Like a real machine, the tape bias and top-end loss and the colour stage's drive wander slowly and independently on each side.</p>
+<h3>Reach for it for</h3><ul class="when"><li>A one-stop vocal or bass channel: smooth levelling plus tape warmth</li><li>Gentle, musical bus compression with colour</li><li>Parallel optical compression with BLEND</li><li>Hard levelling and peak control with LIMIT</li></ul>
+<h2>Controls</h2><h3>The header</h3><dl class="ctl"><dt>ORDER</dt><dd>One key that swaps the units. Its legend shows the order: SMOOTH &gt; HEAD (the default: compress, then saturate) or HEAD &gt; SMOOTH. Its amber light shows while you hold it down.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><h3>HEAD - tape saturator (green unit)</h3><dl class="ctl"><dt>ON</dt><dd>Switches the unit in or out. The change fades over about 30 ms, so there is no click. The unit dims when it is out.</dd><dt>DRIVE</dt><dd>How hard the signal hits the tape curve, from 0 to 10 (3 by default) - up to +22 dB into the curve. The level is matched, so DRIVE changes the character, not the loudness. As it goes up, more of the low end (below about 250 Hz) skips the curve and rejoins clean, and the head bump around 70 Hz softens, so heavy settings stay tidy.</dd><dt>VOICE</dt><dd>NORMAL: flat, with tape's gentle top-end loss. MEDIUM: a broad lift around 1.4 kHz going into the curve, for body. BRIGHT: a high shelf going into the curve, so the top end saturates first. Click a name, click the knob to step, or use the mouse wheel.</dd><dt>TRIM</dt><dd>The tape unit's clean output level, from -24 to +6 dB.</dd><dt>BOOST</dt><dd>Extra colour, 0 to 100%. It makes the tape curve more lopsided (more even harmonics, a warmer tone) and brings in band saturation on the way out, where only the lows and highs are saturated and the mids stay clean. It only works while HEAD is on.</dd><dt>LEVEL</dt><dd>Ten lights showing the tape unit's output peak, from -30 dBFS up to 0.</dd></dl><h3>SMOOTH - optical compressor (blue unit)</h3><dl class="ctl"><dt>ON</dt><dd>Switches the unit in or out, with the same 30 ms fade. The unit dims when it is out.</dd><dt>COLOUR</dt><dd>Switches the valve-style colour stage after the gain cell: a soft, slightly lopsided saturation. Off gives clean compression. On by default.</dd><dt>COMPRESS</dt><dd>How much compression, from 0 to 10 (3 by default). It lowers the threshold from 0 down to -30 dB, so turning it up compresses more. The ratio is 3:1 with a wide, soft 12 dB knee.</dd><dt>BLEND</dt><dd>Parallel compression: 100% (the default) is fully compressed; lower settings blend the dry signal back underneath.</dd><dt>GAIN REDUCTION meter</dt><dd>A needle showing the gain reduction, from 0 to 20 dB.</dd><dt>ATTACK</dt><dd>SLOW (25 ms), MEDIUM (8 ms, the default) or FAST (1.5 ms).</dd><dt>LIMIT</dt><dd>Turns the compressor into a limiter: the ratio goes to 20:1, the knee narrows to 2 dB and the attack is twice as fast. Its red light shows when it is on.</dd><dt>RELEASE</dt><dd>SLOW (900 ms), MEDIUM (350 ms, the default) or FAST (90 ms). The first part of the recovery is quicker; after a long stretch of heavy compression the tail lets go more slowly, as on an optical cell.</dd><dt>OUTPUT</dt><dd>Make-up gain for the compressor, from -12 to +24 dB.</dd><dt>LEVEL</dt><dd>Ten lights showing the compressor unit's output peak, from -30 dBFS up to 0.</dd></dl><p>Double-click a large knob to return it to its default; hold Shift while dragging for fine moves. After both units the signal passes through a soft clipper set at -0.3 dBFS, so sudden peaks are caught.</p>
+<h2>Tips</h2><ul class="tips"><li>On vocals, start with SMOOTH &gt; HEAD: COMPRESS around 3 - 5, MEDIUM attack and release, then add DRIVE to taste. Bring the level back with OUTPUT.</li><li>For bass, try HEAD &gt; SMOOTH: the tape adds harmonics that help it speak on small speakers, and the compressor evens out what the tape brings up.</li><li>SLOW attack lets the front of each note through for punch; FAST catches it for a flatter, more controlled sound.</li><li>For parallel compression, push COMPRESS hard and bring BLEND down to 30 - 50%.</li></ul>
+<p class="file">File: gfx-headsmoother.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

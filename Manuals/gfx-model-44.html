@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Model 44 - manual</title><meta name="description" content="A rack channel strip in the spirit of the early-90s cassette multitrackers: clean preamp, semi-parametric EQ and tape.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-model-44">
+<div class="cat">Amps &amp; drive</div><h1>Model 44</h1>
+<p class="tagline">A rack channel strip in the spirit of the early-90s cassette multitrackers: clean preamp, semi-parametric EQ and tape.</p>
+<div class="shot"><img src="img/gfx-model-44.webp" alt="The Model 44 panel" loading="lazy"></div>
+<h2>Overview</h2><p>Model 44 is a single channel strip in the spirit of the early-90s rack-mount cassette multitrack gear. The signal goes through a clean, high-headroom preamp, a three-band EQ with a sweepable mid, and then a tape stage: a dense magnetic saturation ceiling with a NORMAL / DOUBLE speed switch and compander noise reduction.</p><p>The preamp itself stays clean - the colour and the ceiling come from the tape. Double speed raises that ceiling, extends the top end and tightens the sub-bass, for a punchier, cleaner sound; normal speed is softer, darker and saturates earlier. The noise reduction is tuned to pump less than the earlier 80s machines.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Adding cassette-tape density and warmth to a single track</li><li>Drums and bass that need to sit tighter and punchier (DOUBLE speed)</li><li>Quick tone shaping with a sweepable mid</li><li>A softer, darker lo-fi tone (NORMAL speed)</li><li>Parallel tape colour with MIX</li></ul>
+<h2>Controls</h2><h3>CHANNEL</h3><dl class="ctl"><dt>Signal light</dt><dd>The green light glows when audio is coming out.</dd><dt>GAIN</dt><dd>The preamp gain, -6 to +24 dB (+6 dB by default). The preamp itself stays clean; turning it up drives the tape stage harder.</dd><dt>MID FREQ</dt><dd>The centre of the sweepable mid band, 200 Hz to 5 kHz.</dd><dt>MID GAIN</dt><dd>Cut or boost at MID FREQ, -12 to +12 dB, with a fixed, fairly broad width.</dd><dt>TREBLE</dt><dd>A high shelf at 12 kHz, -10 to +10 dB.</dd><dt>BASS</dt><dd>A low shelf at 80 Hz, -10 to +10 dB.</dd><dt>TRIM</dt><dd>Input level before anything else, from -24 to +12 dB.</dd><dt>GUARD</dt><dd>On by default. GUARD gently eases very hot sources down towards about -18 dBFS average and catches fast peaks above -6 dBFS, so loud sources never overdrive the plugin. It never boosts quiet sources. The light shows when it is on.</dd><dt>MIX</dt><dd>Blends the coloured signal with the dry input, 0 to 100%. 100% is fully through the strip.</dd></dl><h3>Meters</h3><dl class="ctl"><dt>L / R</dt><dd>VU meters showing the left and right output.</dd></dl><h3>TAPE</h3><dl class="ctl"><dt>DRIVE</dt><dd>How hard the tape's saturation ceiling works, 0 to 100% (35% by default). More DRIVE rounds the peaks off sooner and harder, for a denser sound.</dd><dt>NORMAL / DOUBLE</dt><dd>The tape SPEED. NORMAL (1 7/8 IPS): the top end rolls off around 10 kHz and the saturation starts earlier. DOUBLE (3 3/4 IPS): the ceiling sits higher, the top end reaches about 16 kHz, the sub-bass below about 45 Hz is tightened and transients stay punchier.</dd><dt>NR</dt><dd>Compander noise reduction, in by default. It compresses the signal 2:1 with a treble lift on the way onto the tape and expands it 1:2 coming back. Because the expander follows what comes off the tape, it breathes a little, though more gently than the 80s units. Switch it off for the raw tape sound.</dd><dt>OUTPUT</dt><dd>The output level, -24 to +12 dB.</dd></dl><h3>The header</h3><dl class="ctl"><dt>&lt; / &gt;</dt><dd>Step through the presets.</dd><dt>PRESETS</dt><dd>Opens the list of factory presets. Choosing one sets the CHANNEL EQ, GAIN, the TAPE section and MIX; OUTPUT, TRIM and GUARD are left as they are. The last entry resets everything to the defaults.</dd><dt>PATCH</dt><dd>Shows the name of the preset last chosen.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><h3>Output stage</h3><p>These settings have no knobs on the panel; reach them through REAPER's parameter list for the plugin (or automation lanes).</p><dl class="ctl"><dt>Band sat</dt><dd>Band saturation on the way out: only the lows and highs are saturated (the mids stay clean), with a soft curve that loosens as the level rises.</dd><dt>Bias</dt><dd>Shapes the saturation: more bias adds more even (2nd) harmonics, for a warmer, rounder colour.</dd><dt>Sat low band / Sat high band</dt><dd>Where the low and high saturation bands start (40 - 400 Hz and 2 - 16 kHz).</dd><dt>Ceiling / limit threshold</dt><dd>With Clip: the level the peaks are softly clipped at. With Limit: the threshold of a brickwall limiter that holds the peaks at -0.3 dBFS - pulling it down limits harder and makes the output louder.</dd><dt>Output stage</dt><dd>Off, Clip or Limit: nothing, a soft clipper (no latency, the default), or a lookahead limiter (3 ms latency, compensated by REAPER).</dd></dl>
+<h2>Presets</h2><dl class="ctl"><dt>Clean Double Speed</dt><dd>Double speed with light drive, a small treble lift and NR in.</dd><dt>Normal Speed Warm</dt><dd>Normal speed, more gain, a little low-mid and bass lift, NR in.</dd><dt>Rack Punch</dt><dd>Double speed, 14 dB of gain and 55% drive, with a 2.5 kHz and treble lift.</dd><dt>Scooped Mids</dt><dd>Double speed with a 4 dB cut at 600 Hz and a touch of treble and bass.</dd><dt>No NR</dt><dd>Normal speed with the noise reduction out: the raw tape.</dd><dt>Reset all to defaults</dt><dd>Every control back to its starting value, including OUTPUT, TRIM, GUARD and the output stage.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Set GAIN for the amount of tape colour you want, then bring OUTPUT down to match the level before you judge it.</li><li>Switch between NORMAL and DOUBLE on drums: double speed keeps the snap, normal speed softens and thickens it.</li><li>With NR in and plenty of DRIVE you can hear the compander breathe; switch NR out if you want the saturation without the movement.</li><li>Use MIX at 30-60% to add tape density under a track without losing its transients.</li></ul>
+<p class="file">File: gfx-model-44.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

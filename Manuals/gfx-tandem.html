@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Tandem - manual</title><meta name="description" content="Two RMS soft-knee compressors in series on one panel.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-tandem">
+<div class="cat">Dynamics</div><h1>Tandem</h1>
+<p class="tagline">Two RMS soft-knee compressors in series on one panel.</p>
+<div class="shot"><img src="img/gfx-tandem.webp" alt="The Tandem panel" loading="lazy"></div>
+<h2>Overview</h2><p>Tandem puts two classic RMS / VCA compressors one after the other. Each stage does a little of the work, which is the old studio trick for heavy compression that still sounds open: the first stage levels the performance gently, the second catches what gets through.</p><p>Both stages measure loudness (RMS) rather than peaks, so they react the way your ears do. There are no attack and release knobs - the timing follows the music, as on the original hardware: the further the signal goes over the threshold, the faster the stage reacts, and it recovers at a steady pace.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Vocals that need to sit still in a mix</li><li>Drum and mix buses</li><li>Bass guitar</li><li>Ducking a music bed under a voice (EXT KEY)</li><li>Creative pumping and reverse-dynamics effects (negative ratios)</li></ul>
+<h2>Controls</h2>
+<h3>Stage 1 and Stage 2</h3>
+<p>The two stages have the same main controls. The signal goes through Stage 1, then Stage 2.</p>
+<dl class="ctl"><dt>IN</dt><dd>Switches the stage in or out. With a stage out, the audio passes straight through it.</dd><dt>THRESHOLD (red cap)</dt><dd>The level where the stage starts working, from -60 to 0 dB. Turn it down (left) for more compression. Because the detector measures loudness, the threshold relates to the average level rather than the peaks.</dd><dt>RATIO (yellow cap)</dt><dd>How strongly the stage compresses once the level is over the threshold. 1:1 does nothing; 2:1 and 4:1 are moderate; INF:1 (marked in red) is limiting - nothing gets louder. Past INF the ratio becomes negative (-2:1, -1:1): the louder the input, the quieter the output. That reverses the dynamics, for pumping and swelling effects.</dd><dt>OUTPUT (blue cap)</dt><dd>The stage&#x27;s make-up gain, from -20 to +20 dB. Use it to bring the level back up after compression.</dd><dt>BELOW / KNEE / ABOVE</dt><dd>Three lights showing where the level sits: green below the threshold, amber in the soft knee, red above it.</dd><dt>GR meter</dt><dd>The row of 12 lights under the knobs shows the gain reduction of that stage, from 1 to 30 dB.</dd><dt>HARD</dt><dd>Off (default): a soft knee - the ratio eases in gradually over 10 dB around the threshold, which is smoother and more transparent. On: the full ratio starts right at the threshold, for a firmer, more obvious effect.</dd></dl>
+<h3>Stage 1 only</h3>
+<dl class="ctl"><dt>DECOUPLE</dt><dd>Off: both sides of the stereo signal get exactly the same gain, so the stereo image stays still. On: each side mostly follows its own level (80% its own, 20% shared), like unlinking a bus compressor. The sound becomes wider and livelier, but the image can move a little.</dd><dt>EXT KEY</dt><dd>Stage 1 listens to the key input (plug-in pins 3 and 4) instead of the audio it is compressing. Use it for ducking: route a voice or kick to pins 3/4 and the music dips whenever it plays. Stage 2 always listens to Stage 1&#x27;s output.</dd><dt>KEY IN</dt><dd>Lights when a signal arrives on the key input - a quick check that your routing works.</dd></dl>
+<h3>Stage 2 only</h3>
+<dl class="ctl"><dt>GRIT</dt><dd>Drives Stage 2&#x27;s VCA into gentle 2nd and 3rd harmonic distortion. The harder Stage 2 works, the grittier it gets, so it adds attitude on the loud parts and stays clean on the quiet ones.</dd></dl>
+<h3>Master</h3>
+<dl class="ctl"><dt>Transfer curve</dt><dd>Shows the input-to-output curve of both stages together. The white dot rides on it with the live level, so you can see exactly where the music sits.</dd><dt>SC HPF</dt><dd>A high-pass filter on what both stages listen to (fully left = off, up to 400 Hz). Raise it so the bass doesn&#x27;t make the whole mix pump; the bass itself isn&#x27;t filtered.</dd><dt>MIX</dt><dd>Parallel compression: blends the dry signal back in. 100% is fully compressed; lower settings keep the transients of the dry signal under the compressed sound.</dd><dt>IN / OUT meters, TOTAL GR</dt><dd>Input and output level, and the combined gain reduction of both stages.</dd></dl>
+<h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets. Choosing one sets the plugin&#x27;s controls for that job; the input and output stages are left as they are. The last entry resets everything to the defaults.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd><dt>OUTPUT</dt><dd>Folds the input and output stages out below the panel (and back in). The light shows when they are open.</dd></dl>
+<h3>Input and output stages (OUTPUT fold-out)</h3><dl class="ctl"><dt>TRIM</dt><dd>Input level before anything else, from -24 to +12 dB.</dd><dt>GUARD</dt><dd>On by default. Gently eases very hot sources down towards about -18 dBFS average and catches fast peaks above -6 dBFS, so loud sources never overdrive the plugin. It never boosts quiet sources. The tag shows how much it is working.</dd><dt>SAT</dt><dd>Band saturation on the way out: only the lows and highs are saturated (the mids stay clean), with a soft curve that loosens as the level rises.</dd><dt>BIAS</dt><dd>Shapes the saturation: more bias adds more even (2nd) harmonics, for a warmer, rounder colour.</dd><dt>LO BAND / HI BAND</dt><dd>Where the low and high saturation bands start (40 - 400 Hz and 2 - 16 kHz).</dd><dt>CEILING / THRESH</dt><dd>With CLIP: the level the peaks are softly clipped at. With LIMIT: the threshold of a brickwall limiter that holds the peaks at -0.3 dBFS - pulling it down limits harder and makes the output louder.</dd><dt>OFF / CLIP / LIMIT</dt><dd>The final stage: nothing, a soft clipper (no latency), or a lookahead limiter (3 ms latency, compensated by REAPER).</dd></dl>
+<h2>Presets</h2><dl class="ctl"><dt>Gentle Glue</dt><dd>Light two-stage smoothing for a mix or group bus.</dd><dt>Vocal Leveller</dt><dd>Stage 1 evens the performance, Stage 2 catches the peaks; a little SC HPF.</dd><dt>Vocal Upfront</dt><dd>Heavier vocal control with a hard knee and GRIT on Stage 2.</dd><dt>Drum Bus Stack</dt><dd>Stage 1 decoupled for a lively image, GRIT on Stage 2, 70% mix.</dd><dt>Parallel Crush</dt><dd>Stage 2 limiting hard with GRIT, blended in at 35%.</dd><dt>Bass Even</dt><dd>Steady bass level with a little GRIT.</dd><dt>Acoustic Guitar</dt><dd>Gentle, with Stage 1 decoupled for width.</dd><dt>Peak Catcher</dt><dd>Light levelling, then a hard-knee limit at -6 dB.</dd><dt>Negative Pump</dt><dd>Stage 2 past INF for rhythmic pumping, 60% mix.</dd><dt>Reverse Swell</dt><dd>Stage 2 at -1:1: loud hits dip and the tails swell up; 50% mix.</dd><dt>Ducker (ext key)</dt><dd>Stage 1 ducks from the key input - route the voice or kick to pins 3/4.</dd><dt>Reset all to defaults</dt><dd>Every control back to its starting value.</dd></dl>
+<h2>Using the key input (EXT KEY)</h2><ol class="steps"><li>On the track with Tandem, open ROUTE and set the track to 4 channels.</li><li>On the track you want to duck from (e.g. the voice), add a send to Tandem&#x27;s track and set its destination to channels 3/4.</li><li>Switch EXT KEY on. KEY IN lights when the key signal arrives; lower Stage 1&#x27;s THRESHOLD until the music dips by the amount you want.</li></ol>
+<h2>Tips</h2><ul class="tips"><li>Start with Stage 2&#x27;s ratio at INF and its threshold just under your peaks: it becomes a safety limiter after Stage 1&#x27;s gentle levelling.</li><li>If the low end makes the whole mix duck, raise SC HPF to 80-120 Hz.</li><li>Negative ratios sound best on sustained material (pads, rooms, reverb returns) and with MIX below 100%.</li><li>Use the transfer curve: if the white dot sits far up the flat part of the curve, you&#x27;re compressing more than you probably need.</li></ul>
+<p class="file">File: gfx-tandem.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

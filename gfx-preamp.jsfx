@@ -8,7 +8,7 @@ desc:GFX Preamp
 // compression) -> voicing -> tone -> mix -> output stage.
 // Voicings:
 //   CLEAN - no drive (use with EQ BOOST as a clean boost preamp)
-//   VIBE  - the Univibe preamp: low-mid weight, asymmetric soft saturation, rounded top
+//   VIBE  - the photocell-vibe preamp: low-mid weight, asymmetric soft saturation, rounded top
 //   ZEN   - gentle symmetrical diode-style saturation, smooth amp-like breakup
 //   TRANS - single-transistor drive: asymmetric, bites earlier, furrier when pushed
 // Drift: BIAS (asymmetry wanders) and COMP (sag depth breathes).
@@ -140,7 +140,7 @@ function update() local(drv, fc, f1, f2, f3, gb) (
   mix_t = slider10 / 100;
   out_t = 10 ^ (slider11 / 20);
 
-  // VIBE (as the Univibe preamp)
+  // VIBE (as the photocell-vibe preamp)
   pre_shk = 10 ^ (3 * drv / 20) - 1;
   pre_d = 1 + 3 * drv;
   pre_b = 0.15 * drv;

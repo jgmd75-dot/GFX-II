@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Lustre - manual</title><meta name="description" content="A transformer-coupled console summing mixer in the spirit of the silky late-80s British desks.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-lustre">
+<div class="cat">Summing</div><h1>Lustre</h1>
+<p class="tagline">A transformer-coupled console summing mixer in the spirit of the silky late-80s British desks.</p>
+<div class="shot"><img src="img/gfx-lustre.webp" alt="The Lustre panel" loading="lazy"></div>
+<h2>Overview</h2><p>Lustre sums up to eight stereo stems through the bus of a transformer-coupled console from the late 80s: smooth, wide and expensive-sounding, with weight in the low mids and a top end that never bites.</p><p>The transformer works on the low mids (roughly 60 - 400 Hz). DENSITY sets how hard the iron is driven there, COLOUR chooses the character of the harmonics (even and round, or odd and firm), and a light touch of full-band density sits on top. WEIGHT and AIR add the console's low-mid body and a silky lift at the very top.</p><p>With the TRANSFORMER switched out, Lustre is a clean summing mixer with level, pan, solo and mute for each stem.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Summing stems or groups through one console-style bus</li><li>Adding warmth and low-mid weight without dulling the top</li><li>A smooth, open top end on a whole mix (AIR)</li><li>Choosing between rounder (even) and firmer (odd) harmonic colour</li><li>Quick stem balancing with solo and mute in one place</li></ul>
+<h2>Setting up the routing in REAPER</h2><ol class="steps"><li>Create a mix bus track and put Lustre on it. Open the track's ROUTE window and set Track channels to 16.</li><li>Channels 1/2 are STEM 1: whatever plays on the bus track itself (or is sent to it on 1/2).</li><li>On each other stem track, add a send to the bus track and pick a different destination channel pair for each: stem 2 on 3/4, stem 3 on 5/6, stem 4 on 7/8, stem 5 on 9/10, stem 6 on 11/12, stem 7 on 13/14, stem 8 on 15/16.</li><li>Turn off the master send on every stem track, so the stems are heard only through Lustre (otherwise you hear them twice).</li><li>The mix leaves on channels 1/2, so leave the bus track's master send on. The light under each stem's number glows when signal arrives.</li></ol>
+<h2>Controls</h2><h3>Stems</h3><p>Eight channel strips. The channel pair is printed under each name (1-2 up to 15-16).</p><dl class="ctl"><dt>Name</dt><dd>Click the name at the top of a strip and type (up to 16 characters, e.g. Drums). Enter keeps it, Escape cancels, an empty name goes back to the number. The names are saved with the project.</dd><dt>Signal light</dt><dd>Glows green when audio arrives on that stem and the stem is being heard (not muted, not left out by a solo, level not OFF).</dd><dt>PAN</dt><dd>Balance between left and right, from L100 through C to R100. Turning towards one side turns the other side down; the centre leaves both at full level.</dd><dt>LEVEL</dt><dd>The stem's level, from OFF (fully left, -60 dB) to +10 dB; 0 dB by default.</dd><dt>SOLO</dt><dd>Solo in place. Any number of stems can be soloed at once; while anything is soloed, only the soloed stems are heard.</dd><dt>MUTE</dt><dd>Silences the stem. A muted stem stays muted even when it is soloed.</dd></dl><h3>Master</h3><dl class="ctl"><dt>VU meters (L / R)</dt><dd>The output level of the mix.</dd><dt>DRIVE</dt><dd>The level into the bus and its transformers, -6 to +12 dB. It is level-matched: it changes how hard the iron works, not the volume.</dd><dt>DENSITY</dt><dd>How hard the transformer iron works, 0 to 100 (30 by default). The saturation is concentrated in the low mids, roughly 60 - 400 Hz, with a gentle touch of density across the whole band.</dd><dt>COLOUR</dt><dd>The character of the harmonics the iron adds. Left (EVEN) favours the 2nd harmonic: rounder and warmer. Right (ODD) favours the 3rd: firmer and more forward. The centre (BLEND) is the balanced mix.</dd><dt>AIR</dt><dd>A broad, silky lift at the very top (a shelf around 12 kHz), 0 to +6 dB.</dd><dt>WEIGHT</dt><dd>The transformer's low-mid weight: a broad lift around 180 Hz, 0 to +4 dB.</dd><dt>MASTER</dt><dd>The final level of the mix, from OFF (fully left, -60 dB) to +10 dB.</dd><dt>TRANSFORMER</dt><dd>In (lit, the default): the console's colour - DRIVE, DENSITY, COLOUR, WEIGHT and AIR all work, and the label reads TRANSFORMER-COUPLED BUS. Out: a straight, clean sum (STRAIGHT SUM); those five controls then have no effect.</dd></dl><h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets; the arrows beside it step through them, and the display shows the one in use (click it for the list too). The presets change only the bus controls; the last entry resets everything to the defaults.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl>
+<h2>Presets</h2><dl class="ctl"><dt>Console Sheen</dt><dd>The default iron with a touch of air and weight.</dd><dt>Warm and Round (even)</dt><dd>4 dB of drive, more density, colour towards EVEN, extra air and weight.</dd><dt>Forward and Firm (odd)</dt><dd>4 dB of drive, more density, colour towards ODD for a firmer, more forward sound.</dd><dt>Driven Desk</dt><dd>8 dB of drive and heavy density, slightly even, with generous air and weight.</dd><dt>Open Top (air)</dt><dd>Light density with 3 dB of air for an open top end.</dd><dt>Low-Mid Weight</dt><dd>Even colour with 3 dB of weight and no air, for body in the low mids.</dd><dt>Straight Sum (transformer out)</dt><dd>Transformer out: a clean sum.</dd><dt>Reset all to defaults</dt><dd>Every control back to its starting value, including stem levels, pans, solos and mutes.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>The presets change only the bus settings; your stem levels, pans, solos and mutes are left alone (except Reset).</li><li>Because DRIVE is level-matched, you can sweep it freely and judge the colour without being fooled by a jump in level.</li><li>Try COLOUR towards EVEN on dense rock or pop mixes that feel hard, and towards ODD on mixes that need more definition.</li><li>Toggle TRANSFORMER to compare the console colour against a clean sum at the same balance.</li></ul>
+<p class="file">File: gfx-lustre.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

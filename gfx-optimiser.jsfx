@@ -1,10 +1,10 @@
 desc:GFX Optimiser
-//tags: broadcast processor multiband limiter agc clipper loudness optimod
+//tags: broadcast processor multiband limiter agc clipper loudness
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
 //
-// Broadcast-style loudness chain in the spirit of the Orban Optimod:
+// Broadcast-style loudness chain in the spirit of the classic broadcast processors:
 //   1. AGC      - slow wideband gain riding towards a steady level (+/-12 dB). GATE freezes it
 //                 in quiet passages so fades and pauses aren't pumped up.
 //   2. 4-BAND   - phase-coherent crossover (150 Hz / 1.2 kHz / 6 kHz, sums flat) with a

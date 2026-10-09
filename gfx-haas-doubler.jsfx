@@ -142,7 +142,7 @@ function load_preset(p) (
   p == 4 ? setp(0, 18, 0,  0, 120, 100, 0,    0, 0,   0.25) :   // Classic Haas
   p == 5 ? setp(2, 12, 0,  0, 100, 100, 0.6, 20, 0.5, 0.3 ) :   // Wide Spread
   p == 6 ? setp(2, 12, 1,  0, 120, 100, 4,   60, 3,   1.5 ) :   // Super Wobble
-  p == 7 ? setp(0, 22, 0, -1,  80,  70, 2.5,  0, 1,   0.7 ) :   // John Lennon (ADT)
+  p == 7 ? setp(0, 22, 0, -1,  80,  70, 2.5,  0, 1,   0.7 ) :   // Vintage ADT
   p == 8 ? setp(1,  8, 1, -6, 300,  70, 0.3, 10, 0.3, 0.2 );    // Mono Safe
   p >= 1 && p <= 8 ? slider_automate(2039);   // sliders 1,2,3,5-11
   p == 9 ? (                                   // Reset all to defaults
@@ -270,7 +270,7 @@ ui_hw_toggle(248 * sc, 13 * sc);
 // designed below the panel and shown at the top
 ui_swu(45 - 348);
 pk_pextra = "Reset all to defaults";
-k_ = pk_preset(244 * sc, 356 * sc, 380 * sc, 30 * sc, pr_cur, "Short|Med|Long|Classic Haas|Wide Spread|Super Wobble|John Lennon (ADT)|Mono Safe");
+k_ = pk_preset(244 * sc, 356 * sc, 380 * sc, 30 * sc, pr_cur, "Short|Med|Long|Classic Haas|Wide Spread|Super Wobble|Vintage ADT|Mono Safe");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 8 ? 0 : k_; );
 ui_swu(0);
 

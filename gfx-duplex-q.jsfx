@@ -192,7 +192,7 @@ mix_s = mix_t;
 // ================= EQ (the Tilt EQ engine, names q_..., sliders 34 - 43) =================
 // a preset mask of the EQ unit, one slider at a time
 function cb_auto(m, off) local(k) ( k = 1; loop(63, m - 2 * floor(m / 2) ? ui_auto(k + off); m = floor(m / 2); k += 1; ); );
-#ui_man = "gfx-tilt-eq";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-duplex-q";                                  // the ? pop-up links to this manual
 
 q_RSP = 30000; q_QT = 30400;
 // Butterworth section Qs: order 2, 3 (+ one pole), 4, 6, 8

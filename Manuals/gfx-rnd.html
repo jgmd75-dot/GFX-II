@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX RND - manual</title><meta name="description" content="A clean VCA compressor and a levelling amplifier in one half-rack box.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-rnd">
+<div class="cat">Dynamics</div><h1>RND</h1>
+<p class="tagline">A clean VCA compressor and a levelling amplifier in one half-rack box.</p>
+<div class="shot"><img src="img/gfx-rnd.webp" alt="The RND panel" loading="lazy"></div>
+<h2>Overview</h2><p>RND is a half-rack compressor with two characters, in the spirit of the classic half-rack compressor pair. The MODE keys switch between them, and the panel changes colour to match: off-white for COMP, mustard for LEVEL.</p><p>COMP is a clean, transparent VCA compressor with true RMS detection. Its GENTLE switch puts three compressors in series in the side-chain - fast, medium and slow - each doing a third of the ratio, for smoother results on dense material without pumping.</p><p>LEVEL is a levelling amplifier: a softer onset, a two-stage optical-style release (a quick first part, then a slow tail that lengthens the longer it has been compressing), and gentle saturation and a little top-end softening that grow with the gain reduction. It runs at twice the sample rate to keep the saturation clean.</p><p>In both modes THRESHOLD is in dBu, where 0 dBu = -18 dBFS, and both channels are linked to the louder side so the stereo image stays put.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Transparent vocal and acoustic compression (COMP)</li><li>Smooth, invisible levelling on dense mixes and buses (GENTLE)</li><li>Warm, gently coloured levelling on vocals and bass (LEVEL)</li><li>Parallel compression with MIX</li></ul>
+<h2>Controls</h2><h3>Main knobs</h3><dl class="ctl"><dt>THRESHOLD</dt><dd>The level where compression starts, from -40 to +20 dBu (0 dBu = -18 dBFS). Turn it down for more compression. The knee is soft.</dd><dt>RATIO</dt><dd>How strongly the level is reduced above the threshold, from 1:1 to 25:1 (3:1 by default).</dd><dt>ATTACK</dt><dd>How fast the compressor reacts, from 0.2 to 200 ms (10 ms by default). In LEVEL the onset is softened further.</dd><dt>RELEASE</dt><dd>How fast it lets go, from 0.05 to 5 s (0.3 s by default). In LEVEL this sets the two-stage release, or the linear release rate when LOG RELEASE is off.</dd><dt>GAIN</dt><dd>Make-up gain for the compressed signal, from 0 to +15 dB.</dd><dt>MIX</dt><dd>Parallel compression: blends the dry signal back in. 100% is fully compressed. In LEVEL the dry signal goes through the same oversampling filters as the saturated one, so the two stay in phase and there is no comb filtering at partial settings.</dd><dt>GR</dt><dd>Ten lights across the top showing the gain reduction, from 1 to 20 dB.</dd></dl><h3>MODE</h3><dl class="ctl"><dt>COMP</dt><dd>The clean VCA compressor.</dd><dt>LEVEL</dt><dd>The levelling amplifier, with its softer onset, optical-style release and saturation.</dd><dt>GENTLE (COMP only)</dt><dd>Three compressors in series in the side-chain, at staggered thresholds and speeds, each doing a third of the ratio; their reductions are added together. Smoother on dense material, with less pumping.</dd><dt>LOG RELEASE (LEVEL only)</dt><dd>On (the default): the release is exponential and two-stage - the first 40% of the reduction lets go quickly, then a slow tail that lengthens with how long it has been compressing. Off: a linear release, a steady number of dB per second.</dd></dl><h3>Drift</h3><p>One dial, 0 to 100% (50% by default), for a slow random wander like a real analogue box. 50% is the standard amount, 100% twice that, 0 none; higher settings also wander a little faster. What it moves depends on the mode.</p><dl class="ctl"><dt>DRIFT in COMP</dt><dd>The attack and release times wander slowly.</dd><dt>DRIFT in LEVEL</dt><dd>The saturation (its drive and asymmetry, separately on each side) and the "glue" - the knee width and how long the release remembers past compression - wander slowly.</dd></dl><h3>IN / OUT</h3><dl class="ctl"><dt>TRIM</dt><dd>Input level before anything else, from -24 to +12 dB.</dd><dt>GUARD</dt><dd>Click the TRIM knob once to switch it; the small red light at the knob's upper right shows it is on, and glows brighter while it is working. On by default. It gently eases very hot sources down towards about -18 dBFS average and catches fast peaks above -6 dBFS, so loud sources never overdrive the plugin. It never boosts quiet sources. (A double-click still resets TRIM.)</dd><dt>SAT</dt><dd>Band saturation on the way out: only the lows and highs are saturated (the mids stay clean), with a soft curve that loosens as the level rises.</dd><dt>OFF / CLIP / LIMIT</dt><dd>The final stage: nothing, a soft clipper at -0.3 dBFS (no latency, the default), or a lookahead limiter holding the peaks at -0.3 dBFS (3 ms latency, compensated by REAPER). The CLIP key flashes red while the clipper is working.</dd></dl><h3>The header</h3><dl class="ctl"><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>For transparent vocal control, use COMP with a ratio around 2:1 - 4:1 and a medium attack, and lower THRESHOLD until the GR lights show 3 - 6 dB on the loud phrases.</li><li>Switch on GENTLE for buses and full mixes: it lets you compress more before the pumping becomes audible.</li><li>LEVEL's saturation grows with the gain reduction, so the harder you compress, the warmer and softer it gets - drive it for colour, back it off for clean levelling.</li><li>THRESHOLD is in dBu: 0 dBu sits at -18 dBFS, the usual average level of a well-recorded track, so 0 is a sensible starting point.</li></ul>
+<p class="file">File: gfx-rnd.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

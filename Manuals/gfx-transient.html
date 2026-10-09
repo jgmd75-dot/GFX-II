@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Transient - manual</title><meta name="description" content="A level-independent transient shaper: more or less attack, more or less sustain.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-transient">
+<div class="cat">Dynamics</div><h1>Transient</h1>
+<p class="tagline">A level-independent transient shaper: more or less attack, more or less sustain.</p>
+<div class="shot"><img src="img/gfx-transient.webp" alt="The Transient panel" loading="lazy"></div>
+<h2>Overview</h2><p>Transient shapes the front and the tail of every hit. Turn ATTACK up to sharpen the start of each note, down to soften it; turn SUSTAIN up to bring out the ring and room after each hit, down to dry it up and tighten the tail.</p><p>There is no threshold. Transient compares fast and slow envelopes of the signal, so it works the same on quiet and loud hits. One detector serves both channels, so the stereo image never shifts.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Snappier snares and punchier kicks</li><li>Removing room and ring from drums, or bringing more of it up</li><li>Softening harsh picking on guitar or bass</li><li>Tightening bass notes</li><li>Adding snap to a drum bus with MIX</li></ul>
+<h2>Controls</h2><h3>Shaper</h3><dl class="ctl"><dt>ATTACK (green cap)</dt><dd>-100% to +100%. Plus sharpens the front of every hit, minus softens it - pushing drums back or taming picking. Up to about 12 dB either way on the attack.</dd><dt>SUSTAIN (red cap)</dt><dd>-100% to +100%. Plus brings up the ring and room after each hit, minus dries it up and tightens the tail. Up to about 14 dB either way. Very quiet tails (below about -54 dBFS) are left alone, so the noise floor doesn't pump up.</dd><dt>SPEED</dt><dd>How long the attack window is, 5 - 60 ms: short for clicks and sticks, long for a fatter front.</dd><dt>LENGTH</dt><dd>How long the sustain stage holds on after each hit, 50 - 1000 ms.</dd><dt>FOCUS (yellow cap)</dt><dd>A high-pass filter on what the shaper listens to, 20 - 500 Hz (fully left = OFF), so kick or bass rumble does not trigger it. The audio itself isn't filtered.</dd><dt>MIX</dt><dd>Blends in the dry signal, 0 - 100%.</dd><dt>OUTPUT</dt><dd>Output level, -12 to +12 dB.</dd></dl><p>Drag a knob up or down (Shift for fine), use the mouse wheel, or double-click to reset it. While you turn a knob, the display shows its name and value.</p><h3>Meters</h3><dl class="ctl"><dt>ATK</dt><dd>What the attack stage is doing, up or down, +/- 12 dB about the centre line.</dd><dt>SUS</dt><dd>What the sustain stage is doing, +/- 12 dB about the centre line.</dd><dt>OUT</dt><dd>The output level, from -30 dBFS (green, amber, then red near the top).</dd></dl><h3>The top strip</h3><dl class="ctl"><dt>Preset display</dt><dd>Shows the preset number and name. Click it for the preset list.</dd><dt>&lt; and &gt;</dt><dd>Step to the previous or next preset. A preset sets ATTACK, SUSTAIN, SPEED, LENGTH, FOCUS and MIX; OUTPUT and the output stage are left as they are.</dd><dt>OFF / CLIP / LIMIT</dt><dd>The final stage: nothing, a soft clipper at -0.3 dBFS (no latency), or a lookahead limiter holding the peaks at -0.3 dBFS (3 ms latency, compensated by REAPER). CLIP is on by default and flashes red when it clips.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large (it opens at L). The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl>
+<h2>Presets</h2><dl class="ctl"><dt>Init</dt><dd>Everything neutral: no change to the sound.</dd><dt>Snappy Snare</dt><dd>Strong attack with a short window, a slightly drier tail, FOCUS at 120 Hz.</dd><dt>Punchy Kick</dt><dd>More attack with a fatter 25 ms front and a tighter tail.</dd><dt>Room Killer</dt><dd>Sustain pulled well down to dry up room and ring.</dd><dt>Big Room</dt><dd>Attack softened a touch and sustain well up with a long 600 ms hold.</dd><dt>Soft Pick</dt><dd>Attack pulled down with a short window, FOCUS at 150 Hz, to tame picking.</dd><dt>Tight Bass</dt><dd>More attack and a shorter, tighter tail.</dd><dt>Drum Bus Snap</dt><dd>Moderate attack lift and a slightly drier tail, blended in at 60%.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Watch the ATK and SUS bars: they show exactly how much each stage is adding or taking away on every hit.</li><li>Boosting ATTACK raises the peaks. Use LIMIT or CLIP, or bring OUTPUT down, if the track starts to clip.</li><li>On a full drum bus, raise FOCUS to 80 - 120 Hz so the kick doesn't dominate what the shaper reacts to.</li><li>Negative SUSTAIN on a close-miked tom or snare is a quick alternative to a gate, with no chatter.</li></ul>
+<p class="file">File: gfx-transient.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

@@ -1,5 +1,5 @@
 desc:GFX G Tonewheel
-//tags: instrument synth organ tonewheel drawbar hammond b3
+//tags: instrument synth organ tonewheel drawbar
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.

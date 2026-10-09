@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Graphic EQ - manual</title><meta name="description" content="A 31-band third-octave graphic equaliser with a real-time analyser behind the faders.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-graphic-eq">
+<div class="cat">EQ &amp; filters</div><h1>Graphic EQ</h1>
+<p class="tagline">A 31-band third-octave graphic equaliser with a real-time analyser behind the faders.</p>
+<div class="shot"><img src="img/gfx-graphic-eq.webp" alt="The Graphic EQ panel" loading="lazy"></div>
+<h2>Overview</h2><p>Graphic EQ is a 31-band, third-octave graphic equaliser in the spirit of the classic studio and live-sound rack graphics. There is one fader for every ISO third-octave band from 20 Hz to 20 kHz, so you can see the shape of your EQ at a glance and draw it with the mouse.</p><p>The bands are matched: on a real graphic, neighbouring bands overlap and add up, so the curve you hear is not quite the curve of the faders. Here the overlap is corrected, so the response follows the faders. The yellow line in the display shows the real response, over a live analyser of the output in each band.</p><p>Two Q modes cover both sides of the job: proportional Q for smooth tone shaping, constant Q for precise notching. A high-pass and low-pass filter round off the ends.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Broad tone shaping you can see at a glance</li><li>Notching out feedback and ringing frequencies (CONST Q)</li><li>Shaping a whole mix, a bus or a PA-style curve</li><li>Quick 'smile', loudness and telephone curves</li><li>Spotting where the energy sits with the analyser</li></ul>
+<h2>Controls</h2><h3>The display</h3><p>Behind the faders, a column of 16 LEDs per band shows the output level in that band (-72 to 0 dB), green, amber and red. The yellow line is the EQ's actual response, including the cut filters and the output level. It goes flat when EQ IN is off.</p><h3>The faders</h3><dl class="ctl"><dt>Faders</dt><dd>One per third-octave band, 20 Hz to 20 kHz, labelled with its ISO frequency. Drag a fader cap to move it (Shift for fine moves). Double-click a cap to centre it. The cap lights in the accent colour when its band is not at 0. The value shows above the band under the pointer.</dd><dt>Drawing a curve</dt><dd>Click or drag anywhere in the fader area away from a cap to draw a curve across the bands - the faders follow the mouse.</dd><dt>Mouse wheel</dt><dd>Nudges the band under the pointer (Shift for fine steps).</dd><dt>Scale</dt><dd>The figures at both ends of the fader area show the fader travel in dB; they change with RANGE.</dd></dl><h3>Controls (bottom row)</h3><dl class="ctl"><dt>+-6 dB / +-12 dB (RANGE)</dt><dd>The fader travel: +-6 dB (fine) or +-12 dB (the default). Switching it rescales the whole curve.</dd><dt>PROP Q / CONST Q</dt><dd>PROP (proportional, the default): the bands are broad for small moves and tighten as you push them further, which is smooth for tone shaping. CONST (constant): every band keeps its third-octave width at any setting, which is precise for notching.</dd><dt>LOW CUT (yellow cap)</dt><dd>An 18 dB per octave high-pass filter, 20 to 250 Hz. Fully left is OFF.</dd><dt>HIGH CUT</dt><dd>A 12 dB per octave low-pass filter, 3 to 22 kHz. Fully right is OFF.</dd><dt>OUTPUT</dt><dd>The level after the EQ, -12 to +12 dB.</dd><dt>FLAT</dt><dd>Centres every fader at once.</dd><dt>EQ IN</dt><dd>Switches the EQ and its cut filters in or out. OUTPUT and the IN / OUT section stay in.</dd></dl><h3>IN / OUT</h3><dl class="ctl"><dt>TRIM</dt><dd>Input level before anything else, -24 to +12 dB.</dd><dt>GUARD</dt><dd>On by default. A single click on the TRIM knob switches it; its LED sits at the knob's upper right (dark when off, red when on, brighter while it is catching). It gently eases very hot sources down towards about -18 dBFS average and catches fast peaks above -6 dBFS, so loud sources never overdrive the plugin. It never boosts quiet sources.</dd><dt>SAT</dt><dd>Band saturation on the way out, 0 to 100%: only the lows and highs are saturated (the mids stay clean), with a soft curve that loosens as the level rises.</dd><dt>OFF / CLIP / LIMIT</dt><dd>The final stage: nothing, a soft clipper at -0.3 dBFS (no latency), or a lookahead limiter that holds the peaks at -0.3 dBFS (3 ms latency, compensated by REAPER). While the output clips, the CLIP key flashes red.</dd></dl><h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets. You can also click the preset display. The last entry resets everything to the defaults.</dd><dt>◄ / ►</dt><dd>Step to the previous or next preset (wrapping round).</dd><dt>Theme picker</dt><dd>Changes the panel's colour theme.</dd><dt>HW</dt><dd>Switches between the hardware-style panel and the flat look.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl>
+<h2>Presets</h2><p>Presets draw a curve on the faders and set RANGE to +-12 dB, Q, the cut filters, OUTPUT to 0 dB and EQ IN on. The IN / OUT section is left as it is, except Reset.</p><dl class="ctl"><dt>Smile</dt><dd>Lifted lows (around 90 Hz) and highs (around 9 kHz) with a slight dip at 500 Hz.</dd><dt>Vocal Presence</dt><dd>A lift around 3.5 kHz, a little less at 250 Hz and a touch of top above 12 kHz.</dd><dt>De-mud</dt><dd>A cut of about 5 dB around 300 Hz, and a little at 150 Hz.</dd><dt>Air</dt><dd>A gentle high shelf from around 10 kHz.</dd><dt>Telephone</dt><dd>Everything below 300 Hz and above 3.5 kHz pulled right down, a lift at 1.3 kHz, and LOW CUT at 250 Hz.</dd><dt>Bass Boost</dt><dd>A low shelf of about 7 dB below 80 Hz, with a slight dip at 250 Hz.</dd><dt>Hi-Fi Loudness</dt><dd>Strong lifts at both ends (around 60 Hz and 12 kHz), like a hi-fi loudness switch.</dd><dt>Mid Scoop</dt><dd>A broad dip of about 4 dB centred on 800 Hz.</dd><dt>Warm &amp; Smooth</dt><dd>A little low-end warmth, a dip around 2.8 kHz and a slightly softer top.</dd><dt>Live Feedback Notches</dt><dd>CONST Q with narrow cuts around 250 Hz, 2.5 kHz and 4 kHz, typical feedback areas on stage.</dd><dt>Reset all to defaults</dt><dd>Every control back to its starting value, including the IN / OUT section.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Switch to +-6 dB RANGE for fine mastering moves: the full fader travel then covers only 6 dB.</li><li>To find a ringing frequency, switch to CONST Q, push one fader right up and sweep along the bands until it rings, then pull that fader down.</li><li>Draw broad curves with a single drag across the fader area, then fine-tune single bands with the mouse wheel.</li><li>Use EQ IN to compare, and set OUTPUT so the level matches before you judge.</li></ul>
+<p class="file">File: gfx-graphic-eq.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

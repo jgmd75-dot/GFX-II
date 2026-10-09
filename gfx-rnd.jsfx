@@ -1,23 +1,23 @@
 desc:GFX RND
-//tags: compressor levelling amplifier vca opto rnc rnla
+//tags: compressor levelling amplifier vca opto
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn, gfx-faceplate and gfx-instrument (.jsfx-inc) in the same folder
 // (gfx-instrument is used for the shared output stage setup).
 //
-// RND - Really Nice Duo. A half-rack compressor with two characters (personal use; the sound is designed
-// from scratch, in the spirit of the classic half-rack "really nice" pair).
-//   RNC   - clean, transparent VCA compressor with true RMS detection.
-//           SUPER NICE: three compressors in series in the sidechain (fast / medium / slow), each doing a
+// RND. A half-rack compressor with two characters (the sound is designed
+// from scratch, in the spirit of the classic half-rack compressor pair).
+//   COMP   - clean, transparent VCA compressor with true RMS detection.
+//           GENTLE: three compressors in series in the sidechain (fast / medium / slow), each doing a
 //           third of the ratio, their reductions summed - smoother on dense material, no pumping.
 //           DRIFT: the attack and release times wander slowly.
-//   RNLA  - levelling amplifier: softer onset, two-stage optical-style release (a quick first part, then
+//   LEVEL  - levelling amplifier: softer onset, two-stage optical-style release (a quick first part, then
 //           a slow tail that lengthens the longer it has been compressing), gentle asymmetric saturation
 //           and a little top-end softening that grow with the reduction (2x oversampled).
 //           LOG RELEASE: on = exponential release, off = linear (constant dB per second).
 //           DRIFT: the saturation and the "glue" (knee width and release memory) wander slowly.
 // THRESHOLD is in dBu (0 dBu = -18 dBFS). Both channels are linked to the louder side.
-// MIX blends in the dry signal; in RNLA it is sent through the same oversampling filters as the saturated
+// MIX blends in the dry signal; in LEVEL it is sent through the same oversampling filters as the saturated
 // path, so the two stay in phase (no comb filtering at partial mix).
 // IN / OUT (row 2): TRIM with the GUARD key, SAT and the OUT stage (OFF / CLIP / LIM). DRIFT: one dial, 50% = the drift settings.
 
@@ -30,14 +30,14 @@ import gfx-dyn.jsfx-inc
 import gfx-faceplate.jsfx-inc
 import gfx-instrument.jsfx-inc
 
-slider1:0<0,1,1{RNC,RNLA}>-Mode
+slider1:0<0,1,1{Comp,Level}>-Mode
 slider2:0<-40,20,0.1>-Threshold (dBu)
 slider3:3<1,25,0.01>-Ratio
 slider4:10<0.2,200,0.01>-Attack (ms)
 slider5:0.3<0.05,5,0.001>-Release (s)
 slider6:0<0,15,0.1>-Gain (dB)
-slider7:0<0,1,1{Off,On}>-Super Nice (RNC)
-slider8:1<0,1,1{Lin,Log}>-Release curve (RNLA)
+slider7:0<0,1,1{Off,On}>-Gentle (Comp)
+slider8:1<0,1,1{Lin,Log}>-Release curve (Level)
 slider9:0<-24,12,0.1>-Input trim (dB)
 slider10:1<0,1,1{Off,On}>-Input guard
 slider11:25<0,100,1>-Drift amount (%)
@@ -67,7 +67,7 @@ function curve(lv, t, r, k) local(o) (
   o <= -k * 0.5 ? 0 : o >= k * 0.5 ? o * (1 - 1 / r) : (1 - 1 / r) * (o + k * 0.5) ^ 2 / (2 * k);
 );
 
-// ---------- RNLA saturation, 2x oversampled ----------
+// ---------- LEVEL saturation, 2x oversampled ----------
 function bq_lp(f, q, fs) instance(b0, b1, b2, a1, a2) local(w0, cw, al, n) (
   w0 = 2 * $pi * min(f, fs * 0.45) / fs; cw = cos(w0); al = sin(w0) / (2 * q); n = 1 + al;
   b0 = (1 - cw) * 0.5 / n; b1 = (1 - cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
@@ -120,7 +120,7 @@ ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 in_init();
 sm = tc(30);
 eL = 0; eR = 0; gr = 0; g1 = 0; g2 = 0; g3 = 0; grpk = 0; hold = 0; tsm = 0; lpL = 0; lpR = 0; grd = 0;
-!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;   // fixed faceplates: off-white (RNC), mustard (RNLA)
+!ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;   // fixed faceplates: off-white (COMP), mustard (LEVEL)
 !ui_dflt ? ui_kstyle = 0;
 AMBL = 0xFFB030;
 update();
@@ -135,16 +135,16 @@ update();
 dinc = dspd * samplesblock / srate;
 vA = dA.drift_tick(dinc); vR = dR.drift_tick(dinc);
 vSL = dSL.drift_tick(dinc); vSR = dSR.drift_tick(dinc); vG = dG.drift_tick(dinc);
-// RNC drift: attack and release times wander (up to about +/- 60%)
+// COMP drift: attack and release times wander (up to about +/- 60%)
 att_d = att_ms * 2 ^ (0.7 * drift * vA);
 rel_d = rel_ms * 2 ^ (0.7 * drift * vR);
 catt = tc(att_d); crel = tc(rel_d);
-// super nice: three stages, each a third of the ratio, staggered timing
+// gentle: three stages, each a third of the ratio, staggered timing
 r3 = ratio ^ (1 / 3);
 ca1 = tc(att_d * 0.25); cr1 = tc(rel_d * 0.5);
 ca2 = tc(att_d);        cr2 = tc(rel_d);
 ca3 = tc(att_d * 4);    cr3 = tc(rel_d * 2.5);
-// RNLA drift: saturation drive / asymmetry and the "glue" (knee width, release memory) wander
+// LEVEL drift: saturation drive / asymmetry and the "glue" (knee width, release memory) wander
 knee_la = 10 * (1 + 0.4 * drift * vG);
 mem_la = 2 * (1 + 0.5 * drift * vG);
 kdL = 1 + 0.5 * drift * vSL; kdR = 1 + 0.5 * drift * vSR;
@@ -163,7 +163,7 @@ eL += (xL * xL - eL) * crms; eR += (xR * xR - eR) * crms;
 lv = 10 * log10(max(max(eL, eR), 0.000000000001)) + 3;
 
 mode == 0 ? (
-  // ---------- RNC ----------
+  // ---------- COMP ----------
   snice ? (
     t1 = curve(lv, thr + 6, r3, 4);          t1 > g1 ? g1 += (t1 - g1) * ca1 : g1 += (t1 - g1) * cr1;
     t2 = curve(lv - g1, thr, r3, 6);         t2 > g2 ? g2 += (t2 - g2) * ca2 : g2 += (t2 - g2) * cr2;
@@ -177,7 +177,7 @@ mode == 0 ? (
   g = 10 ^ (-gr / 20);
   yL = xL * g; yR = xR * g;
 ) : (
-  // ---------- RNLA ----------
+  // ---------- LEVEL ----------
   tgt = curve(lv, thr, ratio, knee_la);
   tsm += (tgt - tsm) * tc(3);                    // softer onset
   hold += (gr - hold) * tc(1500);
@@ -198,7 +198,7 @@ mode == 0 ? (
   lpL += (yL - lpL) * lpc; lpR += (yR - lpR) * lpc;
   yL = lpL; yR = lpR;
 );
-// dry for MIX: phase-matched to the RNLA path (kept running in RNC too, so a mode change is clean)
+// dry for MIX: phase-matched to the LEVEL path (kept running in COMP too, so a mode change is clean)
 dxL = odL.os_lin(xL * 0.5); dxR = odR.os_lin(xR * 0.5);   // (the chain has a gain of 2, as in os_sat)
 mode == 0 ? ( dxL = xL; dxR = xR; );
 grd = max(grd, gr);
@@ -215,7 +215,7 @@ spl1 = ost_r;
 @gfx 640 264
 ui_begin(640, 264);
 
-// ---------- panel: off-white RNC / mustard RNLA ----------
+// ---------- panel: off-white COMP / mustard LEVEL ----------
 PNL = slider1 ? 0xD3A52E : 0xE8E4D9;
 INKP = slider1 ? 0x2A2210 : 0x2B2A28;
 LEDC = slider1 ? 0x3ADF6A : 0xFF3A2A;
@@ -230,7 +230,7 @@ C_INK = INKP;
 ui_col(INKP); gfx_circle(46 * sc, 36 * sc, 13 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(46 * sc, 31 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 26 * sc, 'b'); ui_col(INKP); gfx_x = 68 * sc; gfx_y = 20 * sc; gfx_drawstr("RND");
-gfx_setfont(4); ui_cola(INKP, 0.75); gfx_x = 128 * sc; gfx_y = 31 * sc; gfx_drawstr("REALLY NICE DUO");
+gfx_setfont(4); ui_cola(INKP, 0.75); gfx_x = 128 * sc; gfx_y = 31 * sc; gfx_drawstr("HALF-RACK DUO");
 ui_size_picker(250 * sc, 26 * sc);
 gfx_setfont(4); ui_col(INKP); gfx_x = 336 * sc; gfx_y = 26 * sc; gfx_drawstr("GR");
 gi = 0;
@@ -263,11 +263,11 @@ slider1 == 0 ? (
   pk_ledbtn(140 * sc, 182 * sc, 40 * sc, 30 * sc, slider8, LEDC) ? ( slider8 = 1 - slider8; slider_automate(128); );
 );
 gfx_setfont(4); ui_col(INKP);
-ui_text(48 * sc, 218 * sc, "RNC"); ui_text(96 * sc, 218 * sc, "RNLA");
-ui_text(160 * sc, 218 * sc, slider1 == 0 ? "SUPER NICE" : "LOG RELEASE");
+ui_text(48 * sc, 218 * sc, "COMP"); ui_text(96 * sc, 218 * sc, "LEVEL");
+ui_text(160 * sc, 218 * sc, slider1 == 0 ? "GENTLE" : "LOG RELEASE");
 ui_cola(INKP, 0.6); ui_text(72 * sc, 232 * sc, "MODE");
 
-// DRIFT (its job depends on the mode: timing on the RNC, saturation + glue on the RNLA) and IN / OUT
+// DRIFT (its job depends on the mode: timing on the COMP, saturation + glue on the LEVEL) and IN / OUT
 ui_section(1); C_INK = INKP;
 ui_knob(274 * sc, 202 * sc, 20, 0, 100, 50, 0, "DRIFT", "%.0f%%");
 pk_line(338 * sc, 180 * sc, 338 * sc, 236 * sc, INKP, 0.25);

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX G Arp - manual</title><meta name="description" content="A tempo-locked MIDI arpeggiator with a 16-step pattern, accents, ties and a human feel.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-g-arpeggiator">
+<div class="cat">Instruments</div><h1>G Arp</h1>
+<p class="tagline">A tempo-locked MIDI arpeggiator with a 16-step pattern, accents, ties and a human feel.</p>
+<div class="shot"><img src="img/gfx-g-arpeggiator.webp" alt="The G Arp panel" loading="lazy"></div>
+<h2>Overview</h2><p>G Arp turns the chords you hold into arpeggios. It sits in front of any instrument on the track and sends out the notes one at a time (or as repeated chords), in the order and rhythm you choose.</p><p>Each step of the 16-step pattern can be on, off (a rest), accented or tied to the step before, and has its own level. FEEL adds a human touch: a little timing looseness, velocity variation and a chance for steps to be skipped.</p><p>When the project plays, G Arp locks to the tempo and the timeline. When it is stopped, it runs free at the project tempo from the first key you press. Anything that isn't a note - controllers, pitch bend and so on - passes straight through.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Classic synth arpeggios from held chords</li><li>Rhythmic gated chords (CHORD mode with a pattern)</li><li>Sequenced basslines and plucks</li><li>Latching a pattern while you play something else</li><li>Adding loose, human movement to programmed parts</li></ul>
+<h2>Setting it up</h2><ol class="steps"><li>Insert G Arp in the track's FX chain, above (before) the instrument plugin. It takes MIDI in and sends MIDI on to the instrument; it does not touch audio.</li><li>Arm the track and turn on record monitoring (or play MIDI items on the track). The MIDI light blinks green when notes arrive.</li><li>Hold a chord: the display shows the step and the notes in the arpeggio. Press play to lock it to the project tempo; when stopped it runs at the project tempo from your first key.</li><li>Switch ARP ON off to pass your notes straight through to the instrument.</li></ol>
+<h2>Controls</h2><h3>Left-hand strip</h3><dl class="ctl"><dt>ARP ON</dt><dd>Turns the arpeggiator on (red light) or off. Off, your notes pass straight through; switching it off stops whatever it was playing.</dd><dt>LATCH</dt><dd>On: the arpeggio keeps playing after you let go of the keys. Release all keys and play a new chord to replace it. Turning LATCH off keeps only the keys you are still holding.</dd><dt>MIDI</dt><dd>Blinks green when a note arrives.</dd><dt>PATTERNS</dt><dd>Opens a menu of step patterns. Choosing one sets the step levels, accents and ties; the knobs and switches stay as they are (except Reset all to defaults).</dd><dt>S / M / L, ?</dt><dd>Panel size, and the pop-up with the design credit, the GFX website and the address of this manual (click anywhere to close it).</dd></dl><h3>TIME</h3><dl class="ctl"><dt>RATE</dt><dd>The length of each step: 1/4, 1/8, 1/8T, 1/16, 1/16T or 1/32 (T = triplet).</dd><dt>SWING</dt><dd>0 to 75%. Lengthens the first step of each pair and shortens the second, for a shuffle.</dd><dt>GATE</dt><dd>How long each note is held, as a percentage of its step, from 10% (short and staccato) to 200%. Above 100% each note overlaps the next, for a legato sound.</dd></dl><h3>RANGE</h3><dl class="ctl"><dt>OCTAVES</dt><dd>1 to 4. The arpeggio repeats the held notes this many octaves upwards.</dd><dt>STEPS</dt><dd>1 to 16: the length of the pattern. Steps beyond it are dimmed and skipped.</dd></dl><h3>FEEL</h3><dl class="ctl"><dt>TIMING</dt><dd>Humanised timing, 0 to 30 ms. Notes land a little late by varying amounts, with a slowly wandering feel rather than pure randomness.</dd><dt>VELOCITY</dt><dd>Humanised velocity, 0 to 40. Each note's velocity varies up or down by up to this amount.</dd><dt>CHANCE</dt><dd>0 to 100%: the chance that each step plays. Below 100% some steps are skipped at random.</dd></dl><h3>NOTES</h3><dl class="ctl"><dt>ACCENT</dt><dd>0 to 60: how much velocity an accented step adds.</dd><dt>LEVEL</dt><dd>1 to 127: the velocity used when the velocity source is FIXED.</dd></dl><h3>Display and modes</h3><dl class="ctl"><dt>Display</dt><dd>The top line shows the mode, rate and octaves. The bottom line shows the current step and the notes in the arpeggio, PLAY A CHORD when nothing is held, or ARP OFF - THRU.</dd><dt>UP / DOWN</dt><dd>The held notes from lowest to highest, or highest to lowest, through all the octaves.</dd><dt>UP-DN / DN-UP</dt><dd>Up then down, or down then up, without repeating the top and bottom notes.</dd><dt>PLAYED</dt><dd>The notes in the order you played them.</dd><dt>RANDOM</dt><dd>A random note from the set on every step.</dd><dt>CHORD</dt><dd>The whole chord on every step; with OCTAVES above 1 each step moves up an octave in turn.</dd><dt>VEL: PLAYED / FIXED / PATTERN</dt><dd>Click to choose where the velocity comes from: the velocity you played each key with, the LEVEL knob, or each step's level in the pattern display.</dd></dl><h3>The step pattern</h3><dl class="ctl"><dt>Step display</dt><dd>The bars above the buttons show each step's level. Click and drag in the display to draw the levels; drag a bar right to the bottom to make it a rest. The level sets the velocity in PATTERN mode. Shift+click a bar to accent it (a red cap), right-click to tie it (TIE). The step playing now is lit.</dd><dt>Step buttons 1 - 16</dt><dd>Click to turn a step on or off (it remembers its level). Shift+click to accent it - its number shows a &gt; sign. Right-click to tie it to the step before: the previous note is held on through this step instead of a new one playing.</dd></dl>
+<h2>Patterns</h2><dl class="ctl"><dt>Straight</dt><dd>Every step on at full level.</dd><dt>Offbeat accents</dt><dd>Every step on, with accents on steps 3, 7, 11 and 15.</dd><dt>Gallop</dt><dd>Rests on steps 2, 6, 10 and 14: a galloping rhythm.</dd><dt>Trance gate</dt><dd>A syncopated on / off gate pattern across the 16 steps.</dd><dt>Rise</dt><dd>Every step on, with levels rising from 35% to full across the bar.</dd><dt>Random</dt><dd>Random levels, with about a quarter of the steps resting and a few random accents. Each choice gives a new pattern.</dd><dt>Tied pairs</dt><dd>Rests on steps 4, 8, 12 and 16, with steps 2, 6, 10 and 14 tied to the step before.</dd><dt>Reset all to defaults</dt><dd>Every step on, and all the knobs and switches back to their starting values.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>The step levels only change the velocity when VEL is set to PATTERN; the pattern's rests, accents and ties work in every velocity mode.</li><li>Try CHORD mode with a short GATE and the Trance gate pattern for rhythmic, gated chords.</li><li>Set STEPS to an odd length (say 5 or 7) against a 1/16 RATE for patterns that shift against the bar.</li><li>Your pattern is saved with the project.</li></ul>
+<p class="file">File: gfx-g-arpeggiator.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

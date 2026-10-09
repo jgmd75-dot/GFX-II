@@ -1,5 +1,5 @@
 desc:GFX G Ensemble
-//tags: instrument synth string machine solina ensemble polyphonic
+//tags: instrument synth string machine ensemble polyphonic
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
@@ -111,7 +111,7 @@ function load_preset(p) (
   p == 1 ? setp(80, 50, 60, 40, 150,  900,  0,  1, 70, 100, 80, 65) :    // Classic Strings
   p == 2 ? setp(100, 0, 0,  0,  60,   600,  0,  1, 85, 110, 100, 75) :   // Violins Only
   p == 3 ? setp(30, 70, 90, 60, 400,  2500, 0,  1, 60, 80, 70, 45) :     // Dark Cellos
-  p == 4 ? setp(90, 60, 70, 50, 900,  4000, 0,  1, 90, 70, 100, 70) :    // Oxygene Pad
+  p == 4 ? setp(90, 60, 70, 50, 900,  4000, 0,  1, 90, 70, 100, 70) :    // Space Pad
   p == 5 ? setp(70, 80, 40, 0,  20,   300,  40, 1, 50, 120, 60, 60) :    // Disco Stabs
   p == 6 ? setp(60, 40, 70, 80, 250,  1500, 0,  1, 75, 100, 90, 50) :    // Full Orchestra-ish
   p == 7 ? setp(80, 50, 60, 40, 150,  900,  0,  0, 70, 100, 80, 65) :    // Dry (no ensemble)
@@ -259,7 +259,7 @@ gfx_setfont(4); ui_cola(INKD, 0.7); gfx_x = 170 * sc; gfx_y = 20 * sc; gfx_draws
 gfx_setfont(4); ui_col(INKD); gfx_x = 380 * sc; gfx_y = 17 * sc; gfx_drawstr("PRESETS");
 pk_ledbtn(342 * sc, 8 * sc, 32 * sc, 28 * sc, 0, ORG) ? (
   gfx_x = 342 * sc; gfx_y = 38 * sc;
-  load_preset(gfx_showmenu("Classic Strings|Violins Only|Dark Cellos|Oxygene Pad|Disco Stabs|Full Orchestra-ish|Dry (no ensemble)|Slow Swell|Reset all to defaults"));
+  load_preset(gfx_showmenu("Classic Strings|Violins Only|Dark Cellos|Space Pad|Disco Stabs|Full Orchestra-ish|Dry (no ensemble)|Slow Swell|Reset all to defaults"));
 );
 ui_size_picker(448 * sc, 13 * sc);
 pk_ledbtn(520 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;

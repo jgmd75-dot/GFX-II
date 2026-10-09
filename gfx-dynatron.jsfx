@@ -1,16 +1,16 @@
 desc:GFX Dynatron
-//tags: flanger phaser envelope filter wah dynaflange modulation
+//tags: flanger phaser envelope filter wah modulation
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-lfo, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn, gfx-faceplate and gfx-instrument (.jsfx-inc) in the same folder.
 //
-// A three-in-one bubble/jet modulator inspired by the Keeley Bubbletron, which was itself inspired by
-// Frank Zappa's "Dynaflange" studio trick (two tape machines, one slightly detuned, crossfaded by hand or
-// by how hard you played) - personal use; the sound is designed from scratch.
+// A three-in-one bubble/jet modulator after the classic two-tape-machine studio trick (one machine slightly
+// detuned, crossfaded by hand or
+// by how hard you played) - the sound is designed from scratch.
 //   MODE   - FLANGE (a wide-sweep studio flange, REGEN for the jet sound), PHASE (a 6-stage all-pass
 //            sweep), FILTER (a resonant state-variable auto-wah / envelope filter, LP / BP / HP).
 //   SWEEP SOURCE - LFO (the usual sweep), HOLD (freeze the sweep, place it by hand with CENTRE),
-//            ENVELOPE (your playing drives the sweep - the Dynaflange trick: louder = further, SENS
+//            ENVELOPE (your playing drives the sweep - the two-machine trick: louder = further, SENS
 //            sets how hard you have to dig in).
 //   CENTRE - where the sweep sits at rest. DEPTH - how far it travels.
 //   FDBK / RESONANCE - FLANGE and PHASE: feedback (negative = hollow/nasal, positive = thick, ringing,
@@ -160,7 +160,7 @@ function setp(m, sh, sy, fr, dv, ce, de, fb, sp, mx, sw, se, ft) (
 );
 function pname(p) (
   p == 1 ? "Classic Bubble Flange" :
-  p == 2 ? "Zappa Dynaflange" :
+  p == 2 ? "Dyna Flange" :
   p == 3 ? "Smooth Phase Sweep" :
   p == 4 ? "Square Throb Phase" :
   p == 5 ? "Vocal Auto-Wah" :
@@ -173,7 +173,7 @@ function pname(p) (
 );
 function load_preset(p) (
   p == 1  ? setp(0, 1, 0, 0.25, 2, 40, 70,  50,   0, 50, 0, 50, 1) :    // Classic Bubble Flange
-  p == 2  ? setp(0, 1, 0, 0.12, 2, 35, 90,  80,  90, 55, 0, 50, 1) :    // Zappa Dynaflange
+  p == 2  ? setp(0, 1, 0, 0.12, 2, 35, 90,  80,  90, 55, 0, 50, 1) :    // Dyna Flange
   p == 3  ? setp(1, 0, 0, 0.3,  2, 50, 80,  30,   0, 50, 0, 50, 1) :    // Smooth Phase Sweep
   p == 4  ? setp(1, 1, 0, 0.15, 2, 45, 90,  60, 120, 50, 0, 50, 1) :    // Square Throb Phase
   p == 5  ? setp(2, 0, 0, 0.2,  2, 30, 85,  40,   0, 70, 0, 60, 1) :    // Vocal Auto-Wah
@@ -257,7 +257,7 @@ out_s   += (out_t   - out_s)   * sm;
 lv = max(abs(inL), abs(inR));
 env += (lv - env) * (lv > env ? env_a : env_r);
 
-// the sweep: LFO, frozen (HOLD) or the input's envelope (ENVELOPE) - the Dynaflange trick
+// the sweep: LFO, frozen (HOLD) or the input's envelope (ENVELOPE) - the two-machine trick
 lvL = lfoL.lfo_tick(0, rd, vR);
 lvR = lfoR.lfo_tick(spread, rd, vR);
 sweep == 1 ? ( uL = 0; uR = 0; ) :
