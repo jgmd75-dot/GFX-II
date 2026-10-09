@@ -12,7 +12,7 @@ desc:GFX Preamp Q
 // compression) -> voicing -> tone -> mix -> output stage.
 // Voicings:
 //   CLEAN - no drive (use with EQ BOOST as a clean boost preamp)
-//   VIBE  - the Univibe preamp: low-mid weight, asymmetric soft saturation, rounded top
+//   VIBE  - the photocell-vibe preamp: low-mid weight, asymmetric soft saturation, rounded top
 //   ZEN   - gentle symmetrical diode-style saturation, smooth amp-like breakup
 //   TRANS - single-transistor drive: asymmetric, bites earlier, furrier when pushed
 // Drift: BIAS (asymmetry wanders) and COMP (sag depth breathes).
@@ -163,7 +163,7 @@ function update() local(drv, fc, f1, f2, f3, gb) (
   mix_t = slider10 / 100;
   out_t = 10 ^ (slider11 / 20);
 
-  // VIBE (as the Univibe preamp)
+  // VIBE (as the photocell-vibe preamp)
   pre_shk = 10 ^ (3 * drv / 20) - 1;
   pre_d = 1 + 3 * drv;
   pre_b = 0.15 * drv;
@@ -237,7 +237,7 @@ mix_s = mix_t; out_s = out_t;
 // ================= EQ (the Board EQ engine, names q_..., sliders 20 - 37) =================
 // a preset mask of the EQ unit, one slider at a time
 function cb_auto(m, off) local(k) ( k = 1; loop(63, m - 2 * floor(m / 2) ? ui_auto(k + off); m = floor(m / 2); k += 1; ); );
-#ui_man = "gfx-board-q";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-preamp-q";                                  // the ? pop-up links to this manual
 
 function th(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
 // one-pole high-pass (the third pole of the 18 dB HPF)

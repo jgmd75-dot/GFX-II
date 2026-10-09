@@ -11,7 +11,7 @@ desc:GFX synth voice engine (include)
 //   o.vo_pulse(inc, pw)              band-limited pulse, pw 0.05..0.95
 //   o.vo_sub(inc, div)               band-limited square at freq / div (div 2 or 4), own phase
 //   o.vo_reset(ph)                   set an oscillator's phase
-//   f.vo_ladder(x, fc, res, kind)    24 dB ladder: kind 0 = warm (bass drops with resonance, Moog-ish),
+//   f.vo_ladder(x, fc, res, kind)    24 dB ladder: kind 0 = warm (bass drops with resonance, classic ladder),
 //                                    kind 1 = acid (sharper, bass kept, 101-ish). res 0..1 (self-oscillates near 1)
 //   f.vo_svf(x, fc, res)             12 dB state-variable low-pass, res 0..1
 //   e.vo_adsr_set(a_ms, d_ms, s, r_ms)   e.vo_adsr_gate(on, retrig)   e.vo_adsr()  -> 0..1

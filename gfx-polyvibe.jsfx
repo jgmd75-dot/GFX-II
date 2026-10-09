@@ -1,5 +1,5 @@
 desc:GFX Polyvibe
-//tags: univibe vibe chorus vibrato preamp modulation
+//tags: vibe chorus vibrato preamp modulation
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-lfo, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.

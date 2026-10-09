@@ -9,9 +9,9 @@ desc:GFX G Chip 48
 // are designed from scratch). A rack sound module: the rubber keys pick the chip and the patch, the knobs shape it.
 //   CHIP (keys 1-5) - BEEPER (48K one-bit speaker), AY (128K three-voice chip with its buzzer envelope),
 //                     PSG (SN-style squares, white / periodic noise), FM (16-bit console, four operators),
-//                     2A03 (8-bit console: 12.5 / 25 / 50 % pulses and a stepped triangle).
+//                     PULSE (8-bit console: 12.5 / 25 / 50 % pulses and a stepped triangle).
 //                     Pitches snap to each chip's own tuning steps and volume to its own level steps.
-//   TONE / NOISE    - DUTY (beeper and 2A03), MIXER, NOISE pitch and type.   BUZZ - the AY envelope at audio
+//   TONE / NOISE    - DUTY (beeper and PULSE), MIXER, NOISE pitch and type.   BUZZ - the AY envelope at audio
 //                     rate: saw, triangle or synced to the tone, tuned an octave down, unison or up.
 //   ENVELOPE        - ATTACK, DECAY, SUSTAIN (0-15, as the chips), RELEASE, stepped once a frame.
 //   ARP / VIBRATO / PITCH - tracker-style: chord ARPs (or HELD: every held note in turn on one voice),
@@ -20,7 +20,7 @@ desc:GFX G Chip 48
 //                     the DAC LADDER grit of the early chip.
 //   DRUMS           - each chip's own kit on the GM drum notes (36 kick, 38 / 40 snare, 42 / 44 / 46 hats,
 //                     41-50 toms, 49 / 57 crash, 51 ride); other notes play toms.
-//   CHANNELS        - AUTHENTIC keeps each chip's voice count (beeper 1, AY / PSG 3, FM 6, 2A03 2 - 1 on the
+//   CHANNELS        - AUTHENTIC keeps each chip's voice count (beeper 1, AY / PSG 3, FM 6, PULSE 2 - 1 on the
 //                     triangle); 6 VOICES lifts it.   LO-FI - the machine's own speaker / output filter.
 // MIDI: pitch bend +/-2, CC1 vibrato, CC64 sustain, CC123 all notes off.
 // IN / OUT: the strip along the bottom holds SAT, the OUT stage (OFF / CLIP / LIM) and STEREO (MONO, WIDTH).
@@ -33,7 +33,7 @@ import gfx-instrument.jsfx-inc
 import gfx-voice.jsfx-inc
 import gfx-amp.jsfx-inc
 
-slider1:0<0,4,1{Beeper (48K),AY (128K),PSG,FM,2A03}>-Chip
+slider1:0<0,4,1{Beeper (48K),AY (128K),PSG,FM,Pulse}>-Chip
 slider2:0<0,40,1{48K Lead,Thin Pulse,Phaser Lead,Beeper Bass,Chord Arp,Laser Zap,Beeper Drums,Soft Hum,AY Lead,Buzzer Bass,Buzz Tri Bass,Sync Lead,Arp Chords,Soft Bell,Steam Lead,AY Drums,PSG Lead,PSG Bass,Periodic Bass,Major Arp,Minor Arp,PSG Bell,Vib Square,PSG Drums,16-Bit Bass,FM Brass,FM E.Piano,FM Lead,FM Strings,FM Marimba,FM Organ,FM Drums,Pulse 12.5,Pulse 25 Lead,Square 50,Triangle Bass,Echo Arp,Vibrato Lead,Slide Lead,8-Bit Drums,Init}>-Patch
 slider3:50<5,50,1>-Duty (%)
 slider4:0<0,3,1{Tone,Tone+Noise,Noise,Triangle}>-Mixer
@@ -91,7 +91,7 @@ FMD = 52000;                                      // FM operator data: 16 per pa
 AYV = 53000;                                      // AY volume table (16)
 gi = 0; loop(NV, VN[gi] = -1; VG[gi] = 0; VT[gi] = 0; VS[gi] = 0; gi += 1; );
 
-// AY-3-8912 output levels (logarithmic, about 3 dB a step)
+// AY chip output levels (logarithmic, about 3 dB a step)
 AYV[0] = 0; AYV[1] = 0.0137; AYV[2] = 0.0205; AYV[3] = 0.0291; AYV[4] = 0.0423; AYV[5] = 0.0618;
 AYV[6] = 0.0847; AYV[7] = 0.1369; AYV[8] = 0.1691; AYV[9] = 0.2647; AYV[10] = 0.3527; AYV[11] = 0.4499;
 AYV[12] = 0.5704; AYV[13] = 0.6873; AYV[14] = 0.8482; AYV[15] = 1;
@@ -314,7 +314,7 @@ function q_push(ofs, t, n, v) local(i) (
 );
 
 // ---------- names ----------
-function chip_name(c) ( c == 0 ? "BEEPER" : c == 1 ? "AY" : c == 2 ? "PSG" : c == 3 ? "FM" : "2A03"; );
+function chip_name(c) ( c == 0 ? "BEEPER" : c == 1 ? "AY" : c == 2 ? "PSG" : c == 3 ? "FM" : "PULSE"; );
 function patch_name(p) (
   p == 0 ? "48K LEAD" : p == 1 ? "THIN PULSE" : p == 2 ? "PHASER LEAD" : p == 3 ? "BEEPER BASS" :
   p == 4 ? "CHORD ARP" : p == 5 ? "LASER ZAP" : p == 6 ? "BEEPER DRUMS" : p == 7 ? "SOFT HUM" :
@@ -591,7 +591,7 @@ function zx_key(x, y, id, ch, val, above, acol, on) local(hov, w, h) (
   zx_face(x, y, w, h, on || drag_id == 900 + id, ch, val, on ? 0xFFF27A : ZX_WHT);
   released_id == 900 + id && hov;
 );
-// a section: box with its title in a Spectrum colour
+// a section: box with its title in an 8-bit micro colour
 function zx_sec(x, y, w, h, title, col) (
   ui_col(0x1D1D20); gfx_rect(x * sc, y * sc, w * sc, h * sc);
   ui_cola(col, 0.22); gfx_rect(x * sc, y * sc, w * sc, 20 * sc);                              // the title strip
@@ -639,7 +639,7 @@ gfx_x = (scx + 24) * sc; gfx_y = (scy + 72) * sc; gfx_drawstr(#l3);
 gfx_setfont(4); ui_col(0x404040); gfx_x = (scx + scw - 116) * sc; gfx_y = (scy + 92) * sc; gfx_drawstr("CLICK FOR LIST");
 pressed && drag_id == 0 && mouse_x >= scx * sc && mouse_x < (scx + scw) * sc && mouse_y >= scy * sc && mouse_y < (scy + sch) * sc ? (
   drag_id = -1; gfx_x = scx * sc; gfx_y = (scy + sch) * sc;
-  gsel = gfx_showmenu(">BEEPER (48K)|48K Lead|Thin Pulse|Phaser Lead|Beeper Bass|Chord Arp|Laser Zap|Beeper Drums|<Soft Hum|>AY (128K)|AY Lead|Buzzer Bass|Buzz Tri Bass|Sync Lead|Arp Chords|Soft Bell|Steam Lead|<AY Drums|>PSG|PSG Lead|PSG Bass|Periodic Bass|Major Arp|Minor Arp|PSG Bell|Vib Square|<PSG Drums|>FM|16-Bit Bass|FM Brass|FM E.Piano|FM Lead|FM Strings|FM Marimba|FM Organ|<FM Drums|>2A03|Pulse 12.5|Pulse 25 Lead|Square 50|Triangle Bass|Echo Arp|Vibrato Lead|Slide Lead|<8-Bit Drums|Init");
+  gsel = gfx_showmenu(">BEEPER (48K)|48K Lead|Thin Pulse|Phaser Lead|Beeper Bass|Chord Arp|Laser Zap|Beeper Drums|<Soft Hum|>AY (128K)|AY Lead|Buzzer Bass|Buzz Tri Bass|Sync Lead|Arp Chords|Soft Bell|Steam Lead|<AY Drums|>PSG|PSG Lead|PSG Bass|Periodic Bass|Major Arp|Minor Arp|PSG Bell|Vib Square|<PSG Drums|>FM|16-Bit Bass|FM Brass|FM E.Piano|FM Lead|FM Strings|FM Marimba|FM Organ|<FM Drums|>PULSE|Pulse 12.5|Pulse 25 Lead|Square 50|Triangle Bass|Echo Arp|Vibrato Lead|Slide Lead|<8-Bit Drums|Init");
   gsel > 0 ? load_patch(gsel - 1);
 );
 
@@ -647,7 +647,7 @@ pressed && drag_id == 0 && mouse_x >= scx * sc && mouse_x < (scx + scw) * sc && 
 gi = 0;
 loop(5,
   sprintf(#zc, "%d", gi + 1);
-  zx_key(730 + gi * 74, 32, gi + 1, #zc, chip_name(gi), gi == 0 ? "48K" : gi == 1 ? "128K" : gi == 2 ? "SN76489" : gi == 3 ? "YM2612" : "2A03",
+  zx_key(730 + gi * 74, 32, gi + 1, #zc, chip_name(gi), gi == 0 ? "48K" : gi == 1 ? "128K" : gi == 2 ? "3 SQUARE" : gi == 3 ? "4-OP" : "2 PULSE",
          gi == 0 ? 0x6E8EFF : gi == 1 ? 0xFF4A4A : gi == 2 ? 0xFF6AFF : gi == 3 ? 0x4ADF6A : 0x3AE6E6, chip == gi) ? load_patch(chip_first(gi));
   gi += 1;
 );

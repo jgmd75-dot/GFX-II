@@ -1,13 +1,13 @@
 desc:GFX G Bass 1X
-//tags: instrument synth bass mono 101 moog reese
+//tags: instrument synth bass mono reese
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-voice, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
 //
 // Monophonic bass synth: saw / pulse oscillator with PWM, sub oscillator (-1 or -2 octaves),
-// detuned second oscillator, unison spread (Reese / Dune-style), noise.
-// Three filters: LADDER (warm 24 dB), ACID (sharp 24 dB, 101-ish), 12 dB (clean state-variable).
-// ACCENT: hard-played notes open the filter and hit harder (101-style).
+// detuned second oscillator, unison spread (Reese-style), noise.
+// Three filters: LADDER (warm 24 dB), ACID (sharp 24 dB, classic acid), 12 dB (clean state-variable).
+// ACCENT: hard-played notes open the filter and hit harder (classic acid style).
 // GLIDE: always, or only between overlapping (legato) notes. Last-note priority.
 // DRIFT: slow analogue wander of pitch (up to +/-20 cents), osc 2, pulse width and cutoff,
 // plus a small random tuning offset on every new note. The DRIFT dial scales it (50% = the Drift setting,
@@ -56,7 +56,7 @@ slider31:0<0,100,1>-LFO to PWM (%)
 slider32:25<0,100,1>-Drift (%)
 slider33:15<0,100,1>-Drive (%)
 slider34:0<-24,6,0.1>-Volume (dB)
-slider35:0<0,11,1{101 Acid,101 Sub,101 PWM,Moog Fat,Moog Pluck,Moog Glide,Dune Reese,Dune Growl,Sine Sub,Synth Pop,Zap Bass,Wobble}>-Patch
+slider35:0<0,11,1{Mono Acid,Mono Sub,Mono PWM,Ladder Fat,Ladder Pluck,Ladder Glide,Wide Reese,Wide Growl,Sine Sub,Synth Pop,Zap Bass,Wobble}>-Patch
 slider36:0<0,100,1>-Band sat (%)
 slider37:30<0,100,1>-Bias (%)
 slider38:120<40,400,1>-Sat low band (Hz)
@@ -126,8 +126,8 @@ function load_patch(p) (
   slider_automate(2147483647 + 17179869184);    // sliders 1-31 and 35
 );
 function patch_name(p) (
-  p == 0 ? "101 ACID" : p == 1 ? "101 SUB" : p == 2 ? "101 PWM" : p == 3 ? "MOOG FAT" : p == 4 ? "MOOG PLUCK" :
-  p == 5 ? "MOOG GLIDE" : p == 6 ? "DUNE REESE" : p == 7 ? "DUNE GROWL" : p == 8 ? "SINE SUB" : p == 9 ? "SYNTH POP" :
+  p == 0 ? "MONO ACID" : p == 1 ? "MONO SUB" : p == 2 ? "Mono PWM" : p == 3 ? "LADDER FAT" : p == 4 ? "LADDER PLUCK" :
+  p == 5 ? "LADDER GLIDE" : p == 6 ? "WIDE REESE" : p == 7 ? "WIDE GROWL" : p == 8 ? "SINE SUB" : p == 9 ? "SYNTH POP" :
   p == 10 ? "ZAP BASS" : "WOBBLE";
 );
 
@@ -314,14 +314,14 @@ gfx_x = 32 * sc; gfx_y = 120 * sc; gfx_drawstr(#l2);
 // click the display: the full patch list
 pressed && drag_id == 0 && mouse_x >= 24 * sc && mouse_x < 196 * sc && mouse_y >= 84 * sc && mouse_y < 144 * sc ? (
   drag_id = -1; #pm = "";
-  strcat(#pm, ""); slider35 == 0 ? strcat(#pm, "!"); strcat(#pm, "101 Acid|");
-  strcat(#pm, ""); slider35 == 1 ? strcat(#pm, "!"); strcat(#pm, "101 Sub|");
-  strcat(#pm, ""); slider35 == 2 ? strcat(#pm, "!"); strcat(#pm, "101 PWM|");
-  strcat(#pm, ""); slider35 == 3 ? strcat(#pm, "!"); strcat(#pm, "Moog Fat|");
-  strcat(#pm, ""); slider35 == 4 ? strcat(#pm, "!"); strcat(#pm, "Moog Pluck|");
-  strcat(#pm, ""); slider35 == 5 ? strcat(#pm, "!"); strcat(#pm, "Moog Glide|");
-  strcat(#pm, ""); slider35 == 6 ? strcat(#pm, "!"); strcat(#pm, "Dune Reese|");
-  strcat(#pm, ""); slider35 == 7 ? strcat(#pm, "!"); strcat(#pm, "Dune Growl|");
+  strcat(#pm, ""); slider35 == 0 ? strcat(#pm, "!"); strcat(#pm, "Mono Acid|");
+  strcat(#pm, ""); slider35 == 1 ? strcat(#pm, "!"); strcat(#pm, "Mono Sub|");
+  strcat(#pm, ""); slider35 == 2 ? strcat(#pm, "!"); strcat(#pm, "Mono PWM|");
+  strcat(#pm, ""); slider35 == 3 ? strcat(#pm, "!"); strcat(#pm, "Ladder Fat|");
+  strcat(#pm, ""); slider35 == 4 ? strcat(#pm, "!"); strcat(#pm, "Ladder Pluck|");
+  strcat(#pm, ""); slider35 == 5 ? strcat(#pm, "!"); strcat(#pm, "Ladder Glide|");
+  strcat(#pm, ""); slider35 == 6 ? strcat(#pm, "!"); strcat(#pm, "Wide Reese|");
+  strcat(#pm, ""); slider35 == 7 ? strcat(#pm, "!"); strcat(#pm, "Wide Growl|");
   strcat(#pm, ""); slider35 == 8 ? strcat(#pm, "!"); strcat(#pm, "Sine Sub|");
   strcat(#pm, ""); slider35 == 9 ? strcat(#pm, "!"); strcat(#pm, "Synth Pop|");
   strcat(#pm, ""); slider35 == 10 ? strcat(#pm, "!"); strcat(#pm, "Zap Bass|");

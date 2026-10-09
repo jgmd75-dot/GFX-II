@@ -263,7 +263,7 @@ function softk(o, w) (
 //                transients through unlifted while tails and low-level detail come up: the "air/breath" trick.
 // Right (c > 0): "decode" downward expansion below threshold, threshold -50 -> -26 dB,
 //                ratio 1:1 -> 1:2, 12 dB soft knee, max 40 dB cut. Never adds gain, so it can't push overs.
-function overeasy(x, c, sp, rc) local(ax, co_c, env, envdb, a, s, T, g) (
+function softknee(x, c, sp, rc) local(ax, co_c, env, envdb, a, s, T, g) (
   ax = abs(x);
   co_c = ax > sp[0] ? atkC : rc;
   sp[0] = sp[0] + co_c*(ax - sp[0]);   // envelope always runs, so no jump leaving centre
@@ -346,7 +346,7 @@ function bandproc(x, bidx, ch, stype, drv, dsc, eqp, cpd, gdb, byp, solo) local(
     y = sat(x, stype, drv, dsc);
     stype == 3 ? (y = dcblock(y, dcS + (bidx + ch*4)*2););
     y = bq(y, eqp + ch*9);
-    y = overeasy(y, cpd, cmpS + bidx + ch*4, bidx == 0 ? relLF : relC);
+    y = softknee(y, cpd, cmpS + bidx + ch*4, bidx == 0 ? relLF : relC);
     y = y * db2g(gdb);
   );
   (anySolo && !solo) ? 0 : y;
@@ -509,7 +509,7 @@ function mkey(x, y, w, h, t, on, c) local(hit, hov, tw, th) (
   );
   hit;
 );
-// header key: house BBC keycap on the hardware panel, flat key on the neumorphic one
+// header key: house micro keycap on the hardware panel, flat key on the neumorphic one
 function hkey(x, y, w, h, t, on) (
   hw ? ui_button(x*qs, y*qs, w*qs, h*qs, t, on, 1) : mkey(x, y, w, h, t, on, AMB);
 );

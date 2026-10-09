@@ -1,5 +1,5 @@
 desc:GFX G Lab80
-//tags: instrument synth workstation fm epiano clavinet glockenspiel pad bass strings
+//tags: instrument synth workstation fm epiano clav glockenspiel pad bass strings
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-instrument (.jsfx-inc) in the same folder.
@@ -7,7 +7,7 @@ desc:GFX G Lab80
 //
 // G-Lab80 (formerly Sound Lab / Palette): pick a sound, play it. File name kept so saved projects still find it.
 //   FM E-PIANO   - 4-operator FM (tine "ding" pair + body pair), velocity sets the bark
-//   CLAVINET     - plucked string (Karplus-Strong) + pickup comb + bite filter, quick damper
+//   CLAV     - plucked string (Karplus-Strong) + pickup comb + bite filter, quick damper
 //   GLOCK        - struck metal bar: inharmonic partials, mallet click, rings on
 //   SYNTH PAD    - detuned saws, 4-pole filter with slow envelope, chorus
 //   WARM PAD     - saw + sub, low filter with slow movement, wide chorus
@@ -17,7 +17,7 @@ desc:GFX G Lab80
 // PRESETS (or a click on the display) lists the sounds by type; < > step through them in that order:
 //   PIANOS & KEYS    - SESSION PIANO and BRIGHT PIANO (openly synthetic: struck partials with stretched tuning and
 //                      paired strings; velocity sets the hammer's brightness, the loudness, the knock and how fast
-//                      the top fades), CHORUS EP, FM E-PIANO, CLAVINET, DRAWBAR ORGAN
+//                      the top fades), CHORUS EP, FM E-PIANO, CLAV, DRAWBAR ORGAN
 //   MALLETS & BELLS  - GLOCKENSPIEL, FANTASY BELLS, CRYSTAL HARP, STACCATO GLASS (with its echo)
 //   GUITARS & PLUCKS - LA NYLON, LA STEEL, LA CLEAN and LA HARMONICS (late-80s plucked guitars: a plucked string
 //                      with a pick transient over a soft synth body), NYLON ATMOS, PIZZ FLOW, HARP
@@ -32,7 +32,7 @@ desc:GFX G Lab80
 // Changing sound puts FILTER, RESO, TONE, ATTACK, RELEASE and CHORUS back to neutral for the new sound.
 // REVERB: the GFX Space engine (ROOM / HALL / PLATE), added as a send on top of the sound.
 // FILTER / RESONANCE: analogue sounds move each note's own 4-pole filter (RESONANCE up to self-oscillation);
-//   FM e-piano, clavinet and glock go through a resonant low-pass (FILTER 0 = wide open).
+//   FM e-piano, clav and glock go through a resonant low-pass (FILTER 0 = wide open).
 // Macros: TONE, ATTACK, RELEASE, CHORUS, VELOCITY, TUNE.  Sustain pedal (CC64) and mod wheel (vibrato).
 
 import gfx-drift.jsfx-inc
@@ -41,7 +41,7 @@ import gfx-ui.jsfx-inc
 import gfx-panel.jsfx-inc
 import gfx-instrument.jsfx-inc
 
-slider1:0<0,42,1{FM E-Piano,Clavinet,Glockenspiel,Synth Pad,Warm Pad,Bass Synth,Strings,String Ensemble,Fantasy Bells,Staccato Glass,Pizz Flow,Glass Voices,Nylon Atmos,Synth Brass,Crystal Harp,Sub Bass,Acid Bass,Round Bass,Pluck Bass,Hollow Bass,Reese Bass,Native Dance,Calliope Lead,Soundtrack Pad,Session Piano,Chorus EP,Dark Vox,Fantasy Vox,Spaced Vox,Velo Stab,Hoover,Fat Strings,Orchestra Hit,Brass Section,Drawbar Organ,Pan Flute,Harp,Square Lead,Bright Piano,LA Nylon,LA Steel,LA Clean,LA Harmonics}>-Sound
+slider1:0<0,42,1{FM E-Piano,Clav,Glockenspiel,Synth Pad,Warm Pad,Bass Synth,Strings,String Ensemble,Fantasy Bells,Staccato Glass,Pizz Flow,Glass Voices,Nylon Atmos,Synth Brass,Crystal Harp,Sub Bass,Acid Bass,Round Bass,Pluck Bass,Hollow Bass,Reese Bass,Native Dance,Calliope Lead,Soundtrack Pad,Session Piano,Chorus EP,Dark Vox,Fantasy Vox,Spaced Vox,Velo Stab,Hoover,Fat Strings,Orchestra Hit,Brass Section,Drawbar Organ,Pan Flute,Harp,Square Lead,Bright Piano,LA Nylon,LA Steel,LA Clean,LA Harmonics}>-Sound
 slider2:50<0,100,1>-Tone (%)
 slider3:100<10,400,1>-Attack (%)
 slider4:100<10,400,1>-Release (%)
@@ -85,7 +85,7 @@ F_DCO = 64; F_DCF = 65; F_PY = 66; F_ATK = 67; F_PY2 = 68;   // de-click: offset
 F_PE = 69; F_HN = 70; F_HL = 71;                              // pitch envelope, hammer / click noise state
 P_MS = 72; P_MC = 88; P_MA = 104; P_MD = 120; P_WS = 136; P_WC = 152;   // 16 partials (piano, organ)
 F_KW = 55; F_KL = 56; F_KLP = 57; F_KAP = 58; F_KG = 59; F_KPO = 60; F_KHP = 61; F_KX = 62; F_DT = 63;
-KSB = 30000; KSL = 4096;         // clavinet string delay lines, one per voice
+KSB = 30000; KSL = 4096;         // clav string delay lines, one per voice
 evq = 4000;                      // MIDI event queue
 cbuf = 8192; cmask = 8191;       // chorus delay line
 memset(VB, 0, NV * VS); memset(KSB, 0, NV * KSL); memset(cbuf, 0, 8192);
@@ -248,7 +248,7 @@ function patch_set(s) (
   form == 3 ? ( fA1.svf_set(530, 5); fA2.svf_set(1840, 7); fA3.svf_set(2480, 9); );
 );
 
-// ---------- plucked string: set up and run (clavinet and the pluck layers) ----------
+// ---------- plucked string: set up and run (clav and the pluck layers) ----------
 function ks_setup(v, b, f0, vg, h, Ts, bright, pick) local(L, x, j, rr, x2_) (
   L = srate / f0;
   b[F_KL] = L; b[F_KW] = floor(L); b[F_KLP] = 0; b[F_KAP] = 0; b[F_KHP] = 0; b[F_KX] = 0; b[F_O3] = 1;
@@ -417,7 +417,7 @@ function note_on(n, vel) local(v, b, f0, vg, h, Tn, j, k, L, x, rr, ratio, amp, 
     b[F_MD] = tc(Tn * dec_k); b[F_MD + 1] = tc(Tn * 0.35 * dec_k); b[F_MD + 2] = tc(Tn * 0.4 * dec_k); b[F_MD + 3] = tc(0.09 + 0.05 * (1 - h));
     b[F_AE] = 1;
   ) : eng == 2 ? (
-    // clavinet: a bright pluck, pickup near the string's end
+    // clav: a bright pluck, pickup near the string's end
     ks_setup(v, b, f0, vg, h, 4 * 2 ^ (-(n - 48) / 24) * dec_k, 0.4, 1);
     b[F_AE] = 1;
   ) : (
@@ -504,7 +504,7 @@ function update() (
 
 // ---------- sound names + menu order (grouped) ----------
 function sname(i) (
-  i == 0 ? "FM E-PIANO" : i == 1 ? "CLAVINET" : i == 2 ? "GLOCKENSPIEL" : i == 3 ? "SYNTH PAD" :
+  i == 0 ? "FM E-PIANO" : i == 1 ? "CLAV" : i == 2 ? "GLOCKENSPIEL" : i == 3 ? "SYNTH PAD" :
   i == 4 ? "WARM PAD" : i == 5 ? "BASS SYNTH" : i == 6 ? "STRINGS" : i == 7 ? "STRING ENSEMBLE" :
   i == 8 ? "FANTASY BELLS" : i == 9 ? "STACCATO GLASS" : i == 10 ? "PIZZ FLOW" : i == 11 ? "GLASS VOICES" :
   i == 12 ? "NYLON ATMOS" : i == 13 ? "SYNTH BRASS" : i == 14 ? "CRYSTAL HARP" : i == 15 ? "SUB BASS" :
@@ -784,7 +784,7 @@ loop(NV,
       b[F_CLK] > 0.0003 ? ( b[F_HN] += (nz - b[F_HN]) * 0.5; y += (nz - b[F_HN]) * b[F_CLK]; b[F_CLK] *= org_ck; );
       !held && b[F_AE] < 0.0003 ? b[F_ACT] = 0;
     ) : eng == 2 ? (
-      // ---------- clavinet string ----------
+      // ---------- clav string ----------
       y = ks_tick(av, b, 1, 1);
       !held && b[F_O3] < 0.0002 ? ( b[F_ACT] = 0; memset(KSB + av * KSL, 0, KSL); );
     ) : (

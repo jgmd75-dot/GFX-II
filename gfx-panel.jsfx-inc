@@ -7,7 +7,7 @@ desc:GFX instrument panel kit (include)
 //
 //   pk_chassis(x, y, w, h, col)       case with a soft top light and bevelled edge
 //   pk_wood(x, y, w, h)               wooden end cheek
-//   pk_panel(x, y, w, h, col)         inset sub-panel (e.g. the white Nord control panel)
+//   pk_panel(x, y, w, h, col)         inset sub-panel (e.g. a white control panel)
 //   pk_box(x, y, w, h, col, title)    printed section outline with the title breaking the top line
 //   pk_stripes(x, y, w, h, col, gap)  printed pinstripe field
 //   pk_lcd(x, y, w, h, kind)          display window: 0 amber LCD, 1 green LCD, 2 red LED; sets pk_lcdc (text colour)

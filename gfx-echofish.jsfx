@@ -152,7 +152,7 @@ mix_s = mix_t; fc = fbase; stv = 0; stg = 0; lstep = -1; bpos = 0;
 // ================= EQ (the Echo engine, names q_..., sliders 27 - 44) =================
 // a preset mask of the EQ unit, one slider at a time
 function cb_auto(m, off) local(k) ( k = 1; loop(63, m - 2 * floor(m / 2) ? ui_auto(k + off); m = floor(m / 2); k += 1; ); );
-#ui_man = "gfx-echo";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-echofish";                                  // the ? pop-up links to this manual
 
 // ---------- delay memory: two lines of 4.2 s ----------
 q_dlen = ceil(4.2 * srate) + 8;

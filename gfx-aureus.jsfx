@@ -15,17 +15,17 @@ desc:GFX Aureus
 // GOLDEN RATIO (PHI = 1.618034) sets everything the knobs don't:
 //   EQ corners    Band 1 shelf F1/PHI, Band 4 shelf F3*PHI,
 //                 Bands 2/3 bells at the geometric band centres
-//   P (program)   broad Q = 1/PHI; boosting a shelf adds a Pultec-style dip of gain/PHI^2
+//   P (program)   broad Q = 1/PHI; boosting a shelf adds a classic program-EQ dip of gain/PHI^2
 //                 exactly at the band edge (F1, F3)
 //   S (console)   resonant shelves (Q = PHI); bells with proportional Q = PHI * (1 + |gain|/12)
 //   D (dynamic)   S shape whose gain follows band energy above -30 dB over a 12*PHI dB range
 //   Attack        30 ms / PHI^band  (30, 18.5, 11.5, 7.1 ms)
 //   Release       attack * PHI^5    (x 11.09)
-//   Ratios        PHI^k: Opto PHI^(2a), VCA PHI^(3a), Super Nice PHI^(3a) over three stages
-//   Knees         Opto 12*PHI dB, VCA 6/PHI dB, Super Nice 6*PHI dB per stage
+//   Ratios        PHI^k: Opto PHI^(2a), VCA PHI^(3a), Gentle PHI^(3a) over three stages
+//   Knees         Opto 12*PHI dB, VCA 6/PHI dB, Gentle 6*PHI dB per stage
 //   Drift         phi-breathing: each band's threshold wanders slowly (period 3 s * PHI^band)
 //
-// R (Super Nice, after the RNC mode in GFX RND): three gentle compressors in series at
+// R (Gentle, after the GENTLE mode in GFX RND): three gentle compressors in series at
 //   thresholds 6 dB apart, each carrying a third of the ratio, with program-dependent release.
 //
 // MASTER: INPUT, DRIFT, MIX (phase-aligned dry vs bands), OUTPUT, safety limiter (-0.3 dBFS).
@@ -41,7 +41,7 @@ slider10:0<0,2,1{P Program,S Console,D Dynamic}>-B1 EQ Type
 slider11:0<-12,12,0.1>-B1 EQ (dB)
 slider12:1<0,2,1{T Transistor,S Tape,X Transformer}>-B1 Drive Type
 slider13:0<0,100,1>-B1 Drive (%)
-slider14:0<0,2,1{O Opto,V VCA,R Super Nice}>-B1 Comp Type
+slider14:0<0,2,1{O Opto,V VCA,R Gentle}>-B1 Comp Type
 slider15:0<0,100,1>-B1 Comp (%)
 slider16:0<-12,12,0.1>-B1 Gain (dB)
 slider17:0<0,1,1{Off,On}>-B1 Solo
@@ -51,7 +51,7 @@ slider20:0<0,2,1{P Program,S Console,D Dynamic}>-B2 EQ Type
 slider21:0<-12,12,0.1>-B2 EQ (dB)
 slider22:1<0,2,1{T Transistor,S Tape,X Transformer}>-B2 Drive Type
 slider23:0<0,100,1>-B2 Drive (%)
-slider24:0<0,2,1{O Opto,V VCA,R Super Nice}>-B2 Comp Type
+slider24:0<0,2,1{O Opto,V VCA,R Gentle}>-B2 Comp Type
 slider25:0<0,100,1>-B2 Comp (%)
 slider26:0<-12,12,0.1>-B2 Gain (dB)
 slider27:0<0,1,1{Off,On}>-B2 Solo
@@ -61,7 +61,7 @@ slider30:0<0,2,1{P Program,S Console,D Dynamic}>-B3 EQ Type
 slider31:0<-12,12,0.1>-B3 EQ (dB)
 slider32:1<0,2,1{T Transistor,S Tape,X Transformer}>-B3 Drive Type
 slider33:0<0,100,1>-B3 Drive (%)
-slider34:0<0,2,1{O Opto,V VCA,R Super Nice}>-B3 Comp Type
+slider34:0<0,2,1{O Opto,V VCA,R Gentle}>-B3 Comp Type
 slider35:0<0,100,1>-B3 Comp (%)
 slider36:0<-12,12,0.1>-B3 Gain (dB)
 slider37:0<0,1,1{Off,On}>-B3 Solo
@@ -71,7 +71,7 @@ slider40:0<0,2,1{P Program,S Console,D Dynamic}>-B4 EQ Type
 slider41:0<-12,12,0.1>-B4 EQ (dB)
 slider42:1<0,2,1{T Transistor,S Tape,X Transformer}>-B4 Drive Type
 slider43:0<0,100,1>-B4 Drive (%)
-slider44:0<0,2,1{O Opto,V VCA,R Super Nice}>-B4 Comp Type
+slider44:0<0,2,1{O Opto,V VCA,R Gentle}>-B4 Comp Type
 slider45:0<0,100,1>-B4 Comp (%)
 slider46:0<-12,12,0.1>-B4 Gain (dB)
 slider47:0<0,1,1{Off,On}>-B4 Solo
@@ -194,7 +194,7 @@ lastX = slider6;
 function eqset(b, t, g) local(pa, pq, fc) (
   pa = eqA + b*18; pq = eqB + b*18; fc = bp[b*40 + 32];
   sUnity(pq);
-  t == 0 ? (                                                   // P: program / Pultec-inspired
+  t == 0 ? (                                                   // P: program / passive-style
     b == 0 ? ( sLS(pa, fc, g, QBW); g > 0 ? sBell(pq, fc*PHI, -g/(PHI*PHI), IPHI); ) :
     b == 3 ? ( sHS(pa, fc, g, QBW); g > 0 ? sBell(pq, fc*IPHI, -g/(PHI*PHI), IPHI); ) :
              ( sBell(pa, fc, g, IPHI); );
@@ -331,7 +331,7 @@ loop(4,
     p[11] = 1 - 1/(PHI^(2*a)); p[12] = 12*PHI; atk *= PHI; rel *= PHI; p[16] = cms(0.010*PHI);
   ) : p[4] == 1 ? (        // VCA: feedback, fast, firm knee
     p[11] = 1 - 1/(PHI^(3*a)); p[12] = 6*IPHI; atk *= IPHI*IPHI; rel *= IPHI; p[16] = cms(0.0005);
-  ) : (                    // Super Nice: three gentle stages, RMS, program-dependent release
+  ) : (                    // Gentle: three gentle stages, RMS, program-dependent release
     p[11] = 1 - 1/(PHI^(3*a)); p[12] = 6*PHI; p[16] = cms(0.005*PHI);
   );
   p[13] = cms(atk); p[14] = cms(rel);
@@ -380,12 +380,12 @@ loop(4,
     ldb = p[20] > 0.00000000001 ? 10*log10(p[20]) : -140;
     thr = p[28] + 3*dr*p[29];                                  // phi-breathing threshold
     p[4] == 2 ? (
-      // Super Nice: three stages 6 dB apart, each a third of the slope
+      // Gentle: three stages 6 dB apart, each a third of the slope
       gr = -(p[11]/3)*(softk(ldb - (thr + 6), p[12]) + softk(ldb - thr, p[12]) + softk(ldb - (thr - 6), p[12]));
     ) : (
       gr = -p[11]*softk(ldb - thr, p[12]);
     );
-    // release: Opto slows as reduction deepens; Super Nice adapts more gently; VCA fixed
+    // release: Opto slows as reduction deepens; Gentle adapts more gently; VCA fixed
     c = gr < p[21] ? p[13] : p[4] == 0 ? p[14]/(1 + PHI*abs(p[21])/6) : p[4] == 2 ? p[14]/(1 + abs(p[21])/(6*PHI)) : p[14];
     p[21] += c*(gr - p[21]);
     g = db2g(p[21] + p[15]);
@@ -423,7 +423,7 @@ mLim = lg < 0.98 ? 1 : mLim*0.9995;
 @gfx 1680 504
 
 // =====================================================================
-// GUI - yellow rack faceplate (Looptrotter-inspired), 1600 x 480 design space.
+// GUI - yellow rack faceplate, 1600 x 480 design space.
 // Size picker: S 75% / M 90% / L 105% (shrinks further if the window is smaller).
 // Knobs: drag vertically (Shift = fine), double-click or Ctrl-click = reset.
 // The LCD shows the preset, or the parameter you are touching.
@@ -788,13 +788,13 @@ loop(4,
     // one key per row: click to step through the three types; it shows the one in use
     btn(bx + 12, y0 + 26, 112, 28, rw == 0 ? (tsel == 0 ? "PROGRAM" : tsel == 1 ? "CONSOLE" : "DYNAMIC") :
                                    rw == 1 ? (tsel == 0 ? "TRANSISTOR" : tsel == 1 ? "TAPE" : "TRANSFORMER") :
-                                             (tsel == 0 ? "OPTO" : tsel == 1 ? "VCA" : "SUPER NICE"), 1, 3, 0) ? (
+                                             (tsel == 0 ? "OPTO" : tsel == 1 ? "VCA" : "GENTLE"), 1, 3, 0) ? (
       k = (tsel + 1) % 3;
       setk(ti, k);
       strcpy(#lcdn, rw == 0 ? "EQ TYPE" : rw == 1 ? "DRIVE TYPE" : "COMP TYPE");
       strcpy(#lcdv, rw == 0 ? (k == 0 ? "PROGRAM" : k == 1 ? "CONSOLE" : "DYNAMIC") :
                     rw == 1 ? (k == 0 ? "TRANSISTOR" : k == 1 ? "TAPE" : "TRANSFORMER") :
-                              (k == 0 ? "OPTO" : k == 1 ? "VCA" : "SUPER NICE"));
+                              (k == 0 ? "OPTO" : k == 1 ? "VCA" : "GENTLE"));
       lcd_t = time_precise();
     );
     // knob
@@ -860,7 +860,7 @@ hlp ? (
   col(0.88, 0.38, 0.23); R(580, 194, 440, 1);
   gfx_setfont(2); col(0.95, 0.95, 0.93); TX(580, 166, "Design by JGWizrad.  © John Garden 2026");
   gfx_setfont(3); col(0.91, 0.70, 0.23); TX(580, 210, "https://gardenfx.jgmd75.workers.dev/");
-  col(0.85, 0.84, 0.82); TX(580, 236, "Manual - https://gardenfx.jgmd75.workers.dev/manual/gfx-aureus.html");
+  col(0.85, 0.84, 0.82); TX(580, 236, "Manual - https://gardenfx.jgmd75.workers.dev/manual/gfx-aureus.pdf");
   col(0.52, 0.51, 0.49); TX(580, 284, "Click anywhere to close.");
 );
 pcap = mouse_cap;

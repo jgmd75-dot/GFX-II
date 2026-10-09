@@ -15,7 +15,7 @@ desc:GFX G Harbour Keys
 // ROM      sample-rate and bit-depth reduction (48 kHz / 16 bit down to ~10 kHz / 8 bit, aliasing left in).
 // WOW      tape speed wander (slow wow, flutter, a little random drag): the vaporwave detune.
 // VHS      worn tape: the top rolls off, hiss and soft tape saturation come up.
-// MOD RACK from GFX Mod Rack: CHORUS (stereo BBD-style), TREM (stereo auto-pan, the Rhodes trick),
+// MOD RACK from GFX Mod Rack: CHORUS (stereo BBD-style), TREM (stereo auto-pan, the classic e-piano trick),
 //          VIBE (photocell phaser), DELAY (ping-pong, warm saturating feedback, ms or synced to tempo).
 // SPACE    ROOM, PLATE (bright, long) or GATED (the 80s gated reverb); SPACE sets the amount.
 // The finer physical controls of G Piano (stiffness, wire age, tuning variance, damper, body, sympathetic

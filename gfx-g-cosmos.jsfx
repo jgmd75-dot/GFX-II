@@ -4,7 +4,7 @@ desc:GFX G Cosmos
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-voice (.jsfx-inc) in the same folder.
 //
-// 8-voice pad synthesizer in the spirit of the classic 80s polys (with a nod to the D-50's layered shimmer).
+// 8-voice pad synthesizer in the spirit of the classic 80s polys (with a nod to the late-80s digital layered shimmer).
 //   DCO    - SAW, PULSE (PW, PWM from the LFO), SUB (one octave down), NOISE - all from one oscillator
 //   LAYER  - a second, detuned saw (LEVEL, DETUNE, OCTAVE) for shimmer and width
 //   HPF    - 0: bass boost, 1: flat, 2 and 3: thinner

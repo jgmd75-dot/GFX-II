@@ -403,7 +403,7 @@ function ui_help() local(w, h, cw, ch, cx, cy, tw, th) (
   ui_help_open ? (
     ui_cola(0x000000, 0.62); gfx_rect(0, 0, gfx_w, gfx_h);
     strcpy(#ui_hl1, "Design by JGWizrad.  "); strcat(#ui_hl1, "© John Garden 2026");
-    strcpy(#ui_hl3, "Manual - "); strcat(#ui_hl3, #ui_site); strcat(#ui_hl3, "manual/"); strcat(#ui_hl3, #ui_man); strcat(#ui_hl3, ".html");
+    strcpy(#ui_hl3, "Manual - "); strcat(#ui_hl3, #ui_site); strcat(#ui_hl3, "manual/"); strcat(#ui_hl3, #ui_man); strcat(#ui_hl3, ".pdf");
     gfx_setfont(4); gfx_measurestr(#ui_hl3, tw, th);
     cw = max(tw + 40 * sc, 360 * sc); ch = 126 * sc;
     cx = (gfx_w - cw) * 0.5; cy = (gfx_h - ch) * 0.5;
@@ -529,7 +529,7 @@ function ui_keyshadow(x, y, w, h, r) local(n, i, al, d, ins) (
   );
 );
 
-// ---------- BBC Micro style keycap ----------
+// ---------- 80s micro style keycap ----------
 // Sculpted key: dark side walls, smaller dished top face, cream legend. red = 1 for the warm
 // olive-brown function-key colour. led = 1 puts a caps-lock style amber LED in the top face (lit while active);
 // without an LED an active key sits pressed down with its legend in the section colour.
@@ -538,7 +538,7 @@ function ui_bbckey(x, y, w, h, label, active, led, red, enabled, hov, dn, font)
   local(tw, th, k, top, side, edge, ink, tx, ty, fh, lx, ly) (
   gfx_setfont(font); gfx_measurestr(label, tw, th);
   k = dn ? 2 * sc : active && !led ? 1.5 * sc : 0;               // travel
-  red ? ( top = hov ? 0x77704A : 0x69633F; side = 0x47422A; edge = 0x1C1A10; ink = 0xF2ECD8; )   // warm olive-brown (BBC edit keys)
+  red ? ( top = hov ? 0x77704A : 0x69633F; side = 0x47422A; edge = 0x1C1A10; ink = 0xF2ECD8; )   // warm olive-brown (micro edit keys)
       : ( top = hov ? 0x47443F : 0x3B3935; side = 0x24221F; edge = 0x0E0D0C; ink = 0xEDE6D6; );
   x = floor(x + 0.5); y = floor(y + 0.5); w = floor(w + 0.5); h = floor(h + 0.5);
   ui_keyshadow(x, y, w, h, 3 * sc);
@@ -573,7 +573,7 @@ function ui_button(x, y, w, h, label, active, enabled) local(tw, th, hit, led, h
   gfx_setfont(2);
   gfx_measurestr(label, tw, th);
   ui_hw ? (
-    // hardware look: BBC Micro keycaps. Header selector keys (top strip, with an LED) are warm brown.
+    // hardware look: 80s micro keycaps. Header selector keys (top strip, with an LED) are warm brown.
     led = w >= 34 * sc && !ui_noled;
     hov = enabled && mouse_x >= x && mouse_x < x + w && mouse_y >= y && mouse_y < y + h;
     ui_bbckey(x, y, w, h, label, active, led, led && y < 44 * sc, enabled, hov, hov && mdown && drag_id == -1, 2);
@@ -893,7 +893,7 @@ function ui_knob_main_flat(cx, cy, r, a1, n, act, ns, rc, pc) local(i, t, nw) (
 );
 
 
-// a keycap button in a given box (BBC Micro style, as ui_button in hardware mode).
+// a keycap button in a given box (80s micro style, as ui_button in hardware mode).
 // toggle = 1 adds a caps-lock style LED at the left that lights while active. Returns 1 when clicked.
 // In the flat look (ui_hw = 0) it draws as a flat button instead.
 function ui_keycap(x, y, w, h, label, active, toggle) local(hov, hit, tw, th) (
@@ -911,7 +911,7 @@ function ui_keycap(x, y, w, h, label, active, toggle) local(hov, hit, tw, th) (
   hit;
 );
 
-// a keycap label button (used under the filter knobs; BBC Micro style in hardware mode); sets knob_lblclick
+// a keycap label button (used under the filter knobs; 80s micro style in hardware mode); sets knob_lblclick
 function ui_lblbtn3d(cx, y, idx, s) local(tw, th, bx, by, bw, bh, hov) (
   !ui_hw ? ui_lblbtn(cx, y, idx, s) : (                    // flat look: the plain label button
   gfx_setfont(4); gfx_measurestr(s, tw, th);

@@ -3,12 +3,12 @@ desc:GFX Twin Comp
 //tags: dynamics compressor vca rms softknee expressor dual
 //author: JGWizrad / Garden FX (GFX)
 //
-// A  VCA      in the spirit of the dbx 160: true-RMS detection, a fast VCA, SOFT KNEE (or hard).
+// A  VCA      in the spirit of the classic 70s true-RMS VCAs: true-RMS detection, a fast VCA, SOFT KNEE (or hard).
 //             COMPRESSION runs 1:1 .. INF:1 and on past it into negative ratios (louder in, quieter out).
 //             Program-dependent timing: the attack quickens the further the signal is over threshold
 //             (about 15 ms for 10 dB, 5 ms for 20 dB) and the release recovers at a steady 120 dB per second.
 //             BELOW / KNEE / ABOVE lamps show where the level sits against the threshold.
-// B  EXPRESSOR in the spirit of the Aphex 651: peak-sensing, smooth knee, DRIVE / RATIO / ATTACK / RELEASE.
+// B  EXPRESSOR in the spirit of the classic 80s program expressors: peak-sensing, smooth knee, DRIVE / RATIO / ATTACK / RELEASE.
 //             AUTO: automatic, opto-smooth timing (quick attack, a two-stage programme-dependent release).
 //             HF EXP: brings the top back up in proportion to the gain reduction, so heavy compression stays open.
 //             SPR: two all-passes at 180 Hz rotate the low end against the top for a tighter, firmer bottom.

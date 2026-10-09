@@ -135,7 +135,7 @@ cWarb  = 1 - exp(-1/(0.15*srate));
 cSea   = 1 - exp(-1/(3.0*srate));
 cDrnd  = 1 - exp(-1/(0.8*srate));
 
-// Vibe stage base frequencies (Hz) - unequal, Univibe-style
+// Vibe stage base frequencies (Hz) - unequal, photocell-vibe-style
 vbFb = alloc(4); vbFb[0] = 60; vbFb[1] = 180; vbFb[2] = 480; vbFb[3] = 1300;
 vbLp  = opc(160);
 vbAt  = 1 - exp(-1/(0.008*srate));             // lamp heats fast
@@ -774,7 +774,7 @@ hlp ? (
   col(0.88, 0.38, 0.23); R(580, 172, 440, 1);
   gfx_setfont(3); col(0.95, 0.95, 0.93); TX(580, 146, "Design by JGWizrad.  © John Garden 2026");
   gfx_setfont(5); col(0.91, 0.70, 0.23); TX(580, 186, "https://gardenfx.jgmd75.workers.dev/");
-  col(0.85, 0.84, 0.82); TX(580, 210, "Manual - https://gardenfx.jgmd75.workers.dev/manual/gfx-modrack.html");
+  col(0.85, 0.84, 0.82); TX(580, 210, "Manual - https://gardenfx.jgmd75.workers.dev/manual/gfx-modrack.pdf");
   col(0.52, 0.51, 0.49); TX(580, 254, "Click anywhere to close.");
 );
 pcap = mouse_cap;

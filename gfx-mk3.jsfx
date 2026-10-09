@@ -1,5 +1,5 @@
 desc:GFX MK3
-// gfx-mk3 - Broadcast Channel Strip (inspired by 1970s BBC Mk III local radio desks) with VCA Gain-Brain-style Compressor
+// gfx-mk3 - Broadcast Channel Strip (inspired by 1970s local radio desks) with a classic VCA Compressor
 //tags: channel strip eq compressor transformer broadcast
 //author: JGWizrad / Garden FX (GFX)
 //
@@ -17,7 +17,7 @@ desc:GFX MK3
 //           under the programme (the way a station's multiband processor holds its top band), so
 //           the air stays constant and the voice cuts through background noise. It runs in parallel:
 //           only the new harmonics are added, about 26 dB under the programme. Works with EQ IN.
-// COMP    VCA compressor in the spirit of the Gain Brain II:
+// COMP    VCA compressor in the spirit of the classic 70s VCA limiters:
 //           peak-sensing feed-forward, fast VCA attack, small fixed knee, ratio up to infinity.
 //           Program-dependent release ("linear integration"): the detector watches the crest
 //           factor; spiky material releases faster, dense material slower (x0.4 .. x2.5).
@@ -29,7 +29,7 @@ desc:GFX MK3
 //           0.25 dB per dB of GR up to 4 dB: LIFT raises the voice band as it compresses, DIP sinks it.
 // OUT     The GFX output stage after OUTPUT: OFF / CLIP (soft clip at -0.3 dBFS, zero latency) /
 //         LIMIT (3 ms lookahead brickwall at -0.3 dBFS, latency reported to REAPER).
-// METER   Stereo PPM in the BBC manner: black face, marks 1 - 7, red needle = left, green = right.
+// METER   Stereo PPM in the broadcast manner: black face, marks 1 - 7, red needle = left, green = right.
 //         4 = -18 dBFS alignment, 4 dB per mark (6 dB between 1 and 2), 6 = -10 dBFS.
 //         Ballistics: fast integrating rise, fall of 24 dB in 2.8 s.
 //
@@ -415,7 +415,7 @@ function mkey(x, y, w, h, t, on, c) local(hit, hov, tw, th) (
   );
   hit;
 );
-// header key: house BBC keycap on the hardware panel, flat key on the neumorphic one
+// header key: house micro keycap on the hardware panel, flat key on the neumorphic one
 function hkey(x, y, w, h, t, on) (
   hw ? ui_button(x*qs, y*qs, w*qs, h*qs, t, on, 1) : mkey(x, y, w, h, t, on, AMB);
 );
@@ -594,7 +594,7 @@ function mscrew(x, y) (
     ui_cola(0xFFFFFF, 0.18); gfx_circle((x - 1.4)*sc, (y - 1.6)*sc, 0.9*sc, 1, 1);
   );
 );
-// IN key: the same warm key as ORDER (house BBC key with an amber LED on the hardware panel)
+// IN key: the same warm key as ORDER (house micro key with an amber LED on the hardware panel)
 function inkey(x, y, on) local(hov, hit) (
   hov = inbox(x, y, 70, 32);
   hw ? (

@@ -1,10 +1,10 @@
 desc:GFX Model 44
-//tags: channel strip preamp tape saturation rack portastudio companding punch
+//tags: channel strip preamp tape saturation rack companding punch
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-output, gfx-input, gfx-ui, gfx-panel and gfx-dyn (.jsfx-inc) in the same folder.
 //
-// A single-channel strip in the spirit of the early-90s rack-mountable cassette portastudio ecosystem:
+// A single-channel strip in the spirit of the early-90s rack-mountable cassette portable-studio ecosystem:
 // a cleaner, higher-headroom solid-state preamp, a tighter semi-parametric EQ, a dense magnetic
 // saturation ceiling with a Normal / Double speed switch, and a companding noise reduction tuned for
 // less pumping than the earlier 80s machines (personal use; the sound is designed from scratch).

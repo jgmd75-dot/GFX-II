@@ -1,10 +1,10 @@
 desc:GFX Equaliser
-//tags: equaliser eq parametric orban 622b mid-side filter
+//tags: equaliser eq parametric 622 mid-side filter
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-input, gfx-output and gfx-ui (.jsfx-inc) in the same folder.
 //
-// Four-band parametric in the spirit of the Orban 622B:
+// Four-band parametric in the spirit of the classic 622 broadcast EQ:
 //   - overlapping band ranges, so bands can be stacked
 //   - "proportional" width: gentle and broad for small moves, narrower as the gain is pushed
 //   - the last quarter of each GAIN knob's cut dives into a notch (down to -40 dB)

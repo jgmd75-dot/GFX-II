@@ -1,5 +1,5 @@
 desc:GFX EC-444
-//tags: delay bbd analog maplin realistic chorus saturation
+//tags: delay bbd analog chorus saturation
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-input, gfx-lfo, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
@@ -36,7 +36,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-echorder";
+#ui_man = "gfx-Ec444";
 
 // Delay memory (MN3005 / MN3207 buffers)
 dlen = ceil(1.0 * srate) + 8;
