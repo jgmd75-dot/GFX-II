@@ -69,6 +69,7 @@ HN = 1000; hcount = 0;                       // held-note stack (last-note prior
 memset(HN, 0, 128);
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 ins_drift_init();
+sv_pal = 0;                                    // faceplate colour (trial)
 sv_dE.drift_init(0.8 + rand(0.5));            // the envelope's slow timing wander
 bend = 1; nd_mul = 1; cur = 60; tgt = 60; vel = 0.8; gate = 0; ab_v = 0;
 sm = vo_coef(30);
@@ -251,13 +252,20 @@ file_var(0, edited);
 @gfx 960 540
 ui_begin(960, 540);
 
-CREAM = 0xF2E8D0; SH1 = 0xEADDBF; SH2 = 0xE3D4B2; SH3 = 0xDCCBA6; ORG = 0xE0701E; INK = 0x3A2A1E; DIMI = 0x7A6450;
-CAPD = 0x3B2A20; CAPO = 0xE0701E; CAPC = 0xF6EFDF; CAPG = 0x9DA2A8;
-dy_ink = INK; dy_bg = CREAM; dy_nov = 1; rd_sqbg = 0x5A4636;
+// faceplate colours (sv_pal: 0 cream, 1 oxblood, 2 olive, 3 petrol, 4 chocolate, 5 slate) - colour trial
+ORG = 0xE0701E; CAPO = 0xE0701E; CAPC = 0xF6EFDF; CAPG = 0x9DA2A8;
+sv_pal == 0 ? ( PANEL = 0xF2E8D0; SH1 = 0xEADDBF; SH2 = 0xE3D4B2; SH3 = 0xDCCBA6; INK = 0x3A2A1E; DIMI = 0x7A6450; CAPD = 0x3B2A20; SQBG = 0x5A4636; BTX = 0xF2E8D0; ) :
+sv_pal == 1 ? ( PANEL = 0x4A1D1F; SH1 = 0x572427; SH2 = 0x502023; SH3 = 0x461B1D; INK = 0xF2E8D0; DIMI = 0xCDAEA2; CAPD = 0xF2E8D0; SQBG = 0x2A1113; BTX = 0xFFF6E8; ) :
+sv_pal == 2 ? ( PANEL = 0x3F4227; SH1 = 0x4A4D2F; SH2 = 0x43462A; SH3 = 0x393C23; INK = 0xEFE9D4; DIMI = 0xBDB89A; CAPD = 0xEFE9D4; SQBG = 0x23251A; BTX = 0xFFF6E8; ORG = 0xE08A1E; CAPO = 0xE08A1E; ) :
+sv_pal == 3 ? ( PANEL = 0x1E4448; SH1 = 0x255157; SH2 = 0x21494E; SH3 = 0x1B3E42; INK = 0xEAF0E8; DIMI = 0x9FBDB9; CAPD = 0xEAF0E8; SQBG = 0x10272A; BTX = 0xFFF6E8; ) :
+sv_pal == 4 ? ( PANEL = 0x3E2B21; SH1 = 0x4A3428; SH2 = 0x433024; SH3 = 0x39281E; INK = 0xF2E8D0; DIMI = 0xC2A68F; CAPD = 0xF2E8D0; SQBG = 0x231811; BTX = 0xFFF6E8; ) :
+              ( PANEL = 0x3A4552; SH1 = 0x445160; SH2 = 0x3E4A58; SH3 = 0x35404C; INK = 0xEEF0F2; DIMI = 0xA9B4C0; CAPD = 0xEEF0F2; SQBG = 0x1F252D; BTX = 0xFFF6E8; );
+SLOT = ui_mix(PANEL, 0x000000, 0.65);
+dy_ink = INK; dy_bg = PANEL; dy_nov = 1; rd_sqbg = SQBG;
 
 function setv(idx, v) ( slider(idx) = v; slider_automate(2 ^ (idx - 1)); edited = 1; );
 // section title: an orange band across the top of the inset
-function band(x, y, w, s) ( ui_col(ORG); gfx_rect(x * sc, y * sc, w * sc, 18 * sc); gfx_setfont(4); ui_col(CREAM); gfx_x = (x + 8) * sc; gfx_y = (y + 3) * sc; gfx_drawstr(s); );
+function band(x, y, w, s) ( ui_col(ORG); gfx_rect(x * sc, y * sc, w * sc, 18 * sc); gfx_setfont(4); ui_col(BTX); gfx_x = (x + 8) * sc; gfx_y = (y + 3) * sc; gfx_drawstr(s); );
 // a row of lit keys for a stepped slider
 function keys(x, y, w, h, gap, idx, n, names) local(i) (
   i = 0;
@@ -267,6 +275,25 @@ function keys(x, y, w, h, gap, idx, n, names) local(i) (
     rd_sq(x + i * (w + gap), y, w, h, floor(slider(idx) + 0.5) == i, ORG, #kn) ? setv(idx, i);
     i += 1;
   );
+);
+// the wave symbols on the WAVE keys: 0 triangle, 1 saw, 2 square, 3 narrow pulse, 4 PWM (pulse with a width arrow)
+function wglyph(cx, cy, t, on) local(x0, x1, y0, y1, w, k) (
+  ui_col(on ? 0x1A1210 : 0xE8DCC6); w = 30; x0 = cx - w / 2; x1 = cx + w / 2; y0 = cy - 7; y1 = cy + 7;
+  k = 0; loop(2,
+    t == 0 ? ( gfx_line(x0 * sc, (y1 + k) * sc, (cx - 7.5) * sc, (y0 + k) * sc, 1); gfx_line((cx - 7.5) * sc, (y0 + k) * sc, (cx + 7.5) * sc, (y1 + k) * sc, 1);
+               gfx_line((cx + 7.5) * sc, (y1 + k) * sc, x1 * sc, (y0 + k) * sc, 1); ) :
+    t == 1 ? ( gfx_line(x0 * sc, (y1 + k) * sc, cx * sc, (y0 + k) * sc, 1); gfx_line(cx * sc, (y0 + k) * sc, cx * sc, (y1 + k) * sc, 1);
+               gfx_line(cx * sc, (y1 + k) * sc, x1 * sc, (y0 + k) * sc, 1); gfx_line(x1 * sc, (y0 + k) * sc, x1 * sc, (y1 + k) * sc, 1); ) :
+    ( w = t == 2 ? 7.5 : 3.5;
+      gfx_line(x0 * sc, (y1 + k) * sc, x0 * sc, (y0 + k) * sc, 1); gfx_line(x0 * sc, (y0 + k) * sc, (x0 + w) * sc, (y0 + k) * sc, 1);
+      gfx_line((x0 + w) * sc, (y0 + k) * sc, (x0 + w) * sc, (y1 + k) * sc, 1); gfx_line((x0 + w) * sc, (y1 + k) * sc, (x0 + 15) * sc, (y1 + k) * sc, 1);
+      gfx_line((x0 + 15) * sc, (y1 + k) * sc, (x0 + 15) * sc, (y0 + k) * sc, 1); gfx_line((x0 + 15) * sc, (y0 + k) * sc, (x0 + 15 + w) * sc, (y0 + k) * sc, 1);
+      gfx_line((x0 + 15 + w) * sc, (y0 + k) * sc, (x0 + 15 + w) * sc, (y1 + k) * sc, 1); gfx_line((x0 + 15 + w) * sc, (y1 + k) * sc, x1 * sc, (y1 + k) * sc, 1); );
+    k += 0.6;
+  );
+  t == 4 ? ( gfx_line((x0 + 15 - 1) * sc, (cy + 10) * sc, (x0 + 15 + 9) * sc, (cy + 10) * sc, 1);
+             gfx_line((x0 + 15 + 9) * sc, (cy + 10) * sc, (x0 + 15 + 6) * sc, (cy + 8) * sc, 1); gfx_line((x0 + 15 + 9) * sc, (cy + 10) * sc, (x0 + 15 + 6) * sc, (cy + 12) * sc, 1);
+             gfx_line((x0 + 15 - 1) * sc, (cy + 10) * sc, (x0 + 15 + 2) * sc, (cy + 8) * sc, 1); gfx_line((x0 + 15 - 1) * sc, (cy + 10) * sc, (x0 + 15 + 2) * sc, (cy + 12) * sc, 1); );
 );
 // the Traveler: a horizontal slider (log), orange handle; double-click resets; value shows on hover
 function trav(x, y, w, idx, lo, hi, def, label) local(v, n, hx, did, hov) (
@@ -281,26 +308,26 @@ function trav(x, y, w, idx, lo, hi, def, label) local(v, n, hx, did, hov) (
     slider(idx) != v ? ( slider(idx) = v; slider_automate(2 ^ (idx - 1)); edited = 1; );
   );
   n = log(slider(idx) / lo) / log(hi / lo); hx = x + n * w;
-  ui_col(0x2A1E16); gfx_rect(x * sc, (y - 3) * sc, w * sc, 6 * sc);                       // the slot
+  ui_col(SLOT); gfx_rect(x * sc, (y - 3) * sc, w * sc, 6 * sc);                            // the slot
   ui_cola(0xFFFFFF, 0.35); gfx_rect(x * sc, (y + 3) * sc, w * sc, 1 * sc);
   i = 0; loop(11, ui_cola(INK, 0.55); gfx_rect((x + i * w / 10) * sc, (y + 9) * sc, 1 * sc, (i % 5 == 0 ? 7 : 4) * sc); i += 1; );
   ui_cola(0x000000, 0.3); gfx_rect((hx - 9) * sc, (y - 10) * sc, 20 * sc, 22 * sc);      // the handle
   ui_col(ORG); gfx_rect((hx - 10) * sc, (y - 11) * sc, 20 * sc, 22 * sc);
   ui_cola(0xFFFFFF, 0.35); gfx_rect((hx - 10) * sc, (y - 11) * sc, 20 * sc, 3 * sc);
-  ui_col(CREAM); gfx_rect((hx - 1) * sc, (y - 9) * sc, 2 * sc, 18 * sc);
+  ui_col(0xFFF6E8); gfx_rect((hx - 1) * sc, (y - 9) * sc, 2 * sc, 18 * sc);
   gfx_setfont(5); ui_col(INK); gfx_x = (x - 44) * sc; gfx_y = (y - 6) * sc; gfx_drawstr(label);
   (hov || drag_id == did) ? ( sprintf(#tv, "%.0f Hz", slider(idx)); rd_lbl(x + w + 34, y - 5, #tv, INK, 1); );
 );
 
 // ---------- panel ----------
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
-ui_col(CREAM); gfx_rect(0, 0, 960 * sc, 540 * sc);
+ui_col(PANEL); gfx_rect(0, 0, 960 * sc, 540 * sc);
 gfx_gradrect(0, 0, 960 * sc, 270 * sc, 1, 1, 1, 0.10, 0, 0, 0, 0, 0, 0, 0, -0.10 / (270 * sc));
 ui_col(ORG); gfx_rect(0, 64 * sc, 960 * sc, 4 * sc);
 ui_cola(0x000000, 0.25); gfx_rect(0, 536 * sc, 960 * sc, 4 * sc);
 
 // header: badge, name, presets [PRESETS][◄][►][LCD], MIDI, size
-rd_badge(36, 32, 16, INK, CREAM);
+rd_badge(36, 32, 16, INK, PANEL);
 rd_title(62, 14, "SEVENTY", 28, INK);
 rd_sub(66, 46, "MONOPHONIC SYNTHESIZER", DIMI, 1);
 pm_ = rd_sq(376, 17, 78, 32, 0, ORG, "PRESETS");
@@ -321,16 +348,17 @@ ui_size_picker(830 * sc, 24 * sc);
 // ---------- row 1: VCO 1, VCO 2, MODULATION ----------
 inset(16, 88, 330, 132, SH1); band(16, 88, 330, "VCO 1");
 rd_lbl(40, 116, "WAVE", DIMI, 1);
-keys(26, 126, 58, 30, 6, 1, 5, "TRI SAW SQR PLS PWM ");
+i_ = 0; loop(5, rd_sq(26 + i_ * 64, 126, 58, 30, floor(slider1 + 0.5) == i_, ORG, "") ? setv(1, i_); wglyph(55 + i_ * 64, 141, i_, floor(slider1 + 0.5) == i_); i_ += 1; );
 rd_lbl(44, 168, "OCTAVE", DIMI, 1);
 keys(26, 178, 48, 30, 5, 2, 6, "64' 32' 16' 8'  4'  2'  ");
 
 inset(358, 88, 300, 132, SH2); band(358, 88, 300, "VCO 2");
-rd_lbl(386, 116, "SOURCE", DIMI, 1);
-keys(368, 126, 54, 30, 4, 3, 5, "SAW RINGWHT PNK RED ");
-sprintf(#v, "%+.2f st", slider4); dy_knob(420, 178, 20, 4, -12, 12, 0.1, 0, CAPD, "TUNE", #v);
-sprintf(#v, "%.0f%%", slider5); dy_knob(560, 176, 22, 5, 0, 100, 30, 0, CAPO, "BLEND", #v);
-rd_lbl(516, 176, "1", DIMI, 1); rd_lbl(604, 176, "2", DIMI, 1);
+rd_lbl(386, 114, "SOURCE", DIMI, 1);
+keys(368, 124, 54, 28, 4, 3, 5, "    RINGWHT PNK RED ");
+wglyph(395, 138, 1, floor(slider3 + 0.5) == 0);
+sprintf(#v, "%+.2f st", slider4); dy_knob(440, 182, 20, 4, -12, 12, 0.1, 0, CAPD, "TUNE", #v);
+sprintf(#v, "%.0f%%", slider5); dy_knob(576, 182, 20, 5, 0, 100, 30, 0, CAPO, "BLEND", #v);
+rd_lbl(540, 196, "1", DIMI, 1); rd_lbl(612, 196, "2", DIMI, 1);
 
 inset(670, 88, 274, 132, SH3); band(670, 88, 274, "MODULATION");
 sprintf(#v, "%.2f Hz", slider6); dy_knob(708, 152, 20, 6, 0.1, 30, 5, 1, CAPD, "MG RATE", #v);
