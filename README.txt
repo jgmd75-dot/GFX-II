@@ -136,13 +136,13 @@ DYNAMICS
   VB30            gfx-vb30.jsfx
 
 EQ & FILTERS
-  622             gfx-622.jsfx
   Baxendale       gfx-baxendale.jsfx
   Board EQ        gfx-board-q.jsfx
   Contour         gfx-contour.jsfx
   Echofish        gfx-echofish.jsfx
   Equaliser       gfx-equaliser.jsfx
   Graphic EQ      gfx-graphic-eq.jsfx
+  Skye            gfx-skye.jsfx
   Starfish        gfx-starfish.jsfx
   Surgical EQ     gfx-surgical-eq.jsfx
   Tilt EQ         gfx-tilt-eq.jsfx
