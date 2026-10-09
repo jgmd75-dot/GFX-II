@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Stage 8 - manual</title><meta name="description" content="A big theatre console&#x27;s mix bus as an eight-stem summing mixer, with VCA groups.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-stage-8">
+<div class="cat">Summing</div><h1>Stage 8</h1>
+<p class="tagline">A big theatre console's mix bus as an eight-stem summing mixer, with VCA groups.</p>
+<div class="shot"><img src="img/gfx-stage-8.webp" alt="The Stage 8 panel" loading="lazy"></div>
+<h2>Overview</h2><p>Stage 8 sums eight stereo stems through the mix bus of a big British theatre console, in the spirit of the consoles famous for their clarity in the West End and on Broadway. Each stem has a level, a pan, a VCA assign, solo and mute; two VCA group masters ride whole groups of stems with one knob.</p><p>Two console characters are on board. VINTAGE is the earlier, transformer-coupled desk: the lows thicken and saturate gently as the level rises, there is a soft lift in the presence region, a silky top that rolls off just above the audio band, a whisper of crosstalk and noise, and a gentle squeeze when driven. MODERN is the later transformerless desk: flat, wide, true stereo, with enormous headroom.</p><p>DRIVE sets the level into the summing amplifiers. It is level-matched, so it changes the colour, not the volume.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Summing stems or groups through one console-style bus</li><li>Riding several stems together with a VCA master</li><li>Adding gentle transformer weight and a silky top to a mix (VINTAGE)</li><li>Clean, wide summing with solo and mute in one place (MODERN)</li><li>Theatre-style mixing: grouping a band, vocals and effects for quick balancing</li></ul>
+<h2>Setting up the routing in REAPER</h2><ol class="steps"><li>Create a bus track and put Stage 8 on it. Open the track's ROUTE window and set Track channels to 16.</li><li>On each stem track, add a send to the bus track and pick its destination channel pair in the send's audio routing: stem 1 on 1/2, stem 2 on 3/4, stem 3 on 5/6, and so on up to stem 8 on 15/16. The pair is printed under each strip's name.</li><li>Turn off the master send on every stem track, so the stems are heard only through Stage 8.</li><li>Stem 1 also receives whatever plays on the bus track itself (channels 1/2), so keep the bus track empty or use it as stem 1.</li><li>The mix leaves on channels 1/2, so leave the bus track's master send on. The green light on each strip lights when signal arrives and the stem is being heard.</li></ol>
+<h2>Controls</h2><p>Drag a knob up or down to turn it, or double-click to reset it.</p><h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets (clicking the display does the same). A preset sets only MODE and DRIVE; the stems and VCAs are left as they are. The last entry resets everything to the defaults.</dd><dt>Left / right arrows</dt><dd>Step to the previous or next preset.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><h3>Stems 1 to 8</h3><dl class="ctl"><dt>Name</dt><dd>Click the name at the top of the strip and type (e.g. Drums), up to 16 characters. Enter keeps it, Escape cancels, and an empty name goes back to the number. The names are saved with the project.</dd><dt>Signal light</dt><dd>Glows green when audio arrives on the stem and it is being heard.</dd><dt>PAN</dt><dd>A balance control, L100 to R100: in the centre both sides play at full level; turning it fades the opposite side down.</dd><dt>LEVEL</dt><dd>The stem's level, from OFF (-60 dB) to +10 dB; 0 dB by default.</dd><dt>VCA</dt><dd>Click to step the stem's VCA assign: none (VCA -), VCA A (orange light) or VCA B (blue light). An assigned stem follows that VCA master's level and mute.</dd><dt>SOLO</dt><dd>Solo in place; several stems can be soloed at once. While anything is soloed, only the soloed stems are heard.</dd><dt>MUTE</dt><dd>Silences the stem. A muted stem stays muted even when soloed.</dd></dl><h3>VCA A and VCA B</h3><dl class="ctl"><dt>LEVEL</dt><dd>The group master, OFF (-60 dB) to +10 dB. It rides every stem assigned to it, on top of their own levels.</dd><dt>MUTE</dt><dd>Mutes every stem assigned to that VCA.</dd></dl><h3>MASTER</h3><dl class="ctl"><dt>VINTAGE / MODERN</dt><dd>Picks the console. VINTAGE: transformer-coupled, with low-end thickening, presence lift, a silky top, a whisper of crosstalk and noise, and a gentle squeeze when driven. MODERN: transformerless - flat and clean, and only extreme levels are softly limited. The caption under the controls reads TRANSFORMER-COUPLED or TRANSFORMERLESS.</dd><dt>DRIVE</dt><dd>The level into the summing amps, -6 to +12 dB. It is level-matched: more DRIVE gives more colour in VINTAGE, not more volume.</dd><dt>MASTER</dt><dd>The final mix level, from OFF (-60 dB) to +10 dB.</dd><dt>L / R meters</dt><dd>Two 12-light meters showing the mix output; 0 on the meter is -18 dBFS.</dd></dl>
+<h2>Presets</h2><dl class="ctl"><dt>Vintage</dt><dd>The transformer-coupled console, DRIVE at 0 dB.</dd><dt>Vintage, driven</dt><dd>The vintage console with 6 dB of drive.</dd><dt>Vintage, pushed hard</dt><dd>The vintage console with 10 dB of drive, for a thicker, squeezed bus.</dd><dt>Modern</dt><dd>The transformerless console, DRIVE at 0 dB.</dd><dt>Modern, driven</dt><dd>The modern console with 6 dB of drive.</dd><dt>Reset all to defaults</dt><dd>Every control back to its starting value, including stem levels, pans, VCA assigns, solos, mutes and the VCA masters.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Assign the band to VCA A and the vocals to VCA B: then one knob each balances the whole show, as on a theatre desk.</li><li>Because DRIVE is level-matched, you can sweep it and judge the colour without being fooled by loudness.</li><li>Name the strips - the names are saved with the project, so the console makes sense when you come back to it.</li><li>Try VINTAGE with DRIVE at +6 dB on a full mix, then switch to MODERN to hear how much of the weight and silk comes from the transformer stages.</li></ul>
+<p class="file">File: gfx-stage-8.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

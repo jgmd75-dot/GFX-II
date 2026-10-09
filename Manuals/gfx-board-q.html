@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Board EQ - manual</title><meta name="description" content="A four-band channel EQ in the spirit of the classic British large-format console strips.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-board-q">
+<div class="cat">EQ &amp; filters</div><h1>Board EQ</h1>
+<p class="tagline">A four-band channel EQ in the spirit of the classic British large-format console strips.</p>
+<div class="shot"><img src="img/gfx-board-q.webp" alt="The Board EQ panel" loading="lazy"></div>
+<h2>Overview</h2><p>Board EQ is a console channel EQ: a high-pass and low-pass filter, a low and high band that can be shelves or bells, and two fully parametric mid bands. It ends in the channel's line amp, which can be driven into gentle saturation.</p><p>Two voicings recreate the two well-known generations of console EQ card. BROWN is the earlier, gentler card, with broad bells and soft shelves. BLACK is the later card: the bells tighten as you boost or cut further, and the shelves have a little dip or bump just inside the corner, for a more focused, punchy sound.</p><p>The display on the right shows the response of the whole EQ, with a coloured dot for each band.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Everyday channel EQ on vocals, drums, bass and guitars</li><li>Punchy, focused boosts with the BLACK voicing</li><li>Broad, musical tone shaping with the BROWN voicing</li><li>Cleaning up the ends with the HPF and LPF</li><li>A touch of line-amp warmth (DRIVE)</li></ul>
+<h2>Controls</h2><h3>FILTERS</h3><dl class="ctl"><dt>HPF</dt><dd>A high-pass filter, 18 dB per octave, from OFF (fully left) up to 400 Hz. Removes rumble and low-end mud.</dd><dt>LPF</dt><dd>A low-pass filter, 12 dB per octave, from 3 kHz up to OFF (fully right). Tames hiss and harsh top.</dd></dl><h3>LF</h3><dl class="ctl"><dt>GAIN</dt><dd>-15 to +15 dB.</dd><dt>FREQ</dt><dd>30 to 450 Hz (100 Hz by default).</dd><dt>BELL</dt><dd>Off (default): a low shelf. On: a bell centred on FREQ.</dd></dl><h3>LMF</h3><dl class="ctl"><dt>GAIN</dt><dd>-15 to +15 dB.</dd><dt>FREQ</dt><dd>200 Hz to 2.5 kHz (600 Hz by default).</dd><dt>Q</dt><dd>The bandwidth, 0.4 to 3 (1 by default). Higher is narrower. In BLACK the bell also narrows as you boost or cut more.</dd></dl><h3>HMF</h3><dl class="ctl"><dt>GAIN</dt><dd>-15 to +15 dB.</dd><dt>FREQ</dt><dd>600 Hz to 7 kHz (2.5 kHz by default).</dd><dt>Q</dt><dd>The bandwidth, 0.4 to 3 (1 by default).</dd></dl><h3>HF</h3><dl class="ctl"><dt>GAIN</dt><dd>-15 to +15 dB.</dd><dt>FREQ</dt><dd>1.5 to 16 kHz (8 kHz by default).</dd><dt>BELL</dt><dd>Off (default): a high shelf. On: a bell centred on FREQ.</dd></dl><h3>LINE AMP</h3><dl class="ctl"><dt>DRIVE</dt><dd>Pushes the channel's line amp into gentle saturation, 0 to 100%. It is level matched, so it adds colour rather than volume.</dd><dt>OUTPUT</dt><dd>Output level, -12 to +12 dB.</dd><dt>EQ IN</dt><dd>Switches the four EQ bands in or out (in by default). The HPF and LPF stay in.</dd><dt>BROWN / BLACK</dt><dd>The voicing (BLACK by default). BROWN: broad bells and soft shelves. BLACK: bells that tighten as you boost or cut (proportional Q), and shelves with a small opposite dip just inside the corner.</dd></dl><h3>Display</h3><dl class="ctl"><dt>Response curve</dt><dd>The frequency response of the filters, the EQ and OUTPUT together, from 20 Hz to 20 kHz and -18 to +18 dB. While the EQ is in, a dot in each band's cap colour shows its frequency and gain.</dd></dl><h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets; the arrows step through them and the display shows the one in use (click it for the list too). A preset sets all the EQ and line-amp controls (and puts the EQ in, OUTPUT at 0 dB). The last entry resets everything to the defaults.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><p>Board EQ has no input or output stage on its panel: there is no TRIM, SAT or OUT stage, as the line amp does that job. An input guard runs in the background (on by default), gently easing very hot sources down so they never overdrive the line amp.</p>
+<h2>Presets</h2><dl class="ctl"><dt>Vocal Presence</dt><dd>HPF 90 Hz, a little 200 Hz and 350 Hz cut, a 3.5 kHz lift and a 12 kHz shelf; BLACK.</dd><dt>Kick Punch</dt><dd>A 60 Hz bell boost, a deep cut at 380 Hz and a 3 kHz click; BLACK with a little drive.</dd><dt>Snare Crack</dt><dd>HPF 80 Hz, body at 200 Hz, a 5 kHz crack and a 10 kHz shelf; BLACK with drive.</dd><dt>Bass Weight</dt><dd>LPF 9 kHz, a low shelf boost at 80 Hz, 250 Hz cut, 1.2 kHz definition; BROWN with drive.</dd><dt>Acoustic Sparkle</dt><dd>HPF 70 Hz, a little low and low-mid cut, broad 4 kHz and a 12 kHz shelf boost; BROWN.</dd><dt>Mix Bus Air</dt><dd>Gentle low shelf, a slight 3 kHz dip and a 14 kHz air shelf; BROWN with a little drive.</dd><dt>Telephone</dt><dd>HPF 400 Hz and LPF 3.5 kHz with a 1.5 kHz boost and heavy line-amp drive.</dd><dt>De-mud</dt><dd>HPF 60 Hz and a 5 dB cut at 300 Hz; BLACK.</dd><dt>Brown Warmth</dt><dd>LPF 16 kHz, low shelf boost, broad mids and a soft top; BROWN with 40% drive.</dd><dt>De-harsh</dt><dd>HPF 100 Hz, a narrow 4 dB cut at 6.5 kHz and a 15 kHz air shelf; BLACK.</dd><dt>Reset all to defaults</dt><dd>Every control back to its starting value.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Try the same settings in BROWN and BLACK: BROWN for gentle, broad shaping, BLACK when a boost needs to be focused and punchy.</li><li>In BLACK, big cuts get narrow on their own, so you can cut a resonance hard without hollowing out the sound around it.</li><li>Use EQ IN to compare with and without the bands; the filters stay in, so the comparison is fair.</li><li>A little DRIVE (10 - 25%) adds density without obvious distortion.</li></ul>
+<p class="file">File: gfx-board-q.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

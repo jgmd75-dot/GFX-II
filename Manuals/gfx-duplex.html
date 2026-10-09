@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX Duplex - manual</title><meta name="description" content="A two-channel compressor, de-esser and peak limiter for stereo, dual-mono or mid-side work.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-duplex">
+<div class="cat">Dynamics</div><h1>Duplex</h1>
+<p class="tagline">A two-channel compressor, de-esser and peak limiter for stereo, dual-mono or mid-side work.</p>
+<div class="shot"><img src="img/gfx-duplex.webp" alt="The Duplex panel" loading="lazy"></div>
+<h2>Overview</h2><p>Duplex is a dual-channel dynamics processor in the spirit of the classic 80s British two-channel units. Each channel is a clean VCA compressor with a gentle 6 dB soft knee, a frequency-conscious de-esser and a separate fast peak limiter.</p><p>The two channels can work three ways. In STEREO, channel A runs both sides together. In DUAL, A handles the left side and B the right. In M-S, A handles the mid (the centre of the image) and B the side (the edges), so you can compress the middle and the width separately.</p><p>The detector measures the average level over a few milliseconds rather than single peaks. AUTO timing follows the music: the attack speeds up the further the signal goes over, and the release lets go quickly after short peaks and slowly after long passages of compression.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Vocals: compression and de-essing in one place</li><li>Gentle glue on a stereo bus</li><li>Taming sibilance with SPLIT de-essing</li><li>Compressing the centre and the sides of a mix separately (M-S)</li><li>Dual-mono work on two unrelated sources</li><li>Parallel drum compression</li></ul>
+<h2>Controls</h2><h3>CHANNEL A and CHANNEL B</h3><p>The two channels have the same controls. The label beside each name shows its job in the current MODE: BOTH SIDES, LEFT or RIGHT, MID or SIDE. In STEREO mode channel B rests and its panel says so.</p><dl class="ctl"><dt>IN</dt><dd>Switches the channel in or out. With it out, the audio passes straight through that channel.</dd><dt>THRESH</dt><dd>The level where compression starts, -40 to 0 dB (-20 dB by default).</dd><dt>RATIO</dt><dd>How strongly the channel compresses, 1:1 to INF:1 (3:1 by default). Fully right is INF:1 - limiting.</dd><dt>ATTACK</dt><dd>0.1 to 50 ms (5 ms by default). Reads AUTO when AUTO is on.</dd><dt>RELEASE</dt><dd>20 ms to 2 s (200 ms by default). Reads AUTO when AUTO is on.</dd><dt>GAIN</dt><dd>Make-up gain, -10 to +20 dB.</dd><dt>DE-ESS (knob)</dt><dd>The de-ess frequency, 2 to 12 kHz (6 kHz by default).</dd><dt>LIMIT</dt><dd>A separate fast peak limiter after the compressor, -24 to 0 dB: instant attack, 50 ms release. Fully right (0 dB) is OFF. The red light beside it shows it working.</dd><dt>AUTO</dt><dd>Program-dependent timing, replacing ATTACK and RELEASE: the further over the threshold, the faster the attack; the release is quick after short peaks and slows down after long passages of compression.</dd><dt>DE-ESS (button)</dt><dd>The compressor listens only above the DE-ESS frequency, so it reacts to sibilance rather than to the whole voice.</dd><dt>SPLIT</dt><dd>On by default; used with DE-ESS. The gain reduction is applied only above the de-ess band (the split sits at three-quarters of the DE-ESS frequency, so the whole ess band is caught): the esses come down and the body of the voice is untouched. Off: the whole signal is turned down, as on the original units.</dd><dt>GR</dt><dd>The row of 12 lights under each channel shows its gain reduction (compressor and limiter together), from 1 to 30 dB.</dd></dl><h3>MASTER</h3><dl class="ctl"><dt>MODE</dt><dd>STEREO: channel A runs both sides, with one shared detector. DUAL: A = left, B = right. M-S: A = mid, B = side.</dd><dt>LINK</dt><dd>Always lit in STEREO. In DUAL and M-S it is a switch (on by default): the two detectors share the louder level, so the image stays put, and the two channels' controls are ganged - turning one moves the other by the same amount, and any offset you set while unlinked is kept.</dd><dt>MIX</dt><dd>Parallel compression, 0 to 100% (shown as WET): blends the dry signal back in. 100% is fully processed.</dd><dt>IN / OUT meters</dt><dd>Input and output level. Click them to reset the peak hold.</dd></dl><h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets (or click the preset display). The ◄ / ► keys step through them. Choosing one sets both channels and the MASTER section. The last entry resets everything to the defaults.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><p>Duplex has no input or output fold-out. An input guard is on by default, gently easing very hot sources down towards about -18 dBFS average and catching fast peaks above -6 dBFS; it can be switched off from REAPER's parameter list (Input guard).</p>
+<h2>Presets</h2><dl class="ctl"><dt>Gentle Stereo Bus</dt><dd>STEREO, 2:1 at -24 dB with AUTO timing and 3 dB of gain.</dd><dt>Vocal Compressor</dt><dd>STEREO, 3:1 at -28 dB, 5 ms attack, 180 ms release, the limiter at -3 dB.</dd><dt>De-esser (split)</dt><dd>STEREO, a fast 6:1 de-esser at 6.5 kHz with SPLIT, so only the esses come down.</dd><dt>Broadcast Voice</dt><dd>STEREO, 4:1 with wideband de-essing at 5 kHz and the limiter at -2 dB.</dd><dt>Dual Mono Pair</dt><dd>DUAL, unlinked, the same 3:1 AUTO settings on each side.</dd><dt>M-S Glue</dt><dd>M-S, unlinked: gentle 2.5:1 on the mid, firmer 4:1 on the sides to hold them in.</dd><dt>M-S Widen + Tame Sides</dt><dd>M-S, unlinked: gentle AUTO compression on the mid, a 7 kHz split de-esser on the sides with 3 dB of gain.</dd><dt>Brickwall Safety</dt><dd>STEREO, INF:1 at -12 dB with a 0.3 ms attack and the limiter at -1 dB.</dd><dt>Parallel Drums</dt><dd>STEREO, 10:1 at -36 dB with 12 dB of gain, blended in at 40% mix.</dd><dt>Bass Leveller</dt><dd>STEREO, 4:1 with AUTO timing, 4 dB of gain and the limiter at -2 dB.</dd><dt>Reset all to defaults</dt><dd>Every control back to its starting value.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>For de-essing, switch DE-ESS on, sweep the DE-ESS knob until the GR lights react mostly to the esses, then set THRESH so they come down by a few dB.</li><li>Leave SPLIT on for vocals: only the top end is turned down, so the voice doesn't dip on every 's'.</li><li>In M-S, a little extra GAIN on channel B (side) widens the mix; compressing B harder than A holds the edges in.</li><li>With LINK on in DUAL or M-S, set one channel and the other follows; switch LINK off to give the two channels different settings, then switch it back on to move them together.</li></ul>
+<p class="file">File: gfx-duplex.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

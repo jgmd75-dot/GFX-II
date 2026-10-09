@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX ADPMod - manual</title><meta name="description" content="A harmonic ring modulator with five carrier waves, tape-style drive and a tone filter.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-adpmod">
+<div class="cat">Modulation &amp; space</div><h1>ADPMod</h1>
+<p class="tagline">A harmonic ring modulator with five carrier waves, tape-style drive and a tone filter.</p>
+<div class="shot"><img src="img/gfx-adpmod.webp" alt="The ADPMod panel" loading="lazy"></div>
+<h2>Overview</h2><p>ADPMod is a ring modulator: it multiplies your signal by a carrier wave. At audio-rate carrier frequencies this turns notes into clangorous, bell-like and metallic tones that no longer follow the original pitch; at very low carrier frequencies it becomes a pulsing, tremolo-like effect. The carrier can be a sine, triangle, square, saw or noise, and HARMONICS adds the carrier's octave on top for a richer, more complex result.</p><p>After the modulation, the effected (wet) signal goes through a tape-style DRIVE stage and a TONE low-pass filter before it is blended with the dry signal. A slow random 'chaos drift' moves the carrier frequency, the character of the drive and the tone filter, so the effect never sits completely still. A low cut on the blend keeps the bass clean if you want it to.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Metallic, bell-like and robotic vocals</li><li>Clangorous textures from synths, guitars and drums</li><li>Slow, pulsing tremolo with low carrier frequencies</li><li>Wide, shimmering stereo modulation (DUAL)</li><li>Adding grit and movement to sound design</li></ul>
+<h2>Controls</h2><h3>Modes (header)</h3><dl class="ctl"><dt>AUDIO</dt><dd>One carrier for both sides, so the result stays mono-compatible. The default.</dd><dt>SUB</dt><dd>The same ring modulator. Use it with low FREQ settings, where the carrier is below the audible range and the effect becomes a pulse or tremolo.</dd><dt>DUAL</dt><dd>The right side's carrier runs very slightly detuned (0.5%) from the left, so the two sides drift against each other for a wider stereo image.</dd><dt>OFF</dt><dd>The ring modulator is switched off: the audio passes through the input and output stages only.</dd></dl><h3>The carrier</h3><dl class="ctl"><dt>CARRIER WAVEFORM display</dt><dd>Shows the carrier wave, moving with it.</dd><dt>SIN / TRI / SQR / SAW / NOISE</dt><dd>The carrier wave. SIN gives the purest ring-mod tones; TRI is a little brighter; SQR and SAW are harsh and buzzy, with many more side tones; NOISE turns the signal into a gritty, broken texture.</dd><dt>FREQ</dt><dd>The carrier frequency, 0.5 Hz to 2 kHz (220 Hz by default). Low settings give a pulse or tremolo; audio-rate settings give metallic, bell-like tones.</dd><dt>DRIVE</dt><dd>A tape-style saturation stage on the modulated (wet) signal, 0 to 10 (0 by default). It warms the sound at low settings and adds thickness and grit as you turn it up.</dd><dt>DEPTH</dt><dd>How much the carrier modulates the signal, 0 to 100% (100% by default). 100% is full ring modulation; lower settings keep more of the unmodulated signal in the wet sound.</dd><dt>HARMONICS</dt><dd>Adds the carrier's octave (twice its frequency) to the carrier, 0 to 100% (50% by default), for a denser, more complex set of tones.</dd><dt>TONE</dt><dd>A low-pass filter on the wet signal, 20 Hz to 18 kHz (1 kHz by default). Turn it down to tame harsh side tones; turn it up for a brighter, more metallic effect.</dd></dl><h3>Drift</h3><p>CHAOS DRIFT: a slow random wander of the carrier frequency, the character of the drive and the TONE filter.</p><dl class="ctl"><dt>DRIFT</dt><dd>How much drift, 0 to 100%. 50% (the default) is the standard amount, 100% is twice that, 0 switches it off. More drift also makes the wander a little faster.</dd></dl><h3>IN / OUT</h3><dl class="ctl"><dt>TRIM</dt><dd>Input level before anything else, from -24 to +12 dB.</dd><dt>GUARD</dt><dd>Click the TRIM knob (without moving it) to switch the guard; its light sits at the knob's upper right and is lit while it is on. On by default. Gently eases very hot sources down towards about -18 dBFS average and catches fast peaks above -6 dBFS, so loud sources never overdrive the plugin. It never boosts quiet sources. The light glows brighter while it is catching peaks.</dd><dt>SAT</dt><dd>Band saturation on the way out: only the lows and highs are saturated (the mids stay clean), with a soft curve that loosens as the level rises.</dd><dt>OFF / CLIP / LIMIT (OUT)</dt><dd>The final stage: nothing, a soft clipper (no latency), or a lookahead limiter that holds the peaks at -0.3 dBFS (3 ms latency, compensated by REAPER). CLIP is on by default; its key flashes red while it is clipping.</dd></dl><h3>Master</h3><dl class="ctl"><dt>MIX</dt><dd>Dry / wet balance, 0 to 100% (50% by default).</dd><dt>LOW CUT</dt><dd>Keeps the lows dry: below this frequency the effect is not blended in, so the bass stays clean and solid. From off (fully left, 20 Hz) to 500 Hz.</dd><dt>OUTPUT</dt><dd>Output level, -24 to +12 dB.</dd><dt>LEVEL meters</dt><dd>Output level, left and right.</dd></dl><h3>The header</h3><dl class="ctl"><dt>PRESETS</dt><dd>Opens the list of factory presets (a click on the display does the same). Choosing one sets the mode, carrier, drive, depth, harmonics, tone and mix; drift, LOW CUT, output and the IN / OUT section are left as they are.</dd><dt>◄ / ►</dt><dd>Step to the previous or next preset.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Next to the S / M / L size keys. Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl>
+<h2>Presets</h2><dl class="ctl"><dt>Vocal Ring (Classic)</dt><dd>AUDIO mode, 440 Hz sine, light drive, 30% harmonics, tone at 2.5 kHz, 70% mix.</dd><dt>Sub Tremolo</dt><dd>SUB mode, 6.5 Hz triangle at 80% depth with some drive: a throbbing tremolo, 50% mix.</dd><dt>Metallic Chaos</dt><dd>DUAL mode, 180 Hz square, heavy drive and 85% harmonics, bright tone, 85% mix.</dd><dt>Subtle Saturation Mod</dt><dd>AUDIO mode, 220 Hz sine at 50% depth, no harmonics, open tone, 40% mix.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>For tuned, musical results, set FREQ to a note that fits the key of the song (for example 220 Hz or 440 Hz for A).</li><li>Sweep FREQ slowly with automation for dramatic, sci-fi movement.</li><li>On a bass or a full mix, raise LOW CUT to 150-300 Hz so the low end stays dry and solid.</li><li>If the effect is too harsh, lower TONE or HARMONICS before turning down MIX.</li></ul>
+<p class="file">File: gfx-adpmod.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>

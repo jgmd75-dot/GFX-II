@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GFX De-Ess - manual</title><meta name="description" content="A split-band or wideband de-esser that turns sibilance down only when it gets too loud.">
+<style>
+:root{--bg:#0e0f11;--panel:#1b1d21;--panel-2:#23262b;--line:#2f3238;--ink:#e9e7e2;--ink-2:#b4b2ad;--ink-3:#85837e;--accent:#e0603a;--accent-2:#e8b23a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-2)}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+.top{position:sticky;top:0;z-index:5;background:rgba(14,15,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:12px;height:56px}
+.badge{width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);display:grid;place-items:center;font-weight:700;font-size:10px;flex:none}
+.top a.home{color:var(--ink);text-decoration:none;font-weight:700;letter-spacing:1px}
+.top nav{margin-left:auto;display:flex;gap:16px;font-size:14px}.top nav a{color:var(--ink-2);text-decoration:none}
+h1{font-size:clamp(28px,5vw,42px);margin:28px 0 4px;line-height:1.1}
+.cat{color:var(--ink-3);font-size:13px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.tagline{color:var(--ink-2);font-size:18px;margin:6px 0 18px}
+.shot{background:#0b0c0d;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 20px}
+.shot img{display:block;width:100%;height:auto}
+h2{font-size:22px;margin:34px 0 10px;padding-top:6px;border-top:1px solid var(--line)}
+h3{font-size:17px;margin:22px 0 8px;color:var(--accent-2)}
+p{margin:0 0 12px;color:var(--ink-2)}
+ul.when{margin:0 0 12px;padding-left:20px;color:var(--ink-2)}
+dl.ctl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+dl.ctl dt,dl.ctl dd{margin:0;padding:10px 14px;border-top:1px solid var(--line)}
+dl.ctl dt:first-of-type,dl.ctl dd:first-of-type{border-top:0}
+dl.ctl dt{background:var(--panel-2);font-weight:700;font-size:14px;letter-spacing:.3px}
+dl.ctl dd{background:var(--panel);color:var(--ink-2);font-size:15px}
+ol.steps{color:var(--ink-2);padding-left:22px}ol.steps li{margin:0 0 6px}
+.tips li{color:var(--ink-2);margin:0 0 6px}
+.file{font:13px ui-monospace,Menlo,Consolas,monospace;color:var(--ink-3)}
+code{font:13px ui-monospace,Menlo,Consolas,monospace;background:var(--panel-2);border:1px solid var(--line);padding:1px 5px;border-radius:4px;color:var(--ink)}
+footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 40px;color:var(--ink-3);font-size:14px}
+.toc{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px;margin:10px 0 24px}
+.toc a{display:block;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;text-decoration:none;color:var(--ink)}
+.toc a span{display:block;color:var(--ink-3);font-size:13px}
+.manual + .manual{margin-top:60px}
+@media (max-width:600px){dl.ctl{grid-template-columns:1fr}dl.ctl dd{border-top:0;padding-top:2px}}
+@media print{body{background:#fff;color:#000}.top,footer{display:none}p,dl.ctl dd,ul.when,.tips li,ol.steps{color:#222}
+ dl.ctl dt{background:#eee}dl.ctl dd{background:#fff}dl.ctl,dl.ctl dt,dl.ctl dd,h2{border-color:#ccc}h3{color:#7a4a10}.manual{break-before:page}.manual:first-of-type{break-before:auto}a{color:#000}}
+</style></head><body>
+<header class="top"><div class="wrap"><span class="badge">GFX</span><a class="home" href="index.html">GFX</a>
+<nav><a href="index.html">All manuals</a><a href="all.html">One page</a><a href="https://gardenfx.jgmd75.workers.dev/">Website</a></nav></div></header>
+<main class="wrap"><section class="manual" id="gfx-de-ess">
+<div class="cat">Dynamics</div><h1>De-Ess</h1>
+<p class="tagline">A split-band or wideband de-esser that turns sibilance down only when it gets too loud.</p>
+<div class="shot"><img src="img/gfx-de-ess.webp" alt="The De-Ess panel" loading="lazy"></div>
+<h2>Overview</h2><p>De-Ess listens only to the esses - a band around FREQ, or everything above it - and when that band goes over the threshold, it turns the sibilance down, by no more than RANGE. It reacts very fast (about 0.3 ms), so even short, sharp esses are caught.</p><p>In SPLIT mode only the esses band is turned down and the rest of the voice is untouched, which is the most transparent way to work. In WIDE mode the whole signal ducks on each ess, like the classic hardware boxes. One detector serves both channels, so the stereo image never shifts.</p>
+<h3>Reach for it for</h3><ul class="when"><li>Sibilant lead and backing vocals</li><li>Spoken word, voice-over and podcasts</li><li>Fret squeak and harsh pick noise on acoustic guitar</li><li>Splashy hi-hats and cymbals in a drum overhead (HIGH shape)</li><li>Taming a bright vocal after heavy compression or EQ</li></ul>
+<h2>Controls</h2><h3>Mode and shape</h3><dl class="ctl"><dt>SPLIT</dt><dd>Only the esses band is turned down; the rest of the voice is untouched. Transparent - the default.</dd><dt>WIDE</dt><dd>The whole signal ducks on each ess, like the classic hardware boxes. Can sound more natural on some voices, but is easier to hear working.</dd><dt>BAND</dt><dd>The detector listens to a band around FREQ, and in SPLIT mode a dip around FREQ is what turns down. Best for a voice whose esses sit in one place.</dd><dt>HIGH</dt><dd>The detector listens to everything above FREQ, and in SPLIT mode a high shelf dips everything above FREQ. Best for broad, airy sibilance and cymbals.</dd><dt>LISTEN</dt><dd>Hear what the detector hears - just the esses band. Use it to tune FREQ onto the esses, then switch it off.</dd></dl><h3>Knobs</h3><p>Each knob's value shows while you hover over it or drag it; while dragging, the display in the top strip also shows the control's name and value.</p><dl class="ctl"><dt>FREQ</dt><dd>Where the esses are, 2 - 12 kHz (starts at 6.5 kHz). Lower for male voices, higher for female voices and cymbals.</dd><dt>THRESHOLD</dt><dd>The level of the esses band where De-Ess starts working, -50 to 0 dB. Turn it down for more de-essing. Above the threshold it works at about 5:1, with a soft 6 dB knee.</dd><dt>RANGE</dt><dd>The most it will ever turn the esses down, 0 - 24 dB. Keeps it from lisping on loud esses.</dd><dt>RELEASE</dt><dd>How quickly the esses band comes back after each ess, 20 - 300 ms.</dd><dt>OUTPUT</dt><dd>Output level, -12 to +12 dB.</dd></dl><h3>Lamp and meters</h3><dl class="ctl"><dt>ESS</dt><dd>The teal lamp lights while De-Ess is turning the esses down (by more than half a dB).</dd><dt>ESS LV</dt><dd>The level of the esses band (bottom -60 dB, top 0 dB). The red line marks THRESHOLD: when the lights pass it, De-Ess is working.</dd><dt>GR</dt><dd>How much the esses are being turned down, lit from the top, up to 24 dB.</dd></dl><h3>The top strip</h3><dl class="ctl"><dt>Preset display</dt><dd>Shows the preset number and name. Click it to open the preset list.</dd><dt>&lt; and &gt;</dt><dd>Step to the previous or next preset.</dd><dt>OFF / CLIP / LIMIT</dt><dd>The final stage: nothing, a soft clipper at -0.3 dBFS (no latency), or a lookahead limiter that holds the peaks at -0.3 dBFS (3 ms latency, compensated by REAPER). CLIP is on by default; its key flashes red while it is clipping.</dd><dt>S / M / L</dt><dd>Panel size: small, medium or large. A new De-Ess opens at L. The panel also scales to fit the plugin window.</dd><dt>?</dt><dd>Opens a pop-up with the design credit, the GFX website address and the address of this manual. Click anywhere to close it.</dd></dl><p>De-Ess has no input stage: there is no TRIM, GUARD or SAT.</p>
+<h2>Presets</h2><p>A preset sets the mode, shape, FREQ, THRESHOLD, RANGE and RELEASE, and switches LISTEN off. OUTPUT and the OUT stage are left as they are.</p><dl class="ctl"><dt>Init</dt><dd>The starting point: SPLIT, BAND at 6.5 kHz, -26 dB threshold, 10 dB range, 60 ms release.</dd><dt>Female Vocal</dt><dd>SPLIT, BAND at 7.5 kHz with a quicker 50 ms release.</dd><dt>Male Vocal</dt><dd>SPLIT, BAND at 5.5 kHz, slightly gentler, 70 ms release.</dd><dt>Gentle Air</dt><dd>SPLIT, HIGH above 9 kHz with only 6 dB of range - softens the top without dulling it.</dd><dt>Hard Esses</dt><dd>WIDE, BAND at 6.5 kHz with a low threshold, 16 dB of range and a fast release, for very sharp sibilance.</dd><dt>Acoustic Guitar</dt><dd>SPLIT, BAND at 4.5 kHz, 6 dB range and a slow release, for string and pick noise.</dd><dt>Hats and Cymbals</dt><dd>SPLIT, HIGH above 10 kHz, 8 dB range.</dd><dt>Podcast Voice</dt><dd>SPLIT, BAND at 6 kHz with a low threshold and 12 dB of range for steady spoken word.</dd></dl>
+<h2>Tips</h2><ul class="tips"><li>Switch LISTEN on and sweep FREQ until the esses sound loudest and harshest, then switch LISTEN off and set THRESHOLD.</li><li>Watch the ESS LV meter: set THRESHOLD so only the esses cross the red line, not the rest of the words.</li><li>If the voice starts to lisp, lower RANGE rather than raising THRESHOLD.</li><li>Put De-Ess after compression and bright EQ, which both tend to bring the esses up.</li><li>Use SPLIT for transparency; try WIDE when SPLIT makes the esses sound dull or hollow.</li></ul>
+<p class="file">File: gfx-de-ess.jsfx</p></section></main>
+<footer><div class="wrap">GFX (Garden FX) - free JSFX plug-ins for REAPER. Designed by JGWizrad. <a href="https://gardenfx.jgmd75.workers.dev/">https://gardenfx.jgmd75.workers.dev/</a></div></footer></body></html>
