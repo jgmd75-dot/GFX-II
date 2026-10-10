@@ -1,10 +1,10 @@
-desc:GFX Feld 45
+desc:GFX Fet 45
 //tags: dynamics compressor limiter fet peak feedback broadcast vintage
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
 //
-// FELD 45 (from Feldeffekt). A peak limiting amplifier in the spirit of the classic ultra-fast FET limiters of
+// FET 45 (from Feldeffekt). A peak limiting amplifier in the spirit of the classic ultra-fast FET limiters of
 // the late 60s / 70s, dressed as state radio / TV transmission gear of the mid-80s (fourth of the family with
 // Pegel 45, Stimm 45 and Raum 45). The FET is a voltage-controlled resistor; the threshold is fixed and the
 // amount of limiting is set by how hard INPUT drives the FET, balanced afterwards by OUTPUT.
@@ -77,7 +77,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-feld-45";                                // the ? pop-up links to this manual
+#ui_man = "gfx-fet-45";                                // the ? pop-up links to this manual
 ext_noinit = 1;
 
 // ---------- memory ----------
@@ -597,7 +597,7 @@ ui_col(FDH); fd_r(0, 0, 820, 54);
 ui_col(fdv_th == 0 ? FDI : FDA); fd_r(0, 54, 820, 2);
 ui_col(fdv_th == 2 ? FDA : FDI); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(fdv_th == 0 ? FDF : 0x111213); ui_text(31 * sc, 21.5 * sc, "GFX");
-gfx_setfont(6); ui_col(FDI); fd_txt(58, 12, "FELD 45");
+gfx_setfont(6); ui_col(FDI); fd_txt(58, 12, "FET 45");
 gfx_setfont(11); ui_col(FDI2); fd_txt(180, 14, fdv_de ? "FET-BEGRENZER" : "FET LIMITING"); fd_txt(180, 29, fdv_de ? "VERSTÄRKER" : "AMPLIFIER");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
 k_ = pk_preset(300 * sc, 10 * sc, 406 * sc, 34 * sc, pr_cur,

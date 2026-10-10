@@ -131,7 +131,7 @@ DYNAMICS
   De-Ess          gfx-de-ess.jsfx
   Duplex          gfx-duplex.jsfx
   Duplex Q        gfx-duplex-q.jsfx
-  Feld 45         gfx-feld-45.jsfx
+  Fet 45          gfx-fet-45.jsfx
   Field 42        gfx-field-42.jsfx
   Gate            gfx-gate.jsfx
   Headsmoother    gfx-headsmoother.jsfx

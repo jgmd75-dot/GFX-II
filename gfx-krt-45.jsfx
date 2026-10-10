@@ -6,7 +6,7 @@ desc:GFX KRT-45
 //
 // KRT-45 (Phasen- und Frequenzkorrektor). A sonic phase processor in the spirit of the classic late-80s rack
 // enhancers (phase alignment and harmonic restoration), dressed as heavy 1980s Eastern European laboratory
-// test-bench gear (fifth of the family with Pegel 45, Stimm 45, Raum 45 and Feld 45).
+// test-bench gear (fifth of the family with Pegel 45, Stimm 45, Raum 45 and Fet 45).
 // The idea: low frequencies travel more slowly through circuits and speaker drivers than the highs, so the
 // transient edge (the highs) and the body (the lows and mids) smear apart. The process holds the lows and mids
 // back a little so that the fast high-frequency edge arrives first and the body follows in step, then restores
@@ -344,7 +344,7 @@ kr_bx > 0 ? (
 ui_begin(820, 306);
 
 // =====================================================================
-// Theme colours (the family palette: Pegel 45 / Stimm 45 / Raum 45 / Feld 45)
+// Theme colours (the family palette: Pegel 45 / Stimm 45 / Raum 45 / Fet 45)
 // =====================================================================
 krv_th = slider11 | 0;
 krv_th == 0 ? (                                         // ENAMEL: light industrial laboratory
@@ -402,7 +402,7 @@ function kr_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = r
 function kr_lbl(x, y, s) ( gfx_setfont(11); ui_col(KRI2); kr_txt(x, y, s); );
 function kr_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
 
-// a flat, sharp-cornered lit key in the theme's manner (as on Pegel 45 / Feld 45); returns 1 when clicked
+// a flat, sharp-cornered lit key in the theme's manner (as on Pegel 45 / Fet 45); returns 1 when clicked
 function kr_key(x, y, w, h, lbl, on) local(hov, hit) (
   hov = kr_hov(x, y, w, h);
   hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;
@@ -434,7 +434,7 @@ function kr_sect(x, y, w, h, col, name) (
   strlen(name) ? kr_lbl(x + 9, y + 6, name);
 );
 
-// the heavy lit push-button (BYPASS), as the Feld 45 / Raum 45 keys: lit = bypassed
+// the heavy lit push-button (BYPASS), as the Fet 45 / Raum 45 keys: lit = bypassed
 function kr_big(x, y, w, h, s, on) local(hov, dn, k, i) (
   hov = kr_hov(x, y, w, h);
   dn = on ? 2 : 0;
