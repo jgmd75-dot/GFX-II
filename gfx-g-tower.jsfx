@@ -6,7 +6,8 @@ desc:GFX G Tower
 //
 // THE TOWER (card XVI of the GFX Tarot series): sudden upheaval - lightning strikes the tower, the structure
 // shatters so that something truer can be built. A polysynth whose heart is a QUADRANT FORMANT FILTER: an XY pad
-// with a formant set in each corner, the point flown around by two LFOs and knocked into a corner by LIGHTNING.
+// with a formant set in each corner, the point flown around by two LFOs; a BASS and a PEDAL layer and a DRONE that
+// plays a chosen chord by itself.
 //   OSC 1 / 2  SAW, PULSE (PW) or CHOIR (a buzzy five-saw stack, SPREAD); OSC 2 PITCH and DETUNE; MIX, SUB (one
 //              octave below OSC 1), NOISE
 //   FORMANT    per voice: five parallel resonant band-passes (zero-delay state-variable, unity peak gain); the four
@@ -22,16 +23,23 @@ desc:GFX G Tower
 //              diamonds with the triangle), FIGURE-8 (Y at twice X; PHASE 90 draws the 8), SPIRAL (a circle that breathes in and out over
 //              eight turns), WALK (a smooth random walk). Drag the pad to move the centre the LFOs orbit.
 //   MOD        mod WHEEL and VELOCITY to X and Y; a formant ENVELOPE (attack / decay) to Y
-//   LIGHTNING  the big lit key, a MIDI note or a hard velocity: the point is jolted towards a random corner (STRIKE
-//              sets how far), the resonance is slammed up and a noise CRACK (and its thunder) rings through the
-//              formants; everything rebuilds over RECOVERY. AUTO strikes at random, a chance on every bar.
+//   LAYERS     BASS (low) and PEDAL (high): two mono drone voices beside the main voice. Each: ON, TRANSPOSE
+//              (octave -3..+3 and semitone -12..+12), LEVEL, its own wave, TONE (12 dB low-pass), its own place on the
+//              formant pad (X / Y, drag its dot; MOTION = how much of the LFOs' orbit it shares) and a slow ATTACK /
+//              RELEASE swell. BASS sounds the lowest held (or drone) note, PEDAL the root - or its 5TH or OCTAVE -
+//              transposed; both hold while notes are held, and always in DRONE mode.
+//   DRONE      the Tower plays by itself: ROOT (C..B, OCTAVE), CHORD (5TH, SUS2, SUS4, MAJ, MIN, MAJ7, MIN7, ADD9,
+//              QUARTAL, OPEN), VOICING (CLOSE, SPREAD, WIDE); the XY LFOs keep it moving. Played notes take over
+//              while held (the drone swells out and back), or with FOLLOW the last note played becomes the root.
+//              Chord changes glide the voices; the drone swells in and out (no clicks).
 //   AMP        ADSR, VELOCITY; POLY (8 voices) / MONO / LEGATO, GLIDE, BEND range
 //   EFFECTS    DRIVE (stone crumble: a biased soft clip that crumbles into grit at the top), stereo ping-pong
 //              DELAY (tempo divisions), a big eight-line REVERB (SIZE, TONE, MIX)
 //   MASTER     FATE, VOLUME, SAT and the OUT stage (OFF / CLIP / LIMIT)
 // FATE (the Tarot series drift, 0-100 %): the cards reshuffle a little - the LFO rates, the phase between them and
-//   their depths wander, each corner's formant set slides a little in frequency, the pad centre drifts, the chance
-//   of an AUTO strike rises and falls; the tuning wanders gently and each note lands slightly differently in tune.
+//   their depths wander, each corner's formant set slides a little in frequency, the pad centre drifts, the drone's
+//   voicing turns over now and then (an inner tone moves an octave); the tuning wanders gently and each note lands
+//   slightly differently in tune.
 // MIDI: pitch bend (BEND range), CC1 mod wheel, CC64 sustain, CC120 / CC123 all notes off.
 
 import gfx-drift.jsfx-inc
@@ -82,14 +90,14 @@ slider34:15<-100,100,1>-Velocity to Y (%)
 slider35:0<-100,100,1>-Envelope to Y (%)
 slider36:10<1,5000,0.1>-Envelope attack (ms)
 slider37:600<10,8000,1>-Envelope decay (ms)
-// ---------- LIGHTNING ----------
-slider38:70<0,100,1>-Strike (%)
-slider39:1500<50,10000,1>-Recovery (ms)
-slider40:40<0,100,1>-Crack (%)
-slider41:0<0,100,1>-Auto strike (% per bar)
-slider42:0<0,2,1{Off,Note,Velocity}>-MIDI strike
-slider43:24<0,127,1>-Strike note
-slider44:120<1,127,1>-Strike velocity
+// ---------- DRONE / CHORD ----------
+slider38:0<0,1,1{Off,On}>-Drone
+slider39:0<0,11,1{C,C#,D,D#,E,F,F#,G,G#,A,A#,B}>-Drone root
+slider40:0<0,9,1{5th,Sus2,Sus4,Maj,Min,Maj7,Min7,Add9,Quartal,Open}>-Drone chord
+slider41:1<0,2,1{Close,Spread,Wide}>-Drone voicing
+slider42:0<0,1,1{Off,On}>-Drone follow
+slider43:3<1,5,1>-Drone octave
+slider44:0<0,2,1{Root,5th,Octave}>-Pedal note
 // ---------- VOICE / AMP ----------
 slider45:0<0,2,1{Poly,Mono,Legato}>-Voice mode
 slider46:0<0,2000,1>-Glide (ms)
@@ -117,6 +125,29 @@ slider65:120<40,400,1>-Sat low band (Hz)
 slider66:6000<2000,16000,10>-Sat high band (Hz)
 slider67:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider68:1<0,2,1{Off,Clip,Limit}>-Output stage
+// ---------- LAYERS: BASS and PEDAL ----------
+slider69:0<0,1,1{Off,On}>-Bass layer
+slider70:-2<-3,3,1>-Bass octave
+slider71:0<-12,12,1>-Bass semitone
+slider72:60<0,100,1>-Bass level (%)
+slider73:0<0,2,1{Saw,Pulse,Choir}>-Bass wave
+slider74:800<60,12000,1>-Bass tone (Hz)
+slider75:80<0,100,0.1>-Bass pad X (%)
+slider76:15<0,100,0.1>-Bass pad Y (%)
+slider77:30<0,100,1>-Bass motion (%)
+slider78:1200<10,10000,1>-Bass attack (ms)
+slider79:2500<10,10000,1>-Bass release (ms)
+slider80:0<0,1,1{Off,On}>-Pedal layer
+slider81:2<-3,3,1>-Pedal octave
+slider82:0<-12,12,1>-Pedal semitone
+slider83:45<0,100,1>-Pedal level (%)
+slider84:2<0,2,1{Saw,Pulse,Choir}>-Pedal wave
+slider85:5000<60,12000,1>-Pedal tone (Hz)
+slider86:50<0,100,0.1>-Pedal pad X (%)
+slider87:85<0,100,0.1>-Pedal pad Y (%)
+slider88:60<0,100,1>-Pedal motion (%)
+slider89:1500<10,10000,1>-Pedal attack (ms)
+slider90:3000<10,10000,1>-Pedal release (ms)
 
 in_pin:none
 out_pin:left output
@@ -135,6 +166,8 @@ TDEF = 32100;                                              // the Init values of
 TTMP = 32200;                                              // preset parser scratch (400)
 TFS  = 32700;                                              // formant sets: 9 x 5 peaks x (Hz, bandwidth Hz, dB)
 TCT  = 32900;                                              // the four corners: 5 peaks x (ln Hz, ln Q, dB)
+TDN  = 33120; TDV = 33130;                                 // drone: target notes (8), their voices (8)
+TLB  = 34200; TLP = 34250;                                 // layer parameter blocks (BASS, PEDAL; 50 each)
 TGC  = 33100;                                              // shared formant coefficients (20) when no voice has its own point
 TRLT = 33020; TRG = 33050;                                 // reverb: line lengths, gains
 TAPL = 33070;                                              // reverb input allpasses: lengths
@@ -143,7 +176,7 @@ TGPX = 33400; TGPY = 33800;                                // GUI: the LFO path 
 TRV  = 40000; TRVN = 16384;                                // reverb lines 8 x 16384  (40000 - 171071)
 TAP  = 172000; TAPN = 4096;                                // 4 allpass rings x 4096 (172000 - 188383)
 TDL  = 200000; TDR = 200000 + 524288; TDM = 524287;        // delay lines (2^19 each)
-memset(TV, 0, 600);
+memset(TV, 0, 600); memset(TDV, -1, 8); memset(TLB, 0, 100);
 tw_i = 0; loop(8, TV[tw_i * 64] = -1; tw_i += 1; );
 memset(TRV, 0, 8 * TRVN); memset(TAP, 0, 4 * TAPN);
 memset(TDL, 0, 524288 * 2);
@@ -152,7 +185,7 @@ memset(TDL, 0, 524288 * 2);
 //   0 note (-1 free)  1 key held  2 age  3 held by pedal  4 pitch now (st)  5 pitch target  6 velocity 0..1
 //   7 note detune (st)  8 amp stage (0 idle, 1 att, 2 dec / sus, 3 rel)  9 amp level  10 formant env stage  11 its level
 //   35-54 its own formant coefficients (5 x a1, a2, a3, gain)  55 voice gain  56 / 57 pan gains L / R
-//   58 needs its control values now  62 fresh (its namespace resets phases and band-passes)
+//   58 needs its control values now  63 a drone voice  62 fresh (its namespace resets phases and band-passes)
 //   (the phases and the band-pass states live in the voice's namespace, tw_v0 - tw_v7: see tw_vproc)
 
 L12 = log(2) / 12; LN2 = log(2);
@@ -174,7 +207,7 @@ tw_fset(7, 270, 45, 0,  1000, 60, -4,   2100, 70, -7,   2900, 80, -9,   4200, 11
 tw_fset(8, 620, 70, 0,  1050, 80, -6,   2350, 110, -12, 2950, 100, -4,  3500, 130, -14);   // CHOIR: open, singer's ring
 
 // ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
-#tw_def = "2 0 0 7 40 50 22 20 4 0 3 2 4 50 50 40 90 0 0 0.2 0 3 35 0 0.2 0 3 35 90 1 0 40 0 15 0 10 600 70 1500 40 0 0 24 120 0 0 2 30 800 85 600 40 10 2 30 12 60 55 25 35 0 0 0 30 120 6000 -0.3 1";
+#tw_def = "2 0 0 7 40 50 22 20 4 0 3 2 4 50 50 40 90 0 0 0.2 0 3 35 0 0.2 0 3 35 90 1 0 40 0 15 0 10 600 0 0 0 1 0 3 0 0 0 2 30 800 85 600 40 10 2 30 12 60 55 25 35 0 0 0 30 120 6000 -0.3 1 0 -2 0 60 0 800 80 15 30 1200 2500 0 2 0 45 2 5000 50 85 60 1500 3000";
 
 function tw_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
   n = 0; i = 0; inn = 0; len = strlen(s);
@@ -196,28 +229,28 @@ function tw_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
 );
 tw_nums(#tw_def, TDEF);
 
-#tw_pm = "Tower Choir|Lightning Vowels|Falling Stones|Storm Chant|Glass Spire|Stone Throat|Crown of Fire|Babel|Ruin Drone|Revelation|Sudden Change|Dark Choir|Thunder Bass|Rebuild";
+#tw_pm = "Tower Choir|Pedal Point|Low Tower|Storm Chant|Glass Spire|Stone Throat|Monastery|Babel|Ruin Drone|Revelation|Desert Tower|Dark Choir|Thunder Bass|Rebuild";
 function tw_pstr(p) (
-  p == 2  ? "1:0 2:1 3:12 5:30 10:0 11:1 12:2 13:3 16:55 21:1 22:3 26:1 27:3 23:45 28:45 38:85 39:900 40:50 41:25 42:2 44:112 48:5 49:600 50:70 51:400 54:4 55:35 56:18 59:30 61:2" :
-  p == 3  ? "1:0 2:0 3:-12 5:45 8:50 10:5 11:4 12:3 13:5 30:4 20:0.15 25:0.11 23:60 28:60 16:65 53:62 38:90 39:4000 40:70 41:35 57:85 59:35 48:400 49:2000 50:80 51:2500 18:-3" :
-  p == 4  ? "1:2 2:2 3:-12 4:-5 7:30 5:45 10:7 11:0 12:7 13:3 30:2 20:0.35 23:50 28:40 16:70 35:40 36:80 37:1200 34:30 38:60 57:75 59:40 56:15 54:2" :
+  p == 2  ? "1:2 2:0 3:12 5:30 16:45 80:1 81:2 44:1 83:40 84:2 86:30 87:90 88:70 69:1 70:-1 72:45 73:0 74:500 75:85 76:20 57:75 59:35 54:4 56:15" :
+  p == 3  ? "38:1 39:0 40:0 41:0 43:2 1:0 2:0 3:-12 4:6 5:50 8:40 10:5 11:3 12:5 13:4 30:4 20:0.07 25:0.05 23:55 28:55 16:70 18:-2 69:1 70:-1 71:0 72:70 73:0 74:400 75:70 76:10 77:20 53:30 57:95 58:35 59:45" :
+  p == 4  ? "1:2 2:2 3:-12 4:-5 7:30 5:45 10:7 11:0 12:7 13:3 30:2 20:0.35 23:50 28:40 16:70 35:40 36:80 37:1200 34:30 57:75 59:40 56:15 54:2" :
   p == 5  ? "1:1 2:0 3:12 5:35 6:30 10:6 11:2 12:1 13:6 18:5 30:3 20:0.6 23:70 28:70 16:60 54:5 55:45 56:22 57:80 58:85 59:40 51:1800 8:0 61:1.5" :
   p == 6  ? "45:2 46:90 1:0 2:1 3:-12 5:40 8:60 10:5 11:3 12:4 13:0 14:30 15:30 23:15 28:15 32:70 34:40 35:50 36:5 37:400 16:75 53:35 59:15 48:3 49:500 50:75 51:250 52:60 61:2" :
-  p == 7  ? "1:0 2:1 3:7 5:45 6:40 10:0 11:6 12:7 13:1 19:3 24:3 21:1 22:8 26:1 27:7 30:0 23:60 28:60 16:80 53:70 38:100 39:600 40:80 42:2 44:120 54:5 56:20 59:20 48:2 49:400 50:60 51:300 61:1.5" :
-  p == 8  ? "1:2 2:2 3:7 4:12 7:45 5:50 10:0 11:2 12:4 13:1 30:0 20:0.3 25:0.2 29:0 23:80 28:80 33:40 16:50 57:90 59:55 54:1 56:20 55:40 48:600 49:3000 50:90 51:3000" :
-  p == 9  ? "1:0 2:0 3:-12 4:9 5:50 8:40 9:15 10:5 11:7 12:4 13:8 30:3 20:0.08 23:80 28:80 16:85 41:15 39:8000 40:60 38:80 57:100 58:40 59:50 48:2500 49:5000 50:100 51:6000" :
-  p == 10 ? "1:2 2:2 3:12 4:-6 7:28 5:35 10:4 11:0 12:3 13:8 15:20 35:60 36:2500 37:6000 20:0.12 23:30 28:30 16:45 57:85 58:70 59:45 48:900 49:4000 50:90 51:3500 38:50 40:25" :
-  p == 11 ? "1:1 2:0 3:12 5:30 6:25 10:3 11:6 12:5 13:0 19:3 24:3 21:1 22:6 26:1 27:5 23:70 28:70 30:0 16:70 42:1 43:24 41:50 38:100 39:250 40:55 48:1 49:350 50:20 51:200 54:4 55:40 56:30 59:20 61:3" :
-  p == 12 ? "1:2 2:2 3:-12 7:26 5:40 8:30 10:3 11:4 12:5 13:8 18:-4 30:4 20:0.2 25:0.15 23:40 28:40 16:55 57:90 58:35 59:50 48:700 49:4000 50:95 51:4000 32:60" :
-  p == 13 ? "45:1 46:25 1:0 2:1 3:-12 5:35 6:35 8:80 10:5 11:0 12:4 13:3 14:20 15:40 23:10 28:10 35:70 36:2 37:250 34:40 16:65 53:55 42:2 44:118 38:80 39:400 40:70 48:1 49:600 50:70 51:180 52:60 56:0 59:10 61:2.5" :
-  p == 14 ? "1:2 2:0 3:12 4:5 5:30 16:60 21:1 22:2 26:1 27:2 23:40 28:40 41:60 39:6000 38:100 40:45 57:80 59:45 54:0 55:45 56:18 48:400 49:3000 50:90 51:3000" :
+  p == 7  ? "38:1 39:9 40:9 41:0 43:3 1:2 2:2 3:12 4:-4 7:30 5:40 10:3 11:4 12:0 13:8 30:1 20:0.07 23:40 28:30 16:50 80:1 81:1 44:0 83:35 84:2 86:20 87:80 69:1 70:-1 72:50 74:600 48:900 51:4000 57:95 58:50 59:55" :
+  p == 8  ? "38:1 39:5 40:8 41:2 43:3 1:2 2:2 3:7 4:12 7:45 5:50 10:0 11:2 12:4 13:1 30:0 20:0.3 25:0.2 29:0 23:80 28:80 16:50 57:90 59:55 54:1 56:20 55:40 48:600 49:3000 50:90 51:3000 69:1 80:1 44:2 83:35" :
+  p == 9  ? "38:1 39:2 40:0 41:0 43:3 1:0 2:0 3:-12 4:9 5:50 8:40 9:15 10:5 11:7 12:4 13:8 30:3 20:0.08 23:80 28:80 16:85 57:100 58:40 59:50 48:2500 49:5000 50:100 51:6000 69:1 70:-2 80:1 81:2 44:1" :
+  p == 10 ? "1:2 2:2 3:12 4:-6 7:28 5:35 10:4 11:0 12:3 13:8 15:20 35:60 36:2500 37:6000 20:0.12 23:30 28:30 16:45 57:85 58:70 59:45 48:900 49:4000 50:90 51:3500" :
+  p == 11 ? "38:1 39:4 40:2 41:1 42:1 43:3 1:1 2:1 3:7 6:35 5:40 10:6 11:0 12:7 13:1 30:2 20:0.15 23:45 28:40 16:60 54:1 55:40 56:25 59:30 80:1 81:2 44:1 84:1 83:35 69:1 70:-2 73:0 72:55" :
+  p == 12 ? "38:1 39:11 40:4 41:1 43:3 1:2 2:2 3:-12 7:26 5:40 8:30 10:3 11:4 12:5 13:8 18:-4 30:4 20:0.2 25:0.15 23:40 28:40 16:55 57:90 58:35 59:50 48:700 49:4000 50:95 51:4000 32:60 69:1 70:-2 72:50" :
+  p == 13 ? "45:1 46:25 1:0 2:1 3:-12 5:35 6:35 8:80 10:5 11:0 12:4 13:3 14:20 15:40 23:10 28:10 35:70 36:2 37:250 34:40 16:65 53:55 48:1 49:600 50:70 51:180 52:60 56:0 59:10 69:1 70:-1 72:55 73:0 74:300 78:40 79:300 61:1" :
+  p == 14 ? "38:1 39:7 40:7 41:1 42:1 43:3 1:2 2:0 3:12 4:5 5:30 16:60 21:1 22:2 26:1 27:2 23:40 28:40 57:80 59:45 54:0 55:45 56:18 48:400 49:3000 50:90 51:3000 80:1 81:2 44:0 83:40" :
   "";
 );
 function load_preset(p) local(n, i) (
-  i = 0; loop(62, i != 59 && i != 61 ? slider(i + 1) = TDEF[i]; i += 1; );   // FATE and the MIDI channel stay
+  i = 0; loop(90, i != 59 && i != 61 ? slider(i + 1) = TDEF[i]; i += 1; );   // FATE and the MIDI channel stay
   n = tw_nums(tw_pstr(p), TTMP);
-  i = 0; loop(floor(n / 2), TTMP[i * 2] >= 1 && TTMP[i * 2] <= 62 ? slider(TTMP[i * 2]) = TTMP[i * 2 + 1]; i += 1; );
-  i = 1; loop(62, ui_auto(i); i += 1; );
+  i = 0; loop(floor(n / 2), TTMP[i * 2] >= 1 && TTMP[i * 2] <= 90 ? slider(TTMP[i * 2]) = TTMP[i * 2 + 1]; i += 1; );
+  i = 1; loop(90, ui_auto(i); i += 1; );
   pr_cur = p; tw_panic = 1;
 );
 
@@ -230,7 +263,7 @@ function tw_vstart(p, n, v, retrig, from) local(i) (
     p[4] = from;                                       // GLIDE comes in from the last note played
   );
   tw_gc >= 1 ? p[4] = n;
-  p[0] = n; p[1] = 1; p[3] = 0; p[5] = n; p[6] = v / 127;
+  p[0] = n; p[1] = 1; p[3] = 0; p[5] = n; p[6] = v / 127; p[63] = 0;
   retrig || p[8] == 0 || p[8] == 3 ? (
     p[7] = log(ins_note_detune()) / LN2 * 12;
     p[8] = 1; p[10] = 1;
@@ -248,13 +281,13 @@ function tw_alloc() local(i, p, best, ba) (
   TV + best * 64;
 );
 function tw_poly_on(n, v) local(i, p, from) (
-  i = 0; loop(8, p = TV + i * 64; p[0] == n && p[1] ? tw_vrel(p); i += 1; );
+  i = 0; loop(8, p = TV + i * 64; p[0] == n && p[1] && !p[63] ? tw_vrel(p); i += 1; );
   from = tw_last >= 0 && tw_glide > 0 ? tw_last : n;
   p = tw_alloc(); tw_age += 1; p[2] = tw_age;
   tw_vstart(p, n, v, 1, from);
 );
 function tw_poly_off(n) local(i, p) (
-  i = 0; loop(8, p = TV + i * 64; p[0] == n && p[1] ? ( tw_pedal ? p[3] = 1 : tw_vrel(p); ); i += 1; );
+  i = 0; loop(8, p = TV + i * 64; p[0] == n && p[1] && !p[63] ? ( tw_pedal ? p[3] = 1 : tw_vrel(p); ); i += 1; );
 );
 function tw_mono_on(n, v) local(i, f, held, p) (
   held = tw_hc > 0;
@@ -283,20 +316,6 @@ function tw_qpush(ofs, t, n, v) local(i) (
     i = tw_qc; while (i > 0 && TQO[i - 1] > ofs) ( TQO[i] = TQO[i - 1]; TQT[i] = TQT[i - 1]; TQN[i] = TQN[i - 1]; TQV[i] = TQV[i - 1]; i -= 1; );
     TQO[i] = ofs; TQT[i] = t; TQN[i] = n; TQV[i] = v; tw_qc += 1;
   );
-);
-
-// ---------- LIGHTNING ----------
-// jolt the point towards a random corner (never the one it is nearest), slam the resonance, crack the sky
-function tw_strike(amt) local(c, near, cx, cy) (
-  near = (tw_gx >= 0.5 ? 1 : 0) + (tw_gy >= 0.5 ? 0 : 2);         // corners: 0 TL, 1 TR, 2 BL, 3 BR
-  c = floor(rand(3)); c >= near ? c += 1;
-  cx = c == 1 || c == 3 ? 1 : 0; cy = c < 2 ? 1 : 0;
-  tw_sk = amt * tw_samt;                                             // how far, how hard
-  tw_jx = (cx - tw_gx) * tw_sk; tw_jy = (cy - tw_gy) * tw_sk;
-  tw_sev = 1; tw_shold = tw_holdn;
-  tw_ce = 0.35 + 0.65 * amt; tw_re = amt;
-  tw_cbf = 3200;                                                     // the crack's band sweeps down from here
-  tw_scorner = c; tw_scount += 1;                                    // (for the panel)
 );
 
 // ---------- rates ----------
@@ -386,7 +405,7 @@ function tw_vproc(p) instance(a0, a1, a2, a3, a4, b0, b1, b2, b3, b4, sp, i1, i2
   );
   (tw_tick || p[58]) ? (
     p[58] = 0;
-    p[4] += (p[5] - p[4]) * tw_gc;
+    p[4] += (p[5] - p[4]) * (p[63] ? tw_dgc : tw_gc);
     // formant envelope (attack / decay)
     e = p[11];
     p[10] == 1 ? ( e += (1.25 - e) * tw_ea; e >= 1 ? ( e = 1; p[10] = 2; ); ) :
@@ -442,7 +461,7 @@ function tw_vproc(p) instance(a0, a1, a2, a3, a4, b0, b1, b2, b3, b4, sp, i1, i2
   x = o1 * tw_m1 + o2 * tw_m2 + su * tw_sub * 0.5 + (tw_noi > 0 ? (rand(2) - 1) * tw_noi : 0);
 
   // ----- the formant bank: five parallel zero-delay state-variable band-passes, unity peak gain -----
-  xf = x + tw_cin;
+  xf = x;
   t = xf - s1; v = c0 * s0 + c1 * t; s1 += 2 * (c1 * s0 + c2 * t);    s0 = 2 * v - s0; y = v * c3;
   t = xf - s3; v = c4 * s2 + c5 * t; s3 += 2 * (c5 * s2 + c6 * t);    s2 = 2 * v - s2; y += v * c7;
   t = xf - s5; v = c8 * s4 + c9 * t; s5 += 2 * (c9 * s4 + c10 * t);   s4 = 2 * v - s4; y += v * c11;
@@ -454,11 +473,137 @@ function tw_vproc(p) instance(a0, a1, a2, a3, a4, b0, b1, b2, b3, b4, sp, i1, i2
 
   // ----- amp envelope -----
   amp = p[9];
-  p[8] == 1 ? ( amp += (1.3 - amp) * tw_aa; amp >= 1 ? ( amp = 1; p[8] = 2; ); ) :
-  p[8] == 2 ? amp += (tw_as - amp) * tw_ad :
-  ( amp -= amp * tw_ar; amp < 0.00002 ? ( amp = 0; p[8] = 0; p[10] = 0; p[0] = -1; p[62] = 1; ); );
+  p[63] ? (
+    // a drone voice swells in, holds, and swells out
+    p[8] == 1 ? ( amp += (1.3 - amp) * tw_daa; amp >= 1 ? ( amp = 1; p[8] = 2; ); ) :
+    p[8] == 2 ? amp += (1 - amp) * tw_daa :
+    ( amp -= amp * tw_dar; amp < 0.00002 ? ( amp = 0; p[8] = 0; p[10] = 0; p[0] = -1; p[62] = 1; p[63] = 0; ); );
+  ) : (
+    p[8] == 1 ? ( amp += (1.3 - amp) * tw_aa; amp >= 1 ? ( amp = 1; p[8] = 2; ); ) :
+    p[8] == 2 ? amp += (tw_as - amp) * tw_ad :
+    ( amp -= amp * tw_ar; amp < 0.00002 ? ( amp = 0; p[8] = 0; p[10] = 0; p[0] = -1; p[62] = 1; ); );
+  );
   p[9] = amp;
   y * amp * p[55];
+);
+
+
+// ---------- LAYERS ----------
+// parameter block q (from slider i0 on): 0 on, 1 transpose (st), 2 level, 3 wave, 4-6 tone a1 a2 a3, 7 x, 8 y,
+//   9 motion, 10 attack, 11 release, 12 gate, 13 target note, 14 the note it sounds (for the panel), 15 / 16 its point
+//   (for the panel), 20-39 its formant coefficients
+function tw_lset(q, i0) local(g) (
+  q[0] = slider(i0) >= 0.5; q[1] = 12 * floor(slider(i0 + 1) + 0.5) + floor(slider(i0 + 2) + 0.5);
+  q[2] = sqr(slider(i0 + 3) / 100) * 0.9; q[3] = floor(slider(i0 + 4) + 0.5);
+  g = tan($pi * min(slider(i0 + 5), srate * 0.45) / srate);
+  q[4] = 1 / (1 + g * (g + 1.2)); q[5] = g * q[4]; q[6] = g * q[5];
+  q[7] = slider(i0 + 6) / 100; q[8] = slider(i0 + 7) / 100; q[9] = slider(i0 + 8) / 100;
+  q[10] = 1 - exp(-4.6 / (slider(i0 + 9) * 0.001 * srate)); q[11] = 1 - exp(-4.6 / (slider(i0 + 10) * 0.001 * srate));
+);
+// one layer: a mono voice with its own wave, tone, place on the pad and swell
+function tw_lproc(q) instance(a0, a1, a2, a3, a4, nt, i1, env, z1, z2, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9,
+                              c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19,
+                              ex, ey, fg, run)
+                     local(x, y, t, d, v, g) (
+  g = q[0] && q[12];
+  !run && g ? (
+    // waking from silence: start on the note (no glide from an old one), fresh phases and filters
+    run = 1; nt = q[13]; env = 0; fg = 1; ex = ey = 0; z1 = z2 = 0;
+    s0 = s1 = s2 = s3 = s4 = s5 = s6 = s7 = s8 = s9 = 0;
+    a0 = rand(1); a1 = rand(1); a2 = rand(1); a3 = rand(1); a4 = rand(1);
+  );
+  run ? (
+    tw_tick ? (
+      nt += (q[13] - nt) * tw_lgl;                      // a new note: glide there (~120 ms), no click
+      i1 = min(exp((nt + tw_pmod - 69) * L12) * tw_440s, 0.45);
+      c0 = q[20];  c1 = q[21];  c2 = q[22];  c3 = q[23];  c4 = q[24];  c5 = q[25];  c6 = q[26];  c7 = q[27];
+      c8 = q[28];  c9 = q[29];  c10 = q[30]; c11 = q[31]; c12 = q[32]; c13 = q[33]; c14 = q[34]; c15 = q[35];
+      c16 = q[36]; c17 = q[37]; c18 = q[38]; c19 = q[39];
+      ey > 0.0000001 ? fg += (min(max(sqrt(ex / ey), 0.3), 12) ^ 0.8 - fg) * tw_lgc;
+      q[14] = nt;
+    );
+    env += ((g ? 1 : 0) - env) * (g ? q[10] : q[11]);
+    q[3] == 0 ? ( a0 += i1; a0 -= floor(a0); x = tw_saw(a0, i1); ) :
+    q[3] == 1 ? ( a0 += i1; a0 -= floor(a0); t = a0 + 1 - tw_pw; t -= floor(t); x = tw_saw(a0, i1) - tw_saw(t, i1); ) : (
+      d = i1 * tw_cr0; a0 += d; a0 -= floor(a0); x = tw_saw(a0, d);
+      d = i1 * tw_cr1; a1 += d; a1 -= floor(a1); x += tw_saw(a1, d);
+      a2 += i1; a2 -= floor(a2); x += tw_saw(a2, i1);
+      d = i1 * tw_cr3; a3 += d; a3 -= floor(a3); x += tw_saw(a3, d);
+      d = i1 * tw_cr4; a4 += d; a4 -= floor(a4); x += tw_saw(a4, d);
+      x *= 0.42;
+    );
+    // TONE: 12 dB low-pass
+    t = x - z2; v = q[4] * z1 + q[5] * t; z2 += 2 * (q[5] * z1 + q[6] * t); z1 = 2 * v - z1;
+    x = z2 * 0.5;
+    // its own formants
+    t = x - s1; v = c0 * s0 + c1 * t; s1 += 2 * (c1 * s0 + c2 * t);    s0 = 2 * v - s0; y = v * c3;
+    t = x - s3; v = c4 * s2 + c5 * t; s3 += 2 * (c5 * s2 + c6 * t);    s2 = 2 * v - s2; y += v * c7;
+    t = x - s5; v = c8 * s4 + c9 * t; s5 += 2 * (c9 * s4 + c10 * t);   s4 = 2 * v - s4; y += v * c11;
+    t = x - s7; v = c12 * s6 + c13 * t; s7 += 2 * (c13 * s6 + c14 * t); s6 = 2 * v - s6; y += v * c15;
+    t = x - s9; v = c16 * s8 + c17 * t; s9 += 2 * (c17 * s8 + c18 * t); s8 = 2 * v - s8; y += v * c19;
+    abs(s0) + abs(s2) > 60 ? s0 = s1 = s2 = s3 = s4 = s5 = s6 = s7 = s8 = s9 = 0;
+    ex += (x * x - ex) * tw_lgf; ey += (y * y - ey) * tw_lgf;
+    y = x * (1 - tw_dep) + y * tw_dep * fg * tw_fcomp;
+    !g && env < 0.00002 ? ( run = 0; env = 0; );
+    y * env * q[2];
+  ) : 0;
+);
+
+// ---------- DRONE: the chord's notes into TDN; returns how many ----------
+function tw_ci(c, k) (                                  // interval k of chord c (-1: no more)
+  c == 0 ? (k == 0 ? 0 : k == 1 ? 7 : k == 2 ? 12 : -1) :
+  c == 1 ? (k == 0 ? 0 : k == 1 ? 2 : k == 2 ? 7 : -1) :
+  c == 2 ? (k == 0 ? 0 : k == 1 ? 5 : k == 2 ? 7 : -1) :
+  c == 3 ? (k == 0 ? 0 : k == 1 ? 4 : k == 2 ? 7 : -1) :
+  c == 4 ? (k == 0 ? 0 : k == 1 ? 3 : k == 2 ? 7 : -1) :
+  c == 5 ? (k == 0 ? 0 : k == 1 ? 4 : k == 2 ? 7 : k == 3 ? 11 : -1) :
+  c == 6 ? (k == 0 ? 0 : k == 1 ? 3 : k == 2 ? 7 : k == 3 ? 10 : -1) :
+  c == 7 ? (k == 0 ? 0 : k == 1 ? 4 : k == 2 ? 7 : k == 3 ? 14 : -1) :
+  c == 8 ? (k == 0 ? 0 : k == 1 ? 5 : k == 2 ? 10 : k == 3 ? 15 : -1) :
+           (k == 0 ? 0 : k == 1 ? 7 : k == 2 ? 12 : k == 3 ? 19 : -1);
+);
+function tw_dnotes(root) local(n, k, iv, lift) (
+  n = 0; while ((iv = tw_ci(tw_dch, n)) >= 0 && n < 4) ( TDN[n] = iv; n += 1; );
+  // VOICING: SPREAD lifts the second tone an octave; WIDE also the fourth (or, with three, the third)
+  tw_dvc >= 1 ? TDN[1] += 12;
+  tw_dvc == 2 ? ( n > 3 ? TDN[3] += 12 : TDN[2] += 12; );
+  // FATE turns the voicing over now and then: the lowest inner tones go up an octave (the root stays at the bottom)
+  lift = floor(max(tw_dinv, 0) * min(n - 1, 2) + 0.5); k = 1;
+  loop(lift, TDN[k] += 12; k += 1; );
+  k = 0; loop(n, TDN[k] += root; k += 1; );
+  n;
+);
+// a voice for a drone tone: never voice 0 in MONO / LEGATO (that one is the played voice); free first, then the
+// oldest released one, then the oldest that is not a drone voice
+function tw_dalloc() local(i, p, best, ba, lo) (
+  best = -1; lo = tw_mode ? 1 : 0;
+  i = 7; loop(8 - lo, p = TV + i * 64; p[8] == 0 && best < 0 ? best = i; i -= 1; );
+  best < 0 ? ( i = 7; loop(8 - lo, p = TV + i * 64; !p[1] && !p[3] && (best < 0 || p[2] < ba) ? ( best = i; ba = p[2]; ); i -= 1; ); );
+  best < 0 ? ( i = 7; loop(8 - lo, p = TV + i * 64; !p[63] && (best < 0 || p[2] < ba) ? ( best = i; ba = p[2]; ); i -= 1; ); );
+  best < 0 ? -1 : TV + best * 64;
+);
+// bring the drone voices to the chord (n notes in TDN): voices that stay glide, new ones swell in, the rest swell out
+function tw_drone_set(n) local(k, p) (
+  k = 0;
+  loop(8,
+    p = TDV[k];
+    p >= 0 && !(p[63] && p[8] > 0 && p[8] != 3) ? ( p = -1; TDV[k] = -1; );     // stolen or gone
+    k < n ? (
+      p >= 0 ? ( p[5] = TDN[k]; p[0] = TDN[k]; ) : (
+        p = tw_dalloc();
+        p >= 0 ? (
+          tw_age += 1; p[2] = tw_age;
+          tw_vstart(p, TDN[k], 92, 1, TDN[k]);
+          p[63] = 1; p[4] = TDN[k];
+          p[55] = (1 - tw_avel + tw_avel * 0.72) * 0.62 * tw_dlg;
+          TDV[k] = p;
+        );
+      );
+    ) : (
+      p >= 0 ? ( p[1] = 0; p[8] = 3; TDV[k] = -1; );
+    );
+    k += 1;
+  );
 );
 
 // ---------- parameters ----------
@@ -479,10 +624,13 @@ function update() local(r, sp) (
   tw_yr0 = tw_yy ? tw_tmp / 60 / tw_yb : slider25;
   tw_wx = slider31 / 100; tw_wy = slider32 / 100; tw_vx = slider33 / 100; tw_vy = slider34 / 100;
   tw_ey = slider35 / 100; tw_ea = tw_c8(slider36); tw_ed = tw_c8(slider37);
-  tw_samt = slider38 / 100; tw_rec = slider39 / 1000; tw_crk = slider40 / 100; tw_auto = slider41 / 100;
-  tw_mstr = slider42; tw_snote = floor(slider43 + 0.5); tw_svel = slider44;
-  tw_rdec = exp(-8 * 3.5 / (tw_rec * srate));        // the strike lets go: ~95 % rebuilt after RECOVERY
-  tw_holdn = floor(0.08 * tw_rec * srate / 8);
+  tw_dron = slider38 >= 0.5; tw_drt = floor(slider39 + 0.5); tw_dch = floor(slider40 + 0.5); tw_dvc = floor(slider41 + 0.5);
+  tw_dfol = slider42 >= 0.5; tw_doct = floor(slider43 + 0.5); tw_pnt = floor(slider44 + 0.5);
+  // drone voices: at least a 300 ms swell in and 800 ms out, whatever the AMP envelope says
+  tw_daa = vo_coef(max(slider48, 300)); tw_dar = vo_coef(max(slider51, 800));
+  tw_dgc = tw_c4(vo_coef(160));                        // drone voices glide to a new chord in ~160 ms
+  // layers: parameter blocks for the two mono drone voices
+  tw_lset(TLB, 69); tw_lset(TLP, 80);
   tw_mode = slider45; tw_glide = slider46; tw_gc = slider46 > 0 ? tw_c4(vo_coef(slider46)) : 1;
   tw_brng = slider47;
   tw_aa = vo_coef(slider48); tw_ad = vo_coef(slider49); tw_as = slider50 / 100; tw_ar = vo_coef(slider51);
@@ -509,12 +657,12 @@ function update() local(r, sp) (
 ins_drift_init();
 tw_dXr.drift_init(0.8 + rand(0.5)); tw_dYr.drift_init(0.8 + rand(0.5)); tw_dPh.drift_init(0.8 + rand(0.5));
 tw_dXd.drift_init(0.8 + rand(0.5)); tw_dYd.drift_init(0.8 + rand(0.5)); tw_dCx.drift_init(0.8 + rand(0.5));
-tw_dCy.drift_init(0.8 + rand(0.5)); tw_dPr.drift_init(0.8 + rand(0.5));
+tw_dCy.drift_init(0.8 + rand(0.5)); tw_dIv.drift_init(0.8 + rand(0.5));
 tw_dF0.drift_init(0.8 + rand(0.5)); tw_dF1.drift_init(0.8 + rand(0.5)); tw_dF2.drift_init(0.8 + rand(0.5)); tw_dF3.drift_init(0.8 + rand(0.5));
 tw_bend = 0; tw_mw = 0; tw_pedal = 0; tw_hc = 0; tw_age = 0; tw_last = -1; tw_qc = 0; tw_ct = 0;
 tw_xph = 0; tw_yph = 0; tw_xcyc = 0; tw_xh = 0; tw_yh = 0; tw_xa = 0; tw_xb2 = rand(2) - 1; tw_ya = 0; tw_yb2 = rand(2) - 1;
-tw_gx = 0.5; tw_gy = 0.5; tw_px = 0.5; tw_py = 0.5; tw_se = 0; tw_sev = 0; tw_jx = tw_jy = 0; tw_ce = 0; tw_re = 0;
-tw_sseen = 0; tw_lastbar = -1; tw_fbeat = 0; tw_vol = 1; tw_wp = 0; tw_rw = 0; tw_dts = -1;
+tw_gx = 0.5; tw_gy = 0.5; tw_px = 0.5; tw_py = 0.5; tw_droot = -1; tw_dinv = 0; tw_dcnt = 0;
+tw_vol = 1; tw_wp = 0; tw_rw = 0; tw_dts = -1;
 tw_fc0 = tw_fc1 = tw_fc2 = tw_fc3 = 0; tw_lastmode = -1;
 function tw_srinit() local(i) (
   tw_sr = srate; tw_sm = 1 - exp(-1 / (0.03 * srate)); ost_init(20000); tw_dts = -1;
@@ -525,11 +673,9 @@ function tw_srinit() local(i) (
   tw_r0.tw_rinit(TRLT[0]); tw_r1.tw_rinit(TRLT[1]); tw_r2.tw_rinit(TRLT[2]); tw_r3.tw_rinit(TRLT[3]);
   tw_r4.tw_rinit(TRLT[4]); tw_r5.tw_rinit(TRLT[5]); tw_r6.tw_rinit(TRLT[6]); tw_r7.tw_rinit(TRLT[7]);
   tw_kc = 1 - exp(-8 / (0.005 * srate));               // the point's smoothing at the tick (5 ms)
-  tw_ju = 1 - exp(-8 / (0.004 * srate));               // the strike's jolt rises in 4 ms (no click)
-  tw_crd = exp(-1 / (0.045 * srate));                  // crack
+  tw_lgl = 1 - exp(-8 / (0.04 * srate));               // the layers glide to a new note (~120 ms)
   tw_lgf = 1 - exp(-1 / (0.03 * srate));               // the formants' level follower (30 ms)
   tw_lgc = 1 - exp(-8 / (0.04 * srate));               // and its make-up gain's glide
-  tw_cbd = exp(-1 / (0.12 * srate));                   // its band sweeps down
 );
 tw_srinit();
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );               // a new instance opens Large, on Init
@@ -545,19 +691,16 @@ srate != tw_sr ? tw_srinit();
 tw_treq > 0 ? ( load_preset(tw_treq); tw_treq = 0; );     // a preset asked for from outside the panel (test hook)
 update();
 
-// MIDI in, sample-accurate through the queue (type 1 on, 0 off, 2 pedal up, 3 all off, 4 strike)
+// MIDI in, sample-accurate through the queue (type 1 on, 0 off, 2 pedal up, 3 all off, 4 drone root)
 tw_qc = 0;
 while (midirecv(mofs, m1, m2, m3)) (
   ins_chan_ok(m1, tw_chan) ? (
     tw_st = m1 & 0xF0;
     tw_st == 0x90 || tw_st == 0x80 ? (
       tw_on = tw_st == 0x90 && m3 > 0;
-      tw_mstr == 1 && m2 == tw_snote ? (
-        tw_on ? tw_qpush(mofs, 4, 0, m3);                // the strike note only strikes, it does not sound
-      ) : (
-        tw_qpush(mofs, tw_on, m2, m3);
-        tw_mstr == 2 && tw_on && m3 >= tw_svel ? tw_qpush(mofs, 4, 0, m3);
-      );
+      tw_dron && tw_dfol ? (
+        tw_on ? tw_qpush(mofs, 4, m2, m3);              // FOLLOW: a played note moves the drone's root
+      ) : tw_qpush(mofs, tw_on, m2, m3);
       tw_on ? ins_midi_hit();
     ) :
     tw_st == 0xE0 ? tw_bend = (((m3 * 128 + m2) - 8192) / 8192) * tw_brng :
@@ -570,17 +713,25 @@ while (midirecv(mofs, m1, m2, m3)) (
 );
 tw_mode != tw_lastmode ? ( tw_qpush(0, 3, 0, 0); tw_lastmode = tw_mode; );
 tw_panic ? ( tw_all_off(); tw_panic = 0; );
-// the LIGHTNING key on the panel (the GUI counts presses, the audio side follows)
-tw_sreq != tw_sseen ? ( tw_sseen = tw_sreq; tw_qpush(0, 4, 0, 127); );
 
-// AUTO strike: a chance on every bar (the project's bars while it plays, a free bar clock at its tempo when not)
-ts_num > 0 && ts_denom > 0 ? tw_barlen = ts_num * 4 / ts_denom : tw_barlen = 4;
-play_state & 1 ? tw_bar = floor(beat_position / tw_barlen) : (
-  tw_fbeat += samplesblock / srate * tw_tmp / 60; tw_bar = floor(tw_fbeat / tw_barlen);
-);
-tw_bar != tw_lastbar ? (
-  tw_lastbar >= 0 && tw_auto > 0 && rand(1) < min(tw_auto * (1 + 0.6 * tw_fate * tw_dpr), 1) ? tw_qpush(0, 4, 0, 70 + rand(57));
-  tw_lastbar = tw_bar;
+// ---------- DRONE and LAYERS (block rate) ----------
+// what is held (played voices only)
+tw_nheld = 0; tw_plo = 1000; tw_i = 0;
+loop(8, tw_p = TV + tw_i * 64; !tw_p[63] && tw_p[0] >= 0 && (tw_p[1] || tw_p[3]) ? ( tw_nheld += 1; tw_plo = min(tw_plo, tw_p[0]); ); tw_i += 1; );
+// the drone sounds while it is on and nothing is played over it (with FOLLOW, played notes only move its root)
+tw_dact = tw_dron && (tw_dfol || tw_nheld == 0);
+tw_droot < 0 || !tw_dfol ? tw_droot = tw_drt;
+tw_drn = 12 * (tw_doct + 1) + tw_droot;                  // the root note (octave 3: C3 = 48)
+tw_dcnt = tw_dact ? tw_dnotes(tw_drn) : 0;
+tw_dlg = sqrt(3 / max(tw_dcnt, 1)) * 0.9;                  // level-matched to playing a three-note chord
+tw_drone_set(tw_dcnt);
+// the layers sound the lowest note and the root of the drone, or of what is played
+tw_dact ? ( tw_lsrc = tw_drn; tw_lroot = tw_drn; tw_lgate = 1; ) :
+tw_nheld > 0 ? ( tw_lsrc = tw_plo; tw_lroot = tw_plo; tw_lgate = 1; ) : tw_lgate = 0;
+TLB[12] = tw_lgate; TLP[12] = tw_lgate;
+tw_lgate ? (
+  TLB[13] = tw_lsrc + TLB[1];
+  TLP[13] = tw_lroot + (tw_pnt == 1 ? 7 : tw_pnt == 2 ? 12 : 0) + TLP[1];
 );
 tw_eqi = 0; tw_spos = 0;
 
@@ -595,7 +746,7 @@ tw_xdm = 1 + tw_dXd.drift_tick(tw_di) * tw_fate * 0.25;            // depths +/-
 tw_ydm = 1 + tw_dYd.drift_tick(tw_di) * tw_fate * 0.25;
 tw_dcx = tw_dCx.drift_tick(tw_di * 0.7) * tw_fate * 0.08;          // the centre wanders +/-8 %
 tw_dcy = tw_dCy.drift_tick(tw_di * 0.7) * tw_fate * 0.08;
-tw_dpr = tw_dPr.drift_tick(tw_di * 0.5);                           // the AUTO chance rises and falls
+tw_dinv = tw_dIv.drift_tick(tw_di * 0.35) * tw_fate * 2 - 0.25;    // the drone voicing turns over now and then
 tw_fc0 = tw_dF0.drift_tick(tw_di * 0.6) * tw_fate * 0.07;          // each corner's set slides up to +/-7 %
 tw_fc1 = tw_dF1.drift_tick(tw_di * 0.6) * tw_fate * 0.07;
 tw_fc2 = tw_dF2.drift_tick(tw_di * 0.6) * tw_fate * 0.07;
@@ -624,12 +775,12 @@ while (tw_eqi < tw_qc && TQO[tw_eqi] <= tw_spos) (
   tw_et = TQT[tw_eqi];
   tw_et == 1 ? ( tw_mode ? tw_mono_on(TQN[tw_eqi], TQV[tw_eqi]) : tw_poly_on(TQN[tw_eqi], TQV[tw_eqi]); tw_last = TQN[tw_eqi]; ) :
   tw_et == 0 ? ( tw_mode ? tw_mono_off(TQN[tw_eqi]) : tw_poly_off(TQN[tw_eqi]); ) :
-  tw_et == 2 ? tw_pedal_up() : tw_et == 3 ? tw_all_off() : tw_strike(TQV[tw_eqi] / 127);
+  tw_et == 2 ? tw_pedal_up() : tw_et == 3 ? tw_all_off() : tw_droot = TQN[tw_eqi] % 12;
   tw_eqi += 1;
 );
 tw_spos += 1;
 
-// ---------- control tick (every 8 samples): LFOs, the point, LIGHTNING ----------
+// ---------- control tick (every 8 samples): LFOs, the point, the layers' points ----------
 tw_ct += 1;
 tw_tick = tw_ct >= 8;
 tw_tick ? (
@@ -667,14 +818,14 @@ tw_tick ? (
   tw_ty = slider15 / 100 + tw_dcy + tw_ly * tw_yd * tw_ydm * 0.5 + tw_mw * tw_wy * 0.5;
   tw_gx += (min(max(tw_tx, 0), 1) - tw_gx) * tw_kc;
   tw_gy += (min(max(tw_ty, 0), 1) - tw_gy) * tw_kc;
-  // LIGHTNING: the jolt rises in 4 ms, holds a moment, then lets go over RECOVERY
-  tw_shold > 0 ? tw_shold -= 1 : tw_sev *= tw_rdec;
-  tw_sev < 0.0001 ? tw_sev = 0;
-  tw_se += (tw_sev - tw_se) * (tw_sev > tw_se ? tw_ju : 1);
-  tw_px = min(max(tw_gx + tw_jx * tw_se, 0), 1);
-  tw_py = min(max(tw_gy + tw_jy * tw_se, 0), 1);
-  tw_rq = tw_rq0 * (1 + 3.5 * tw_sk * tw_se);                      // the resonance slammed up
-  tw_fcomp = 1.5 * (1 + 0.8 * tw_sk * tw_se);                       // the strike rings out a little louder
+  tw_px = tw_gx; tw_py = tw_gy;
+  tw_rq = tw_rq0; tw_fcomp = 1.5;
+  // the layers: their own place on the pad, plus MOTION's share of the LFOs' orbit
+  tw_ox = tw_lx * tw_xd * tw_xdm * 0.5; tw_oy = tw_ly * tw_yd * tw_ydm * 0.5;
+  TLB[0] ? ( TLB[15] = min(max(TLB[7] + tw_ox * TLB[9], 0), 1); TLB[16] = min(max(TLB[8] + tw_oy * TLB[9], 0), 1);
+             tw_fcoef(TLB + 20, TLB[15], TLB[16]); );
+  TLP[0] ? ( TLP[15] = min(max(TLP[7] + tw_ox * TLP[9], 0), 1); TLP[16] = min(max(TLP[8] + tw_oy * TLP[9], 0), 1);
+             tw_fcoef(TLP + 20, TLP[15], TLP[16]); );
   // one shared set of coefficients unless velocity or the envelope give each voice its own point
   tw_own = tw_vx != 0 || tw_vy != 0 || tw_ey != 0;
   !tw_own ? tw_fcoef(TGC, tw_px, tw_py);
@@ -684,21 +835,6 @@ tw_tick ? (
   tw_cr0 = 2 ^ (-tw_spr / 1200); tw_cr1 = 2 ^ (-tw_spr * 0.42 / 1200);
   tw_cr3 = 2 ^ (tw_spr * 0.39 / 1200); tw_cr4 = 2 ^ (tw_spr * 1.03 / 1200);
 );
-
-// the crack: noise and sparks, through a band that falls; the thunder after it
-tw_ce > 0.00002 || tw_re > 0.00002 ? (
-  tw_nz = rand(2) - 1;
-  tw_ce *= tw_crd; tw_cbf = max(tw_cbf * tw_cbd, 180);
-  tw_cx = (tw_nz * 0.7 + (rand(1) < 0.012 ? (rand(2) - 1) * 3 : 0)) * tw_ce * tw_ce;
-  tw_g = tan(tw_cbf * tw_pis); tw_a1 = 1 / (1 + tw_g * (tw_g + 0.6)); tw_a2 = tw_g * tw_a1; tw_a3 = tw_g * tw_a2;
-  tw_v3 = tw_cx - tw_cz2; tw_v1 = tw_a1 * tw_cz1 + tw_a2 * tw_v3; tw_v2 = tw_cz2 + tw_a2 * tw_cz1 + tw_a3 * tw_v3;
-  tw_cz1 = 2 * tw_v1 - tw_cz1; tw_cz2 = 2 * tw_v2 - tw_cz2;
-  tw_re *= tw_rdec ^ 0.125 * 0.99999;
-  tw_rl += (tw_nz - tw_rl) * 0.006; tw_rl2 += (tw_rl - tw_rl2) * 0.006;
-  tw_crack = (tw_v1 * 0.9 + tw_cx * 0.25 + tw_rl2 * 9 * tw_re * tw_re) * tw_crk;
-  tw_ce <= 0.00002 && tw_re <= 0.00002 ? ( tw_ce = tw_re = 0; tw_cz1 = tw_cz2 = tw_rl = tw_rl2 = 0; );
-) : tw_crack = 0;
-tw_cin = tw_crack * 0.6;                                           // what rings through the formants
 
 // ---------- the voices ----------
 tw_L = tw_R = 0;
@@ -710,7 +846,8 @@ TV[256 + 8] > 0 ? ( tw_y = tw_v4.tw_vproc(TV + 256); tw_L += tw_y * TV[256 + 56]
 TV[320 + 8] > 0 ? ( tw_y = tw_v5.tw_vproc(TV + 320); tw_L += tw_y * TV[320 + 56]; tw_R += tw_y * TV[320 + 57]; );
 TV[384 + 8] > 0 ? ( tw_y = tw_v6.tw_vproc(TV + 384); tw_L += tw_y * TV[384 + 56]; tw_R += tw_y * TV[384 + 57]; );
 TV[448 + 8] > 0 ? ( tw_y = tw_v7.tw_vproc(TV + 448); tw_L += tw_y * TV[448 + 56]; tw_R += tw_y * TV[448 + 57]; );
-tw_L += tw_crack * 0.5; tw_R += tw_crack * 0.5;
+// the layers (centred)
+tw_y = tw_lb.tw_lproc(TLB) + tw_lp.tw_lproc(TLP); tw_L += tw_y; tw_R += tw_y;
 
 // ---------- DRIVE: stone crumble ----------
 tw_drv > 0.001 ? (
@@ -787,9 +924,9 @@ ost_out(tw_L, tw_R);
 spl0 = ost_l; spl1 = ost_r;
 tw_pk = max(tw_pk, max(abs(spl0), abs(spl1)));
 
-@gfx 1100 480
+@gfx 1100 600
 ui_thm = 13; ui_hw = 1;
-ui_begin(1100, 480);
+ui_begin(1100, 600);
 
 // ---------- the card's colours: storm lapis, ochre, flame orange, cream, ink ----------
 INK = 0x1A1E24; CREAM = 0xF4E8C4; CREAMH = 0xFFF6DC; LBL = 0xF6EBCB;
@@ -797,6 +934,7 @@ LAPIS = 0x24408A; LAPX = 0x172B63; LAPL = 0x3558A8;
 SHA = 0x2A4994; SHB = 0x264490; SHC = 0x2C4E9A;
 OCHRE = 0xDDA43C; OCHRED = 0xA97A22; FLAME = 0xF2662B; FLAMEL = 0xFFA040; SKY = 0x48B4D2;
 KEYOFF = 0x1E3672; KEYHOV = 0x2B4890;
+BASSC = 0x48C4E0; PEDC = 0xE8509A;                     // the layers' colours on the pad
 
 // fonts, calibrated once per scale (the house way: a reference word fills the same width everywhere)
 sc != tg_calsc ? (
@@ -955,7 +1093,7 @@ function tg_emblem(x, y, w, h, fl) local(cx, by, tw, th, ty, i, k, sx, sy, bc, e
   ui_cola(0x000000, 0.3); tg_rr(x + 1.5, y + 2.5, w, h, 6);
   ui_col(INK); tg_rr(x, y, w, h, 6);
   ui_col(CREAM); tg_rr(x + 2, y + 2, w - 4, h - 4, 5);
-  // the sky in flat bands, lit up by the strike
+  // the sky in flat bands
   k = 0; loop(5, ui_col(ui_mix(ui_mix(0x1B3474, 0x3E66B8, k / 4), CREAMH, fl * 0.55)); tg_r(x + 5, y + 5 + k * (h - 30) / 5, w - 10, (h - 30) / 5 + 0.5); k += 1; );
   // the ground
   ui_col(OCHRED); tg_r(x + 5, y + h - 25, w - 10, 20);
@@ -1037,11 +1175,9 @@ function tg_path() local(n, i, t, lx, ly, rad, cx0, cy0, xd, yd, sx, sy, ph, tt)
 );
 
 // ---------- the XY pad ----------
-function tg_pad(x, y, w, h) local(i, k, px, py, qx, qy, a, ox, oy, mx, my, inpad, c, tx, ty, tw2, hit, sev, bx, by, nx, ny) (
+function tg_pad(x, y, w, h) local(i, k, px, py, qx, qy, a, ox, oy, mx, my, inpad, c, tx, ty, tw2, hit, q, lx, ly, col) (
   // a storm sky in flat bands
   k = 0; loop(7, ui_col(ui_mix(0x13285E, 0x2F5AAE, k / 6)); tg_r(x, y + k * h / 7, w, h / 7 + 0.5); k += 1; );
-  sev = tw_se;
-  sev > 0.02 ? ( ui_cola(CREAMH, min(sev, 1) * 0.28); tg_r(x, y, w, h); );
   // quarter guides
   ui_cola(LBL, 0.16); tg_r(x + w * 0.5, y, 1, h); tg_r(x, y + h * 0.5, w, 1);
   ui_cola(LBL, 0.07); tg_r(x + w * 0.25, y, 1, h); tg_r(x + w * 0.75, y, 1, h); tg_r(x, y + h * 0.25, w, 1); tg_r(x, y + h * 0.75, w, 1);
@@ -1073,16 +1209,9 @@ function tg_pad(x, y, w, h) local(i, k, px, py, qx, qy, a, ox, oy, mx, my, inpad
   px = x + tw_px * w; py = y + (1 - tw_py) * h;
   ui_cola(LBL, 0.35); gfx_line(ox * sc, oy * sc, px * sc, py * sc, 1);
   ui_col(INK); gfx_circle(ox * sc, oy * sc, 6 * sc, 1, 1); ui_col(LBL); gfx_circle(ox * sc, oy * sc, 4.5 * sc, 1, 1); ui_col(INK); gfx_circle(ox * sc, oy * sc, 2 * sc, 1, 1);
-  // a strike: the bolt comes down onto the point
-  sev > 0.04 ? (
-    ui_cola(CREAMH, min(sev * 1.5, 1));
-    bx = px - 30 + tg_hash1 * 10; by = y + 2; k = 0;
-    loop(5, nx = px + (k < 4 ? (k & 1 ? 10 : -12) * (1 - k / 5) : 0); ny = by + (py - by) * (k + 1) / 5;
-            tg_ln(bx, by, nx, ny, 3.5 * min(sev * 2, 1)); bx = nx; by = ny; k += 1; );
-  );
   ui_cola(0x000000, 0.35); gfx_circle((px + 1) * sc, (py + 2) * sc, 9 * sc, 1, 1);
   ui_col(INK); gfx_circle(px * sc, py * sc, 9 * sc, 1, 1);
-  ui_col(sev > 0.04 ? ui_mix(FLAME, CREAMH, min(sev, 1) * 0.7) : FLAME); gfx_circle(px * sc, py * sc, 7.2 * sc, 1, 1);
+  ui_col(FLAME); gfx_circle(px * sc, py * sc, 7.2 * sc, 1, 1);
   ui_cola(0xFFFFFF, 0.55); gfx_circle((px - 2.2) * sc, (py - 2.4) * sc, 2.2 * sc, 1, 1);
   // the four corners: their formant sets (click to choose)
   hit = 0; c = 0;
@@ -1103,6 +1232,27 @@ function tg_pad(x, y, w, h) local(i, k, px, py, qx, qy, a, ox, oy, mx, my, inpad
     );
     c += 1;
   );
+  // the layers' points: a ring where they are anchored (drag it), the dot where they are now
+  k = 0;
+  loop(2,
+    q = k ? TLP : TLB; i = k ? 86 : 75; col = k ? PEDC : BASSC;
+    slider(k ? 80 : 69) >= 0.5 ? (
+      ox = x + slider(i) / 100 * w; oy = y + (1 - slider(i + 1) / 100) * h;
+      lx = x + q[15] * w; ly = y + (1 - q[16]) * h;
+      ui_cola(col, 0.5); gfx_line(ox * sc, oy * sc, lx * sc, ly * sc, 1);
+      ui_col(INK); gfx_circle(ox * sc, oy * sc, 6.5 * sc, 0, 1); gfx_circle(ox * sc, oy * sc, 4.5 * sc, 0, 1);
+      ui_col(col); gfx_circle(ox * sc, oy * sc, 5.5 * sc, 0, 1);
+      ui_col(INK); gfx_circle(lx * sc, ly * sc, 8.5 * sc, 1, 1); ui_col(col); gfx_circle(lx * sc, ly * sc, 7 * sc, 1, 1);
+      gfx_setfont(16); ui_col(INK); tg_tc(lx, ly + 0.5, k ? "P" : "B");
+      pressed && drag_id == 0 && sqr(mouse_x - ox * sc) + sqr(mouse_y - oy * sc) <= sqr(9 * sc) ? drag_id = 3002 + k;
+      drag_id == 3002 + k ? (
+        mx = min(max((mouse_x / sc - x) / w, 0), 1); my = min(max(1 - (mouse_y / sc - y) / h, 0), 1);
+        slider(i) != mx * 100 ? tg_set(i, mx * 100); slider(i + 1) != my * 100 ? tg_set(i + 1, my * 100);
+        sprintf(#tg_vv, "%s  X %.0f   Y %.0f", k ? "PEDAL" : "BASS", slider(i), slider(i + 1)); tg_pill(x + w * 0.5, y + h - 20, #tg_vv);
+      );
+    );
+    k += 1;
+  );
   // drag the centre (double-click: back to the middle)
   inpad = tg_hov(x, y, w, h);
   pressed && inpad && drag_id == 0 ? (
@@ -1112,7 +1262,7 @@ function tg_pad(x, y, w, h) local(i, k, px, py, qx, qy, a, ox, oy, mx, my, inpad
     mx = min(max((mouse_x / sc - x) / w, 0), 1); my = min(max(1 - (mouse_y / sc - y) / h, 0), 1);
     slider14 != mx * 100 ? tg_set(14, mx * 100); slider15 != my * 100 ? tg_set(15, my * 100);
   );
-  (inpad || drag_id == 3001) ? ( sprintf(#tg_vv, "X %.0f   Y %.0f", slider14, slider15); tg_pill(x + w * 0.5, y + h - 20, #tg_vv); );
+  ((inpad && drag_id != 3002 && drag_id != 3003) || drag_id == 3001) ? ( sprintf(#tg_vv, "X %.0f   Y %.0f", slider14, slider15); tg_pill(x + w * 0.5, y + h - 20, #tg_vv); );
   // the frame
   ui_col(INK); tg_frame(x - 2, y - 2, w + 4, h + 4, 2);
 );
@@ -1120,10 +1270,10 @@ function tg_pad(x, y, w, h) local(i, k, px, py, qx, qy, a, ox, oy, mx, my, inpad
 // ---------- the card ----------
 // card stock with an ink frame, the field in storm lapis
 ui_col(CREAM); gfx_rect(0, 0, gfx_w, gfx_h);
-ui_col(INK); tg_rr(4, 4, 1092, 472, 9);
-ui_col(CREAM); tg_rr(6.5, 6.5, 1087, 467, 7);
-ui_col(INK); tg_r(11, 11, 1078, 458);
-ui_col(LAPIS); tg_r(13, 13, 1074, 454);
+ui_col(INK); tg_rr(4, 4, 1092, 592, 9);
+ui_col(CREAM); tg_rr(6.5, 6.5, 1087, 587, 7);
+ui_col(INK); tg_r(11, 11, 1078, 578);
+ui_col(LAPIS); tg_r(13, 13, 1074, 574);
 // header band
 ui_col(LAPX); tg_r(13, 13, 1074, 44);
 ui_col(INK); tg_r(13, 57, 1074, 2);
@@ -1141,7 +1291,7 @@ k_ = pk_preset(22 * sc, 18 * sc, 372 * sc, 34 * sc, pr_cur, #tw_pm);
 k_ > 0 ? load_preset(k_);
 gfx_setfont(12); ui_col(LBL); tg_t(650, 19, "QUADRANT FORMANT"); ui_cola(LBL, 0.75); tg_t(650, 35, "SYNTHESIZER");
 // MIDI: activity LED and channel
-pk_led(816 * sc, 35 * sc, 4.5 * sc, ins_midi_lit() || tw_sseen != tg_lastseen, FLAMEL);
+pk_led(816 * sc, 35 * sc, 4.5 * sc, ins_midi_lit(), FLAMEL);
 gfx_setfont(11); ui_col(LBL); tg_tc(816, 22, "MIDI");
 sprintf(#tg_g, slider62 < 0.5 ? "OMNI" : "CH %.0f", slider62);
 tg_field(832, 23, 70, 24, #tg_g) ? (
@@ -1229,29 +1379,64 @@ loop(2,
 );
 tg_knob(894, 145, 14, 29, 0, 360, 90, 0, "PHASE", "%.0f°", 0);            // the phase of Y against X, between the two
 
-// ---------- LIGHTNING ----------
+// ---------- DRONE / CHORD ----------
 pk_inset(712 * sc, 188 * sc, 368 * sc, 112 * sc, SHC);
-tg_hash1 = (tw_scount * 0.6180339) - floor(tw_scount * 0.6180339);
-tg_emblem(719, 193, 94, 102, tw_se);
-tg_fl = tw_se > 0.05;
-tg_key(822, 194, 128, 38, tg_fl, "") ? tw_sreq += 1;
-tg_fl ? ( ui_cola(CREAMH, min(tw_se, 1) * 0.5); tg_rr(823.5, 195.5, 125, 35, 2); );
-gfx_setfont(12); ui_col(tg_fl ? INK : LBL); tg_tc(886, 213, "LIGHTNING");
-tg_keys(958, 194, 36, 20, 3, 42, 3, "OFF|NOTE|VEL");
-// the MIDI trigger: drag the field to set the note or the velocity
-tg_mm = floor(slider42 + 0.5);
-tg_mm == 1 ? sprintf(#tg_g, "NOTE %s", tg_nname(floor(slider43 + 0.5))) : tg_mm == 2 ? sprintf(#tg_g, "VEL %d+", floor(slider44 + 0.5)) : strcpy(#tg_g, "MIDI OFF");
-ui_col(INK); tg_rr(958, 218, 114, 18, 3); ui_col(tg_mm ? CREAM : 0x8F98B5); tg_rr(959.5, 219.5, 111, 15, 2);
-gfx_setfont(16); ui_col(INK); tg_tc(1015, 227.5, #tg_g);
-tg_hov(958, 218, 114, 18) && pressed && drag_id == 0 && tg_mm ? ( drag_id = 3101; tg_fy = mouse_y; tg_fv = tg_mm == 1 ? slider43 : slider44; );
-drag_id == 3101 ? (
-  tg_fv = min(max(tg_fv + (tg_fy - mouse_y) / (4 * sc), tg_mm == 1 ? 0 : 1), 127); tg_fy = mouse_y;
-  tg_set(tg_mm == 1 ? 43 : 44, floor(tg_fv + 0.5));
+tg_key(720, 193, 62, 22, slider38 >= 0.5, "DRONE") ? tg_set(38, slider38 >= 0.5 ? 0 : 1);
+tg_key(786, 193, 66, 22, slider42 >= 0.5, "FOLLOW") ? tg_set(42, slider42 >= 0.5 ? 0 : 1);
+tg_keys(860, 193, 48, 22, 3, 41, 3, "CLOSE|SPREAD|WIDE");
+// the register: drag the field up / down
+sprintf(#tg_g, "OCT %d", floor(slider43 + 0.5));
+ui_col(INK); tg_rr(1018, 193, 54, 22, 3); ui_col(tg_hov(1018, 193, 54, 22) || drag_id == 3102 ? CREAMH : CREAM); tg_rr(1019.5, 194.5, 51, 19, 2);
+gfx_setfont(11); ui_col(INK); tg_tc(1045, 204, #tg_g);
+tg_hov(1018, 193, 54, 22) && pressed && drag_id == 0 ? ( drag_id = 3102; tg_fy = mouse_y; tg_fv = slider43; );
+drag_id == 3102 ? ( tg_fv = min(max(tg_fv + (tg_fy - mouse_y) / (12 * sc), 1), 5); tg_fy = mouse_y; floor(tg_fv + 0.5) != slider43 ? tg_set(43, floor(tg_fv + 0.5)); );
+// ROOT (with FOLLOW on, the key lit is the root the last note played chose)
+tg_rt = slider42 >= 0.5 && slider38 >= 0.5 ? tw_droot : floor(slider39 + 0.5);
+tg_i = 0;
+loop(12,
+  tg_key(720 + tg_i * 29.5, 220, 27, 22, tg_rt == tg_i, pk_pitem("C|C#|D|D#|E|F|F#|G|G#|A|A#|B", tg_i + 1, #tg_k)) ? tg_set(39, tg_i);
+  tg_i += 1;
 );
-tg_knob(848,  263, 14, 38, 0, 100, 70, 0, "STRIKE", "%.0f%%", 0);
-tg_knob(912,  263, 14, 39, 50, 10000, 1500, 1, "RECOVERY", "%.0f ms", 0);
-tg_knob(978,  263, 14, 40, 0, 100, 40, 0, "CRACK", "%.0f%%", 0);
-tg_knob(1043, 263, 14, 41, 0, 100, 0, 0, "AUTO", "%.0f%% / bar", 0);
+// CHORD
+tg_i = 0;
+loop(10,
+  tg_key(720 + (tg_i % 5) * 71, 247 + floor(tg_i / 5) * 26, 68, 22, floor(slider40 + 0.5) == tg_i,
+         pk_pitem("5TH|SUS2|SUS4|MAJ|MIN|MAJ7|MIN7|ADD9|QUARTAL|OPEN", tg_i + 1, #tg_k)) ? tg_set(40, tg_i);
+  tg_i += 1;
+);
+
+// ---------- LAYERS: BASS and PEDAL (with the card's emblem between them) ----------
+tg_emblem(496, 431, 108, 106, 0);
+k_ = 0;
+loop(2,
+  tg_x = k_ ? 618 : 20; tg_b = k_ ? 80 : 69; tg_q = k_ ? TLP : TLB;
+  tg_sect(tg_x, 428, 462, 112, k_ ? SHA : SHB, k_ ? "PEDAL LAYER" : "BASS LAYER");
+  ui_col(INK); gfx_circle((tg_x + (k_ ? 116 : 104)) * sc, 438 * sc, 6 * sc, 1, 1); ui_col(k_ ? PEDC : BASSC); gfx_circle((tg_x + (k_ ? 116 : 104)) * sc, 438 * sc, 4.6 * sc, 1, 1);
+  // the note it sounds now
+  slider(tg_b) >= 0.5 && tg_q[12] ? ( gfx_setfont(12); ui_col(INK); sprintf(#tg_g, "NOTE  %s", tg_nname(floor(tg_q[14] + 0.5))); tg_t(tg_x + 372, 431, #tg_g); );
+  tg_key(tg_x + 8, 454, 42, 22, slider(tg_b) >= 0.5, "ON") ? tg_set(tg_b, slider(tg_b) >= 0.5 ? 0 : 1);
+  gfx_setfont(11); ui_col(LBL); tg_t(tg_x + 56, 459, "OCT");
+  tg_i = 0;
+  loop(7,
+    tg_key(tg_x + 84 + tg_i * 28, 454, 26, 22, floor(slider(tg_b + 1) + 0.5) == tg_i - 3, pk_pitem("-3|-2|-1|0|+1|+2|+3", tg_i + 1, #tg_k)) ? tg_set(tg_b + 1, tg_i - 3);
+    tg_i += 1;
+  );
+  tg_keys(tg_x + 292, 454, 50, 22, 3, tg_b + 4, 3, "SAW|PULSE|CHOIR");
+  tg_knob(tg_x + 34,  506, 14, tg_b + 2, -12, 12, 0, 0, "SEMI", "%+.0f st", 1);
+  tg_knob(tg_x + 88,  506, 14, tg_b + 3, 0, 100, k_ ? 45 : 60, 0, "LEVEL", "%.0f%%", 0);
+  tg_knob(tg_x + 142, 506, 14, tg_b + 5, 60, 12000, k_ ? 5000 : 800, 1, "TONE", "%.0f Hz", 0);
+  tg_knob(tg_x + 196, 506, 14, tg_b + 8, 0, 100, k_ ? 60 : 30, 0, "MOTION", "%.0f%%", 0);
+  tg_knob(tg_x + 250, 506, 14, tg_b + 9, 10, 10000, k_ ? 1500 : 1200, 1, "ATTACK", "%.0f ms", 0);
+  tg_knob(tg_x + 304, 506, 14, tg_b + 10, 10, 10000, k_ ? 3000 : 2500, 1, "RELEASE", "%.0f ms", 0);
+  gfx_setfont(11); ui_col(LBL); tg_tc(tg_x + 393, 488, "PLAYS");
+  k_ ? (
+    tg_keys(tg_x + 332, 499, 39, 22, 2.5, 44, 3, "ROOT|5TH|OCT");
+  ) : (
+    ui_col(INK); tg_rr(tg_x + 332, 499, 122, 22, 3); ui_col(0x8F98B5); tg_rr(tg_x + 333.5, 500.5, 119, 19, 2);
+    gfx_setfont(11); ui_col(INK); tg_tc(tg_x + 393, 510, "LOWEST NOTE");
+  );
+  k_ += 1;
+);
 
 // ---------- EFFECTS ----------
 tg_sect(712, 310, 368, 110, SHB, "");
@@ -1266,26 +1451,25 @@ tg_knob(1004, 365, 16, 58, 0, 100, 55, 0, "TONE", "%.0f%%", 0);
 tg_knob(1053, 365, 16, 59, 0, 100, 25, 0, "MIX", "%.0f%%", 0);
 
 // ---------- the foot of the card: FATE, VOLUME, the name, OUT ----------
-ui_col(INK); tg_r(13, 426, 1074, 2);
-ui_col(LAPX); tg_r(13, 428, 1074, 39);
+ui_col(INK); tg_r(13, 546, 1074, 2);
+ui_col(LAPX); tg_r(13, 548, 1074, 39);
 tg_acc = OCHRE;
-tg_knob(40, 447, 12, 60, 0, 100, 35, 0, "", "%.0f%%", 0);
-drag_id != 2060 && !(sqr(mouse_x - 40 * sc) + sqr(mouse_y - 447 * sc) <= sqr(18 * sc)) ? ( gfx_setfont(12); ui_col(LBL); tg_t(59, 440, "FATE"); );
+tg_knob(40, 567, 12, 60, 0, 100, 35, 0, "", "%.0f%%", 0);
+drag_id != 2060 && !(sqr(mouse_x - 40 * sc) + sqr(mouse_y - 567 * sc) <= sqr(18 * sc)) ? ( gfx_setfont(12); ui_col(LBL); tg_t(59, 560, "FATE"); );
 tg_acc = FLAME;
-tg_knob(132, 447, 13, 61, -24, 6, 0, 0, "", "%+.1f dB", 0);
-drag_id != 2061 && !(sqr(mouse_x - 132 * sc) + sqr(mouse_y - 447 * sc) <= sqr(19 * sc)) ? ( gfx_setfont(12); ui_col(LBL); tg_t(152, 440, "VOLUME"); );
+tg_knob(132, 567, 13, 61, -24, 6, 0, 0, "", "%+.1f dB", 0);
+drag_id != 2061 && !(sqr(mouse_x - 132 * sc) + sqr(mouse_y - 567 * sc) <= sqr(19 * sc)) ? ( gfx_setfont(12); ui_col(LBL); tg_t(152, 560, "VOLUME"); );
 // the name plate
-ui_col(INK); tg_rr(398, 431, 304, 33, 5); ui_col(CREAM); tg_rr(400, 433, 300, 29, 4);
-gfx_setfont(14); ui_col(INK); tg_tc(550, 448, "THE TOWER");
-ui_col(FLAME); gfx_circle(414 * sc, 447.5 * sc, 3 * sc, 1, 1); gfx_circle(686 * sc, 447.5 * sc, 3 * sc, 1, 1);
-ui_col(OCHRE); tg_r(240, 446.5, 146, 2); tg_r(714, 446.5, 120, 2);
+ui_col(INK); tg_rr(398, 551, 304, 33, 5); ui_col(CREAM); tg_rr(400, 553, 300, 29, 4);
+gfx_setfont(14); ui_col(INK); tg_tc(550, 568, "THE TOWER");
+ui_col(FLAME); gfx_circle(414 * sc, 567.5 * sc, 3 * sc, 1, 1); gfx_circle(686 * sc, 567.5 * sc, 3 * sc, 1, 1);
+ui_col(OCHRE); tg_r(240, 566.5, 146, 2); tg_r(714, 566.5, 120, 2);
 // IN / OUT and a level bar
-ins_io(852, 429, 63, LBL);
+ins_io(852, 549, 63, LBL);
 tg_lv = min(max((20 * log10(max(tw_pk, 0.00001)) + 48) / 48, 0), 1); tw_pk *= 0.8;
-ui_col(INK); tg_r(960, 443, 112, 14); ui_col(0x0E1A3C); tg_r(961.5, 444.5, 109, 11);
-tg_i = 0; loop(18, tg_on = tg_i / 18 < tg_lv; ui_col(tg_on ? (tg_i >= 16 ? 0xFF3A2A : tg_i >= 13 ? FLAMEL : OCHRE) : 0x1E2C55); tg_r(963 + tg_i * 6, 446, 4.6, 8); tg_i += 1; );
-gfx_setfont(11); ui_col(LBL); tg_t(960, 428, "LEVEL");
-tg_lastseen = tw_sseen;
+ui_col(INK); tg_r(960, 563, 112, 14); ui_col(0x0E1A3C); tg_r(961.5, 564.5, 109, 11);
+tg_i = 0; loop(18, tg_on = tg_i / 18 < tg_lv; ui_col(tg_on ? (tg_i >= 16 ? 0xFF3A2A : tg_i >= 13 ? FLAMEL : OCHRE) : 0x1E2C55); tg_r(963 + tg_i * 6, 566, 4.6, 8); tg_i += 1; );
+gfx_setfont(11); ui_col(LBL); tg_t(960, 548, "LEVEL");
 
 pk_end();
 ui_end();
