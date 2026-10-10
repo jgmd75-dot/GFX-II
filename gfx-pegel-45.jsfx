@@ -320,8 +320,8 @@ pressed && drag_id == 0 && mouse_x >= pgv_wx * sc && mouse_x < (pgv_wx + pgv_ww)
 strcpy(#pgv_sn, pgv_sc == 0 ? "PPM" : pgv_sc == 1 ? "VU" : "PEAK");
 pgv_sc == 0 ? sprintf(#pgv_ds, "0 dB = %d dBFS", pga_ref) :
 pgv_sc == 1 ? sprintf(#pgv_ds, "0 VU = %d dBFS", pga_ref) : strcpy(#pgv_ds, "SCALE dBFS");
-pgv_sc == 0 ? strcpy(#pgv_bl, "INTEGR. 10 ms   RUECKLAUF 20 dB / 1,5 s") :
-pgv_sc == 1 ? strcpy(#pgv_bl, "ANSTIEG 300 ms   RUECKLAUF 300 ms") : strcpy(#pgv_bl, "SAMPLE PEAK   RUECKLAUF 20 dB / 1,7 s");
+pgv_sc == 0 ? strcpy(#pgv_bl, "INTEGR. 10 ms   RÜCKLAUF 20 dB / 1,5 s") :
+pgv_sc == 1 ? strcpy(#pgv_bl, "ANSTIEG 300 ms   RÜCKLAUF 300 ms") : strcpy(#pgv_bl, "SAMPLE PEAK   RÜCKLAUF 20 dB / 1,7 s");
 
 // tick label text
 function pg_tlbl(s, d) (
