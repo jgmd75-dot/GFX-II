@@ -122,6 +122,7 @@ function ps(md, ft, f, d, pk, dr, rg, sn, rs, rt, ml, gl, lp, dv) (
   slider10 = rt; slider11 = ml; slider12 = gl; slider13 = lp; slider14 = dv; slider15 = 100; slider16 = 0; slider17 = 1; slider18 = 0;
 );
 function load_preset(p) (
+  ef_dst = 1;                                       // fade the filter out, swap the settings, fade it back in
   p == 1  ? ps(0, 1, 250, 3.5, 4, 1, 0, 60, 40, 2, 0, 15, 1, 20) :     // Init (the defaults)
   p == 2  ? ps(0, 1, 250, 3.5, 5, 1, 0, 60, 30, 2, 0, 15, 1, 20) :     // Funk Up
   p == 3  ? ps(0, 0, 900, 3, 6, 0, 0, 65, 35, 2, 0, 15, 1, 30) :       // Bass Quack (down)
@@ -133,6 +134,9 @@ function load_preset(p) (
   p == 9  ? ps(0, 1, 400, 3, 6, 1, 1, 70, 15, 2, 0, 15, 1, 35) :       // Clav Wah
   p == 10 ? ps(1, 1, 500, 3.5, 10, 1, 1, 60, 40, 4, 0, 0, 1, 10) :     // Synth Blips (1/32)
   p == 11 ? ps(0, 0, 120, 5, 2, 1, 0, 50, 70, 2, 0, 15, 1, 0);         // Lowpass Bloom
+  // preset levels (OUTPUT, dB): matched on bass, guitar and drum-like material (the resonant low-pass and notch
+  // presets pass far more than the band-pass ones)
+  p >= 1 && p <= 11 ? slider16 = p == 4 ? 2 : p == 5 ? -12 : p == 6 ? 2 : p == 7 ? -9 : p == 8 ? 3.5 : p == 10 ? 4 : p == 11 ? -8.5 : 0;
   p >= 1 && p <= 11 ? slider_automate(262143);     // sliders 1-18
   p == 12 ? (                                       // Reset all to defaults
     ps(0, 1, 250, 3.5, 4, 1, 0, 60, 40, 2, 0, 15, 1, 20);
@@ -147,7 +151,8 @@ sm = 1 - exp(-1 / (0.03 * srate));
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
 BLU = 0x1D3BC4; BLUD = 0x142A8C; SKYB = 0x46B2EE; REDP = 0xD43A2C; WHT = 0xF2F4FA; CHR = 0xC9CDD2;
 update();
-mix_s = mix_t; fc = fbase; stv = 0; stg = 0; lstep = -1; bpos = 0;
+mix_s = mix_t; ef_og = fx_on ? og : 1; fc = fbase;
+ef_dkr = 1 / (0.012 * srate); ef_dk = 1; ef_dst = 0;   // preset crossfade: 12 ms to dry, 12 ms back stv = 0; stg = 0; lstep = -1; bpos = 0;
 
 
 // ================= EQ (the Echo engine, names q_..., sliders 27 - 44) =================
@@ -340,14 +345,14 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 @slider
 q_update();
 q_ord = slider45;
-update();
+ef_dst != 1 ? update();                             // during a preset fade the swap applies the new settings
 
 @block
 q_update();
 q_dinc = q_dspd * samplesblock / srate;
 q_vW = q_drW.drift_tick(q_dinc); vF = q_drF.drift_tick(q_dinc * 3);
 q_ord = slider45;
-update();
+ef_dst != 1 ? update();
 playing = play_state & 1;
 playing ? bpos = beat_position;
 bpm = tempo > 1 ? tempo : 120;                     // (no host tempo: 120)
@@ -360,6 +365,9 @@ file_avail(0) != 0 ? (                           // the preset in use (older pro
   file_avail(0) != 0 ? file_var(0, pr_ver) : pr_cur >= 1 ? pr_cur += 1;   // saved before INIT became preset 1
 ) : pr_cur = 0;
 @sample
+// preset crossfade: filter type, mode and the rest change while only the dry signal plays
+ef_dst == 1 ? ( ef_dk -= ef_dkr; ef_dk <= 0 ? ( ef_dk = 0; update(); ef_dst = 2; ); ) :
+ef_dst == 2 ? ( ef_dk += ef_dkr; ef_dk >= 1 ? ( ef_dk = 1; ef_dst = 0; ); );
 in_process(spl0, spl1);
 !q_ord ? ( q_proc(in_l, in_r); in_l = q_out_l; in_r = q_out_r; );   // EQ first
 dl = in_l; dr = in_r;
@@ -384,7 +392,9 @@ xl = th(dl * dg) / dg * (1 + (dg - 1) * 0.3); xr = th(dr * dg) / dg * (1 + (dg -
 yl = FL.svf(xl); yr = FR.svf(xr);
 yl = th(yl * 0.7) / 0.7; yr = th(yr * 0.7) / 0.7;
 mix_s += ((fx_on ? mix_t : 0) - mix_s) * sm;
-oL = (dl + (yl - dl) * mix_s) * (fx_on ? og : 1); oR = (dr + (yr - dr) * mix_s) * (fx_on ? og : 1);
+ef_og += ((fx_on ? og : 1) - ef_og) * sm;          // OUTPUT glides (the presets set it)
+ef_mx = ef_dst ? mix_s * ef_dk * ef_dk * (3 - 2 * ef_dk) : mix_s;
+oL = (dl + (yl - dl) * ef_mx) * ef_og; oR = (dr + (yr - dr) * ef_mx) * ef_og;
 q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
 oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
 ost_out(oL, oR);

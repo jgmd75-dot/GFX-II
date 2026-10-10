@@ -168,6 +168,7 @@ function setup() local(fso) (
 // ---------- presets: input, output, warmth, comp, iron, mix ----------
 function pset(i, o, w, c, ir, m) ( slider2 = i; slider3 = o; slider4 = w; slider5 = c; slider6 = ir; slider7 = m; );
 function apply_preset(n) (
+  t7_dst = 1;                                 // duck the output, swap the settings at silence, fade back in
   pset(0, 0, 0, 0, 1, 100); slider8 = 0;
   n == 1 ? pset(3, -2, 2, 2, 1, 100) :      // Tape Glue Bus
   n == 2 ? pset(6, -4, 3, 3, 1, 100) :      // Drum Slam
@@ -189,6 +190,7 @@ mDec = exp(-1/(0.3*srate));
 !ui_dflt ? ( ui_hw = 1; lastPreset = slider1; );
 ui_dflt = 1;
 setup();
+t7_dkr = 1 / (0.012*srate); t7_dk = 1; t7_dst = 0;   // preset duck: 12 ms out, hold through the latency, 12 ms in
 
 @serialize
 file_var(0, ui_sz);
@@ -197,10 +199,10 @@ file_var(0, lastPreset);
 
 @slider
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
-setup();
+t7_dst != 1 ? setup();                        // during a preset duck the swap applies the new settings
 
 @block
-setup();
+t7_dst != 1 ? setup();
 // DRIFT: an uneven supply under the iron - two slow random walks (drive, asymmetry), level-neutral
 drA -= samplesblock; drA <= 0 ? ( drA = srate*(0.6 + rand(1.4)); drTa = rand(2) - 1; );
 drB -= samplesblock; drB <= 0 ? ( drB = srate*(0.25 + rand(0.5)); drTb = rand(2) - 1; );
@@ -209,6 +211,9 @@ drAmt = slider11/100;
 irDw = 1 + drAmt*(0.10*drSa + 0.03*drSb); irBw = drAmt*(0.03*drSa + 0.015*drSb);
 
 @sample
+// preset duck-and-swap: comp mode, warmth, levels and oversampling change in silence
+t7_dst == 1 ? ( t7_dk -= t7_dkr; t7_dk <= 0 ? ( t7_dk = 0; setup(); t7_hc = osLat + floor(0.002*srate); t7_dst = 2; ); ) :
+t7_dst == 2 ? ( t7_hc > 0 ? t7_hc -= 1 : ( t7_dk += t7_dkr; t7_dk >= 1 ? ( t7_dk = 1; t7_dst = 0; ); ); );
 xL = spl0*inG; xR = spl1*inG;
 a_ = max(abs(xL), abs(xR)); mIn = a_ > mIn ? a_ : mIn*mDec;
 // latency-matched dry for BYPASS
@@ -235,6 +240,7 @@ uL1.hbu(xL); uR1.hbu(xR);
 mWm = max(mWm*mDec, wmG); mGr = max(mGr*mDec, cGr);
 
 yL *= outG; yR *= outG;
+t7_dst ? ( t7_dkg = t7_dk*t7_dk*(3 - 2*t7_dk); yL *= t7_dkg; yR *= t7_dkg; );
 bpS += ((byp ? 1 : 0) - bpS)*0.002;
 yL += (dryL - yL)*bpS; yR += (dryR - yR)*bpS;
 ost_out(yL, yR);

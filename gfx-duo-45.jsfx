@@ -311,6 +311,7 @@ function kx_setR(on, st, dr, ce, rl, sp, sa, mx, df) (
   slider_automate(1048575);                             // sliders 1-20 (the output section stays)
 );
 function load_preset(p) (
+  kx_dst = 1;                                           // duck the output, swap the settings at silence, fade back in
   p == 1  ? ( kx_setL(1, 0,  0, 12, 0, 0, 40000, 1, 100, 85,   0); kx_setR(1, 0,  0,  -1,    30,  15,  0, 100, 50); ) : // Init
   p == 2  ? ( kx_setL(1, 0,  4, 12, 0, 0, 26040, 1,  70, 80,  -3); kx_setR(1, 0,  4,  -0.5,  20,  20, 15, 100, 50); ) : // 12-Bit Drums
   p == 3  ? ( kx_setL(1, 0,  6, 12, 0, 1, 22050, 0,   0, 70,  -4); kx_setR(1, 1,  6,  -0.8,  60,  25, 30, 100, 50); ) : // Hip-Hop Crunch
@@ -330,6 +331,14 @@ function load_preset(p) (
   );
 );
 
+// the output filter follows RATE (per block, and at a preset swap)
+function kx_ofilt() (
+  kx_fo = min(0.5 * kx_rate * (0.3 + 0.75 * kx_flt) * kx_fsc * (1 + kx_fdr), 0.42 * srate);
+  kx_lG = tan($pi * kx_fo / srate); kx_lG /= 1 + kx_lG;
+  kx_lG1 = 1 - kx_lG; kx_lG2 = kx_lG * kx_lG; kx_lG3 = kx_lG2 * kx_lG; kx_lG4 = kx_lG2 * kx_lG2;
+  kx_lpset(4, kx_fo * 1.25, 0.7071);
+);
+
 // ---------- state ----------
 // everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
 // from running then)
@@ -338,6 +347,7 @@ function kx_srinit() local(i) (
   kx_L = min(floor(0.002 * srate), 1000) + 1;           // lookahead window (latency = kx_L - 1)
   kx_sm  = 1 - exp(-1 / (0.02 * srate));                // knob glides
   kx_swc = 1 - exp(-1 / (0.01 * srate));                // ON fades
+  kx_dkr = 1 / (0.012 * srate);                         // preset duck: 12 ms out, 12 ms in
   kx_cLF = 1 - exp(-2 * $pi * 100 / srate);             // transformer low band
   kx_cHF = 1 - exp(-2 * $pi * 12000 / srate);           // BERLIN transformer top
   kx_dcr = 1 - 2 * $pi * 4 / srate;                     // DC blockers, 4 Hz
@@ -360,6 +370,7 @@ kxoL.ost_ch_init(); kxoR.ost_ch_init();
 kx_update();
 kx_gin = kx_tgin; kx_trim = kx_ttrim; kx_ldg = kx_tldg; kx_cs = kx_ct; kx_mix = kx_tmix; kx_og = kx_tog;
 kx_sw = kx_son; kx_lw = kx_lon;
+kx_dk = 1; kx_dst = 0;
 kxa_ipk = 0; kxa_gr = 0; kxa_opk = 0; kxa_ovp = 0; kxa_bands = 31;
 
 ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
@@ -367,11 +378,11 @@ ui_thm = 5; ui_hw = 1;                                  // house keycaps for the
 ui_dflt = 1;
 
 @slider
-kx_update();
+kx_dst != 1 ? kx_update();                              // during a preset duck the swap applies the new settings
 
 @block
 srate != kx_sr ? kx_srinit();
-kx_update();                                            // knobs moved on the panel do not run @slider
+kx_dst != 1 ? kx_update();                              // knobs moved on the panel do not run @slider
 // DRIFT: converter clock jitter and wander, analogue output filter drift
 kx_di = 0.25 * dm_s * samplesblock / srate;
 kx_wd = 0.001 * dm_a * kxdC.drift_tick(kx_di);
@@ -379,10 +390,7 @@ kx_fdr = 0.015 * dm_a * kxdF.drift_tick(kx_di * 0.7);
 kx_jw = 0.0015 * dm_a * kx_jsc;
 kx_dinc = kx_rate * (1 + kx_wd) / srate;
 // the output filter follows RATE
-kx_fo = min(0.5 * kx_rate * (0.3 + 0.75 * kx_flt) * kx_fsc * (1 + kx_fdr), 0.42 * srate);
-kx_lG = tan($pi * kx_fo / srate); kx_lG /= 1 + kx_lG;
-kx_lG1 = 1 - kx_lG; kx_lG2 = kx_lG * kx_lG; kx_lG3 = kx_lG2 * kx_lG; kx_lG4 = kx_lG2 * kx_lG2;
-kx_lpset(4, kx_fo * 1.25, 0.7071);
+kx_ofilt();
 // denormal housekeeping
 sL.kx_cflush(); sR.kx_cflush(); rL.kx_rflush(); rR.kx_rflush();
 kx_zflush(kx_ZL); kx_zflush(kx_ZR); kx_zflush(kx_ZQ); kx_zflush(kx_ZS);
@@ -409,6 +417,9 @@ kx_mix  += (kx_tmix - kx_mix) * kx_sm;
 kx_og   += (kx_tog - kx_og) * kx_sm;
 kx_sw   += (kx_son - kx_sw) * kx_swc;
 kx_lw   += (kx_lon - kx_lw) * kx_swc;
+// preset duck-and-swap: the engine's switches (style, bits, rate, filters, frames) change in silence
+kx_dst == 1 ? ( kx_dk -= kx_dkr; kx_dk <= 0 ? ( kx_dk = 0; kx_update(); kx_ofilt(); kx_dst = 2; ); ) :
+kx_dst == 2 ? ( kx_dk += kx_dkr; kx_dk >= 1 ? ( kx_dk = 1; kx_dst = 0; ); );
 
 // ---------- LEFT: the sampler engine ----------
 kx_sw > 0.00001 ? (
@@ -475,6 +486,7 @@ kx_lw < 0.99999 ? ( kx_ol = kx_dbL[kx_rp] + (kx_ol - kx_dbL[kx_rp]) * kx_lw; kx_
 
 // ---------- MIX, OUTPUT and the house output stage ----------
 kx_mix < 0.99999 ? ( kx_ol = kx_ddL[kx_rp] + (kx_ol - kx_ddL[kx_rp]) * kx_mix; kx_or = kx_ddR[kx_rp] + (kx_or - kx_ddR[kx_rp]) * kx_mix; );
+kx_dst ? ( kx_dkg = kx_dk * kx_dk * (3 - 2 * kx_dk); kx_ol *= kx_dkg; kx_or *= kx_dkg; );
 kx_ol = kxoL.ost_band(kx_ol) * kx_og;
 kx_or = kxoR.ost_band(kx_or) * kx_og;
 ost_out(kx_ol, kx_or);

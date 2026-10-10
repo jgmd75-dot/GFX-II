@@ -136,6 +136,7 @@ function setp(m, d, x, lv, lc, w, td, pd, ld, sp) (
   slider7 = w; slider8 = td; slider9 = pd; slider10 = ld; slider11 = sp;
 );
 function load_preset(p) (
+  hd_dst = 1;                                  // duck the output, swap the settings at silence, fade back in
   p == 1 ? setp(1,  6, 0, -3, 150, 100, 0.2,  5, 0.3, 0.2 ) :   // Short
   p == 2 ? setp(1, 12, 0,  0, 150, 100, 0.5, 15, 0.5, 0.25) :   // Med
   p == 3 ? setp(1, 20, 0, -4, 200, 100, 0.8, 15, 0.5, 0.2 ) :   // Long
@@ -163,6 +164,7 @@ wp = 0;
 msr = srate / 1000;
 sm = 1 - exp(-1 / (0.03 * srate));
 psm = 1 - exp(-1 / (0.02 * srate));
+hd_dkr = 1 / (0.012 * srate); hd_dk = 1; hd_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 tdA.drift_init(0.8 + rand(0.5)); tdB.drift_init(0.8 + rand(0.5));
 pdA.drift_init(0.8 + rand(0.5)); pdB.drift_init(0.8 + rand(0.5));
@@ -182,10 +184,10 @@ pkL = 0; pkR = 0;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+hd_dst != 1 ? update();                      // during a preset duck the swap applies the new settings
 
 @block
-update();
+hd_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_thm);
@@ -194,6 +196,9 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+// preset duck-and-swap: the mode (which voice is dry, which is delayed) and the low cut change in silence
+hd_dst == 1 ? ( hd_dk -= hd_dkr; hd_dk <= 0 ? ( hd_dk = 0; update(); hd_dst = 2; ); ) :
+hd_dst == 2 ? ( hd_dk += hd_dkr; hd_dk >= 1 ? ( hd_dk = 1; hd_dst = 0; ); );
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
@@ -243,6 +248,7 @@ oR = cR + yA * gA * sin(angA) + yB * gB * sin(angB);
 mid  = 0.5 * (oL + oR);
 side = 0.5 * (oL - oR) * wid_s;
 monochk ? side = 0;
+hd_dst ? ( hd_dkg = hd_dk * hd_dk * (3 - 2 * hd_dk); mid *= hd_dkg; side *= hd_dkg; );
 // output stage: band saturation -> output gain -> clipper / limiter
 oL = ostL.ost_band(mid + side) * in_comp * out_s;
 oR = ostR.ost_band(mid - side) * in_comp * out_s;
