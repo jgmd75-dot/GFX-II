@@ -759,12 +759,11 @@ function s92_run(m) (
   m == 2 ? ( cs_run(); s92_rL = cs_ml; s92_rR = cs_mr; s92_rg = 1; ) :
            ( f42_run(); s92_rL = f42_xL; s92_rR = f42_xR; s92_rg = 1; );
 );
-// the output stage, CLIP always on: 15 / 44 with the shared band saturation and CEILING; COMPACT the CEILING only;
-// FIELD its fixed soft clip at -0.3 dBFS
+// the output stage, CLIP always on: 15 / 44 / COMPACT with the shared band saturation and CEILING; FIELD its fixed
+// soft clip at -0.3 dBFS
 function s92_ost() (
-  s92_cur == 3 ? ost_setup(0, 0.3, 120, 6000, -0.3, 1) :
-  s92_cur == 2 ? ost_setup(0, slider43 / 100, slider44, slider45, slider46, 1) :
-                 ost_setup(slider42 / 100, slider43 / 100, slider44, slider45, slider46, 1);
+  s92_cur == 3 ? ost_setup(0, 0.3, 120, 6000, -0.3, 1)
+               : ost_setup(slider42 / 100, slider43 / 100, slider44, slider45, slider46, 1);
 );
 // MODEL change: start the 20 ms crossfade (a change during a fade keeps whichever model is louder as the outgoing one)
 function s92_switch() local(m) (
@@ -1031,7 +1030,7 @@ function s92_cliplight(x, y) (
   s92_okclp = ost_clipped ? 1 : s92_okclp * 0.88; ost_clipped = 0;
   rd_led(x, y, 4, s92_okclp > 0.1, 0xFF3A2A); dy_lbl(x, y + 10, "CLIP", 0.7);
 );
-// the 92 OUTPUT STAGE of the 15 / 44: band SAT, BIAS, LOW / HIGH bands and the CEILING of the always-on soft clip,
+// the 92 OUTPUT STAGE of the 15 / 44 / COMPACT: band SAT, BIAS, LOW / HIGH bands and the CEILING of the always-on soft clip,
 // in the column beside the faceplate
 function s92_outstage() (
   dy_ink = S92_INK; dy_bg = S92_HDR; dy_kst = 20; dy_nov = 0;
@@ -1114,31 +1113,29 @@ function s92_gui44() (
 function s92_compact() (
   cs_PNL = 0x2A2B2E; cs_INK = 0xF0EEE8; cs_CHI = 0x3FB05C; cs_CMD = 0x2F7FD0; cs_CLO = 0xE0B02A;
   dy_ink = cs_INK; dy_bg = cs_PNL; dy_kst = 7; dy_nov = 1;
-  pk_chassis(8 * sc, 68 * sc, 944 * sc, 228 * sc, cs_PNL);
-  ui_cola(0xFFFFFF, 0.06); gfx_rect(16 * sc, 74 * sc, 456 * sc, 216 * sc);
+  pk_chassis(8 * sc, 68 * sc, 744 * sc, 228 * sc, cs_PNL);
+  ui_cola(0xFFFFFF, 0.06); gfx_rect(16 * sc, 74 * sc, 404 * sc, 216 * sc);
   dy_title(28, 80, "CHANNEL");
-  sprintf(#v, "%+.1f", slider47); dy_knob(76, 160, 24, 47, -15, 15, 0, 0, cs_CHI, "HI", #v);
-  sprintf(#v, "%+.1f", slider48); dy_knob(184, 160, 24, 48, -12, 12, 0, 0, cs_CMD, "MID", #v);
-  sprintf(#v, "%+.1f", slider49); dy_knob(292, 160, 24, 49, -15, 15, 0, 0, cs_CLO, "LOW", #v);
-  sprintf(#v, "%.1f", slider50); dy_knob(408, 160, 24, 50, 0, 10, 0, 0, 0xE8742A, "COMP", #v);
+  sprintf(#v, "%+.1f", slider47); dy_knob(70, 160, 24, 47, -15, 15, 0, 0, cs_CHI, "HI", #v);
+  sprintf(#v, "%+.1f", slider48); dy_knob(164, 160, 24, 48, -12, 12, 0, 0, cs_CMD, "MID", #v);
+  sprintf(#v, "%+.1f", slider49); dy_knob(258, 160, 24, 49, -15, 15, 0, 0, cs_CLO, "LOW", #v);
+  sprintf(#v, "%.1f", slider50); dy_knob(360, 160, 24, 50, 0, 10, 0, 0, 0xE8742A, "COMP", #v);
   // indicator row: signal, mono (the desk's -3 dB centre dip), the COMP's gain reduction
   cs_lhd = max(cs_pk, cs_lhd * 0.9); cs_pk = 0;
-  pk_led(76 * sc, 252 * sc, 3.5 * sc, cs_lhd > 0.001, dy_grn); dy_lbl(76, 262, "SIGNAL", 0.6);
-  pk_led(238 * sc, 252 * sc, 3.5 * sc, cs_mono, dy_amb); dy_lbl(238, 262, "MONO  -3 dB", 0.6);
-  pk_led(408 * sc, 252 * sc, 3.5 * sc, cs_grm > 1, dy_amb); dy_lbl(408, 262, "COMP", 0.6); cs_grm *= 0.8;
-  // the desk: MAIN MIX, HOT, NOISE, meters, and the soft clip's CEILING
-  ui_cola(0xFFFFFF, 0.08); gfx_rect(480 * sc, 74 * sc, 464 * sc, 216 * sc);
-  dy_title(492, 80, "MAIN MIX");
-  dy_ledv(538, 108, 156, cs_pkdL, 1); dy_ledv(554, 108, 156, cs_pkdR, 0);
+  pk_led(70 * sc, 252 * sc, 3.5 * sc, cs_lhd > 0.001, dy_grn); dy_lbl(70, 262, "SIGNAL", 0.6);
+  pk_led(211 * sc, 252 * sc, 3.5 * sc, cs_mono, dy_amb); dy_lbl(211, 262, "MONO  -3 dB", 0.6);
+  pk_led(360 * sc, 252 * sc, 3.5 * sc, cs_grm > 1, dy_amb); dy_lbl(360, 262, "COMP", 0.6); cs_grm *= 0.8;
+  // the desk: meters, MAIN MIX, HOT, NOISE
+  ui_cola(0xFFFFFF, 0.08); gfx_rect(428 * sc, 74 * sc, 318 * sc, 216 * sc);
+  dy_title(440, 80, "MAIN MIX");
+  dy_ledv(480, 108, 156, cs_pkdL, 1); dy_ledv(496, 108, 156, cs_pkdR, 0);
   cs_pkdL = max(cs_pkL, cs_pkdL * 0.85); cs_pkdR = max(cs_pkR, cs_pkdR * 0.85); cs_pkL = cs_pkR = 0;
-  dy_lbl(544, 270, "L", 0.7); dy_lbl(560, 270, "R", 0.7);
+  dy_lbl(486, 270, "L", 0.7); dy_lbl(502, 270, "R", 0.7);
   dy_nov = 0;
   slider51 <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider51);
-  dy_knob(670, 150, 30, 51, -60, 10, 0, 0, 0xF4F2EA, "MAIN MIX", #v);
-  dy_btn(616, 226, slider52, dy_red, "HOT") ? ( slider52 = 1 - slider52; ui_auto(52); );
-  dy_btn(684, 226, slider53, dy_amb, "NOISE") ? ( slider53 = 1 - slider53; ui_auto(53); );
-  sprintf(#v, "%+.1f dB", slider46); dy_knob(852, 150, 22, 46, -24, 0, -0.3, 0, 0xF4F2EA, "CEILING", #v);
-  s92_cliplight(852, 236);
+  dy_knob(636, 150, 30, 51, -60, 10, 0, 0, 0xF4F2EA, "MAIN MIX", #v);
+  dy_btn(582, 226, slider52, dy_red, "HOT") ? ( slider52 = 1 - slider52; ui_auto(52); );
+  dy_btn(650, 226, slider53, dy_amb, "NOISE") ? ( slider53 = 1 - slider53; ui_auto(53); );
 );
 
 // ---------------------------------------------------------------- the frame, the selected model's faceplate, the chassis
@@ -1151,6 +1148,7 @@ s92_cur == 0 ? (
   s92_outstage();
 ) : s92_cur == 2 ? (
   s92_compact();
+  s92_outstage();
 ) : (
   // the FIELD faceplate is drawn in the flat look with the house Amber theme, as the original
   s92_hw = ui_hw; ui_hw = 0; ui_theme(0);
