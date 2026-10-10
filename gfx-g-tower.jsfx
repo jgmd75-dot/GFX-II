@@ -247,11 +247,15 @@ function tw_pstr(p) (
   "";
 );
 function load_preset(p) local(n, i) (
-  i = 0; loop(90, i != 59 && i != 61 ? slider(i + 1) = TDEF[i]; i += 1; );   // FATE and the MIDI channel stay
+  i = 0; loop(90, i != 59 && (i < 61 || i > 67) ? slider(i + 1) = TDEF[i]; i += 1; );   // FATE, the MIDI channel, SAT and the output stage stay
   n = tw_nums(tw_pstr(p), TTMP);
   i = 0; loop(floor(n / 2), TTMP[i * 2] >= 1 && TTMP[i * 2] <= 90 ? slider(TTMP[i * 2]) = TTMP[i * 2 + 1]; i += 1; );
   i = 1; loop(90, ui_auto(i); i += 1; );
   pr_cur = p; tw_panic = 1;
+);
+function reset_all() local(i) (                            // "Reset all to defaults": Init, and everything else back too
+  load_preset(1);
+  i = 0; loop(90, slider(i + 1) = TDEF[i]; ui_auto(i + 1); i += 1; );
 );
 
 // ---------- voices ----------
@@ -1287,8 +1291,9 @@ ui_col(OCHRE); k_ = 0; loop(2, tg_x = k_ ? 618 : 482;
 ui_col(FLAME); gfx_circle(470 * sc, 35 * sc, 2.5 * sc, 1, 1); gfx_circle(630 * sc, 35 * sc, 2.5 * sc, 1, 1);
 
 // preset bar
+pk_pextra = "Reset all to defaults";
 k_ = pk_preset(22 * sc, 18 * sc, 372 * sc, 34 * sc, pr_cur, #tw_pm);
-k_ > 0 ? load_preset(k_);
+k_ > 0 ? ( k_ > 14 ? reset_all() : load_preset(k_); );
 gfx_setfont(12); ui_col(LBL); tg_t(650, 19, "QUADRANT FORMANT"); ui_cola(LBL, 0.75); tg_t(650, 35, "SYNTHESIZER");
 // MIDI: activity LED and channel
 pk_led(816 * sc, 35 * sc, 4.5 * sc, ins_midi_lit(), FLAMEL);

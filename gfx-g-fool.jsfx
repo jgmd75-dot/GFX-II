@@ -232,6 +232,10 @@ function load_preset(p) local(n, i) (
   i = 1; loop(105, i <= 61 || i >= 69 ? ui_auto(i); i += 1; );
   pr_cur = p;
 );
+function reset_all() local(i) (                            // "Reset all to defaults": Init, and SAT / output stage / MIDI channel back too
+  load_preset(1);
+  i = 0; loop(105, slider(i + 1) = FO_DEF[i]; ui_auto(i + 1); i += 1; );
+);
 
 // ---------- STEP OFF: a seeded, repeatable deal of MODE / LENGTH / OFFSET / PROB for the three paths ----------
 function fo_rng() ( fo_rs = fo_rs * 16807; fo_rs -= 2147483647 * floor(fo_rs / 2147483647); fo_rs / 2147483647; );
@@ -1325,7 +1329,7 @@ ui_col(INK); fg_disc(42, 39, 17); ui_col(CARD); fg_disc(42, 39, 15);
 gfx_setfont(4); ui_col(INK); fg_ctxt(42, 39, "GFX");
 pk_pextra = "Reset all to defaults";
 fg_k = pk_preset(70 * sc, 23 * sc, 400 * sc, 32 * sc, pr_cur, #fo_pm);
-fg_k > 0 ? load_preset(fg_k > 14 ? 1 : fg_k);
+fg_k > 0 ? ( fg_k > 14 ? reset_all() : load_preset(fg_k); );
 // the numeral in its cartouche
 ui_col(INK); fg_rr(512, 19, 76, 40, 20); ui_col(SUN); fg_rr(514.5, 21.5, 71, 35, 17.5);
 ui_col(INK); fg_th(492, 39, 508, 39, 2); fg_th(592, 39, 608, 39, 2); fg_disc(488, 39, 2.5); fg_disc(612, 39, 2.5);
