@@ -135,10 +135,9 @@ TDEF = 32100;                                              // the Init values of
 TTMP = 32200;                                              // preset parser scratch (400)
 TFS  = 32700;                                              // formant sets: 9 x 5 peaks x (Hz, bandwidth Hz, dB)
 TCT  = 32900;                                              // the four corners: 5 peaks x (ln Hz, ln Q, dB)
-TCR  = 33000;                                              // choir saw ratios (5)
 TGC  = 33100;                                              // shared formant coefficients (20) when no voice has its own point
 TRLT = 33020; TRG = 33050;                                 // reverb: line lengths, gains
-TAPL = 33070; TAPW = 33080;                                // reverb input allpasses: lengths, write positions
+TAPL = 33070;                                              // reverb input allpasses: lengths
 TGX  = 33200; TGY = 33300;                                 // GUI: the point's trail (64 each)
 TGPX = 33400; TGPY = 33800;                                // GUI: the LFO path (400 each)
 TRV  = 40000; TRVN = 16384;                                // reverb lines 8 x 16384  (40000 - 171071)
@@ -152,9 +151,9 @@ memset(TDL, 0, 524288 * 2);
 // voice slots (p = TV + 64 * voice):
 //   0 note (-1 free)  1 key held  2 age  3 held by pedal  4 pitch now (st)  5 pitch target  6 velocity 0..1
 //   7 note detune (st)  8 amp stage (0 idle, 1 att, 2 dec / sus, 3 rel)  9 amp level  10 formant env stage  11 its level
-//   12-16 osc 1 phases (choir: five saws)  17-21 osc 2 phases  22 sub phase  23 osc 1 inc  24 osc 2 inc
-//   25-34 formant band-pass states (5 x 2)  35-54 their coefficients (5 x a1, a2, a3, gain)
-//   55 voice gain  56 / 57 pan gains L / R  58 needs its control values now  61 where its coefficients are (own or shared)
+//   35-54 its own formant coefficients (5 x a1, a2, a3, gain)  55 voice gain  56 / 57 pan gains L / R
+//   58 needs its control values now  62 fresh (its namespace resets phases and band-passes)
+//   (the phases and the band-pass states live in the voice's namespace, tw_v0 - tw_v7: see tw_vproc)
 
 L12 = log(2) / 12; LN2 = log(2);
 
@@ -199,11 +198,23 @@ tw_nums(#tw_def, TDEF);
 
 #tw_pm = "Tower Choir|Lightning Vowels|Falling Stones|Storm Chant|Glass Spire|Stone Throat|Crown of Fire|Babel|Ruin Drone|Revelation|Sudden Change|Dark Choir|Thunder Bass|Rebuild";
 function tw_pstr(p) (
-  p == 2  ? "" :
+  p == 2  ? "1:0 2:1 3:12 5:30 10:0 11:1 12:2 13:3 16:55 21:1 22:3 26:1 27:3 23:45 28:45 38:85 39:900 40:50 41:25 42:2 44:112 48:5 49:600 50:70 51:400 54:4 55:35 56:18 59:30" :
+  p == 3  ? "1:0 2:0 3:-12 5:45 8:50 10:5 11:4 12:3 13:5 30:4 20:0.15 25:0.11 23:60 28:60 16:65 53:62 38:90 39:4000 40:70 41:35 57:85 59:35 48:400 49:2000 50:80 51:2500 18:-3" :
+  p == 4  ? "1:2 2:2 3:-12 4:-5 7:30 5:45 10:7 11:0 12:7 13:3 30:2 20:0.35 23:50 28:40 29:0 16:70 35:40 36:80 37:1200 34:30 38:60 57:75 59:40 56:15 54:2" :
+  p == 5  ? "1:1 2:0 3:12 5:35 6:30 10:6 11:2 12:1 13:6 18:5 30:3 20:0.6 23:70 28:70 16:60 54:5 55:45 56:22 57:80 58:85 59:40 51:1800 8:0" :
+  p == 6  ? "45:2 46:90 1:0 2:1 3:-12 5:40 8:60 10:5 11:3 12:4 13:0 14:30 15:30 23:15 28:15 32:70 34:40 35:50 36:5 37:400 16:75 53:35 59:15 48:3 49:500 50:75 51:250 52:60" :
+  p == 7  ? "1:0 2:1 3:7 5:45 6:40 10:0 11:6 12:7 13:1 19:3 24:3 21:1 22:8 26:1 27:7 30:0 23:60 28:60 16:80 53:70 38:100 39:600 40:80 42:2 44:120 54:5 56:20 59:20 48:2 49:400 50:60 51:300" :
+  p == 8  ? "1:2 2:2 3:7 4:12 7:45 5:50 10:0 11:2 12:4 13:1 30:0 20:0.3 25:0.2 29:0 23:80 28:80 33:40 16:50 57:90 59:55 54:1 56:20 55:40 48:600 49:3000 50:90 51:3000" :
+  p == 9  ? "1:0 2:0 3:-12 4:9 5:50 8:40 9:15 10:5 11:7 12:4 13:8 30:3 20:0.08 23:80 28:80 16:85 41:15 39:8000 40:60 38:80 57:100 58:40 59:50 48:2500 49:5000 50:100 51:6000" :
+  p == 10 ? "1:2 2:2 3:12 4:-6 7:28 5:35 10:4 11:0 12:3 13:8 15:20 35:60 36:2500 37:6000 20:0.12 23:30 28:30 16:45 57:85 58:70 59:45 48:900 49:4000 50:90 51:3500 38:50 40:25" :
+  p == 11 ? "1:1 2:0 3:12 5:30 6:25 10:3 11:6 12:5 13:0 19:3 24:3 21:1 22:6 26:1 27:5 23:70 28:70 30:0 16:70 42:1 43:24 41:50 38:100 39:250 40:55 48:1 49:350 50:20 51:200 54:4 55:40 56:30 59:20" :
+  p == 12 ? "1:2 2:2 3:-12 7:26 5:40 8:30 10:3 11:4 12:5 13:8 18:-4 30:4 20:0.2 25:0.15 23:40 28:40 16:55 57:90 58:35 59:50 48:700 49:4000 50:95 51:4000 32:60" :
+  p == 13 ? "45:1 46:25 1:0 2:1 3:-12 5:35 6:35 8:80 10:5 11:0 12:4 13:3 14:20 15:40 23:10 28:10 35:70 36:2 37:250 34:40 16:65 53:55 42:2 44:118 38:80 39:400 40:70 48:1 49:600 50:70 51:180 52:60 56:0 59:10" :
+  p == 14 ? "1:2 2:0 3:12 4:5 5:30 16:60 21:1 22:2 26:1 27:2 23:40 28:40 41:60 39:6000 38:100 40:45 57:80 59:45 54:0 55:45 56:18 48:400 49:3000 50:90 51:3000" :
   "";
 );
 function load_preset(p) local(n, i) (
-  i = 0; loop(62, i != 59 && i != 60 && i != 61 ? slider(i + 1) = TDEF[i]; i += 1; );   // FATE, VOLUME and channel stay
+  i = 0; loop(62, i != 59 && i != 61 ? slider(i + 1) = TDEF[i]; i += 1; );   // FATE and the MIDI channel stay
   n = tw_nums(tw_pstr(p), TTMP);
   i = 0; loop(floor(n / 2), TTMP[i * 2] >= 1 && TTMP[i * 2] <= 62 ? slider(TTMP[i * 2]) = TTMP[i * 2 + 1]; i += 1; );
   i = 1; loop(62, ui_auto(i); i += 1; );
@@ -215,8 +226,7 @@ function tw_vrel(p) ( p[1] = 0; p[3] = 0; p[8] > 0 ? p[8] = 3; );
 function tw_vstart(p, n, v, retrig, from) local(i) (
   p[8] == 0 ? (
     // a fresh voice: random phases (chords and the choir saws never line up), clean filters
-    i = 0; loop(11, p[12 + i] = rand(1); i += 1; );
-    memset(p + 25, 0, 10); p[9] = 0; p[11] = 0;
+    p[62] = 1; p[9] = 0; p[11] = 0;
     p[4] = from;                                       // GLIDE comes in from the last note played
   );
   tw_gc >= 1 ? p[4] = n;
@@ -300,14 +310,21 @@ function tw_lfov(sh, ph, hv, a, b) (
   a + (b - a) * (0.5 - 0.5 * cos($pi * ph));
 );
 
-// one reverb line: read (its length glides to the target; m swims it a little), damp, scale
+// one reverb line: read (its length glides to the target; m swims it a little), damp, scale.
+// Lines that do not swim read at whole samples (cheaper); the two that swim interpolate.
 function tw_rl(base, lt, g, m) instance(ln, z) local(rp, ri, rf, d) (
   ln += (lt - ln) * 0.0004;
-  rp = tw_rw - ln - m; ri = floor(rp); rf = rp - ri;
-  d = base[ri & (TRVN - 1)] * (1 - rf) + base[(ri + 1) & (TRVN - 1)] * rf;
+  m != 0 ? (
+    rp = tw_rw - ln - m; ri = floor(rp); rf = rp - ri;
+    d = base[ri & (TRVN - 1)] * (1 - rf) + base[(ri + 1) & (TRVN - 1)] * rf;
+  ) : d = base[(tw_rw - floor(ln + 0.5)) & (TRVN - 1)];
   z += (d - z) * tw_rdc;
-  abs(z) < 0.0000000001 ? z = 0;
   z * g;
+);
+// an input allpass (ring at base, length n)
+function tw_ap(base, n, x) instance(w) local(d, v) (
+  d = base[(w - n) & (TAPN - 1)]; v = x + 0.6 * d; base[w] = v; w = (w + 1) & (TAPN - 1);
+  d - 0.6 * v;
 );
 function tw_rinit(lt) instance(ln, z) ( ln = lt; z = 0; );
 
@@ -342,6 +359,106 @@ function tw_fcoef(q, x, y) local(w1, w2, w3, w4, c, lf, lq, gd, f, kk, g, a1) (
     q[0] = a1; q[1] = g * a1; q[2] = g * g * a1; q[3] = exp(gd * 0.11512925) * kk;
     c += 3; q += 4;
   );
+);
+
+// one band-pass of the bank: zero-delay state-variable (q: its two states, c: a1 a2 a3 gain), unity peak gain
+function tw_bp(q, c, x) local(v1, v3, s0) (
+  s0 = q[0]; v3 = x - q[1]; v1 = c[0] * s0 + c[1] * v3;
+  q[1] += 2 * (c[1] * s0 + c[2] * v3); q[0] = 2 * v1 - s0;
+  v1 * c[3];
+);
+
+
+// ---------- one voice (its DSP state lives in its own namespace: fast); p = its slots in TV ----------
+function tw_saw(ph, d) ( 2 * ph - 1 - vo_blep(ph, d); );
+function tw_vproc(p) instance(a0, a1, a2, a3, a4, b0, b1, b2, b3, b4, sp, i1, i2,
+                              s0, s1, s2, s3, s4, s5, s6, s7, s8, s9,
+                              c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19,
+                              ex, ey, fg)
+                     local(e, b, v, q, o1, o2, su, x, xf, y, amp, t, d) (
+  p[62] ? (
+    // a fresh voice: random phases (chords and the choir saws never line up), clean band-passes
+    p[62] = 0;
+    a0 = rand(1); a1 = rand(1); a2 = rand(1); a3 = rand(1); a4 = rand(1);
+    b0 = rand(1); b1 = rand(1); b2 = rand(1); b3 = rand(1); b4 = rand(1); sp = rand(1);
+    s0 = s1 = s2 = s3 = s4 = s5 = s6 = s7 = s8 = s9 = 0;
+    ex = ey = 0; fg = 1;
+  );
+  (tw_tick || p[58]) ? (
+    p[58] = 0;
+    p[4] += (p[5] - p[4]) * tw_gc;
+    // formant envelope (attack / decay)
+    e = p[11];
+    p[10] == 1 ? ( e += (1.25 - e) * tw_ea; e >= 1 ? ( e = 1; p[10] = 2; ); ) :
+    p[10] == 2 ? e -= e * tw_ed;
+    p[11] = e;
+    b = p[4] + p[7] + tw_pmod;
+    i1 = min(exp((b - 69) * L12) * tw_440s, 0.45);
+    i2 = min(i1 * tw_o2i, 0.45);
+    tw_own ? (
+      v = p[6] * 2 - 1;
+      tw_fcoef(p + 35, tw_px + v * tw_vx * 0.5, tw_py + v * tw_vy * 0.5 + e * tw_ey * 0.6);
+      q = p + 35;
+    ) : q = TGC;
+    c0 = q[0];   c1 = q[1];   c2 = q[2];   c3 = q[3];   c4 = q[4];   c5 = q[5];   c6 = q[6];   c7 = q[7];
+    c8 = q[8];   c9 = q[9];   c10 = q[10]; c11 = q[11]; c12 = q[12]; c13 = q[13]; c14 = q[14]; c15 = q[15];
+    c16 = q[16]; c17 = q[17]; c18 = q[18]; c19 = q[19];
+    // level: the formants pass far more when a harmonic sits on a peak than when the peaks fall between them -
+    // follow what goes in against what comes out and make up most of the difference (smoothly, ~40 ms)
+    ey > 0.0000001 ? fg += (min(max(sqrt(ex / ey), 0.3), 12) ^ 0.8 - fg) * tw_lgc;
+  );
+
+  // ----- OSC 1 -----
+  tw_w1 == 0 ? ( a0 += i1; a0 -= floor(a0); o1 = tw_saw(a0, i1); ) :
+  tw_w1 == 1 ? (
+    a0 += i1; a0 -= floor(a0); t = a0 + 1 - tw_pw; t -= floor(t);
+    o1 = tw_saw(a0, i1) - tw_saw(t, i1);
+  ) : (
+    d = i1 * tw_cr0; a0 += d; a0 -= floor(a0); o1 = tw_saw(a0, d);
+    d = i1 * tw_cr1; a1 += d; a1 -= floor(a1); o1 += tw_saw(a1, d);
+    a2 += i1; a2 -= floor(a2); o1 += tw_saw(a2, i1);
+    d = i1 * tw_cr3; a3 += d; a3 -= floor(a3); o1 += tw_saw(a3, d);
+    d = i1 * tw_cr4; a4 += d; a4 -= floor(a4); o1 += tw_saw(a4, d);
+    o1 *= 0.42;
+  );
+  // ----- OSC 2 -----
+  tw_w2 == 0 ? ( b0 += i2; b0 -= floor(b0); o2 = tw_saw(b0, i2); ) :
+  tw_w2 == 1 ? (
+    b0 += i2; b0 -= floor(b0); t = b0 + 1 - tw_pw; t -= floor(t);
+    o2 = tw_saw(b0, i2) - tw_saw(t, i2);
+  ) : (
+    d = i2 * tw_cr0; b0 += d; b0 -= floor(b0); o2 = tw_saw(b0, d);
+    d = i2 * tw_cr1; b1 += d; b1 -= floor(b1); o2 += tw_saw(b1, d);
+    b2 += i2; b2 -= floor(b2); o2 += tw_saw(b2, i2);
+    d = i2 * tw_cr3; b3 += d; b3 -= floor(b3); o2 += tw_saw(b3, d);
+    d = i2 * tw_cr4; b4 += d; b4 -= floor(b4); o2 += tw_saw(b4, d);
+    o2 *= 0.42;
+  );
+  // sub (square, one octave below OSC 1) and noise
+  tw_sub > 0 ? (
+    d = i1 * 0.5; sp += d; sp -= floor(sp); t = sp + 0.5; t -= floor(t);
+    su = tw_saw(sp, d) - tw_saw(t, d);
+  ) : su = 0;
+  x = o1 * tw_m1 + o2 * tw_m2 + su * tw_sub * 0.5 + (tw_noi > 0 ? (rand(2) - 1) * tw_noi : 0);
+
+  // ----- the formant bank: five parallel zero-delay state-variable band-passes, unity peak gain -----
+  xf = x + tw_cin;
+  t = xf - s1; v = c0 * s0 + c1 * t; s1 += 2 * (c1 * s0 + c2 * t);    s0 = 2 * v - s0; y = v * c3;
+  t = xf - s3; v = c4 * s2 + c5 * t; s3 += 2 * (c5 * s2 + c6 * t);    s2 = 2 * v - s2; y += v * c7;
+  t = xf - s5; v = c8 * s4 + c9 * t; s5 += 2 * (c9 * s4 + c10 * t);   s4 = 2 * v - s4; y += v * c11;
+  t = xf - s7; v = c12 * s6 + c13 * t; s7 += 2 * (c13 * s6 + c14 * t); s6 = 2 * v - s6; y += v * c15;
+  t = xf - s9; v = c16 * s8 + c17 * t; s9 += 2 * (c17 * s8 + c18 * t); s8 = 2 * v - s8; y += v * c19;
+  abs(s0) + abs(s2) > 60 ? s0 = s1 = s2 = s3 = s4 = s5 = s6 = s7 = s8 = s9 = 0;   // safety: never let a band run away
+  ex += (xf * xf - ex) * tw_lgf; ey += (y * y - ey) * tw_lgf;
+  y = x * (1 - tw_dep) + y * tw_dep * fg * tw_fcomp;
+
+  // ----- amp envelope -----
+  amp = p[9];
+  p[8] == 1 ? ( amp += (1.3 - amp) * tw_aa; amp >= 1 ? ( amp = 1; p[8] = 2; ); ) :
+  p[8] == 2 ? amp += (tw_as - amp) * tw_ad :
+  ( amp -= amp * tw_ar; amp < 0.00002 ? ( amp = 0; p[8] = 0; p[10] = 0; p[0] = -1; p[62] = 1; ); );
+  p[9] = amp;
+  y * amp * p[55];
 );
 
 // ---------- parameters ----------
@@ -383,6 +500,7 @@ function update() local(r, sp) (
   TRLT[4] = 59.7 * sp; TRLT[5] = 67.1 * sp; TRLT[6] = 73.9 * sp; TRLT[7] = 81.7 * sp;
   r = 0; loop(8, TRLT[r] = min(TRLT[r], TRVN - 40); r += 1; );
   tw_t60 = 1.2 + 10 * tw_rsz ^ 1.5;
+  tw_rwg = 0.58 * (1.2 / tw_t60) ^ 0.19;            // longer rooms gather more: keep the wet level even
   r = 0; loop(8, TRG[r] = 10 ^ (-3 * TRLT[r] / (tw_t60 * srate)); r += 1; );
   tw_rdc = 1 - exp(-2 * $pi * min(1200 * 2 ^ (tw_rtone * 3.6), srate * 0.45) / srate);
   ins_output_setup(63);
@@ -402,13 +520,15 @@ function tw_srinit() local(i) (
   tw_sr = srate; tw_sm = 1 - exp(-1 / (0.03 * srate)); ost_init(20000); tw_dts = -1;
   TAPL[0] = min(floor(4.77 * srate / 1000), TAPN - 2); TAPL[1] = min(floor(3.59 * srate / 1000), TAPN - 2);
   TAPL[2] = min(floor(12.73 * srate / 1000), TAPN - 2); TAPL[3] = min(floor(9.31 * srate / 1000), TAPN - 2);
-  memset(TAPW, 0, 4);
+  tw_ap0.w = tw_ap1.w = tw_ap2.w = tw_ap3.w = 0;
   update();
   tw_r0.tw_rinit(TRLT[0]); tw_r1.tw_rinit(TRLT[1]); tw_r2.tw_rinit(TRLT[2]); tw_r3.tw_rinit(TRLT[3]);
   tw_r4.tw_rinit(TRLT[4]); tw_r5.tw_rinit(TRLT[5]); tw_r6.tw_rinit(TRLT[6]); tw_r7.tw_rinit(TRLT[7]);
   tw_kc = 1 - exp(-8 / (0.005 * srate));               // the point's smoothing at the tick (5 ms)
   tw_ju = 1 - exp(-8 / (0.004 * srate));               // the strike's jolt rises in 4 ms (no click)
   tw_crd = exp(-1 / (0.045 * srate));                  // crack
+  tw_lgf = 1 - exp(-1 / (0.03 * srate));               // the formants' level follower (30 ms)
+  tw_lgc = 1 - exp(-8 / (0.04 * srate));               // and its make-up gain's glide
   tw_cbd = exp(-1 / (0.12 * srate));                   // its band sweeps down
 );
 tw_srinit();
@@ -491,6 +611,9 @@ play_state & 1 ? (
 tw_dts < 0 ? tw_dts = tw_dlt;
 abs(tw_dfl) + abs(tw_dfr) < 0.0000000001 ? tw_dfl = tw_dfr = 0;
 abs(tw_dcyl) + abs(tw_dcyr) < 0.0000000001 ? tw_dcyl = tw_dcyr = 0;
+abs(tw_r0.z) + abs(tw_r1.z) + abs(tw_r2.z) + abs(tw_r3.z) + abs(tw_r4.z) + abs(tw_r5.z) + abs(tw_r6.z) + abs(tw_r7.z) < 0.0000000001 ? (
+  tw_r0.z = tw_r1.z = tw_r2.z = tw_r3.z = tw_r4.z = tw_r5.z = tw_r6.z = tw_r7.z = 0;
+);
 
 @serialize
 file_var(0, ui_sz);
@@ -551,15 +674,15 @@ tw_tick ? (
   tw_px = min(max(tw_gx + tw_jx * tw_se, 0), 1);
   tw_py = min(max(tw_gy + tw_jy * tw_se, 0), 1);
   tw_rq = tw_rq0 * (1 + 3.5 * tw_sk * tw_se);                      // the resonance slammed up
-  tw_fcomp = 4.5 * (tw_rq0 * (1 + 1.2 * tw_sk * tw_se)) ^ 0.22;    // narrower peaks pass less: make it up
+  tw_fcomp = 1.5 * (1 + 0.8 * tw_sk * tw_se);                       // the strike rings out a little louder
   // one shared set of coefficients unless velocity or the envelope give each voice its own point
   tw_own = tw_vx != 0 || tw_vy != 0 || tw_ey != 0;
   !tw_own ? tw_fcoef(TGC, tw_px, tw_py);
   tw_pmod = tw_bend + tw_dps;
   tw_o2i = 2 ^ (tw_o2st / 12);
   // the choir: five saws spread in cents
-  TCR[0] = 2 ^ (-tw_spr / 1200); TCR[1] = 2 ^ (-tw_spr * 0.42 / 1200); TCR[2] = 1;
-  TCR[3] = 2 ^ (tw_spr * 0.39 / 1200); TCR[4] = 2 ^ (tw_spr * 1.03 / 1200);
+  tw_cr0 = 2 ^ (-tw_spr / 1200); tw_cr1 = 2 ^ (-tw_spr * 0.42 / 1200);
+  tw_cr3 = 2 ^ (tw_spr * 0.39 / 1200); tw_cr4 = 2 ^ (tw_spr * 1.03 / 1200);
 );
 
 // the crack: noise and sparks, through a band that falls; the thunder after it
@@ -579,95 +702,14 @@ tw_cin = tw_crack * 0.6;                                           // what rings
 
 // ---------- the voices ----------
 tw_L = tw_R = 0;
-tw_p = TV;
-loop(8,
-  tw_p[8] > 0 ? (
-    (tw_tick || tw_p[58]) ? (
-      tw_p[58] = 0;
-      tw_p[4] += (tw_p[5] - tw_p[4]) * tw_gc;
-      // formant envelope (attack / decay)
-      tw_e = tw_p[11];
-      tw_p[10] == 1 ? ( tw_e += (1.25 - tw_e) * tw_ea; tw_e >= 1 ? ( tw_e = 1; tw_p[10] = 2; ); ) :
-      tw_p[10] == 2 ? tw_e -= tw_e * tw_ed;
-      tw_p[11] = tw_e;
-      tw_b = tw_p[4] + tw_p[7] + tw_pmod;
-      tw_p[23] = min(exp((tw_b - 69) * L12) * tw_440s, 0.45);
-      tw_p[24] = min(tw_p[23] * tw_o2i, 0.45);
-      tw_own ? (
-        tw_v = tw_p[6] * 2 - 1;
-        tw_fcoef(tw_p + 35, tw_px + tw_v * tw_vx * 0.5, tw_py + tw_v * tw_vy * 0.5 + tw_e * tw_ey * 0.6);
-        tw_p[61] = tw_p + 35;
-      ) : tw_p[61] = TGC;
-    );
-
-    // ----- OSC 1 -----
-    tw_i1 = tw_p[23];
-    tw_w1 == 0 ? (
-      tw_ph = tw_p[12] + tw_i1; tw_ph -= floor(tw_ph); tw_p[12] = tw_ph;
-      tw_o1 = 2 * tw_ph - 1 - vo_blep(tw_ph, tw_i1);
-    ) : tw_w1 == 1 ? (
-      tw_ph = tw_p[12] + tw_i1; tw_ph -= floor(tw_ph); tw_p[12] = tw_ph;
-      tw_q = tw_ph + 1 - tw_pw; tw_q -= floor(tw_q);
-      tw_o1 = (2 * tw_ph - 1 - vo_blep(tw_ph, tw_i1)) - (2 * tw_q - 1 - vo_blep(tw_q, tw_i1));
-    ) : (
-      tw_o1 = 0; tw_k = 0;
-      loop(5,
-        tw_d = tw_i1 * TCR[tw_k];
-        tw_ph = tw_p[12 + tw_k] + tw_d; tw_ph -= floor(tw_ph); tw_p[12 + tw_k] = tw_ph;
-        tw_o1 += 2 * tw_ph - 1 - vo_blep(tw_ph, tw_d);
-        tw_k += 1;
-      );
-      tw_o1 *= 0.42;
-    );
-    // ----- OSC 2 -----
-    tw_i2 = tw_p[24];
-    tw_w2 == 0 ? (
-      tw_ph = tw_p[17] + tw_i2; tw_ph -= floor(tw_ph); tw_p[17] = tw_ph;
-      tw_o2 = 2 * tw_ph - 1 - vo_blep(tw_ph, tw_i2);
-    ) : tw_w2 == 1 ? (
-      tw_ph = tw_p[17] + tw_i2; tw_ph -= floor(tw_ph); tw_p[17] = tw_ph;
-      tw_q = tw_ph + 1 - tw_pw; tw_q -= floor(tw_q);
-      tw_o2 = (2 * tw_ph - 1 - vo_blep(tw_ph, tw_i2)) - (2 * tw_q - 1 - vo_blep(tw_q, tw_i2));
-    ) : (
-      tw_o2 = 0; tw_k = 0;
-      loop(5,
-        tw_d = tw_i2 * TCR[tw_k];
-        tw_ph = tw_p[17 + tw_k] + tw_d; tw_ph -= floor(tw_ph); tw_p[17 + tw_k] = tw_ph;
-        tw_o2 += 2 * tw_ph - 1 - vo_blep(tw_ph, tw_d);
-        tw_k += 1;
-      );
-      tw_o2 *= 0.42;
-    );
-    // sub (square, one octave below OSC 1) and noise
-    tw_sub > 0 ? (
-      tw_q = tw_p[22] + tw_i1 * 0.5; tw_q -= floor(tw_q); tw_p[22] = tw_q; tw_qr = tw_q + 0.5; tw_qr -= floor(tw_qr);
-      tw_su = (2 * tw_q - 1 - vo_blep(tw_q, tw_i1 * 0.5)) - (2 * tw_qr - 1 - vo_blep(tw_qr, tw_i1 * 0.5));
-    ) : tw_su = 0;
-    tw_x = tw_o1 * tw_m1 + tw_o2 * tw_m2 + tw_su * tw_sub * 0.5 + (tw_noi > 0 ? (rand(2) - 1) * tw_noi : 0);
-
-    // ----- the formant bank: five parallel zero-delay band-passes, unity peak gain -----
-    tw_xf = tw_x + tw_cin;
-    tw_q = tw_p + 25; tw_c = tw_p[61]; tw_y = 0;
-    loop(5,
-      tw_v3 = tw_xf - tw_q[1]; tw_v1 = tw_c[0] * tw_q[0] + tw_c[1] * tw_v3; tw_v2 = tw_q[1] + tw_c[1] * tw_q[0] + tw_c[2] * tw_v3;
-      tw_q[0] = 2 * tw_v1 - tw_q[0]; tw_q[1] = 2 * tw_v2 - tw_q[1];
-      tw_y += tw_v1 * tw_c[3];
-      tw_q += 2; tw_c += 4;
-    );
-    abs(tw_p[25]) > 30 ? memset(tw_p + 25, 0, 10);               // safety: never let a band run away
-    tw_y = tw_x * (1 - tw_dep) + tw_y * tw_dep * tw_fcomp;
-
-    // ----- amp envelope -----
-    tw_a = tw_p[9];
-    tw_p[8] == 1 ? ( tw_a += (1.3 - tw_a) * tw_aa; tw_a >= 1 ? ( tw_a = 1; tw_p[8] = 2; ); ) :
-    tw_p[8] == 2 ? tw_a += (tw_as - tw_a) * tw_ad :
-    ( tw_a -= tw_a * tw_ar; tw_a < 0.00002 ? ( tw_a = 0; tw_p[8] = 0; tw_p[10] = 0; tw_p[0] = -1; memset(tw_p + 25, 0, 10); ); );
-    tw_p[9] = tw_a;
-    tw_y *= tw_a * tw_p[55];
-    tw_L += tw_y * tw_p[56]; tw_R += tw_y * tw_p[57];
-  );
-  tw_p += 64;
-);
+TV[8]       > 0 ? ( tw_y = tw_v0.tw_vproc(TV);       tw_L += tw_y * TV[56];       tw_R += tw_y * TV[57]; );
+TV[64 + 8]  > 0 ? ( tw_y = tw_v1.tw_vproc(TV + 64);  tw_L += tw_y * TV[64 + 56];  tw_R += tw_y * TV[64 + 57]; );
+TV[128 + 8] > 0 ? ( tw_y = tw_v2.tw_vproc(TV + 128); tw_L += tw_y * TV[128 + 56]; tw_R += tw_y * TV[128 + 57]; );
+TV[192 + 8] > 0 ? ( tw_y = tw_v3.tw_vproc(TV + 192); tw_L += tw_y * TV[192 + 56]; tw_R += tw_y * TV[192 + 57]; );
+TV[256 + 8] > 0 ? ( tw_y = tw_v4.tw_vproc(TV + 256); tw_L += tw_y * TV[256 + 56]; tw_R += tw_y * TV[256 + 57]; );
+TV[320 + 8] > 0 ? ( tw_y = tw_v5.tw_vproc(TV + 320); tw_L += tw_y * TV[320 + 56]; tw_R += tw_y * TV[320 + 57]; );
+TV[384 + 8] > 0 ? ( tw_y = tw_v6.tw_vproc(TV + 384); tw_L += tw_y * TV[384 + 56]; tw_R += tw_y * TV[384 + 57]; );
+TV[448 + 8] > 0 ? ( tw_y = tw_v7.tw_vproc(TV + 448); tw_L += tw_y * TV[448 + 56]; tw_R += tw_y * TV[448 + 57]; );
 tw_L += tw_crack * 0.5; tw_R += tw_crack * 0.5;
 
 // ---------- DRIVE: stone crumble ----------
@@ -681,7 +723,7 @@ tw_drv > 0.001 ? (
 );
 
 // ---------- DELAY: stereo ping-pong ----------
-tw_dmx > 0.001 ? (
+tw_dmx > 0.001 && (tw_dsil < tw_sr || abs(tw_L) + abs(tw_R) > 0.000001) ? (
   tw_dts += (tw_dlt * (1 + 0.004 * ins_fx) - tw_dts) * 0.0002;
   tw_rp = tw_wp - tw_dts; tw_ri = floor(tw_rp); tw_rf = tw_rp - tw_ri;
   tw_dl1 = TDL[tw_ri & TDM] * (1 - tw_rf) + TDL[(tw_ri + 1) & TDM] * tw_rf;
@@ -690,19 +732,16 @@ tw_dmx > 0.001 ? (
   TDL[tw_wp] = (tw_L + tw_R) * 0.5 + vo_tanh(tw_dfr * tw_dfb);
   TDR[tw_wp] = vo_tanh(tw_dfl * tw_dfb);
   tw_L += tw_dl1 * tw_dmx; tw_R += tw_dr1 * tw_dmx;
+  abs(tw_L) + abs(tw_R) + abs(tw_dl1) + abs(tw_dr1) < 0.000001 ? tw_dsil += 1 : tw_dsil = 0;
 ) : ( TDL[tw_wp] = 0; TDR[tw_wp] = 0; );
 tw_wp = (tw_wp + 1) & TDM;
 
 // ---------- REVERB: eight lines, Hadamard feedback, damped ----------
-tw_rmx > 0.001 ? (
+tw_rmx > 0.001 && (tw_rsil < tw_sr || abs(tw_L) + abs(tw_R) > 0.000001) ? (
   // input diffusion (four allpasses)
-  tw_x = (tw_L + tw_R) * 0.5; tw_k = 0;
-  loop(4,
-    tw_ri = TAP + tw_k * TAPN; tw_rp = TAPW[tw_k] - TAPL[tw_k]; tw_rp < 0 ? tw_rp += TAPN;
-    tw_d = tw_ri[tw_rp]; tw_v = tw_x + 0.6 * tw_d; tw_ri[TAPW[tw_k]] = tw_v; tw_x = tw_d - 0.6 * tw_v;
-    TAPW[tw_k] = (TAPW[tw_k] + 1) & (TAPN - 1);
-    tw_k += 1;
-  );
+  tw_x = (tw_L + tw_R) * 0.5;
+  tw_x = tw_ap0.tw_ap(TAP, TAPL[0], tw_x); tw_x = tw_ap1.tw_ap(TAP + TAPN, TAPL[1], tw_x);
+  tw_x = tw_ap2.tw_ap(TAP + 2 * TAPN, TAPL[2], tw_x); tw_x = tw_ap3.tw_ap(TAP + 3 * TAPN, TAPL[3], tw_x);
   // two lines swim a little against the metallic ring
   tw_tick ? ( tw_rmo += 0.37 * 8 / srate; tw_rmo -= floor(tw_rmo); tw_rm1 = sin(2 * $pi * tw_rmo) * 7 * srate / 48000; tw_rm2 = cos(2 * $pi * tw_rmo * 0.77) * 6 * srate / 48000; );
   tw_y0 = tw_r0.tw_rl(TRV,            TRLT[0], TRG[0], 0);
@@ -730,8 +769,10 @@ tw_rmx > 0.001 ? (
   TRV[7 * TRVN + tw_ri] = (tw_b3 - tw_b7) * tw_h - tw_x;
   tw_wl = (tw_y0 - tw_y2 + tw_y4 - tw_y6) * 0.5;
   tw_wr = (tw_y1 - tw_y3 + tw_y5 - tw_y7) * 0.5;
-  tw_L = tw_L * (1 - 0.3 * tw_rmx) + tw_wl * tw_rmx;
-  tw_R = tw_R * (1 - 0.3 * tw_rmx) + tw_wr * tw_rmx;
+  tw_L = tw_L * (1 - 0.3 * tw_rmx) + tw_wl * tw_rmx * tw_rwg;
+  tw_R = tw_R * (1 - 0.3 * tw_rmx) + tw_wr * tw_rmx * tw_rwg;
+  // a silent input and a tail fallen below -120 dB: rest the reverb until something comes in
+  abs(tw_x) + abs(tw_wl) + abs(tw_wr) < 0.000001 ? tw_rsil += 1 : tw_rsil = 0;
 );
 tw_rw = (tw_rw + 1) & (TRVN - 1);
 
