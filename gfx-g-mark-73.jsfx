@@ -84,7 +84,7 @@ slider22:6000<2000,16000,10>-Sat high band (Hz)
 slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
 slider25:0<0,16,1>-MIDI channel (0 = omni)
-slider26:80<0,100,1>-Bell (%)
+slider26:40<0,100,1>-Bell (%)
 slider27:0<0,1,1{Off,On}>-Chorus
 slider28:0.6<0.05,8,0.01>-Chorus rate (Hz)
 slider29:50<0,100,1>-Chorus depth (%)
@@ -110,7 +110,7 @@ ext_noinit = 1;
 
 // ---------- memory ----------
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
-MKV = 30000; MKVS = 130; MKNV = 36;                         // 36 voice slots x 130 (32 playable + 4 for stolen fades)
+MKV = 30000; MKVS = 137; MKNV = 36;                         // 36 voice slots x 137 (32 playable + 4 for stolen fades)
 MKHL = 35000; MKHR = 35100;                                 // half-band decimator rings (64 each)
 MKDEF = 35200;                                              // the Init values of sliders 1-18
 MKTMP = 35300;                                              // preset parser scratch (400)
@@ -123,7 +123,7 @@ MFDA = 90000; MFDB = 420000; MFDN = 330000;                 // delay: up to 1.6 
 memset(MFCA, 0, 2 * 4100); memset(MFVA, 0, 80); memset(MFR, 0, 4 * MFRN);
 memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 
-// voice slots (p = MKV + 130 * v):
+// voice slots (p = MKV + 137 * v):
 //   0 on   1 note   2 age   3 key held   4 held by the pedal   5 dampers down   6 velocity 0..1   7 hammer samples left
 //   8 hammer position   9 hammer velocity   10 T / hammer mass   11 felt K   12 felt exponent p   13 felt loss
 //   14 gain L   15 gain R   16 cos(w) of the fundamental   17 pickup offset (rest position across the pole)   18 output norm
@@ -141,6 +141,8 @@ memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 //   121 samples since the strike   122 when the bell has died (samples)   123 full-speed swing
 //   124 the bell's linear path gain   125 cos(w) of the tonebar
 //   126 bell pulse: samples done   127 its length   128 its height
+//   129 output norm without the pickup slope   130 / 131 / 132 targets of 18 / 124 / 101 (GAP / VOICING moves)
+//   133 the key's rest offset / the VOICING offset   134 rest flux (last)   135 bell path base   136 clink base
 
 function mk_hash(n, k) local(v) ( v = sin(n * 12.9898 + k * 78.233 + 0.5) * 43758.5453; v - floor(v); );
 
@@ -194,24 +196,24 @@ mk_nums(#mk_fxd, MKDEF + 20);
 
 #mk_pm = "Init|Stage Mark|Bright Stage|Mellow Ballad|Suitcase Tremolo|Auto Pan Wide|Bark & Bite|Bell Tines|Soft Felt|Drive Amp|Gospel Bark|Lo-Fi Upright|Dyno Bright|Dark Ballad";
 function mk_pstr(p) (
-  p == 2  ? "1:60 3:40 4:42 5:55 9:72 10:25 26:70 38:1 39:0 40:18" :
-  p == 3  ? "1:50 3:65 4:52 5:45 6:4 9:78 10:35 14:6 26:100 27:1 28:0.5 29:40" :
-  p == 4  ? "1:70 2:55 3:22 4:18 5:62 6:-3 9:62 10:30 16:20 26:56 18:-1.7 27:1 28:0.4 29:45 38:1 39:1 40:30" :
-  p == 5  ? "1:66 3:35 4:30 5:56 7:55 8:4.8 15:1 10:20 26:64 38:1 39:0 40:20" :
-  p == 6  ? "1:66 3:35 4:32 5:56 6:1 7:-85 8:3.2 15:1 10:0 26:64" :
-  p == 7  ? "1:50 2:35 3:60 4:58 5:30 9:90 14:22 6:1 26:70 30:1 31:0.9 32:40 18:1.8" :
-  p == 8  ? "1:60 3:72 4:30 5:55 6:4 9:72 10:45 26:100 18:-1.1 27:1 28:0.7 29:55 38:1 39:1 40:28" :
+  p == 2  ? "1:60 3:40 4:42 5:55 9:72 10:25 26:40 38:1 39:0 40:18" :
+  p == 3  ? "1:50 3:65 4:52 5:45 6:4 9:78 10:35 14:6 26:40 27:1 28:0.5 29:40" :
+  p == 4  ? "1:70 2:55 3:22 4:18 5:62 6:-3 9:62 10:30 16:20 26:40 18:-1.7 27:1 28:0.4 29:45 38:1 39:1 40:30" :
+  p == 5  ? "1:66 3:35 4:30 5:56 7:55 8:4.8 15:1 10:20 26:40 38:1 39:0 40:20" :
+  p == 6  ? "1:66 3:35 4:32 5:56 6:1 7:-85 8:3.2 15:1 10:0 26:40" :
+  p == 7  ? "1:50 2:35 3:60 4:58 5:30 9:90 14:22 6:1 26:40 30:1 31:0.9 32:40 18:1.8" :
+  p == 8  ? "1:60 3:72 4:30 5:55 6:4 9:72 10:45 26:40 18:-1.1 27:1 28:0.7 29:55 38:1 39:1 40:28" :
   p == 9  ? "1:66 2:55 3:8 4:24 5:65 6:-5 9:55 16:18 26:50 18:-1.5" :
-  p == 10 ? "1:55 3:50 4:48 5:42 9:82 14:65 15:1 7:30 8:5.6 26:60 18:-4 33:1 34:320 35:30 36:18" :
-  p == 11 ? "1:60 3:58 4:56 5:32 9:88 14:30 15:1 7:20 8:6.2 6:2 26:70 18:-1.9 38:1 39:0 40:22" :
-  p == 12 ? "1:40 2:30 3:30 4:35 6:-7 7:22 8:6.8 15:1 13:4 17:70 10:10 16:40 26:60" :
-  p == 13 ? "1:55 3:60 4:90 5:52 6:2 9:78 10:35 26:100 18:2.9 27:1 28:0.8 29:50 33:1 37:2 35:28 36:15 38:1 39:1 40:22" :
+  p == 10 ? "1:55 3:50 4:48 5:42 9:82 14:65 15:1 7:30 8:5.6 26:40 18:-4 33:1 34:320 35:30 36:18" :
+  p == 11 ? "1:60 3:58 4:56 5:32 9:88 14:30 15:1 7:20 8:6.2 6:2 26:40 18:-1.9 38:1 39:0 40:22" :
+  p == 12 ? "1:40 2:30 3:30 4:35 6:-7 7:22 8:6.8 15:1 13:4 17:70 10:10 16:40 26:40" :
+  p == 13 ? "1:55 3:60 4:90 5:52 6:2 9:78 10:35 26:40 18:2.9 27:1 28:0.8 29:50 33:1 37:2 35:28 36:15 38:1 39:1 40:22" :
   p == 14 ? "1:60 2:58 3:22 4:6 5:74 6:-4 9:66 10:28 15:1 16:20 26:30 18:-7.4" :
   "";
 );
 function load_preset(p) local(n, i) (
   i = 0; loop(18, slider(i + 1) = MKDEF[i]; i += 1; );
-  slider26 = 80;
+  slider26 = 40;
   i = 0; loop(14, slider(27 + i) = MKDEF[20 + i]; i += 1; );
   n = mk_nums(mk_pstr(p), MKTMP);
   i = 0; loop(floor(n / 2), (MKTMP[i * 2] >= 1 && MKTMP[i * 2] <= 18) || (MKTMP[i * 2] >= 26 && MKTMP[i * 2] <= 40) ? slider(MKTMP[i * 2]) = MKTMP[i * 2 + 1]; i += 1; );
@@ -320,7 +322,8 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
     p[29] = mk_mech * 0.055 * tc / mh;                                   // hammer thump (from the contact force)
     // ----- the pickup: swing at full speed in pole widths, rest offset, output norm -----
     A = (2.3 - 1.55 * tr) * (0.92 + 0.16 * h4) * (0.79 + 0.3 * mk_vsens);
-    off = mk_off0 * (1 + (h5 - 0.5) * 0.12 + (tr - 0.5) * 0.15);
+    p[133] = 1 + (h5 - 0.5) * 0.12 + (tr - 0.5) * 0.15;
+    off = mk_offs * p[133];
     p[38] = off; p[17] = off;
     p[118] = (mk_hash(n, 40) - 0.5) * 0.03;                               // the tine sits a hair off the pole sideways too
     p[119] = 1 / (2 * (9 - 4 * tr));                                      // the tip moves on a circle about the clamp
@@ -330,9 +333,10 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
     p[123] = A;
     // output norm: the level of the fundamental and the octave at a medium swing, so VOICING changes the colour, not the level
     xr = 0.45 * A;
-    p[18] = 0.31 * 0.45 * (1 - 0.22 * tr) * (0.94 + 0.12 * h3) / (sqrt(sqr(mk_slope(off) * xr) + sqr(mk_curv(off) * xr * xr * 0.5)) * $pi * f / srate);
-    p[18] *= (n & 1) ? -1 : 1;                                            // the pickups alternate polarity key to key (hum-cancelling)
-    p[19] = mk_flux(off, p[118], mk_d0);
+    p[129] = 0.31 * 0.45 * (1 - 0.22 * tr) * (0.94 + 0.12 * h3) / ($pi * f / srate);
+    p[129] *= (n & 1) ? -1 : 1;                                           // the pickups alternate polarity key to key (hum-cancelling)
+    p[18] = p[130] = p[129] / sqrt(sqr(mk_slope(off) * xr) + sqr(mk_curv(off) * xr * xr * 0.5));
+    p[19] = p[134] = mk_flux(off, p[118], mk_d0);
     // ----- the horizontal polarisation of the fundamental and the bell: a weaker, slightly detuned twin, so the tip
     // traces a slowly precessing ellipse in front of the pole (the timbre turns over without any pitch change)
     ef = (0.08 + 0.17 * mk_hash(n, 41)) * mk_thor;                         // how much of the blow goes sideways
@@ -371,10 +375,12 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
     p[20] > 1 ? (
       // the bell reaches the output mostly through the pickup's straight (linear) response, only a third of it
       // through the curve, so the fundamental's swing does not ring-modulate it into sidebands
-      p[124] = -max(mk_slope(off), 0.35 * mk_slope(0.53)) * p[55] * 0.65 * p[18];
+      p[135] = -p[55] * 0.65;
+      p[124] = p[131] = max(mk_slope(off), 0.35 * mk_slope(0.53)) * p[135] * p[18];
       p[55] *= 0.35;
     );
-    p[100] = 0; p[101] = mk_ckg * p[18] * max(mk_slope(off), 0.35 * mk_slope(0.53)) * (0.3 + 2 * mk_mech) * min(max(2 ^ (1.8 * kt), 0.25), 6);   // the clink layer (hammer tick)
+    p[136] = mk_ckg * (0.3 + 2 * mk_mech) * min(max(2 ^ (1.8 * kt), 0.25), 6);
+    p[100] = 0; p[101] = p[132] = p[136] * p[18] * max(mk_slope(off), 0.35 * mk_slope(0.53));   // the clink layer (hammer tick)
   ) : (
     // the same key struck again while it rings: the dampers come up, the hammer meets the moving tine
     i = 0; q = p + 40; loop(p[20], q[9] = p[95 + i]; q += 10; i += 1; );
@@ -399,6 +405,16 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
   );
   p[0] = 1; p[3] = 1; p[4] = 0; p[5] = 0; p[31] = 0;
   mk_coefs(p, mk_ptch);
+);
+
+// GAP / VOICING moved while the voice sounds: its output norm and the bell / clink path gains follow the
+// (smoothed) pickup geometry exactly as a new note would get them, so the level glides instead of jumping
+function mk_norm(p) local(off, xr, sl, m) (
+  off = mk_offs * p[133]; xr = 0.45 * p[123];
+  sl = mk_slope(off);
+  p[130] = p[129] / max(sqrt(sqr(sl * xr) + sqr(mk_curv(off) * xr * xr * 0.5)), 0.000000000001);
+  m = max(sl, 0.35 * mk_slope(0.53));
+  p[131] = m * p[135] * p[130]; p[132] = m * p[136] * p[130];
 );
 
 function mk_pan(p, n) local(pan) (
@@ -447,7 +463,8 @@ function mk_note_off(n) local(i, p) (
 function mk_pedal_up() local(i, p) (
   i = 0; loop(MKNV, p = MKV + i * MKVS; p[0] && p[4] ? mk_release(p); i += 1; );
 );
-function mk_all_off() ( memset(MKV, 0, MKVS * MKNV); mk_pedal = 0; );
+// all notes off: every voice fades out fast (25 ms, as a stolen voice) instead of stopping dead
+function mk_all_off() local(i, p) ( i = 0; loop(MKNV, p = MKV + i * MKVS; p[0] ? ( p[31] = 1; p[5] = 1; p[3] = 0; p[4] = 0; ); i += 1; ); mk_pedal = 0; );
 
 // half-band decimator (39 taps, equiripple, > 63 dB stop band): ring[(w - j) & 63], newest 2x sample at j = 0
 function mk_hb(b, w) (
@@ -478,7 +495,7 @@ function mf_vibe(x, phoff, vs, tick) local(ph, lf, k, y, f, t, a1, xi) (
     ph = mf_vph + phoff; ph -= floor(ph); lf = 0.5 - 0.5 * cos(2 * $pi * ph);
     vs[8] += (lf > vs[8] ? mf_vat : mf_vrl) * (lf - vs[8]);
     k = 0; loop(4,
-      f = min(srate * 0.45, (k == 0 ? 60 : k == 1 ? 180 : k == 2 ? 480 : 1300) * 2 ^ (mf_voct * vs[8]));
+      f = min(srate * 0.45, (k == 0 ? 60 : k == 1 ? 180 : k == 2 ? 480 : 1300) * 2 ^ (mf_vocs * vs[8]));
       t = tan($pi * f / srate); vs[9 + k] = (t - 1) / (t + 1); k += 1; );
   );
   y = x; k = 0;
@@ -487,7 +504,17 @@ function mf_vibe(x, phoff, vs, tick) local(ph, lf, k, y, f, t, a1, xi) (
 );
 function mf_dloop(y, st) (
   st[0] += mf_dlc * (y - st[0]); st[1] += mf_dhc * (st[0] - st[1]);
-  vo_tanh((st[0] - st[1]) * mf_dfb * 1.15) / 1.15;
+  vo_tanh((st[0] - st[1]) * mf_dfbs * 1.15) / 1.15;
+);
+
+// SPACE: the tank for type ty (the feedback gain mf_rgt is glided in @sample)
+function mf_sparams(ty) (
+  mf_sk = ty == 1 ? 0.6 : ty == 2 ? 0.85 : 1;
+  mf_st60 = ty == 1 ? 1.4 + 2.6 * mf_sam : ty == 2 ? 2.4 : 0.5 + 0.8 * mf_sam;
+  mf_slv = ty == 1 ? 0.8 : ty == 2 ? 1.4 : 1;
+  mf_rgt = 10 ^ (-3 * 0.015 * mf_sk / mf_st60);
+  mf_l0 = floor(0.0073 * srate * mf_sk); mf_l1 = floor(0.0119 * srate * mf_sk); mf_l2 = floor(0.0171 * srate * mf_sk); mf_l3 = floor(0.0217 * srate * mf_sk);
+  mf_slp = 1 - exp(-2 * $pi * (ty == 1 ? 10000 : ty == 2 ? 8000 : 6500) / srate);
 );
 
 // ---------- parameters ----------
@@ -495,11 +522,11 @@ function update() (
   mk_dec = 2 ^ ((slider1 - 50) / 50 * 1.5);                // 0.35x .. 2.8x
   mk_relt = 0.03 * 2 ^ (slider2 / 100 * 5.5);              // damper T60: 30 ms .. 1.4 s
   mk_hard = slider3 / 100;
-  mk_off0 = 0.015 + 1.185 * (1 - slider4 / 100) ^ 1.45;      // tine rest across the pole: far off-axis (dark) .. inline (dyno)
+  mk_off0 = 0.015 + 1.185 * (1 - slider4 / 100) ^ 1.45;      // tine rest across the pole: far off-axis (dark) .. inline (dyno; glided)
   mk_bell = (slider26 / 100) ^ 1.5;                       // 100 % = the old 50 %
   // TAME strength from the settings that push the top end (0 for soft, mellow settings)
   mk_tk2 = (0.9 * max(slider3 / 100 - 0.35, 0) / 0.65 + 0.7 * max(slider26 / 100 - 0.7, 0) / 0.3 + 0.9 * max(slider4 / 100 - 0.55, 0) / 0.45) * mk_ttam;
-  mk_d0 = 2 ^ ((slider5 / 100 - 0.5) * 1.4);               // GAP: the pole's distance from the tine tip (1 = standard)
+  mk_d0t = 2 ^ ((slider5 / 100 - 0.5) * 1.4);              // GAP: the pole's distance from the tine tip (1 = standard; glided in @sample)
   mk_a2 = 0.12;                                              // (pole radius)^2: the magnet tip's own size
   mk_treb = slider6;
   mk_mod = slider7 / 100; mk_rate = slider8;
@@ -521,12 +548,8 @@ function update() (
   mf_vbon = slider30 >= 0.5; mf_vbr = slider31; mf_voct = 3 * slider32 / 100; mf_vwet = min(1, 2 * slider32 / 100);
   mf_dlon = slider33 >= 0.5; mf_dfb = 0.95 * slider35 / 95; mf_dmix = slider36 / 100; mf_dsync = floor(slider37 + 0.5);
   mf_spon = slider38 >= 0.5; mf_sty = floor(slider39 + 0.5); mf_sam = slider40 / 100;
-  mf_sk = mf_sty == 1 ? 0.6 : mf_sty == 2 ? 0.85 : 1;
-  mf_st60 = mf_sty == 1 ? 1.4 + 2.6 * mf_sam : mf_sty == 2 ? 2.4 : 0.5 + 0.8 * mf_sam;
-  mf_slv = mf_sty == 1 ? 0.8 : mf_sty == 2 ? 1.4 : 1;
-  mf_rg = 10 ^ (-3 * 0.015 * mf_sk / mf_st60);
-  mf_l0 = floor(0.0073 * srate * mf_sk); mf_l1 = floor(0.0119 * srate * mf_sk); mf_l2 = floor(0.0171 * srate * mf_sk); mf_l3 = floor(0.0217 * srate * mf_sk);
-  mf_slp = 1 - exp(-2 * $pi * (mf_sty == 1 ? 10000 : mf_sty == 2 ? 8000 : 6500) / srate);
+  mf_stya < 0 ? mf_stya = mf_sty;
+  mf_sparams(mf_stya);                                        // (a new SPACE type is switched in @sample, under a short fade)
 );
 
 function mk_srinit() (
@@ -549,12 +572,18 @@ function mk_srinit() (
   mk_kq.bq_set(5, 320, 0.9, 0);                             // key-off knock: a dull felt bump, not a click
   mk_bh = 1 - exp(-1 / (0.014 * srate)); mk_bc = 1 - exp(-1 / (0.045 * srate));   // bulb: heats ~14 ms, cools ~45 ms
   mk_tset = -1;
+  // de-zipper: GAP / VOICING 30 ms, the norm follows within 2 ms, TAME / modulation 20 ms, TREBLE / OVERDRIVE 30 ms per 32-sample tick
+  mk_gk = 1 - exp(-1 / (0.015 * srate)); mk_nk = 1 - exp(-1 / (0.002 * srate)); mk_gk2 = 1 - exp(-1 / (0.02 * srate));
+  mk_k32 = 1 - exp(-32 / (0.03 * srate)); mf_gsm2 = 1 - exp(-1 / (0.05 * srate));
+  mk_swdn = 1 / (0.012 * srate); mk_swup = 1 / (0.02 * srate);  // the brief fades for switches (12 ms out, 20 ms in)
 );
 
-function mk_tone() local(f) (
+function mk_tcoil() local(f) (
   // the pickup coil and its cable: a gentle resonant low-pass (drifts a little)
   f = 6800 * 2 ^ (ins_tone * 0.35);
   mk_cl.bq_set(0, f, 0.85, 0); mk_cr.bq_set(0, f, 0.85, 0);
+);
+function mk_tamp() (
   mk_amp ? (
     // SUITCASE (a) its preamp tone stack: bass and treble shelving with a mid scoop
     mk_a1l.bq_set(4, 110, 0.7, 3.5); mk_a1r.bq_set(4, 110, 0.7, 3.5);
@@ -578,11 +607,16 @@ function mk_tone() local(f) (
     mk_c4l.bq_set(1, 30, 0.7, 0); mk_c4r.bq_set(1, 30, 0.7, 0);
     mk_pre = 0.85; mk_bias = -0.2; mk_cg = 1;
   );
-  mk_tbl.bq_set(3, 3000, 0.7, mk_treb); mk_tbr.bq_set(3, 3000, 0.7, mk_treb);
-  // (b) the valves / transistors: tanh(x g + b) - tanh(b), the bias makes the drive add even harmonics
-  mk_dg = mk_pre * (1 + 30 * mk_od * mk_od);
   mk_bt = vo_tanh(mk_bias);
+);
+function mk_ttreb() ( mk_tbl.bq_set(3, 3000, 0.7, mk_trs); mk_tbr.bq_set(3, 3000, 0.7, mk_trs); );   // (the glided TREBLE)
+function mk_drv() (
+  // (b) the valves / transistors: tanh(x g + b) - tanh(b), the bias makes the drive add even harmonics (the glided OVERDRIVE)
+  mk_dg = mk_pre * (1 + 30 * mk_ods * mk_ods);
   mk_dn = mk_cg / (mk_dg ^ 0.75 * mk_pre ^ 0.25 * (1 - mk_bt * mk_bt));   // drive adds some gain, like a real amp
+);
+function mk_tone() (
+  mk_tcoil(); mk_tamp(); mk_trs = mk_treb; mk_ttreb(); mk_ods = mk_od; mk_drv(); mk_dgs = mk_dg; mk_dns = mk_dn;
 );
 
 ins_drift_init();
@@ -590,9 +624,11 @@ mk_tcpl = 1; mk_tclk = 1; mk_thor = 1; mk_ttam = 1;                     // test 
 mk_symk = 0.00012;                                         // sympathetic coupling between undamped tines
 mk_pedal = 0; mk_age = 0; mk_kn = 0; mk_hw = 0; mk_lph = 0; mk_rail = 0; mk_pk = 0;
 mk_dcxl = mk_dcyl = mk_dcxr = mk_dcyr = 0; mk_ptch = 1; mk_bu1 = mk_bu2 = 0.5; mk_adn = 0.000000000000000001;
+mf_stya = -1; mk_swr = mk_swg = 1; mf_dkr = mf_skr = 1; mf_dstop = mf_sstop = 1;
 mk_srinit();
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                     // a new instance opens Large, on Init
 update();
+mk_d0 = mk_d0a = mk_d0t; mk_offs = mk_offa = mk_off0; mk_cutf = 1; mk_drs = mk_drift;
 mk_tone();
 mk_vol = mk_volt;
 ui_dflt = 1;
@@ -615,11 +651,24 @@ while (midirecv(mofs, m1, m2, m3)) (
     mk_qt == 1 ? ins_midi_hit();
   );
 );
-ins_drift_block(mk_drift, samplesblock);
+mk_drs += (mk_drift - mk_drs) * (1 - exp(-samplesblock / (0.3 * srate)));   // (the DRIFT amount glides: its offsets never jump)
+ins_drift_block(mk_drs, samplesblock);
 mk_ptch = ins_pitch ^ 0.2;                                 // the harp's tuning wanders only gently (+/-1 ct at 25 %)
-(mk_tset < 0 || mk_ta != mk_amp || mk_tt != mk_treb || mk_to != mk_od || abs(mk_tn - ins_tone) > 0.01) ? (
-  mk_tone(); mk_tset = 1; mk_ta = mk_amp; mk_tt = mk_treb; mk_to = mk_od; mk_tn = ins_tone;
+mk_tset < 0 ? (
+  // (first block / new sample rate: everything set at once, nothing to glide from)
+  mk_tone(); mk_tset = 1; mk_ta = mk_amp; mk_tn = ins_tone; mk_swp = 0; mk_swr = mk_swg = 1;
+  mk_drs = mk_drift; mk_d0 = mk_d0a = mk_d0t; mk_offs = mk_offa = mk_off0; mk_tk2s = mk_tk2; mk_tmx = mk_tk2 > 0.001; mk_mods = mk_mod;
+  mf_chds = mf_chd; mf_vocs = mf_voct; mf_dfbs = mf_dfb; mf_rg = mf_rgt; mf_dt = mf_dtgl = mf_dtg = slider34;
+) : (
+  abs(mk_tn - ins_tone) > 0.01 ? ( mk_tcoil(); mk_tn = ins_tone; );
+  mk_ta != mk_amp ? mk_swp = 1;                              // STAGE / SUITCASE: switched in @sample under a brief fade
 );
+// GAP / VOICING: glided per sample; while they move, the sounding voices re-normalise (on the 32-sample tick)
+abs(mk_d0t - mk_d0) < 0.0000001 && abs(mk_d0t - mk_d0a) < 0.0000001 ? mk_d0 = mk_d0a = mk_d0t;
+abs(mk_off0 - mk_offs) < 0.0000001 && abs(mk_off0 - mk_offa) < 0.0000001 ? mk_offs = mk_offa = mk_off0;
+mk_d0 != mk_d0t || mk_offs != mk_off0 ? mk_gtl = floor(0.05 * srate) : mk_gtl = max(mk_gtl - samplesblock, 0);
+mk_gmov = mk_gtl > 0;
+mk_cutf = 1 + ins_cut * 0.05;
 
 // per-voice: dampers (the felt lands over ~12 ms), pitch drift, freeing spent voices
 mk_ramp = 1 - exp(-samplesblock / (0.012 * srate));
@@ -645,7 +694,10 @@ loop(MKNV,
       mk_k = mk_n; loop(mk_p[120] - mk_n, mk_p[40 + 10 * mk_k] = mk_p[41 + 10 * mk_k] = 0; mk_k < 2 ? mk_p[102 + 8 * mk_k] = mk_p[103 + 8 * mk_k] = 0; mk_k += 1; );
       mk_p[120] = mk_n;
     );
-    mk_p[17] = mk_p[38] * (1 + ins_cut * 0.05);            // the pickup alignment breathes (DRIFT)
+    mk_p[38] = mk_offs * mk_p[133];                          // (follows VOICING)
+    mk_p[17] = mk_p[38] * mk_cutf;                           // the pickup alignment breathes (DRIFT)
+    mk_p[134] = mk_flux(mk_p[17], mk_p[118], mk_d0);         // rest flux now (for the GAP / VOICING glide)
+    mk_gmov ? mk_norm(mk_p);
     mk_coefs(mk_p, mk_ptch);
     // level estimate: tip swing + tonebar
     mk_e = abs(mk_p[40] * mk_p[45]) + abs(mk_p[41] * mk_p[45]) + abs(mk_p[21] * mk_p[45]) + abs(mk_p[50] * mk_p[55]);
@@ -661,6 +713,17 @@ loop(MKNV,
 );
 mf_dq = mf_dsync == 1 ? 1 : mf_dsync == 2 ? 0.75 : mf_dsync == 3 ? 0.5 : 2 / 3;
 mf_dtg = mf_dsync > 0 && tempo > 0 ? min(1500, mf_dq * 60000 / tempo) : slider34;
+// DELAY: a jump of the time (sync change, preset) is made under a brief fade of the echoes; a knob drag glides
+abs(mf_dtg - mf_dtgl) > 0.2 * max(mf_dtgl, 1) ? mf_djp = 1; mf_dtgl = mf_dtg;
+// a delay / space that has stopped is cleared when it starts again (no stale tail coming back)
+(mf_dg > 0.0001 || mf_dlon) ? (
+  mf_dlon && mf_dstop ? ( memset(MFDA, 0, MFDN); memset(MFDB, 0, MFDN); memset(MFVA + 30, 0, 8); mf_din = 0; mf_dstop = 0; mf_dt = mf_dtg; mf_djp = 0; mf_dkr = 1; );
+) : ( mf_dstop = 1; mf_dt = mf_dtg; mf_djp = 0; mf_dkr = 1; );
+(mf_sg > 0.0001 || mf_spon) ? (
+  mf_spon && mf_sstop ? ( memset(MFR, 0, 4 * MFRN); mf_z0 = mf_z1 = mf_z2 = mf_z3 = 0; mf_sstop = 0; mf_ssw = 0; mf_skr = 1;
+    mf_stya != mf_sty ? ( mf_stya = mf_sty; mf_sparams(mf_stya); ); mf_rg = mf_rgt; );
+  mf_stya != mf_sty ? mf_ssw = 1;                            // SPACE type: switched in @sample under a brief fade
+) : ( mf_sstop = 1; mf_ssw = 0; mf_skr = 1; mf_stya != mf_sty ? ( mf_stya = mf_sty; mf_sparams(mf_stya); ); mf_rg = mf_rgt; );
 mf_dlen = floor(min(1.6 * srate, MFDN - 8));
 mk_ga = mk_na; mk_goff = mk_noff;                          // for the panel's pickup window
 mk_lpinc = mk_rate * (1 + 0.04 * ins_fx) / srate;
@@ -682,10 +745,17 @@ mk_spos += 1;
 mk_L0 = mk_L1 = mk_R0 = mk_R1 = 0; mk_th = 0; mk_rsum = 0;
 mk_T = 1 / srate;
 mk_tk += 1; mk_tick = mk_tk >= 32; mk_tick ? mk_tk = 0;
+// GAP / VOICING glide (2 x 15 ms)
+// (two cascaded one-poles: the glide starts and ends with zero speed, so the tine's voltage never switches on abruptly)
+mk_gmov ? ( mk_d0a += (mk_d0t - mk_d0a) * mk_gk; mk_d0 += (mk_d0a - mk_d0) * mk_gk; mk_offa += (mk_off0 - mk_offa) * mk_gk; mk_offs += (mk_offa - mk_offs) * mk_gk; );
 mk_p = MKV;
 loop(MKNV,
   mk_p[0] ? (
     mk_tick ? mk_drag(mk_p);
+    mk_gmov ? (
+      mk_tick ? mk_norm(mk_p);
+      mk_p[18] += (mk_p[130] - mk_p[18]) * mk_nk; mk_p[124] += (mk_p[131] - mk_p[124]) * mk_nk; mk_p[101] += (mk_p[132] - mk_p[101]) * mk_nk;
+    );
     // ----- the hammer (only while it is near the tine) -----
     mk_F = 0;
     mk_p[7] > 0 ? (
@@ -736,12 +806,17 @@ loop(MKNV,
       mk_ym += mk_q[5] * mk_y + mk_q[6] * mk_q[0]; mk_q[1] = mk_q[0]; mk_q[0] = mk_y; mk_yt += mk_p[55] * mk_y;
     );
     // ----- the pickup at 2x: the 2D tip position against the pole (on its circle about the clamp), flux, d/dt -----
-    mk_ox = mk_p[17]; mk_oy = mk_p[118]; mk_ic = mk_p[119]; mk_nr = mk_p[18];
+    mk_ox = mk_gmov ? mk_offs * mk_p[133] * mk_cutf : mk_p[17]; mk_oy = mk_p[118]; mk_ic = mk_p[119]; mk_nr = mk_p[18];
     mk_x = mk_xm + mk_ox; mk_yy = mk_ym + mk_oy; mk_dz = mk_d0 - (mk_xm * mk_xm + mk_ym * mk_ym) * mk_ic;
     mk_s = 1 / (mk_x * mk_x + mk_yy * mk_yy + mk_dz * mk_dz + mk_a2); mk_flm = mk_dz * mk_s * sqrt(mk_s);
     mk_x = mk_xt + mk_ox; mk_yy = mk_yt + mk_oy; mk_dz = mk_d0 - (mk_xt * mk_xt + mk_yt * mk_yt) * mk_ic;
     mk_s = 1 / (mk_x * mk_x + mk_yy * mk_yy + mk_dz * mk_dz + mk_a2); mk_fl = mk_dz * mk_s * sqrt(mk_s);
     mk_o0 = (mk_flm - mk_p[19]) * mk_nr; mk_o1 = (mk_fl - mk_flm) * mk_nr;
+    mk_gmov ? (
+      // while the geometry glides, the flux at the tine's rest moves too: that step is not the tine's voltage
+      mk_s = 1 / (mk_ox * mk_ox + mk_oy * mk_oy + mk_d0 * mk_d0 + mk_a2); mk_fr = mk_d0 * mk_s * sqrt(mk_s);
+      mk_o0 -= (mk_fr - mk_p[134]) * mk_nr; mk_p[134] = mk_fr;
+    );
     mk_p[19] = mk_fl;
     mk_p[32] = mk_o1; mk_rsum += mk_o1;
     mk_p[120] > 1 ? mk_ck += 0.5 * (mk_p[50] - mk_p[51]) * mk_p[124];
@@ -774,16 +849,23 @@ mk_tsv > 0 ? ( mk_tsp += 261.63 / srate; mk_tsp -= floor(mk_tsp); mk_l += mk_tsv
 // the band above the split is followed by an envelope; as it rises past a threshold the band is turned down and
 // softly bias-saturated, so hard, bright, bell-heavy or dyno-voiced playing rounds off instead of clanging.
 // Its strength follows HARDNESS, BELL and VOICING (zero for soft, mellow settings); velocity drives the envelope.
-mk_tk2 > 0.001 ? (
+// (its strength glides, and the split is cross-faded in and out over 20 ms as it engages / disengages)
+mk_tk2s += (mk_tk2 - mk_tk2s) * mk_gk2;
+mk_tmx += ((mk_tk2 > 0.001) - mk_tmx) * mk_gk2; mk_tmx > 0.99999 ? mk_tmx = 1 : mk_tmx < 0.00001 ? mk_tmx = 0;
+mk_tmx > 0 ? (
   // Linkwitz-Riley 4th-order split: the top band holds nothing of the fundamentals, so its gain cannot move them
   mk_lo1 = mk_tsl2.bq_run(mk_tsl.bq_run(mk_l)); mk_lo2 = mk_tsr2.bq_run(mk_tsr.bq_run(mk_r_));
   mk_hi1 = mk_thl2.bq_run(mk_thl.bq_run(mk_l)); mk_hi2 = mk_thr2.bq_run(mk_thr.bq_run(mk_r_));
   mk_e = max(abs(mk_hi1), abs(mk_hi2));
   mk_ten += (mk_e - mk_ten) * (mk_e > mk_ten ? mk_tat : mk_trl);
-  mk_g = 1 / (1 + 0.5 * mk_tk2 * max(mk_ten - mk_tth, 0) / mk_tth); mk_g = max(mk_g, 0.35);
+  mk_g = 1 / (1 + 0.5 * mk_tk2s * max(mk_ten - mk_tth, 0) / mk_tth); mk_g = max(mk_g, 0.35);
   // (a gain on the top band only: no saturation, so no intermodulation reaches the low range and the pitch never
   // follows the dynamics; with the gain at 1 the two bands sum back to the input, phase-shifted only)
-  mk_l = mk_lo1 + mk_g * mk_hi1; mk_r_ = mk_lo2 + mk_g * mk_hi2;
+  mk_tmx < 1 ? (
+    mk_l += mk_tmx * (mk_lo1 + mk_g * mk_hi1 - mk_l); mk_r_ += mk_tmx * (mk_lo2 + mk_g * mk_hi2 - mk_r_);
+  ) : (
+    mk_l = mk_lo1 + mk_g * mk_hi1; mk_r_ = mk_lo2 + mk_g * mk_hi2;
+  );
   mk_tgr = mk_g;
 ) : ( mk_tgr = 1; );
 
@@ -792,8 +874,14 @@ mk_l = mk_a1l.bq_run(mk_l); mk_r_ = mk_a1r.bq_run(mk_r_);
 mk_l = mk_a2l.bq_run(mk_l); mk_r_ = mk_a2r.bq_run(mk_r_);
 mk_l = mk_a3l.bq_run(mk_l); mk_r_ = mk_a3r.bq_run(mk_r_);
 // ---------- AMP (b) asymmetric waveshaping with bias (OVERDRIVE drives it) ----------
-mk_l = (vo_tanh(mk_dg * mk_l + mk_bias) - mk_bt) * mk_dn;
-mk_r_ = (vo_tanh(mk_dg * mk_r_ + mk_bias) - mk_bt) * mk_dn;
+// (OVERDRIVE and TREBLE glide on the 32-sample tick, the drive gains are interpolated between ticks)
+mk_tick ? (
+  mk_ods != mk_od ? ( mk_ods += (mk_od - mk_ods) * mk_k32; abs(mk_od - mk_ods) < 0.00005 ? mk_ods = mk_od; mk_drv(); );
+  mk_trs != mk_treb ? ( mk_trs += (mk_treb - mk_trs) * mk_k32; abs(mk_treb - mk_trs) < 0.002 ? mk_trs = mk_treb; mk_ttreb(); );
+);
+mk_dgs += (mk_dg - mk_dgs) * mk_nk; mk_dns += (mk_dn - mk_dns) * mk_nk;
+mk_l = (vo_tanh(mk_dgs * mk_l + mk_bias) - mk_bt) * mk_dns;
+mk_r_ = (vo_tanh(mk_dgs * mk_r_ + mk_bias) - mk_bt) * mk_dns;
 
 // ---------- MODULATION: right = tremolo, left = stereo auto-pan, through bulbs and photocells ----------
 // the LFO lights an incandescent bulb (the filament heats faster than it cools), its light sets a photocell's
@@ -803,8 +891,9 @@ mk_ls = 0.5 + 0.5 * sin(2 * $pi * mk_lph);
 mk_bu1 += (mk_ls - mk_bu1) * (mk_ls > mk_bu1 ? mk_bh : mk_bc);
 mk_bu2 += ((1 - mk_ls) - mk_bu2) * ((1 - mk_ls) > mk_bu2 ? mk_bh : mk_bc);
 mk_pc1 = (mk_bu1 * mk_bu1) ^ 0.7; mk_pc2 = (mk_bu2 * mk_bu2) ^ 0.7;      // light ~ T^2, photocell law ~ light^0.7
-mk_mod > 0 ? ( mk_g = 1 - mk_mod * mk_pc1; mk_l *= mk_g; mk_r_ *= mk_g; ) :
-mk_mod < 0 ? ( mk_g = -mk_mod; mk_l *= (1 - mk_g * mk_pc1) * (1 + 0.3 * mk_g); mk_r_ *= (1 - mk_g * mk_pc2) * (1 + 0.3 * mk_g); );
+mk_mods != mk_mod ? ( mk_mods += (mk_mod - mk_mods) * mk_gk2; abs(mk_mod - mk_mods) < 0.000001 ? mk_mods = mk_mod; );   // (glides through 0 between pan and trem)
+mk_mods > 0 ? ( mk_g = 1 - mk_mods * mk_pc1; mk_l *= mk_g; mk_r_ *= mk_g; ) :
+mk_mods < 0 ? ( mk_g = -mk_mods; mk_l *= (1 - mk_g * mk_pc1) * (1 + 0.3 * mk_g); mk_r_ *= (1 - mk_g * mk_pc2) * (1 + 0.3 * mk_g); );
 
 // ---------- AMP (c) speaker / cabinet ----------
 mk_l = mk_c1l.bq_run(mk_l); mk_r_ = mk_c1r.bq_run(mk_r_);
@@ -813,16 +902,26 @@ mk_l = mk_c3l.bq_run(mk_l); mk_r_ = mk_c3r.bq_run(mk_r_);
 mk_l = mk_c4l.bq_run(mk_l); mk_r_ = mk_c4r.bq_run(mk_r_);
 // ---------- TREBLE ----------
 mk_l = mk_tbl.bq_run(mk_l); mk_r_ = mk_tbr.bq_run(mk_r_);
+// STAGE <-> SUITCASE: the amp is faded out (12 ms), switched, and faded back in (20 ms); the FX tails ring on
+(mk_swp || mk_swr < 1) ? (
+  mk_swp ? (
+    mk_swr -= mk_swdn;
+    mk_swr <= 0 ? ( mk_swr = 0; mk_tamp(); mk_drv(); mk_dgs = mk_dg; mk_dns = mk_dn; mk_ta = mk_amp; mk_swp = 0; );
+  ) : mk_swr = min(1, mk_swr + mk_swup);
+  mk_swg = 0.5 - 0.5 * cos($pi * mk_swr);
+  mk_l *= mk_swg; mk_r_ *= mk_swg;
+);
 
 // ---------- FX: CHORUS, VIBE, DELAY, SPACE (each fades in and out, and is skipped while off) ----------
 mf_cg += ((mf_chon * 1) - mf_cg) * mf_gsm; mf_vg += (mf_vbon * mf_vwet - mf_vg) * mf_gsm;
 mf_dg += (mf_dlon * mf_dmix - mf_dg) * mf_gsm; mf_sg += (mf_spon * mf_sam - mf_sg) * mf_gsm;
+mf_chds += (mf_chd - mf_chds) * mf_gsm2; mf_vocs += (mf_voct - mf_vocs) * mf_gsm2;   // (depths glide: no jumps of the delay taps)
 mf_cpl += mf_cpc * (mk_l - mf_cpl); mf_cpr += mf_cpc * (mk_r_ - mf_cpr);
 MFCA[mf_cw] = mf_cpl; MFCB[mf_cw] = mf_cpr;
 mf_cg > 0.0001 ? (
   mf_cph += mf_chr / srate; mf_cph -= floor(mf_cph);
-  mf_wl = mf_read(MFCA, MFCN, mf_cw - (8 + mf_chd * sin(2 * $pi * mf_cph)) * srate * 0.001);
-  mf_wr = mf_read(MFCB, MFCN, mf_cw - (8 + mf_chd * sin(2 * $pi * (mf_cph + 0.25))) * srate * 0.001);
+  mf_wl = mf_read(MFCA, MFCN, mf_cw - (8 + mf_chds * sin(2 * $pi * mf_cph)) * srate * 0.001);
+  mf_wr = mf_read(MFCB, MFCN, mf_cw - (8 + mf_chds * sin(2 * $pi * (mf_cph + 0.25))) * srate * 0.001);
   mk_l += mf_cg * (0.6 * mf_wl - 0.15 * mk_l); mk_r_ += mf_cg * (0.6 * mf_wr - 0.15 * mk_r_);
 );
 mf_cw = (mf_cw + 1) & (MFCN - 1);
@@ -832,15 +931,30 @@ mf_vg > 0.0001 ? (
   mk_l += mf_vg * mf_vibe(mk_l, 0, MFVA, mf_vtk); mk_r_ += mf_vg * mf_vibe(mk_r_, 0.25, MFVB, mf_vtk);
 );
 (mf_dg > 0.0001 || mf_dlon) ? (
-  mf_dt += mf_dts * (mf_dtg - mf_dt);
+  // a jump of the time: the echoes (and what they feed back) fade out over 12 ms, the taps move, then fade back in
+  mf_djp ? (
+    mf_dkr -= mk_swdn; mf_dkr <= 0 ? ( mf_dkr = 0; mf_dt = mf_dtg; mf_djp = 0; );
+  ) : (
+    mf_dkr < 1 ? mf_dkr = min(1, mf_dkr + mk_swup);
+    mf_dt += mf_dts * (mf_dtg - mf_dt);
+  );
   mf_dsm = max(2, min(mf_dlen - 4, mf_dt * srate * 0.001));
   mf_ya = mf_read(MFDA, mf_dlen, mf_dw - mf_dsm); mf_yb = mf_read(MFDB, mf_dlen, mf_dw - mf_dsm);
-  MFDA[mf_dw] = mf_dlon * 0.5 * (mk_l + mk_r_) + mf_dloop(mf_yb, MFVA + 30);   // in on the left, then across: ping-pong
+  mf_dkr < 1 ? ( mf_dkg = 0.5 - 0.5 * cos($pi * mf_dkr); mf_ya *= mf_dkg; mf_yb *= mf_dkg; );
+  mf_din += (mf_dlon - mf_din) * mf_gsm; mf_dfbs += (mf_dfb - mf_dfbs) * mf_gsm;   // (input fade, feedback glide)
+  MFDA[mf_dw] = mf_din * 0.5 * (mk_l + mk_r_) + mf_dloop(mf_yb, MFVA + 30);   // in on the left, then across: ping-pong
   MFDB[mf_dw] = mf_dloop(mf_ya, MFVA + 34);
   mk_l += mf_dg * mf_ya; mk_r_ += mf_dg * mf_yb;
   mf_dw += 1; mf_dw >= mf_dlen ? mf_dw = 0;
 );
 (mf_sg > 0.0001 || mf_spon) ? (
+  // a new type: the tank fades out (12 ms), is cleared and re-sized, and fades back in (20 ms)
+  mf_ssw ? (
+    mf_skr -= mk_swdn;
+    mf_skr <= 0 ? ( mf_skr = 0; mf_stya = mf_sty; mf_sparams(mf_stya); mf_rg = mf_rgt; memset(MFR, 0, 4 * MFRN); mf_z0 = mf_z1 = mf_z2 = mf_z3 = 0; mf_ssw = 0; );
+  ) : mf_skr < 1 ? mf_skr = min(1, mf_skr + mk_swup);
+  mf_skg = mf_skr < 1 ? 0.5 - 0.5 * cos($pi * mf_skr) : 1;
+  mf_rg += (mf_rgt - mf_rg) * mf_gsm;
   mf_q0 = MFR[(mf_rw - mf_l0) & MFRM]; mf_q1 = MFR[MFRN + ((mf_rw - mf_l1) & MFRM)];
   mf_q2 = MFR[2 * MFRN + ((mf_rw - mf_l2) & MFRM)]; mf_q3 = MFR[3 * MFRN + ((mf_rw - mf_l3) & MFRM)];
   mf_z0 += (mf_q0 - mf_z0) * mf_slp; mf_z1 += (mf_q1 - mf_z1) * mf_slp; mf_z2 += (mf_q2 - mf_z2) * mf_slp; mf_z3 += (mf_q3 - mf_z3) * mf_slp;
@@ -850,7 +964,7 @@ mf_vg > 0.0001 ? (
   MFR[2 * MFRN + mf_rw]  = mf_qin + 0.5 * mf_rg * (mf_z0 + mf_z1 - mf_z2 - mf_z3);
   MFR[3 * MFRN + mf_rw]  = mf_qin + 0.5 * mf_rg * (mf_z0 - mf_z1 - mf_z2 + mf_z3);
   mf_ghold -= 1; mf_gt = mf_ghold > 0; mf_gs += (mf_gt - mf_gs) * (mf_gt ? 0.01 : mf_grl);
-  mf_gm = (mf_sty == 2 ? mf_gs : 1) * mf_slv;
+  mf_gm = (mf_stya == 2 ? mf_gs : 1) * mf_slv * mf_skg;
   mk_l += mf_sg * (mf_z0 - mf_z2) * 0.7 * mf_gm; mk_r_ += mf_sg * (mf_z1 - mf_z3) * 0.7 * mf_gm;
   mf_rw = (mf_rw + 1) & MFRM;
 );
@@ -948,7 +1062,7 @@ ui_size_picker(1030 * sc, 21 * sc);
 mg_y = 82; mg_h = 160; mg_ky = mg_y + 84;
 mg_sect(14, mg_y, 330, mg_h, mg_s1, "HAMMER & TINES");
 mg_kn(56,  mg_ky, 24, 3, 0, 100, 50, 0, mg_cream, "HARDNESS", "%.0f%%");
-mg_kn(135, mg_ky, 24, 26, 0, 100, 80, 0, mg_acc, "BELL", "%.0f%%");
+mg_kn(135, mg_ky, 24, 26, 0, 100, 40, 0, mg_acc, "BELL", "%.0f%%");
 mg_kn(214, mg_ky, 24, 1, 0, 100, 50, 0, mg_cream, "DECAY", "%.0f%%");
 mg_kn(293, mg_ky, 24, 2, 0, 100, 40, 0, mg_cream, "RELEASE", "%.0f%%");
 
