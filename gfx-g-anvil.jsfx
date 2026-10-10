@@ -23,7 +23,7 @@ desc:GFX G Anvil [drum synth]
 //            project and with each preset.
 //   DRIFT  - the GFX instrument drift: every hit is detuned a little at random, and the tunings, the snare
 //            filter and the click tone wander slowly (0 - 100 %).
-// IN / OUT: SAT (band saturation) and the OUT stage (OFF / CLIP / LIMIT) along the bottom strip.
+// IN / OUT: SAT (band saturation) along the bottom strip; the output soft clip is always on.
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -70,8 +70,8 @@ slider31:0<0,100,1>-Band sat (%)
 slider32:30<0,100,1>-Bias (%)
 slider33:120<40,400,1>-Sat low band (Hz)
 slider34:6000<2000,16000,10>-Sat high band (Hz)
-slider35:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider36:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider35:-0.3<-24,0,0.1>-Ceiling (dB)
+slider36:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:none
 out_pin:left output
@@ -219,7 +219,7 @@ function update() local(m) (
   an_bus = slider23 / 100; an_bg = 1 + an_bus * 5; an_bb = 0.3 * an_bus; an_btb = ost_tanh(an_bb); an_btg = ost_tanh(an_bg);
   an_vol = 10 ^ (slider24 / 20); an_mono = slider25; an_drift = slider26 / 100;
   an_chan = slider27; an_seq = slider28; an_swing = slider29 / 100; an_acc = slider30 / 100;
-  ins_output_setup(31);
+  ins_output_setup(31);   // output stage: CLIP, always on
 );
 
 ext_noinit = 1;                                   // keep the voices and the playhead when playback starts

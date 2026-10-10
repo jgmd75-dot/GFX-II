@@ -41,8 +41,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-Ceiling (dB)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider24:20<20,500,1>-Mono below (Hz, 20 = off)
 slider25:0<0,100,1>-Stereo width (%)
 
@@ -99,7 +99,7 @@ function update() (
   chan = slider14;
   drift = slider15 / 100;
   out_t = 10 ^ (slider17 / 20);
-  ins_output_setup(18); ins_stereo_setup(24);
+  ins_output_setup(18); ins_stereo_setup(24);   // output stage: CLIP, always on
 );
 
 // ---------- presets ----------
@@ -331,13 +331,12 @@ gfx_x = 230 * sc; gfx_y = 375 * sc; gfx_drawstr("MIDI IN");
 sprintf(#nh, "%d sounding", nact);
 gfx_x = 214 * sc; gfx_y = 396 * sc; gfx_drawstr(#nh);
 
-// ---------- MASTER: SAT, output stage, stereo, level ----------
+// ---------- MASTER: SAT, stereo, level ----------
 mgroup(296, 350, 328, 92, 4, "MASTER", SH3);
-ui_knob(336 * sc, 394 * sc, 18, 0, 100, 0, 0, "SAT", "%.0f%%");
-ui_okfs = 1; ui_outkeys(366, 364, 46, 18, 3, 23); ui_okfs = 0.85;
+ui_knob(340 * sc, 394 * sc, 18, 0, 100, 0, 0, "SAT", "%.0f%%");
 ui_section(4); C_INK = INKD;
-ui_knob(448 * sc, 394 * sc, 24, 20, 500, 20, 1, "MONO", slider24 <= 20.5 ? "OFF" : "%.0f Hz");
-ui_knob(502 * sc, 394 * sc, 25, 0, 100, 0, 0, "WIDTH", "+%.0f%%");
+ui_knob(412 * sc, 394 * sc, 24, 20, 500, 20, 1, "MONO", slider24 <= 20.5 ? "OFF" : "%.0f Hz");
+ui_knob(484 * sc, 394 * sc, 25, 0, 100, 0, 0, "WIDTH", "+%.0f%%");
 ui_section(2); C_INK = INKD;
 ui_knob(556 * sc, 394 * sc, 17, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
 mL.ui_ledm(588 * sc, 360 * sc, 12 * sc, 70 * sc, pkL);

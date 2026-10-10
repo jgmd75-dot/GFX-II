@@ -35,7 +35,7 @@ desc:GFX Platte 140 [plate reverb]
 //   -> the return: EAST colour (+3 dB at 1.4 kHz, a gentle 8 kHz roll-off, hum / hiss), LOW CUT (yellow cap,
 //      2-pole, 20 - 600 Hz), HIGH CUT (black cap, 2-pole, 2 - 20 kHz, fully up = off), WIDTH (0 - 150 %)
 //   -> MIX (default 30 % for an insert: dry stays full up to 50 %, wet full from 50 %; set 100 % on a send)
-//   -> OUTPUT -> the house output stage (band SAT, OFF / CLIP / LIMIT).
+//   -> OUTPUT -> the house output stage (band SAT).
 //   A WEST / EAST change fades the return out, changes the plate and fades back in (30 ms each way).
 //
 // DAMPING - the big dial, numbered 1 - 10 like the remote: 1 = the pad lifted (5 s), 10 = pressed fully (0.4 s),
@@ -73,8 +73,8 @@ slider13:0<0,100,1>-Band sat (%)
 slider14:30<0,100,1>-Bias (%)
 slider15:120<40,400,1>-Sat low band (Hz)
 slider16:6000<2000,16000,10>-Sat high band (Hz)
-slider17:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider17:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider18:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider19:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
@@ -267,7 +267,7 @@ function update() (
   pl_tt = min(max(slider1, 0.4), 5);
   pl_pret = min(max(slider2, 0), 250) * 0.001 * srate;
   slider3 != pl_lcl ? ( pl_lcl = slider3; lcL.bq_set(1, slider3, 0.7071, 0); lcR.bq_set(1, slider3, 0.7071, 0); );
-  slider4 != pl_hcl ? ( pl_hcl = slider4; hcL.bq_set(0, min(slider4, srate * 0.45), 0.7071, 0); hcR.bq_set(0, min(slider4, srate * 0.45), 0.7071, 0); );
+  pl_hcf != pl_hcl ? ( pl_hcl = pl_hcf; hcL.bq_set(0, pl_hcf, 0.7071, 0); hcR.bq_set(0, pl_hcf, 0.7071, 0); );   // pl_hcf: glided in @sample
   pl_hcon = slider4 < 19950;
   pl_dg = 10 ^ (slider5 / 100 * 24 / 20);
   pl_mxt = slider6 / 100;
@@ -277,7 +277,7 @@ function update() (
   pl_vtar = slider10 >= 0.5;
   pl_spt = slider11 / 100;
   pl_ot = 10 ^ (slider12 / 20);
-  ost_setup(slider13 / 100, slider14 / 100, slider15, slider16, slider17, slider18);
+  ost_setup(slider13 / 100, slider14 / 100, slider15, slider16, slider17, 0);   // output stage: straight through
 );
 
 // ---------- presets (the output stage is left alone) ----------
@@ -319,6 +319,8 @@ function pl_srinit() local(i) (
   pl_shc = 1 - exp(-2 * $pi * 200 / srate);
   in_init(); in_setup(0, 0);
   pl_lcl = -1; pl_hcl = -1;
+  pl_hcf = min(slider4, srate * 0.45); pl_hck = 1 - exp(-16 / (0.02 * srate)); pl_hcn = 0;   // HIGH CUT glide (~20 ms)
+  pl_hcw = slider4 < 19950; pl_hcxs = 1 / (0.02 * srate);                                     // and its on / off fade (20 ms)
   drvA.bq_set(1, 55, 0.6, 0); drvB.bq_set(1, 55, 0.6, 0);  // the driver: the sheet barely moves below 60 Hz
   eqL.bq_set(2, 1400, 0.8, 3); eqR.bq_set(2, 1400, 0.8, 3);  // East: mid-focused return
   pl_elc = 1 - exp(-2 * $pi * 8000 / srate);            // East: darker return
@@ -482,7 +484,12 @@ pl_ver ? (
 );
 // LOW CUT / HIGH CUT on the return
 pl_wl = lcL.bq_run(pl_wl); pl_wr = lcR.bq_run(pl_wr);
-pl_hcon ? ( pl_wl = hcL.bq_run(pl_wl); pl_wr = hcR.bq_run(pl_wr); );
+pl_hcw = pl_hcon ? min(pl_hcw + pl_hcxs, 1) : max(pl_hcw - pl_hcxs, 0);
+pl_hct = min(slider4, srate * 0.45);
+pl_hcf != pl_hct ? ( (pl_hcn += 1) >= 16 ? ( pl_hcn = 0; pl_hcf *= (pl_hct / pl_hcf) ^ pl_hck; abs(pl_hcf - pl_hct) < 0.0005 * pl_hct ? pl_hcf = pl_hct;
+  pl_hcl = pl_hcf; hcL.bq_set(0, pl_hcf, 0.7071, 0); hcR.bq_set(0, pl_hcf, 0.7071, 0); ); );
+pl_hal = hcL.bq_run(pl_wl); pl_har = hcR.bq_run(pl_wr);   // the high cut always runs (primed) and is faded in / out, never switched
+pl_hcw >= 1 ? ( pl_wl = pl_hal; pl_wr = pl_har; ) : pl_hcw > 0 ? ( pl_wl += (pl_hal - pl_wl) * pl_hcw; pl_wr += (pl_har - pl_wr) * pl_hcw; );
 // width
 pl_em = 0.5 * (pl_wl + pl_wr); pl_es = 0.5 * (pl_wl - pl_wr) * pl_wd;
 pl_wl = (pl_em + pl_es) * pl_vf; pl_wr = (pl_em - pl_es) * pl_vf;
@@ -806,12 +813,11 @@ sprintf(#pvv, "%.0f%%", slider7);  pv_knob(649, 216, 19, 7, 0, 150, 100, 0, pv_e
 pv_key(552, 276, 124, 24, pv_de ? "MONO EIN" : "MONO IN", slider9 >= 0.5) ? ( slider9 = slider9 >= 0.5 ? 0 : 1; ui_auto(9); );
 
 // =====================================================================
-// OUTPUT: level, the house output stage, SAT, DRIFT and the output meter
+// OUTPUT: level, SAT, DRIFT and the output meter
 // =====================================================================
 pv_sect(694, 64, 116, 248, pv_de ? "AUSGANG" : "OUTPUT");
 dy_kst = 20;
-sprintf(#pvv, "%+.1f dB", slider12); pv_dec(#pvv); dy_knob(726, 122, 15, 12, -24, 12, 0, 0, 0x9DA2A8, pv_de ? "PEGEL" : "OUTPUT", #pvv);
-ui_outkeys(756, 98, 44, 16, 5, 18);
+sprintf(#pvv, "%+.1f dB", slider12); pv_dec(#pvv); dy_knob(751, 122, 15, 12, -24, 12, 0, 0, 0x9DA2A8, pv_de ? "PEGEL" : "OUTPUT", #pvv);
 sprintf(#pvv, "%.0f%%", slider13); dy_knob(726, 198, 12, 13, 0, 100, 0, 0, 0xD8B040, "SAT", #pvv);
 sprintf(#pvv, "%.0f%%", slider8);  dy_knob(776, 198, 12, 8, 0, 100, 50, 0, pv_e ? 0x6F8794 : 0x9DA2A8, "DRIFT", #pvv);
 dy_kst = 7; dy_nov = 0;

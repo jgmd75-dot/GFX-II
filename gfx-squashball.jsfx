@@ -8,7 +8,7 @@ desc:GFX Squashball [analogue delay pedal]
 // Signal path: input (trim + guard) -> GAIN: op-amp style overdrive (asymmetric, warm) -> BBD delay line ->
 // clock / TONE filter (inside the loop, so every repeat comes back darker than the last) -> REGEN feedback
 // (soft-limited inside the loop: past 100 % it howls into steady self-oscillation but never runs away) ->
-// LEVEL (wet volume) -> MIX -> band saturation, output gain, OFF / CLIP / LIMIT stage.
+// LEVEL (wet volume) -> MIX -> band saturation, output gain.
 //   TIME    30 - 1500 ms, or a tempo division with SYNC. Turning it glides the clock, so the repeats bend in pitch.
 //   REGEN   feedback 0 - 130 %; past 100 % the loop oscillates and the soft limiter holds it.
 //   TONE    the high-frequency roll-off in the loop (about 700 Hz - 9 kHz). Long times also darken a little,
@@ -50,8 +50,8 @@ slider15:0<0,100,1>-Band sat (%)
 slider16:30<0,100,1>-Bias (%)
 slider17:120<40,400,1>-Sat low band (Hz)
 slider18:6000<2000,16000,10>-Sat high band (Hz)
-slider19:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider20:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider19:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider20:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider21:0<-24,12,0.1>-Input trim (dB)
 slider22:0<0,1,1{Off,On}>-Input guard
 
@@ -137,7 +137,7 @@ function qb_update() local(q) (
   drift_macro(slider13);
   qb_out = 10 ^ (slider14 / 20);
   in_setup(slider21, slider22);
-  ost_setup(slider15 / 100, slider16 / 100, slider17, slider18, slider19, slider20);
+  ost_setup(slider15 / 100, slider16 / 100, slider17, slider18, slider19, 0);   // output stage: straight through
 );
 
 // ---------- state ----------

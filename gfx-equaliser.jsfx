@@ -16,7 +16,7 @@ desc:GFX Equaliser [parametric EQ]
 // Drift: AMOUNT and SPEED. Band frequencies and gains wander together, like an unsteady power supply
 // (bands set flat stay flat). The DRIFT dial scales the AMOUNT (50% = the setting, 100% = twice, 0 = none)
 // and speeds the wander up with it.
-// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIMIT) on the panel.
+// IN / OUT: TRIM (with the GUARD key) and SAT on the panel.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -57,8 +57,8 @@ slider26:0<0,100,1>-Band sat (%)
 slider27:30<0,100,1>-Bias (%)
 slider28:120<40,400,1>-Sat low band (Hz)
 slider29:6000<2000,16000,10>-Sat high band (Hz)
-slider30:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider31:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider30:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider31:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider32:0<-24,12,0.1>-Input trim (dB)
 slider33:0<0,1,1{Off,On}>-Input guard
 slider34:0<0,3,1{x1 12 dB/oct,x2 24 dB/oct,x3 36 dB/oct,x4 48 dB/oct}>-Low cut slope
@@ -132,6 +132,12 @@ function gain_text(gs) local(ge) (
   #gt;
 );
 
+// high cut sections at the glided frequency hc_f (follows slider21 in @sample)
+function hc_coef() (
+  lp1.svf_set(hc_f, 0, bw_q(lpn, 0), 4); lp2.svf_set(hc_f, 0, bw_q(lpn, 1), 4);
+  lp3.svf_set(hc_f, 0, bw_q(lpn, 2), 4); lp4.svf_set(hc_f, 0, bw_q(lpn, 3), 4);
+);
+
 // ---------- parameters ----------
 function update() (
   ms = slider1;
@@ -141,14 +147,16 @@ function update() (
   hpn = slider34 + 1; lpn = slider35 + 1;
   hp1.svf_set(slider20, 0, bw_q(hpn, 0), 3); hp2.svf_set(slider20, 0, bw_q(hpn, 1), 3);
   hp3.svf_set(slider20, 0, bw_q(hpn, 2), 3); hp4.svf_set(slider20, 0, bw_q(hpn, 3), 3);
-  lp1.svf_set(slider21, 0, bw_q(lpn, 0), 4); lp2.svf_set(slider21, 0, bw_q(lpn, 1), 4);
-  lp3.svf_set(slider21, 0, bw_q(lpn, 2), 4); lp4.svf_set(slider21, 0, bw_q(lpn, 3), 4);
+  hc_coef();
   drift_macro(slider36);
   fdr = slider22 / 100 * dm_a; gdr = fdr; dspd = slider24 * dm_s;      // one AMOUNT moves frequencies and gains together
   out_t = 10 ^ (slider25 / 20);
   in_setup(slider32, slider33);
-  ost_setup(slider26 / 100, slider27 / 100, slider28, slider29, slider30, slider31);
+  ost_setup(slider26 / 100, slider27 / 100, slider28, slider29, slider30, 0);   // output stage: straight through
 );
+
+// hi-mid band from its smoothed gain (hm_s glides to slider12 in @sample)
+function hm_coef() local(g) ( g = eff_gain(hm_s) * hm_gm; c2.svf_set(hm_f, g, bell_q(slider13, g), 0); );
 
 // band coefficients with drift (called once per block)
 function band_coefs(dinc) local(v, f, g) (
@@ -156,8 +164,8 @@ function band_coefs(dinc) local(v, f, g) (
   c0.svf_set(f, g, sh0 ? shelf_q(slider4) : bell_q(slider4, g), sh0);
   v = dF1.drift_tick(dinc); f = slider7  * 2 ^ (fdr * 0.5 * v); v = dG1.drift_tick(dinc); g = eff_gain(slider8)  * (1 + gdr * 0.3 * v);
   c1.svf_set(f, g, bell_q(slider9, g), 0);
-  v = dF2.drift_tick(dinc); f = slider11 * 2 ^ (fdr * 0.5 * v); v = dG2.drift_tick(dinc); g = eff_gain(slider12) * (1 + gdr * 0.3 * v);
-  c2.svf_set(f, g, bell_q(slider13, g), 0);
+  v = dF2.drift_tick(dinc); hm_f = slider11 * 2 ^ (fdr * 0.5 * v); v = dG2.drift_tick(dinc); hm_gm = 1 + gdr * 0.3 * v;
+  hm_coef();
   v = dF3.drift_tick(dinc); f = slider15 * 2 ^ (fdr * 0.5 * v); v = dG3.drift_tick(dinc); g = eff_gain(slider16) * (1 + gdr * 0.3 * v);
   c3.svf_set(f, g, sh3 ? shelf_q(slider17) : bell_q(slider17, g), sh3);
 );
@@ -252,7 +260,10 @@ in_init();
 pkL = 0; pkR = 0; vu_ms = 0;
 !ui_dflt ? ui_thm = 1; !ui_dflt ? ui_hw = 0;   // defaults for new instances: Blue, hardware (saved projects keep their own)
 
+hc_f = min(slider21, srate * 0.45); hc_n = 0;   // high cut frequency glide (~20 ms)
 update();
+hm_s = slider12; hm_k = 1 - exp(-16 / (0.02 * srate)); hm_n = 0;   // hi-mid gain glide (~20 ms, coefficients every 16 samples)
+hcw = lp_on; hcxs = 1 / (0.02 * srate);                              // high cut fades in / out over 20 ms
 band_coefs(0);
 out_s = out_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
@@ -286,12 +297,19 @@ hp_on ? (
   hpn > 2 ? ( a = hsA3.svf_run(a, hp3.a1, hp3.a2, hp3.a3, hp3.m0, hp3.m1, hp3.m2); b = hsB3.svf_run(b, hp3.a1, hp3.a2, hp3.a3, hp3.m0, hp3.m1, hp3.m2); );
   hpn > 3 ? ( a = hsA4.svf_run(a, hp4.a1, hp4.a2, hp4.a3, hp4.m0, hp4.m1, hp4.m2); b = hsB4.svf_run(b, hp4.a1, hp4.a2, hp4.a3, hp4.m0, hp4.m1, hp4.m2); );
 );
-lp_on ? (
+hm_s != slider12 ? ( (hm_n += 1) >= 16 ? ( hm_n = 0; hm_s += (slider12 - hm_s) * hm_k; abs(slider12 - hm_s) < 0.001 ? hm_s = slider12; hm_coef(); ); );
+// high cut: always running (its state stays primed), faded in / out rather than switched; its frequency glides
+hc_t = min(slider21, srate * 0.45);
+hc_f != hc_t ? ( (hc_n += 1) >= 16 ? ( hc_n = 0; hc_f *= (hc_t / hc_f) ^ hm_k; abs(hc_f - hc_t) < 0.0005 * hc_t ? hc_f = hc_t; hc_coef(); ); );
+hcw = lp_on ? min(hcw + hcxs, 1) : max(hcw - hcxs, 0);
+hca = a; hcb = b;
+(
   ( a = lsA1.svf_run(a, lp1.a1, lp1.a2, lp1.a3, lp1.m0, lp1.m1, lp1.m2); b = lsB1.svf_run(b, lp1.a1, lp1.a2, lp1.a3, lp1.m0, lp1.m1, lp1.m2); );
   lpn > 1 ? ( a = lsA2.svf_run(a, lp2.a1, lp2.a2, lp2.a3, lp2.m0, lp2.m1, lp2.m2); b = lsB2.svf_run(b, lp2.a1, lp2.a2, lp2.a3, lp2.m0, lp2.m1, lp2.m2); );
   lpn > 2 ? ( a = lsA3.svf_run(a, lp3.a1, lp3.a2, lp3.a3, lp3.m0, lp3.m1, lp3.m2); b = lsB3.svf_run(b, lp3.a1, lp3.a2, lp3.a3, lp3.m0, lp3.m1, lp3.m2); );
   lpn > 3 ? ( a = lsA4.svf_run(a, lp4.a1, lp4.a2, lp4.a3, lp4.m0, lp4.m1, lp4.m2); b = lsB4.svf_run(b, lp4.a1, lp4.a2, lp4.a3, lp4.m0, lp4.m1, lp4.m2); );
 );
+hcw < 1 ? ( a = hca + (a - hca) * hcw; b = hcb + (b - hcb) * hcw; );
 
 (!ms || tg0 != 2) ? a = sA0.svf_run(a, c0.a1, c0.a2, c0.a3, c0.m0, c0.m1, c0.m2);
 (!ms || tg0 != 1) ? b = sB0.svf_run(b, c0.a1, c0.a2, c0.a3, c0.m0, c0.m1, c0.m2);
@@ -454,11 +472,9 @@ lz_key(666, 345, 64, slider1 == 1, 0xFFC830, "M / S") ? ( slider1 = 1; ui_auto(1
 // ---------- IN / OUT ----------
 lz_sect(752, 156, 240, 224);
 lz_head(872, 170, "IN / OUT", 210);
-sprintf(#v, "%+.1f dB", slider32); lz_lw = 56; lz_knob(822, 232, 15, 32, -24, 12, 0, 0, "TRIM", #v);
-ui_guardclick(1700 + 32, 33, 822, 232, 18);   // click TRIM for GUARD
-sprintf(#v, "%.0f%%", slider26); lz_lw = 56; lz_cap = 0xD8B040; lz_knob(922, 232, 15, 26, 0, 100, 0, 0, "SAT", #v);
-lz_label(872, 289, "OUT");
-ui_okfs = 0.9; ui_outkeys(842, 306, 60, 15, 3, 31); ui_okfs = 0.85;
+sprintf(#v, "%+.1f dB", slider32); lz_lw = 56; lz_knob(822, 272, 15, 32, -24, 12, 0, 0, "TRIM", #v);
+ui_guardclick(1700 + 32, 33, 822, 272, 18);   // click TRIM for GUARD
+sprintf(#v, "%.0f%%", slider26); lz_lw = 56; lz_cap = 0xD8B040; lz_knob(922, 272, 15, 26, 0, 100, 0, 0, "SAT", #v);
 
 // ---------- OUTPUT: the DRIFT dial, the meter, the level ----------
 lz_sect(996, 12, 62, 368);

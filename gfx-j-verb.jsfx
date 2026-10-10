@@ -18,7 +18,7 @@ desc:GFX J-Verb [digital reverb]
 // VINTAGE runs the reverb at each unit's clock rate with the bits set by BITS.
 // Every parameter has its own display (drag, mouse wheel or DOWN / UP; double-click = default); the lamp rows are
 // one-touch settings for the cut frequencies and the reverb-time multipliers. READ recalls presets.
-// IN / OUT (right column): TRIM + GUARD, LEVEL, SAT and the OUT stage (OFF / CLIP / LIM).
+// IN / OUT (right column): TRIM + GUARD, LEVEL and SAT.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -53,8 +53,8 @@ slider22:0<0,100,1>-Band sat (%)
 slider23:30<0,100,1>-Bias (%)
 slider24:120<40,400,1>-Sat low band (Hz)
 slider25:6000<2000,16000,10>-Sat high band (Hz)
-slider26:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider27:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider26:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider27:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider28:0<-24,12,0.1>-Input trim (dB)
 slider29:0<0,1,1{Off,On}>-Input guard
 
@@ -158,7 +158,7 @@ function update() local(k, sz, L, lens, er_s, dens) (
   wid = slider17 / 100;
   dft = slider18 / 100; dspd = slider19 * (0.5 + 0.5 * slider18 / 20);   // the wander speeds up with DRIFT (1x at its default 20%)
   mix_t = slider20 / 100; out_t = 10 ^ (slider21 / 20);
-  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, slider27);
+  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, 0);   // output stage: straight through
   in_setup(slider28, slider29);
 );
 
@@ -446,17 +446,12 @@ loop(16,
   pmod(gk, 230 + (gi % 8) * 120, 172 + floor(gi / 8) * 98, pv_name(gk), gk == 7 ? 5 : 4);
   gi += 1; );
 
-// ---------- IN / OUT (right column): trim + guard, the output level, saturation and the output stage ----------
+// ---------- IN / OUT (right column): trim + guard, the output level and saturation ----------
 cap(1196, 52, 216, "IN / OUT");
-win(16, 1196, 68, 104, 4, pv_text(16), "dB", "TRIM");
-key(1308, 72, 104, 36, S_KG, "GUARD", "", slider29, 0) ? ( slider29 = 1 - slider29; ui_auto(29); update(); );
-win(17, 1196, 140, 104, 4, pv_text(17), "dB", "LEVEL");
-win(19, 1308, 140, 104, 3, pv_text(19), "%", "SAT");
-io_clp = ost_clipped ? 1 : io_clp * 0.9; ost_clipped = 0;
-cap(1196, 212, 216, io_clp > 0.1 ? "OUT STAGE  -  CLIPPING" : "OUT STAGE");
-key(1196, 228, 68, 36, S_KN, "OFF", "", slider27 == 0, 0) ? ( slider27 = 0; ui_auto(27); update(); );
-key(1270, 228, 68, 36, S_KN, "CLIP", "", slider27 == 1, 0) ? ( slider27 = 1; ui_auto(27); update(); );
-key(1344, 228, 68, 36, S_KN, "LIMIT", "", slider27 == 2, 0) ? ( slider27 = 2; ui_auto(27); update(); );
+win(16, 1196, 100, 104, 4, pv_text(16), "dB", "TRIM");
+key(1308, 104, 104, 36, S_KG, "GUARD", "", slider29, 0) ? ( slider29 = 1 - slider29; ui_auto(29); update(); );
+win(17, 1196, 212, 104, 4, pv_text(17), "dB", "LEVEL");
+win(19, 1308, 212, 104, 3, pv_text(19), "%", "SAT");
 
 pk_end();
 ui_end();

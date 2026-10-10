@@ -16,7 +16,7 @@ desc:GFX Preamp Q [preamp + EQ]
 //   ZEN   - gentle symmetrical diode-style saturation, smooth amp-like breakup
 //   TRANS - single-transistor drive: asymmetric, bites earlier, furrier when pushed
 // Drift: BIAS (asymmetry wanders) and COMP (sag depth breathes).
-// The bottom cream row: DRIFT (one dial: 50% = the drift settings), IN / OUT (TRIM + GUARD, SAT, OUT stage), MASTER.
+// The bottom cream row: DRIFT (one dial: 50% = the drift settings), IN / OUT (TRIM + GUARD, SAT), MASTER.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -42,8 +42,8 @@ slider12:0<0,100,1>-Band sat (%)
 slider13:30<0,100,1>-Bias (%)
 slider14:120<40,400,1>-Sat low band (Hz)
 slider15:6000<2000,16000,10>-Sat high band (Hz)
-slider16:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider17:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider16:-0.3<-24,0,0.1>-Ceiling (dB)
+slider17:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider18:0<-24,12,0.1>-Input trim (dB)
 slider19:1<0,1,1{Off,On}>-Input guard
 slider20:20<20,400,1>-EQ: HPF (Hz, 20 = off)
@@ -186,7 +186,7 @@ function update() local(drv, fc, f1, f2, f3, gb) (
   eqA.peak_set(f1, gb); eqB.peak_set(f1 * 10, gb); eqC.peak_set(f1 * 100, gb);
 
   in_setup(slider18, slider19);
-  ost_setup(slider12 / 100, slider13 / 100, slider14, slider15, slider16, slider17);
+  ost_setup(slider12 / 100, slider13 / 100, slider14, slider15, slider16, 1);   // output stage: CLIP, always on
 );
 
 // ---------- presets (leave Drift speed, Output and the I/O rows alone) ----------
@@ -247,20 +247,21 @@ function q_hp1set(f) local(k) ( k = tan($pi * min(f, srate * 0.45) / srate); q_h
 function q_hp1db(f) local(w, q_wc) ( q_wc = slider20; w = f / q_wc; 10 * log10(w * w / (1 + w * w)); );
 
 // one channel's chain
-function q_chain(x) instance() (
+function q_chain(x) instance() local(y) (
   q_hp_on ? x = this.h1.q_hp1(this.h2.bq_run(x));
   q_eq_on ? (
     x = this.lf.bq_run(x); q_lfx ? x = this.lx.bq_run(x);
     x = this.lm.bq_run(x); x = this.hm.bq_run(x);
     x = this.hf.bq_run(x); q_hfx ? x = this.hx.bq_run(x);
   );
-  q_lp_on ? x = this.lp.bq_run(x);
+  y = this.lp.bq_run(x);                     // the LPF always runs (primed) and is faded in / out, never switched
+  q_bd_lpw >= 1 ? x = y : q_bd_lpw > 0 ? x += (y - x) * q_bd_lpw;
   x;
 );
 
 function q_setch() instance() local(q) (
   q_hp_on ? this.h2.bq_set(1, slider20, 1, 0);
-  q_lp_on ? this.lp.bq_set(0, slider21, 0.707, 0);
+  this.lp.bq_set(0, q_bd_lpf, 0.707, 0);     // q_bd_lpf: the LPF frequency, glided in q_proc
   // proportional Q on the black card
   this.lf.bq_set(slider24 ? 2 : 4, slider23, slider24 ? (q_blk ? 0.6 + abs(slider22) / 15 * 0.9 : 0.55) : (q_blk ? 1.15 : 0.6), slider22);
   this.lm.bq_set(2, slider26, slider27 * (q_blk ? 0.6 + abs(slider25) / 15 * 1.2 : 0.7), slider25);
@@ -312,10 +313,16 @@ function q_load_preset(p) (
   
  q_RSP = 30000;
 q_PNL = 0xB4B8BA; q_PRT = 0x1C1E21; q_SCR = 0x121517; q_CRED = 0xC8322A; q_CGRN = 0x2E8A4A; q_CBLU = 0x2C5FA8; q_CBRN = 0x6A4A32; q_CGRY = 0xE4E4E0; q_CBLK = 0x26272A; q_SLB = 0x3BA9E0; SDB = 0x34349A; q_SRD = 0xE0262B;
+q_bd_lpf = min(slider21, srate * 0.45); q_bd_lpk = 1 - exp(-16 / (0.02 * srate)); q_bd_lpn = 0;   // LPF glide (~20 ms)
 q_update();
+q_bd_lpw = q_lp_on; q_bd_lpxs = 1 / (0.02 * srate);   // LPF on / off fade: 20 ms
 
 
 function q_proc(cb_inl, cb_inr) (
+  q_bd_lpw = q_lp_on ? min(q_bd_lpw + q_bd_lpxs, 1) : max(q_bd_lpw - q_bd_lpxs, 0);
+  q_bd_lpt = min(slider21, srate * 0.45);
+  q_bd_lpf != q_bd_lpt ? ( (q_bd_lpn += 1) >= 16 ? ( q_bd_lpn = 0; q_bd_lpf *= (q_bd_lpt / q_bd_lpf) ^ q_bd_lpk; abs(q_bd_lpf - q_bd_lpt) < 0.0005 * q_bd_lpt ? q_bd_lpf = q_bd_lpt;
+    q_CL.lp.bq_set(0, q_bd_lpf, 0.707, 0); q_CR.lp.bq_set(0, q_bd_lpf, 0.707, 0); ); );
   q_xl = q_CL.q_chain(cb_inl); q_xr = q_CR.q_chain(cb_inr);
   q_drv > 0.001 ? (
     q_xl = (th(q_dk * q_xl + q_dbias) - q_dtb) / (q_dk * (1 - q_dtb * q_dtb));
@@ -368,7 +375,7 @@ yR = chR.ch_proc(inR, bnow, sagk);
 oL = inL * (1 - mix_s) + yL * mix_s;
 oR = inR * (1 - mix_s) + yR * mix_s;
 
-// output stage: band saturation -> output gain -> clipper / limiter
+// output stage: band saturation -> output gain -> clipper
 q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;

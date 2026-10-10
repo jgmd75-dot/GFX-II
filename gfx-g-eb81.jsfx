@@ -41,7 +41,7 @@ desc:GFX G EB81 [FM synth]
 // DISPLAY: RATIO page (the operator ratios as numbers and bars) or TELEMETRY (the live waveform with clip markers
 //   and the aliasing / step indicator), drawn in the active skin.
 // SKIN: ENAMEL / VFD / MATRIX (the 45 family's three looks; each deck keeps its identity). Saved in a slider.
-// OUTPUT: VOLUME, DRIFT, SAT and the house OUT stage (OFF / CLIP / LIMIT).
+// OUTPUT: VOLUME, DRIFT and SAT (the output soft clip is always on).
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -109,8 +109,8 @@ slider49:0<0,100,1>-Band sat (%)
 slider50:30<0,100,1>-Bias (%)
 slider51:120<40,400,1>-Sat low band (Hz)
 slider52:6000<2000,16000,10>-Sat high band (Hz)
-slider53:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider54:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider53:-0.3<-24,0,0.1>-Ceiling (dB)
+slider54:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider55:0<0,2,1{Enamel,VFD,Matrix}>-Skin
 slider56:0<0,1,1{Ratio,Telemetry}>-Display page
 
@@ -198,6 +198,7 @@ function eb_pstr(p) (
   "";
 );
 function load_preset(p) local(n, i) (
+  eb_panic = 1;                                            // (first: the audio thread holds the old sound until it has faded)
   i = 0; loop(47, slider(i + 1) = EBDEF[i]; i += 1; );
   n = eb_nums(eb_pstr(p), EBTMP);
   i = 0; loop(floor(n / 2), EBTMP[i * 2] >= 1 && EBTMP[i * 2] <= 47 ? slider(EBTMP[i * 2]) = EBTMP[i * 2 + 1]; i += 1; );
@@ -327,7 +328,7 @@ function update() local(d) (
   eb_brng = slider45;
   eb_drift = slider46 / 100; eb_volt = 10 ^ (slider47 / 20); eb_chan = slider48;
   eb_sr2 = 2 * srate; eb_i2s = 1 / eb_sr2; eb_fmax2 = srate * 0.9;
-  ins_output_setup(49);
+  ins_output_setup(49);   // output stage: CLIP, always on
 );
 
 ins_drift_init();
@@ -336,6 +337,20 @@ eb_ct = 0; eb_lph = 0; eb_lsv = 0; eb_lv = 0; eb_hw = 0; eb_bw = 0; eb_audg = 0;
 eb_dcxl = eb_dcyl = eb_dcxr = eb_dcyr = 0; eb_dqxl = eb_dqyl = eb_dqxr = eb_dqyr = 0; eb_ain = eb_aprev = 0; eb_ci = 256; eb_cdc = 0; eb_cfree = 0; eb_cdec = 2;
 eb_sprev = 0; eb_hfa = eb_hfb = 0; eb_hfm = 0; eb_clipf = 0; eb_pk = 0; eb_tlast = 0;
 eb_pg = eb_pgt = 1;
+eb_pcf = 0; eb_pck = eb_pcg = 1;
+// a preset loaded while voices sound: the old sound fades out (12 ms), the new preset applies at the silent
+// point (where the released notes end) and the output fades back in (12 ms): no click
+// notes played during the fade wait for its silent point (they start with the new sound)
+EBPC = 33600; eb_pcn = 0;                                    // (32 pairs: note, velocity)
+function eb_pchold(n, v) ( eb_pcn < 32 ? ( EBPC[eb_pcn * 2] = n; EBPC[eb_pcn * 2 + 1] = v; eb_pcn += 1; ); );
+function eb_pcunhold(n) local(i, j) (
+  i = j = 0; loop(eb_pcn, EBPC[i * 2] != n ? ( EBPC[j * 2] = EBPC[i * 2]; EBPC[j * 2 + 1] = EBPC[i * 2 + 1]; j += 1; ); i += 1; ); eb_pcn = j;
+);
+function eb_pcapply() local(i, p) (
+  i = 0; loop(8, p = EBV + i * 64; p[13] == 3 ? ( p[13] = 0; p[15] = 0; p[14] = 0; p[0] = -1; ); i += 1; );   // the released notes end here
+  update(); eb_lastmode = eb_mode; eb_lastsrc = eb_src; eb_pcf = 0;
+  i = 0; loop(eb_pcn, eb_note_on(EBPC[i * 2], EBPC[i * 2 + 1]); i += 1; ); eb_pcn = 0;
+);
 // everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
 // from running then)
 function eb_srinit() (
@@ -351,12 +366,14 @@ eb_vol = eb_volt;
 ui_dflt = 1;
 
 @slider
-update();
+!eb_panic && !eb_pcf ? update();
 
 @block
 srate != eb_sr ? eb_srinit();
 eb_treq > 0 && eb_treq != eb_tql ? ( load_preset(eb_treq); eb_tql = eb_treq; );     // test hook: a preset asked for from outside the panel
-update();
+eb_pcr = 1 / (0.012 * srate);
+eb_panic && !eb_pcf ? ( eb_i = 0; loop(9, EBV[eb_i * 64 + 13] > 0 ? eb_pcf = 1; eb_i += 1; ); );   // sounding: fade first
+!eb_pcf ? update();
 
 eb_qc = 0;
 eb_mode != eb_lastmode ? ( eb_qpush(0, 3, 0, 0); eb_lastmode = eb_mode; );
@@ -377,7 +394,7 @@ while (midirecv(mofs, m1, m2, m3)) (
     );
   );
 );
-eb_panic ? ( eb_all_off(); eb_panic = 0; );
+eb_panic ? ( eb_all_off(); eb_panic = 0; );                // (with a fade running, the update waits for its silent point)
 // the AUDIO voice: always on in AUDIO
 eb_pa = EBV + 8 * 64;
 eb_src == 1 && eb_pa[13] == 0 ? (
@@ -402,10 +419,12 @@ file_var(0, pr_cur);
 @sample
 while (eb_eqi < eb_qc && EBQO[eb_eqi] <= eb_spos) (
   eb_et = EBQT[eb_eqi];
-  eb_et == 1 ? eb_note_on(EBQN[eb_eqi], EBQV[eb_eqi]) : eb_et == 0 ? eb_note_off(EBQN[eb_eqi]) : eb_et == 2 ? eb_pedal_up() : eb_all_off();
+  eb_et == 1 ? ( eb_pcf ? eb_pchold(EBQN[eb_eqi], EBQV[eb_eqi]) : eb_note_on(EBQN[eb_eqi], EBQV[eb_eqi]); ) : eb_et == 0 ? ( eb_pcunhold(EBQN[eb_eqi]); eb_note_off(EBQN[eb_eqi]); ) : eb_et == 2 ? eb_pedal_up() : ( eb_pcn = 0; eb_all_off(); );
   eb_eqi += 1;
 );
 eb_spos += 1;
+eb_pcf ? ( eb_pck -= eb_pcr; eb_pck <= 0 ? ( eb_pck = 0; eb_pcapply(); ); eb_pcg = 0.5 - 0.5 * cos($pi * eb_pck); ) :
+eb_pck < 1 ? ( eb_pck = min(eb_pck + eb_pcr, 1); eb_pcg = 0.5 - 0.5 * cos($pi * eb_pck); );
 
 // ---------- input ----------
 eb_aprev = eb_ain;
@@ -569,7 +588,7 @@ eb_L = eb_Ao + eb_Bo * 0.94; eb_R = eb_Ao * 0.94 + eb_Bo;   // Berlin a touch le
 
 // ---------- MASTER ----------
 eb_vol += (eb_volt - eb_vol) * eb_sm;
-eb_L *= eb_vol; eb_R *= eb_vol;
+eb_L *= eb_vol * eb_pcg; eb_R *= eb_vol * eb_pcg;
 // DC block (rectified waves, asymmetric drive and the asymmetric loops can leave an offset)
 eb_dqyl = eb_L - eb_dqxl + 0.999 * eb_dqyl; eb_dqxl = eb_L; eb_L = eb_dqyl;
 eb_dqyr = eb_R - eb_dqxr + 0.999 * eb_dqyr; eb_dqxr = eb_R; eb_R = eb_dqyr;
@@ -1031,11 +1050,9 @@ eg_kn(eg_x + 88,  eg_ky, 16, 26, 20, 2000, 110, 1, "FREQ", "%.1f Hz", 2);
 eg_kn(eg_x + 143, eg_ky, 16, 27, 0, 100, 35, 0, "A | B", "%.0f%%", 2);
 // MASTER
 eg_x = 1077; eg_mod(eg_x, eg_by, 153, eg_bh, "MASTER");
-eg_kn(eg_x + 42, eg_by + 46, 18, 47, -24, 6, 0, 0, "VOLUME", "%+.1f dB", 2);
-eg_kn(eg_x + 24, eg_ky + 6, 11, 46, 0, 100, 25, 0, "DRIFT", "%.0f%%", 3);
-eg_kn(eg_x + 66, eg_ky + 6, 11, 49, 0, 100, 0, 0, "SAT", "%.0f%%", 4);
-gfx_setfont(10); ui_col(eg_i2); eg_ct(eg_x + 121, eg_by + 14, "OUT");
-eg_okf = ui_okfs; ui_okfs = 1.2; ui_outkeys(eg_x + 96, eg_by + 26, 48, 22, 6, 54); ui_okfs = eg_okf;
+eg_kn(eg_x + 76, eg_by + 46, 18, 47, -24, 6, 0, 0, "VOLUME", "%+.1f dB", 2);
+eg_kn(eg_x + 50, eg_ky + 6, 11, 46, 0, 100, 25, 0, "DRIFT", "%.0f%%", 3);
+eg_kn(eg_x + 102, eg_ky + 6, 11, 49, 0, 100, 0, 0, "SAT", "%.0f%%", 4);
 
 dy_kst = 7; dy_nov = 0;
 pk_end();

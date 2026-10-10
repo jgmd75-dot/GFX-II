@@ -19,7 +19,7 @@ desc:GFX G Byte 6 [lo-fi drum machine]
 //               37 rim. Velocity sets the level (VELOCITY = how much). Click a pad to hear it.
 //   DRIFT     - a digital box, so it stays very subtle: each hit is retuned at random by up to +/-12 cents at
 //               100 % (the default 15 % is under 2 cents). Nothing wanders between hits.
-//   IN / OUT  - the house output section: SAT, the OUT stage (OFF / CLIP / LIMIT), MONO and WIDTH.
+//   IN / OUT  - the house output section: SAT, MONO and WIDTH (the output soft clip is always on).
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -39,8 +39,8 @@ slider8:0<0,100,1>-Band sat (%)
 slider9:30<0,100,1>-Bias (%)
 slider10:120<40,400,1>-Sat low band (Hz)
 slider11:6000<2000,16000,10>-Sat high band (Hz)
-slider12:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider13:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider12:-0.3<-24,0,0.1>-Ceiling (dB)
+slider13:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider14:20<20,500,1>-Mono below (Hz, 20 = off)
 slider15:0<0,100,1>-Stereo width (%)
 slider16:0<-12,12,0.1>-Kick tune (st)
@@ -203,7 +203,7 @@ function b6_update() local(fc, g) (
   b6_a1 = 1 / (1 + g * (g + 0.7654)); b6_a2 = g * b6_a1; b6_a3 = g * b6_a2;     // Butterworth 4-pole: k = 0.765, 1.848
   b6_b1 = 1 / (1 + g * (g + 1.8478)); b6_b2 = g * b6_b1; b6_b3 = g * b6_b2;
   b6_fc = fc;
-  ins_output_setup(8); ins_stereo_setup(14);
+  ins_output_setup(8); ins_stereo_setup(14);   // output stage: CLIP, always on
 );
 
 // ---------- presets (BITS, RATE, FILTER and the six voices; volume, velocity, drift, MIDI and IN / OUT stay) ----------
@@ -490,7 +490,7 @@ g6mR.ui_ledm(854 * sc, 208 * sc, 11 * sc, 140 * sc, b6_pkR);
 b6_pkL *= 0.85; b6_pkR *= 0.85;
 gfx_setfont(4); ui_col(G6INK); ui_text(851 * sc, 354 * sc, "OUT");
 
-// ---------- IN / OUT: SAT, the OUT stage, MONO, WIDTH ----------
+// ---------- IN / OUT: SAT, MONO, WIDTH ----------
 pk_inset(664 * sc, 392 * sc, 216 * sc, 50 * sc, G6IO);
 ins_io(672, 398, 8, G6INK);
 ins_stereo_mini(778, 398, 14, G6INK);

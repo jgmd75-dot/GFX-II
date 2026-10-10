@@ -9,7 +9,7 @@ desc:GFX Grunt [drive]
 //
 // Signal path: input (trim + guard) -> 140Hz low-shelf bypass splits off the sub-140Hz band ->
 // boost / gain drive -> soft pre-clip -> grunt waveshaping (cubic warmth) -> low band rejoins ->
-// band saturation / tone -> dynamic 330Hz dip -> stereo-linked clipper / limiter -> master.
+// band saturation / tone -> dynamic 330Hz dip -> stereo-linked clipper -> master.
 //   GAIN   - drive into the stage. The higher it goes, the more of the
 //            sub-140Hz content is routed around the gain/grunt stage untouched (tighter low end).
 //   BOOST  - smaller amp knob (gold pointer): extra drive on top of GAIN, plus an asymmetric warmth bias
@@ -18,7 +18,7 @@ desc:GFX Grunt [drive]
 //   SAG    - output-stage saturation bias
 //   SQUASH - output-stage band saturation amount
 //   MASTER - output level
-//   Out stage: Off, Clip (soft, zero latency) or Limit (lookahead, PDC reported)
+//   Out stage: a soft clip, always on (zero latency)
 
 import gfx-input.jsfx-inc
 import gfx-output.jsfx-inc
@@ -32,7 +32,7 @@ slider3:0.5<0,1,0.01>-Grunt
 slider4:0.2<0,1,0.01>-Sag
 slider5:0.5<0,1,0.01>-Squash
 slider6:0<-24,12,0.1>-Master (dB)
-slider7:1<0,2,1{Off,Clip,Limit}>-Out stage
+slider7:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -75,7 +75,7 @@ function svf_bp(x) instance(ic1eq, ic2eq, g, k, a1, a2, a3) local(v1, v2, v3) (
 
 function update() (
   in_setup(slider1, 1);
-  ost_setup(gk_qb, gk_sb, 90, 7500, 0, slider7);   // SQUASH / SAG glide per block
+  ost_setup(gk_qb, gk_sb, 90, 7500, 0, 1);   // SQUASH / SAG glide per block; output stage: CLIP, always on
   lpL140.lp140_set(140); lpR140.lp140_set(140);
   nL.svf_set(330, 0.9); nR.svf_set(330, 0.9);
 );
@@ -144,7 +144,7 @@ sig_r *= drive;
 // Soft pre-clip: with GAIN and BOOST both driven hard, "drive" above can reach 8x (+18 dB).
 // Taming it here with a tanh soft-knee keeps the cubic/even-harmonic terms below from
 // exploding into huge, DC-shifted peaks that blow straight past the output stage (even in
-// Clip/Limit mode) and can trigger a DAW's protective mute on the master bus.
+// with CLIP always on) and can trigger a DAW's protective mute on the master bus.
 sig_l = ost_tanh(sig_l);
 sig_r = ost_tanh(sig_r);
 
@@ -155,7 +155,7 @@ sig_l = sig_l + grunt_amt * 0.4 * (sig_l * sig_l * sig_l) + grunt_bias * (sig_l 
 sig_r = sig_r + grunt_amt * 0.4 * (sig_r * sig_r * sig_r) + grunt_bias * (sig_r * sig_r);
 
 // Re-introduce the untouched low end that skipped the gain/grunt stage above; it still goes
-// through the output stage (squash/sag + clipper/limiter) and master gain like everything else.
+// through the output stage (squash/sag + clipper) and master gain like everything else.
 sig_l += dry_low_l;
 sig_r += dry_low_r;
 
@@ -170,7 +170,7 @@ notch_coeff = notch_amt * 0.5;                     // ~ -6 dB max cut at 330Hz w
 sig_l -= notch_coeff * nL.svf_bp(sig_l);
 sig_r -= notch_coeff * nR.svf_bp(sig_r);
 
-// Stereo-linked output limiter / clipper stage
+// Output clipper stage
 ost_out(sig_l, sig_r);
 
 master_g = gk_m;

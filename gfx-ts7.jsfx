@@ -3,7 +3,7 @@ desc:GFX TS-7 [tape sat + comp]
 //tags: tape saturation compressor transformer warmth slam
 //author: JGWizrad / Garden FX (GFX)
 //
-// CHAIN   IN -> INPUT -> [ oversampled 2x / 4x:  IRON -> WARMTH -> COMP (+ MIX) ] -> OUTPUT -> OUT stage
+// CHAIN   IN -> INPUT -> [ oversampled 2x / 4x:  IRON -> WARMTH -> COMP (+ MIX) ] -> OUTPUT
 // IRON    Input transformer: the low band (below ~120 Hz) runs into core saturation first, then the whole
 //         band meets a gentle asymmetric soft clip. The asymmetry (even harmonics) grows with level, so
 //         INPUT decides how much iron you hear. IRON off = clean input stage.
@@ -41,7 +41,7 @@ slider5:0<0,3,1{Off,Tx,Bus,Slam}>-Comp
 slider6:1<0,1,1{Off,On}>-Iron
 slider7:100<0,100,1>-Mix (%)
 slider8:0<0,1,1{Off,On}>-Bypass
-slider9:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider9:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider10:1<0,1,1{2x,4x}>-Oversampling
 slider11:20<0,100,1>-Drift (%)
 
@@ -161,7 +161,7 @@ function setup() local(fso) (
   mix = slider7/100;
   byp = slider8 > 0.5;
   osLat = os4 ? 36 : 31;
-  ost_setup(0, 0, 120, 6000, -0.3, floor(slider9 + 0.5));
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
   pdc_delay += osLat; pdc_bot_ch = 0; pdc_top_ch = 2;
 );
 
@@ -518,9 +518,8 @@ pressed && drag_id == 0 && inbox(600, 256, 200, 30) ? (
   loop(8, slider1 == i ? strcat(#pm, "!"); strcat(#pm, pname(i)); i < 7 ? strcat(#pm, "|"); i += 1; );
   gfx_x = 600*qs; gfx_y = 286*qs; i = gfx_showmenu(#pm); i > 0 ? ( slider1 = i - 1; apply_preset(i - 1); lastPreset = i - 1; slider_automate(255); );
 );
-wkey(830, 256, 40, 30) ? ( slider10 = slider10 < 0.5; ui_auto(10); );
-gfx_setfont(6); ui_col(INK); TC(850, 238, slider10 > 0.5 ? "OS 4X" : "OS 2X");
-ui_outkeys(892*0.75, 236*0.75, 44*0.75, 14, 2, 9);
+wkey(860, 256, 40, 30) ? ( slider10 = slider10 < 0.5; ui_auto(10); );
+gfx_setfont(6); ui_col(INK); TC(880, 238, slider10 > 0.5 ? "OS 4X" : "OS 2X");
 gfx_setfont(6); ui_col(INK); TR(992, 262, "MIX");
 sknob(7, 1020, 270, 18, 0, 100, 100);
 gfx_setfont(6); ui_col(INK); TR(1094, 262, "DRIFT");

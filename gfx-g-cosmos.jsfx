@@ -16,7 +16,7 @@ desc:GFX G Cosmos [pad synth]
 // DRIFT (GFX): the tuning and the filter wander - for the whole instrument and for each voice on its own -
 //   and every note lands slightly differently in tune.
 // MIDI: pitch bend +/-2, CC1 vibrato, CC64 sustain, CC123 all notes off.
-// IN / OUT: the strip along the bottom holds SAT, the OUT stage (OFF / CLIP / LIM) and STEREO (MONO, WIDTH).
+// IN / OUT: the strip along the bottom holds SAT and STEREO (MONO, WIDTH).
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -65,8 +65,8 @@ slider37:0<0,100,1>-Band sat (%)
 slider38:30<0,100,1>-Bias (%)
 slider39:120<40,400,1>-Sat low band (Hz)
 slider40:6000<2000,16000,10>-Sat high band (Hz)
-slider41:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider42:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider41:-0.3<-24,0,0.1>-Ceiling (dB)
+slider42:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider43:20<20,500,1>-Mono below (Hz, 20 = off)
 slider44:0<0,100,1>-Stereo width (%)
 slider45:0<0,11,1{Cosmos,Warm Poly,Strings 6,Glass Shimmer,Dark Drone,PWM Haze,Brass Pad,Choir Air,Sweep Pad,Slow Strings,Nebula,Init}>-Patch
@@ -173,7 +173,7 @@ function update() (
   dtime = slider29; dfb = slider30 / 100; dmix = slider32 / 100;
   dtc = 1 - exp(-2 * $pi * slider31 / srate);
   velsens = slider33 / 100; drift = slider34 / 100; vol_t = 10 ^ (slider35 / 20); chan = slider36;
-  ins_output_setup(37); ins_stereo_setup(43);
+  ins_output_setup(37); ins_stereo_setup(43);   // output stage: CLIP, always on
 );
 function env_update() (
   v0.fe.vo_adsr_set(slider16, slider17, slider18 / 100, slider19); v0.ae.vo_adsr_set(slider20, slider21, slider22 / 100, slider23);

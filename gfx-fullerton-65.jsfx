@@ -28,7 +28,7 @@ desc:GFX Fullerton 65 [valve combo amp]
 //      pushed -> output transformer -> SPEAKER: 12" open back, about 80 Hz - 5 kHz with a presence peak. The two
 //      speakers are not quite the same (different cone / mic), and the two reverb tanks are tuned apart.
 //   The amp runs at twice the sample rate (the reverb tanks at the host rate).
-// IN / OUT: INPUT trim (click the knob for the house GUARD), OUTPUT, band SAT and the OFF / CLIP / LIMIT stage.
+// IN / OUT: INPUT trim (click the knob for the house GUARD), OUTPUT, band SAT (the output soft clip is always on).
 // DRIFT (0 - 100 %, 50 % = standard): valve and supply wander. The valves' bias wanders (each side on its own),
 //   the supply 'breathes' a little, the power valves drift out of balance, and the tremolo rate wanders slightly.
 //   0 % = perfectly steady.
@@ -71,8 +71,8 @@ slider22:0<0,100,1>-Band sat (%)
 slider23:30<0,100,1>-Bias (%)
 slider24:120<40,400,1>-Sat low band (Hz)
 slider25:6000<2000,16000,10>-Sat high band (Hz)
-slider26:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider27:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider26:-0.3<-24,0,0.1>-Ceiling (dB)
+slider27:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -349,7 +349,7 @@ function update() (
   in_setup(slider18, slider19);
   drift_macro(slider20);
   fl_ot_ = 10 ^ (slider21 / 20) * fl_kout;
-  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, slider27);
+  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, 1);   // output stage: CLIP, always on
 );
 fl_kout = 0.75;
 
@@ -752,19 +752,18 @@ fv_knob(772, 128, 13, 3, "Reverb"); fv_knob(843, 128, 14, 5, "Speed"); fv_knob(9
 fv_jewel(966, 128);
 
 // =====================================================================
-// The utility panel: JUMPER, MONO IN, STEREO TREM | INPUT (GUARD), DRIFT, OUTPUT, SAT | the output stage
+// The utility panel: JUMPER, MONO IN, STEREO TREM | INPUT (GUARD), DRIFT, OUTPUT, SAT
 // =====================================================================
 fv_key(588, 216, 104, 20, "JUMPER", fv_jp, 0xFFFDD0) ? ( slider2 = fv_jp ? 0 : 1; ui_auto(2); );
 fv_key(588, 240, 104, 20, "MONO IN", slider17 >= 0.5, 0xFFFDD0) ? ( slider17 = slider17 >= 0.5 ? 0 : 1; ui_auto(17); );
 fv_key(588, 264, 104, 20, "STEREO TREM", slider16 >= 0.5, 0xFFFDD0) ? ( slider16 = slider16 >= 0.5 ? 0 : 1; ui_auto(16); );
 dy_ink = FV_INK; dy_bg = FV_UT; dy_kst = 20; dy_ntick = 11;
-sprintf(#fvv, "%+.1f dB", slider18); dy_knob(728, 236, 13, 18, -24, 12, 0, 0, 0x9DA2A8, "INPUT", #fvv);
-ui_guardclick(1600 + 18, 19, 728, 236, 22);             // click INPUT for the house GUARD (its LED, upper right)
-sprintf(#fvv, "%.0f%%", slider20); dy_knob(788, 236, 13, 20, 0, 100, 50, 0, 0x6F8794, "DRIFT", #fvv);
-sprintf(#fvv, "%+.1f dB", slider21); dy_knob(848, 236, 13, 21, -24, 12, 0, 0, 0x9DA2A8, "OUTPUT", #fvv);
-sprintf(#fvv, "%.0f%%", slider22); dy_knob(904, 236, 13, 22, 0, 100, 0, 0, 0xD8B040, "SAT", #fvv);
+sprintf(#fvv, "%+.1f dB", slider18); dy_knob(734, 236, 13, 18, -24, 12, 0, 0, 0x9DA2A8, "INPUT", #fvv);
+ui_guardclick(1600 + 18, 19, 734, 236, 22);             // click INPUT for the house GUARD (its LED, upper right)
+sprintf(#fvv, "%.0f%%", slider20); dy_knob(804, 236, 13, 20, 0, 100, 50, 0, 0x6F8794, "DRIFT", #fvv);
+sprintf(#fvv, "%+.1f dB", slider21); dy_knob(874, 236, 13, 21, -24, 12, 0, 0, 0x9DA2A8, "OUTPUT", #fvv);
+sprintf(#fvv, "%.0f%%", slider22); dy_knob(944, 236, 13, 22, 0, 100, 0, 0, 0xD8B040, "SAT", #fvv);
 dy_kst = 7;
-ui_okfs = 1.15; ui_outkeys(934, 216, 40, 19, 4, 27); ui_okfs = 0.85;
 
 pk_end();
 ui_end();

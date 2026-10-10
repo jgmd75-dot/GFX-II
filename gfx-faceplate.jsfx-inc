@@ -165,26 +165,24 @@ function rd_stepclick(cx, cy, r, idx, n) local(i, a, px, py) (
 );
 // ---------- the inline input / output strip ----------
 // TRIM with its GUARD key beside it (the guard protects the input; the key glows while it catches peaks),
-// SAT: the band saturation; OUT: the output stage as three stacked keys (OFF / CLIP / LIMIT).
+// SAT: the band saturation. (The output stage has no keys: its mode is fixed per unit.) iM is not used.
 rd_ioc1 = 0x2A2A2E; rd_ioc2 = 0xD8B040; rd_ioc3 = 0xC83A2A; rd_iok = 20; rd_gcol = 0xFF4A30;
 rd_iotx = 0;   // a panel with room can move TRIM further left of its GUARD key
 function rd_io(x, y, iT, iG, iS, iM) local(r, k0) (
   r = 15; k0 = dy_kst;
   dy_kst = rd_iok;
-  sprintf(#rdv, "%+.1f dB", slider(iT)); dy_knob(x + 22 - rd_iotx, y + 22, r, iT, -24, 12, 0, 0, rd_ioc1, "TRIM", #rdv);
+  sprintf(#rdv, "%+.1f dB", slider(iT)); dy_knob(x + 50 - rd_iotx, y + 22, r, iT, -24, 12, 0, 0, rd_ioc1, "TRIM", #rdv);
   // GUARD: click the TRIM knob; its LED (upper right) is lit while the guard is on
-  ui_guardclick(1600 + iT, iG, x + 22 - rd_iotx, y + 22, r + 9);
-  sprintf(#rdv, "%.0f%%", slider(iS)); dy_knob(x + 106, y + 22, r, iS, 0, 100, 0, 0, rd_ioc2, "SAT", #rdv);
-  ui_outkeys(x + 150, y + 1, 52, 13, 3, iM);
-  rd_lbl(x + 176, y + 48, "OUT", dy_ink, 0.8);
+  ui_guardclick(1600 + iT, iG, x + 50 - rd_iotx, y + 22, r + 9);
+  sprintf(#rdv, "%.0f%%", slider(iS)); dy_knob(x + 148, y + 22, r, iS, 0, 100, 0, 0, rd_ioc2, "SAT", #rdv);
+  gfx_setfont(8, "Trebuchet MS", ui_fs4 * ui_okfs, 'b'); gfx_setfont(4);   // (fonts as the old OUT keys left them)
   dy_kst = k0 ? k0 : 7;
 );
 
 // ---------- the IN / OUT strip for the themed panels (follows the colour theme and HW / FLAT) ----------
 function ui_io(x, y, iT, iG, iS, iM) (
-  ui_kcap = 0x3A3B40; ui_knob((x + 20) * sc, (y + 30) * sc, iT, -24, 12, 0, 0, "TRIM", "%+.1f dB");
-  ui_guardclick(iT, iG, x + 20, y + 30, 20.5);   // click TRIM for GUARD; its LED sits at the knob's upper right
-  ui_kcap = 0xD8B040; ui_knob((x + 104) * sc, (y + 30) * sc, iS, 0, 100, 0, 0, "SAT", "%.0f%%");
-  ui_outkeys(x + 140, y + 6, 54, 14, 3, iM);
-  gfx_setfont(4); ui_cola(C_INK, 0.8); ui_text((x + 167) * sc, (y + 59) * sc, "OUT");
+  ui_kcap = 0x3A3B40; ui_knob((x + 46) * sc, (y + 30) * sc, iT, -24, 12, 0, 0, "TRIM", "%+.1f dB");
+  ui_guardclick(iT, iG, x + 46, y + 30, 20.5);   // click TRIM for GUARD; its LED sits at the knob's upper right
+  ui_kcap = 0xD8B040; ui_knob((x + 142) * sc, (y + 30) * sc, iS, 0, 100, 0, 0, "SAT", "%.0f%%");
+  gfx_setfont(8, "Trebuchet MS", ui_fs4 * ui_okfs, 'b'); gfx_setfont(4);   // (fonts as the old OUT keys left them)
 );

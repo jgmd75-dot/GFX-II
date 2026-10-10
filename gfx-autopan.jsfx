@@ -41,8 +41,8 @@ slider17:0<0,100,1>-Band sat (%)
 slider18:30<0,100,1>-Bias (%)
 slider19:120<40,400,1>-Sat low band (Hz)
 slider20:6000<2000,16000,10>-Sat high band (Hz)
-slider21:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider22:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider21:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider22:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider23:0<-24,12,0.1>-Input trim (dB)
 slider24:1<0,1,1{Off,On}>-Input guard
 slider25:50<0,100,1>-Drift (%)
@@ -74,7 +74,7 @@ function update() (
   out_t = 10 ^ (slider15 / 20);
   mix_t = slider16 / 100;
   in_setup(slider23, slider24);
-  ost_setup(slider17 / 100, slider18 / 100, slider19, slider20, slider21, slider22);
+  ost_setup(slider17 / 100, slider18 / 100, slider19, slider20, slider21, 0);   // output stage: straight through
   lfo1.lfo_setup(shape, smooth);
 );
 
@@ -193,7 +193,7 @@ mode == 1 ? (
 gL += (gtL - gL) * sm2;
 gR += (gtR - gR) * sm2;
 
-// output stage: band saturation -> output gain -> clipper / limiter
+// output stage: band saturation -> output gain (no clip: straight through)
 oL = ostL.ost_band(inL * (1 - mix_s) + srcL * gL * mix_s) * in_comp * out_s;
 oR = ostR.ost_band(inR * (1 - mix_s) + srcR * gR * mix_s) * in_comp * out_s;
 ost_out(oL, oR);

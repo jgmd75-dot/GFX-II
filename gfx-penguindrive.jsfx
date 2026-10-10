@@ -34,8 +34,8 @@ slider14:0<0,100,1>-Band Sat (%)
 slider15:30<0,100,1>-Bias (%)
 slider16:120<40,400,1>-Sat Low Band (Hz)
 slider17:6000<2000,16000,10>-Sat High Band (Hz)
-slider18:-0.3<-24,0,0.1>-Ceiling / Limit Threshold (dB)
-slider19:1<0,2,1{Off,Clip,Limit}>-Output Stage
+slider18:-0.3<-24,0,0.1>-Ceiling (dB)
+slider19:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider20:0<-24,12,0.1>-Input Trim (dB)
 slider21:1<0,1,1{Off,On}>-Input Guard
 slider22:20<20,500,1>-Wet Low Cut (Hz, 20 = off)
@@ -109,7 +109,7 @@ function update() (
   
   out_t = 10 ^ (slider13 / 20);
   in_setup(slider20, slider21);
-  ost_setup(slider14 / 100, slider15 / 100, slider16, slider17, slider18, slider19);
+  ost_setup(slider14 / 100, slider15 / 100, slider16, slider17, slider18, 1);   // output stage: CLIP, always on
 );
 
 function load_preset(p) (

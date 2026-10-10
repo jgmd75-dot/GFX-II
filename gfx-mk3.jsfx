@@ -72,7 +72,7 @@ slider20:1<0,1,1{Off,On}>-Peak Reversion Correction
 slider21:0<0,1,1{EQ then Comp,Comp then EQ}>-Order
 slider22:0<-24,12,0.1>-Output (dB)
 slider23:0<0,2,1{Flat,Lift,Dip}>-Voice 2k
-slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider24:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider25:0<0,1,1{Off,On}>-Fizz
 
 in_pin:Left
@@ -141,7 +141,7 @@ cHp = alloc(5); cLf = alloc(5); cMf = alloc(5); cHf = alloc(5);
 sHpL = alloc(4); sHpR = alloc(4);
 sLfL = alloc(4); sLfR = alloc(4); sMfL = alloc(4); sMfR = alloc(4); sHfL = alloc(4); sHfR = alloc(4);
 cVb = alloc(5); sVbL = alloc(4); sVbR = alloc(4);
-ost_init(alloc(4096));                              // GFX output stage (clip / limit)
+ost_init(alloc(4096));                              // GFX output stage
 cBP(cVb, 2000, 0.7);
 // FIZZ: high-pass into the exciter, high-pass after it, a peak at 8 kHz
 cFz1 = alloc(5); cFz2 = alloc(5); cFz3 = alloc(5);
@@ -263,7 +263,7 @@ vcMode = floor(slider23 + 0.5);
 fzOn = slider25 > 0.5;
 ord = slider21 > 0.5;
 outG = db2g(slider22);
-ost_setup(0, 0, 120, 6000, -0.3, floor(slider24 + 0.5));   // no band saturation: clip / limit only
+ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 
 eqs = slider5 + slider7*3 + slider8*7 + slider9*11 + slider10*13 + slider11*17 + slider12*19;
 eqs != lastEq ? (
@@ -819,17 +819,7 @@ loop(6,
   k < 5 ? ( ui_col(hw ? ui_mix(PNL, INK, 0.3) : ui_mix(NB, NTX, 0.3)); gfx_line((fx_ + 4)*qs, (fy_ + k*38 + 15)*qs, (fx_ + 4)*qs, (fy_ + k*38 + 41)*qs, 1); );
   k += 1;
 );
-mknob(22, 1040, 456, 32, -24, 12, 0, 0, CAP_YEL, "OUTPUT", fdb(slider22)); touch(22, "OUTPUT", fdb(slider22));
-// OUT stage keys: OFF / CLIP / LIMIT (house keys on the hardware panel); CLIP flashes red while it clips
-gfx_setfont(8); ui_col(hw ? INK2 : NTX); TC(1144, 398, "OUT");
-hw ? (
-  ui_outkeys(1112*0.75, 416*0.75, 64*0.75, 20, 4, 24);
-) : (
-  mk_clp = ost_clipped ? 1 : mk_clp*0.88; ost_clipped = 0;
-  mkey(1112, 416, 64, 26, "OFF", slider24 < 0.5, BLU) ? ( setv(24, 0); setmsg("OUTPUT STAGE", "OFF"); );
-  mkey(1112, 448, 64, 26, "CLIP", (slider24 > 0.5 && slider24 < 1.5) || mk_clp > 0.1, mk_clp > 0.1 ? RED : YEL) ? ( setv(24, 1); setmsg("OUTPUT STAGE", "CLIP -0.3 dB"); );
-  mkey(1112, 480, 64, 26, "LIMIT", slider24 > 1.5, AMB) ? ( setv(24, 2); setmsg("OUTPUT STAGE", "LIMIT -0.3 dB"); );
-);
+mknob(22, 1100, 456, 32, -24, 12, 0, 0, CAP_YEL, "OUTPUT", fdb(slider22)); touch(22, "OUTPUT", fdb(slider22));
 gfx_setfont(8, "Trebuchet MS", 13.5*qs, 'b');
 
 pk_end();

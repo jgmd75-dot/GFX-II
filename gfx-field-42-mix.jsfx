@@ -79,8 +79,8 @@ slider49:0<0,100,1>-Band sat (%)
 slider50:30<0,100,1>-Bias (%)
 slider51:120<40,400,1>-Sat low band (Hz)
 slider52:6000<2000,16000,10>-Sat high band (Hz)
-slider53:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider54:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider53:-0.3<-24,0,0.1>-Ceiling (dB)
+slider54:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:1-2 left
 in_pin:1-2 right
@@ -173,7 +173,7 @@ function update() (
   tone_on = slider41 > 0.5; tone_f = slider42 < 0.5 ? 1000 : slider42 < 1.5 ? 400 : 100; tone_a = 10 ^ ((slider43 - 20) / 20) * sqrt(2);
   drift_macro(slider44);
   l_at = 1 - exp(-1 / (max(slider47, 0.05) * 0.001 * srate)); l_rl = 1 - exp(-1 / (slider48 * 0.001 * srate));
-  ost_setup(slider49 / 100, slider50 / 100, slider51, slider52, slider53, floor(slider54 + 0.5));
+  ost_setup(slider49 / 100, slider50 / 100, slider51, slider52, slider53, 1);   // output stage: CLIP, always on
 );
 
 f4_ia = 1 - exp(-2 * $pi * 110 / srate);

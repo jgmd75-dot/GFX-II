@@ -13,7 +13,7 @@ desc:GFX Haas Doubler [stereo doubler]
 // amounts (50% = the drift settings, 100% = twice, 0 = none) and speeds the wander up with them.
 // Detune: each side pitch-shifted by +/- cents (a dual-tap delay-line shifter), for the classic
 // detuned-doubler width. In L/R mode the dry side takes its side's detune too.
-// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIM) sit on the panel.
+// IN / OUT: TRIM (with the GUARD key) and SAT sit on the panel.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -43,8 +43,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:0<-24,12,0.1>-Input trim (dB)
 slider23:1<0,1,1{Off,On}>-Input guard
 slider24:0<-50,50,0.1>-Detune left (cents)
@@ -122,7 +122,7 @@ function update() local(w0, cw, al, q0) (
   monochk = slider14;
   dryon = slider15;
   in_setup(slider22, slider23);
-  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, slider21);
+  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, 0);   // output stage: straight through
   // detune follows the side each copy sits on
   cA = sideA < 0 ? slider24 : slider25; cB = sideA < 0 ? slider25 : slider24;
   rtA = 1 - 2 ^ (cA / 1200); rtB = 1 - 2 ^ (cB / 1200);
@@ -249,7 +249,7 @@ mid  = 0.5 * (oL + oR);
 side = 0.5 * (oL - oR) * wid_s;
 monochk ? side = 0;
 hd_dst ? ( hd_dkg = hd_dk * hd_dk * (3 - 2 * hd_dk); mid *= hd_dkg; side *= hd_dkg; );
-// output stage: band saturation -> output gain -> clipper / limiter
+// output stage: band saturation -> output gain (no clip: straight through)
 oL = ostL.ost_band(mid + side) * in_comp * out_s;
 oR = ostR.ost_band(mid - side) * in_comp * out_s;
 ost_out(oL, oR);

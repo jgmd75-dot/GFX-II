@@ -16,7 +16,6 @@ desc:GFX Skye [broadcast parametric EQ]
 // EQ IN       the whole equaliser, filters included, in or out (the output stage stays in).
 // DRIFT       the supply voltage wanders: the band gains and centres (and the filter corners) ease very slightly with it, and the
 //             op-amp headroom rises and falls (a hot signal softens a little more when the rail sags).
-// OUT         the GFX output stage: OFF / CLIP (soft clip at -0.3 dBFS) / LIMIT (3 ms lookahead).
 //
 // GUI: drag knobs (Shift = fine), double-click / Ctrl-click = reset. Click the LCD for the preset list.
 // S / M / L / ? = size and help.
@@ -49,7 +48,7 @@ slider17:1<0,1,1{Out,In}>-Band 4 In
 slider18:0<-12,12,0.1>-Output (dB)
 slider19:1<0,1,1{Out,In}>-EQ In
 slider20:20<0,100,1>-Drift (%)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:30<10,1000,1>-HPF Freq (Hz)
 slider23:0<0,2,1{x1 (12 dB/oct),x2 (24 dB/oct),x4 (48 dB/oct)}>-HPF Slope
 slider24:0<0,1,1{Out,In}>-HPF In
@@ -96,7 +95,7 @@ function lpf_set(f) local(n) (
 function setup() (
   eqin = slider19 > 0.5; drA = slider20/100;
   outg = db2g(slider18);
-  ost_setup(0, 0, 120, 6000, -0.3, floor(slider21 + 0.5));
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 // the band filters, re-set each block with the supply drift folded in
 function bands() local(v, fk, gk, q, t) (
@@ -264,7 +263,7 @@ function filters(cx) (
 // ---------------------------------------------------------------------
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
 
-// ---- top strip: name, presets, EQ IN, drift, out stage, size ----
+// ---- top strip: name, presets, EQ IN, drift, size ----
 ui_col(0x1E2023); R(0, 0, 1648, 76);
 gfx_gradrect(0, 0, 1648*qs, 30*qs, 1, 1, 1, 0.05, 0, 0, 0, 0, 0, 0, 0, -0.05/(30*qs));
 ui_col(0x3D70CC); CIRC(40, 38, 22, 1);

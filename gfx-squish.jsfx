@@ -7,7 +7,7 @@ desc:GFX Squish [comp pedal]
 // SQUISH. A stompbox compressor with two characters (the sound is designed from scratch, in the spirit of the
 // classic orange / red OTA guitar sustainer pedals and the modern boutique studio-style pedal compressors).
 // Signal path: input (trim + guard) -> stereo-linked detector -> gain-reduction VCA -> BLEND (dry / wet) ->
-// TONE -> LEVEL -> OUT stage. Zero latency (OUT = OFF or CLIP), so it is safe for live guitar monitoring.
+// TONE -> LEVEL -> OUT. Zero latency, so it is safe for live guitar monitoring.
 // Both modes have the same four controls:
 //             SENS    - how early it grabs (threshold about -10 to -40 dBFS) and how hard the OTA is driven.
 //             SUSTAIN - how much it squashes (the ratio; the knee tightens as it goes up).
@@ -25,7 +25,7 @@ desc:GFX Squish [comp pedal]
 //         wander very slightly (up to about +/- 1.5 dB of threshold at 100 %).
 // Bypass (REAPER parameter list only, slider 10): a 10 ms crossfade, the bypass takes the input before TRIM;
 //         the OUT stage stays in. BLEND is the big knob beside the IN / OUT tray.
-// IN / OUT: TRIM (click it for GUARD), DRIFT and the OUT stage (OFF / CLIP / LIMIT; LIMIT adds 3 ms latency).
+// IN / OUT: TRIM (click it for GUARD) and DRIFT.
 //
 // GUI: drag knobs (Shift = fine), double-click = reset. Click the LCD for the preset list. S / M / L / ? = size and help.
 
@@ -49,7 +49,7 @@ slider9:15<0,100,1>-Drift (%)
 slider10:1<0,1,1{Bypass,On}>-On / bypass
 slider11:0<-24,12,0.1>-Input trim (dB)
 slider12:1<0,1,1{Off,On}>-Input guard
-slider13:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider13:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -97,7 +97,7 @@ function update() (
   sq_dr = slider9 / 100;
   sq_on = slider10 > 0.5;
   in_setup(slider11, slider12);
-  ost_setup(0, 0.3, 120, 6000, -0.3, slider13);
+  ost_setup(0, 0.3, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 // ---------- presets: mode, sens, sustain, attack, release, blend, tone, level, drift (IN / OUT left alone) ----------
@@ -224,18 +224,6 @@ dy_ink = INK; dy_nov = 1;
 
 function sg_setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
 
-// the OUT stage keys, side by side (OFF / CLIP / LIMIT); CLIP flashes red while the output clips
-function sg_outkeys(x, y, w, h, gap) local(i, c, xx) (
-  ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-  gfx_setfont(8, "Trebuchet MS", ui_fs4 * 0.85, 'b');
-  i = 0; loop(3,
-    xx = x + i * (w + gap);
-    c = i == 0 ? 0x3A9CFF : i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-    ui_okey(xx, y, w, h, slider13 == i || (i == 1 && ui_okclp > 0.1), c) ? sg_setv(13, i);
-    gfx_setfont(8); ui_col(0x141414); ui_keytext((xx + w * 0.5) * sc, (y + h * 0.5) * sc, i == 0 ? "OFF" : i == 1 ? "CLIP" : "LIMIT");
-    i += 1; );
-);
-
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
 
 // ---------- header strip: GFX, name, the house preset bar, S / M / L / ? ----------
@@ -289,12 +277,11 @@ dy_knob(224, 326, 25, 8, -24, 12, 0, 0, sg_cap, "LEVEL", #sg_v);
 pk_inset(312 * sc, 284 * sc, 108 * sc, 108 * sc, SHC);
 dy_kst = 20;
 sprintf(#sg_v, "%+.1f dB", slider11);
-dy_knob(338, 320, 14, 11, -24, 12, 0, 0, 0x9DA2A8, "TRIM", #sg_v);
-ui_guardclick(1600 + 11, 12, 338, 320, 23);           // click TRIM for GUARD
+dy_knob(338, 334, 14, 11, -24, 12, 0, 0, 0x9DA2A8, "TRIM", #sg_v);
+ui_guardclick(1600 + 11, 12, 338, 334, 23);           // click TRIM for GUARD
 sprintf(#sg_v, "%.0f%%", slider9);
-dy_knob(394, 320, 14, 9, 0, 100, 15, 0, 0x9DA2A8, "DRIFT", #sg_v);
+dy_knob(394, 334, 14, 9, 0, 100, 15, 0, 0x9DA2A8, "DRIFT", #sg_v);
 dy_kst = 1;
-sg_outkeys(316, 370, 32, 15, 3);
 
 // ---------- tray D: gain reduction ----------
 pk_inset(436 * sc, 126 * sc, 178 * sc, 138 * sc, SHA);

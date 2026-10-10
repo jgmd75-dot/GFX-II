@@ -85,8 +85,8 @@ slider70:0<0,100,1>-Band sat (%)
 slider71:30<0,100,1>-Bias (%)
 slider72:120<40,400,1>-Sat low band (Hz)
 slider73:6000<2000,16000,10>-Sat high band (Hz)
-slider74:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider75:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider74:-0.3<-24,0,0.1>-Ceiling (dB)
+slider75:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider76:20<20,500,1>-Mono below (Hz, 20 = off)
 slider77:0<0,100,1>-Stereo width (%)
 
@@ -1243,7 +1243,7 @@ function update() (
   sens = slider11/100; tune = 2^(slider12/1200);
   drift = 0.1; chan = slider4;                  // drift: fixed and subtle
   out_t = 10^(slider2/20);
-  ins_output_setup(70); ins_stereo_setup(76);
+  ins_output_setup(70); ins_stereo_setup(76);   // output stage: CLIP, always on
   rv_update(); mr_update();
 );
 // the sound engine for a patch (no sliders touched)

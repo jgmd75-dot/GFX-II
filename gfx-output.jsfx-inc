@@ -1,27 +1,28 @@
 desc:GFX Output stage (include)
 //author: JGWizrad / Garden FX (GFX)
 //
-// Band-focused "loose knit" saturation + clipper / lookahead limiter.
+// Band-focused "loose knit" saturation + clipper.
 //   - Signal splits into low / mid / high (subtractive, so it sums back perfectly).
 //   - Only the low and high bands are saturated; mids pass clean.
 //   - Saturation is a wide, soft biased curve. The bias floats with the signal
 //     envelope (loosens as level rises), giving even harmonics that breathe.
-//   - Final stage: Off, Clip (soft, zero latency) or Limit (3 ms lookahead, PDC reported).
+//   - Final stage: a soft clipper (CLIP) or straight through, zero latency. Each unit fixes its mode in code
+//     (CLIP always on, or straight through) and has no keys for it; its old mode slider is not used.
 //     CLIP: ceil_db is the ceiling the peaks are clipped at.
-//     LIMIT: ceil_db is the THRESHOLD of a brickwall limiter: the signal is raised by (-0.3 - threshold) dB
-//     into a fixed -0.3 dBFS ceiling, so pulling it down limits harder and gets louder, peaks held at -0.3.
-//     (Set ost_ceilmode = 1 after ost_init to keep ceil_db as the limiter's ceiling instead.)
+//     Should the mode ever change while running, nothing steps: the clip ceiling glides (1 dB / ms) - CLIP comes
+//     in from just above the signal's level down to the ceiling, straight through lets it rise to +30 dBFS first.
+//     mode 0 or -1: straight through; 1 (or more): CLIP.
 //
 // Usage in a plugin:
 //   import gfx-output.jsfx-inc
 //   @init    ost_init(memory_offset);  ostL.ost_ch_init(); ostR.ost_ch_init();
-//            (needs 4096 free memory slots from memory_offset)
-//   @block   ost_setup(sat 0..1, bias 0..1, low_hz, high_hz, ceiling_db, mode 0/1/2);
+//            (memory_offset is no longer used: the stage needs no buffer)
+//   @block   ost_setup(sat 0..1, bias 0..1, low_hz, high_hz, ceiling_db, mode 1 = CLIP / 0 = straight);
 //   @sample  l = ostL.ost_band(l); r = ostR.ost_band(r);   // band saturation
 //            (apply output gain here)
-//            ost_out(l, r); spl0 = ost_l; spl1 = ost_r;      // clipper / limiter
-//   Display: ost_gr (min gain since last reset, set it back to 1 after reading),
-//            ost_clipped (1 if the clipper engaged; reset to 0 after reading).
+//            ost_out(l, r); spl0 = ost_l; spl1 = ost_r;      // clipper
+//   Display: ost_clipped (1 if the clipper engaged; reset to 0 after reading).
+//            (ost_gr stays at 1: kept for older display code.)
 
 @init
 
@@ -42,15 +43,11 @@ function ost_clip(x, c) local(a, k) (
 );
 
 function ost_init(mem) (
-  ost_buf = mem; ost_bsz = 2048; ost_bmask = ost_bsz - 1;
-  memset(ost_buf, 0, ost_bsz * 2);
-  ost_wp = 0; ost_g = 1; ost_hg = 1; ost_hc = 0; ost_gr = 1; ost_clipped = 0;
-  ost_N = min(floor(0.003 * srate), ost_bsz - 1);
-  ost_att = 1 - exp(-5 / ost_N);
-  ost_rel = 1 - exp(-1 / (0.08 * srate));
+  ost_gr = 1; ost_clipped = 0;
   ost_envc = 1 - exp(-1 / (0.15 * srate));
   ost_lastlf = -1; ost_lasthf = -1;
-  ost_lg = 1; ost_lgs = 1; ost_lgc = 1 - exp(-1 / (0.03 * srate)); ost_ceilmode = 0;
+  ost_kd = 10 ^ (-1 / (20 * 0.001 * srate)); ost_ku = 1 / ost_kd;   // ceiling glide: 1 dB per ms
+  ost_xi = 0;                                                  // the first ost_setup snaps to its mode
 );
 
 function ost_setup(sat, bias, lf, hf, ceil_db, mode) local(w0, cw, alp, q0) (
@@ -58,12 +55,10 @@ function ost_setup(sat, bias, lf, hf, ceil_db, mode) local(w0, cw, alp, q0) (
   ost_drv = 1 + 12 * sat * sqrt(sat);                // starts biting around -20 dBFS at full SAT
   ost_wet = min(sat * 3, 1);
   ost_bias = bias * 0.3;
-  mode == 2 && !ost_ceilmode ? (
-    ost_ceil = 10 ^ (-0.3 / 20); ost_lg = 10 ^ ((-0.3 - ceil_db) / 20);   // threshold: gain into the limiter
-  ) : (
-    ost_ceil = 10 ^ (ceil_db / 20); ost_lg = 1;
-  );
-  ost_mode = mode;
+  ost_cc = 10 ^ (ceil_db / 20);                              // clipper ceiling
+  ost_ceil = ost_cc;
+  ost_mode = mode >= 0.5;                                    // 0 / -1: straight through; 1 (or more): CLIP
+  !ost_xi ? ( ost_st = ost_mode; ost_xi = 1; );             // ost_st: 0 off, 1 clip, 2 / 3 ceiling gliding down / up
   lf != ost_lastlf ? (
     ost_lastlf = lf;
     w0 = 2 * $pi * min(lf, srate * 0.45) / srate; cw = cos(w0); alp = sin(w0) / (2 * 0.70710678); q0 = 1 + alp;
@@ -77,7 +72,7 @@ function ost_setup(sat, bias, lf, hf, ceil_db, mode) local(w0, cw, alp, q0) (
     ost_ha1 = -2 * cw / q0; ost_ha2 = (1 - alp) / q0;
   );
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = mode == 2 ? ost_N : 0;
+  pdc_delay = 0;                                             // no latency in any mode
 );
 
 function ost_ch_init() instance(lz1, lz2, hz1, hz2, dcx, dcy, env) (
@@ -106,25 +101,23 @@ function ost_band(x) instance(lz1, lz2, hz1, hz2, dcx, dcy, env) local(lo, rest,
   lo + dcy + mid + hi;
 );
 
-// stereo-linked clipper / limiter; results in ost_l, ost_r
-function ost_out(l, r) local(c, pk, gt, rp, del_l, del_r) (
-  c = ost_ceil;
-  ost_mode == 2 ? (
-    ost_lgs += (ost_lg - ost_lgs) * ost_lgc; l *= ost_lgs; r *= ost_lgs;
-    ost_buf[ost_wp] = l; ost_buf[ost_bsz + ost_wp] = r;
-    rp = (ost_wp - ost_N + ost_bsz) & ost_bmask;
-    del_l = ost_buf[rp]; del_r = ost_buf[ost_bsz + rp];
-    ost_wp = (ost_wp + 1) & ost_bmask;
-    pk = max(abs(l), abs(r));
-    gt = pk > c ? c / pk : 1;
-    gt < ost_hg ? ( ost_hg = gt; ost_hc = ost_N; ) : ( ost_hc > 0 ? ost_hc -= 1 : ost_hg = gt; );
-    ost_g += (ost_hg - ost_g) * (ost_hg < ost_g ? ost_att : ost_rel);
-    ost_gr = min(ost_gr, ost_g);
-    l = min(max(del_l * ost_g, -c), c);
-    r = min(max(del_r * ost_g, -c), c);
-  ) : ost_mode == 1 ? (
-    l = ost_clip(l, c);
-    r = ost_clip(r, c);
+// clipper; results in ost_l, ost_r. OFF <-> CLIP: the ceiling glides (see the top), so nothing steps.
+function ost_out(l, r) (
+  ost_mode ? (
+    ost_st == 1 ? (
+      l = ost_clip(l, ost_cc); r = ost_clip(r, ost_cc);
+    ) : (
+      ost_st == 0 ? ost_ct = max(1.25 * max(abs(l), abs(r)), ost_cc)   // from just above the signal: no step
+                  : ost_ct = max(ost_ct * ost_kd, ost_cc);
+      ost_st = ost_ct > ost_cc ? 2 : 1;
+      l = ost_clip(l, ost_ct); r = ost_clip(r, ost_ct);
+    );
+  ) : ost_st ? (
+    ost_ct = (ost_st == 1 ? ost_cc : ost_ct) * ost_ku;
+    ost_ct < 31.6 ? (                                        // until +30 dBFS, then out
+      ost_st = 3;
+      l = ost_clip(l, ost_ct); r = ost_clip(r, ost_ct);
+    ) : ost_st = 0;
   );
   ost_l = l; ost_r = r;
 );

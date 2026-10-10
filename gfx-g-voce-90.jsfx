@@ -41,8 +41,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-Ceiling (dB)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:20<20,500,1>-Mono below (Hz, 20 = off)
 slider23:0<0,100,1>-Stereo width (%)
 
@@ -190,7 +190,7 @@ function update() (
   w_mode = slider12;
   drift = slider13 / 100;
   vol_t = 10 ^ (slider14 / 20);
-  ins_output_setup(16); ins_stereo_setup(22);
+  ins_output_setup(16); ins_stereo_setup(22);   // output stage: CLIP, always on
 );
 
 // ---------- GUI helpers ----------

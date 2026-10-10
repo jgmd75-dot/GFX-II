@@ -18,7 +18,7 @@ desc:GFX Model 44 [tape channel strip]
 //                 extends the top end, tightens the sub-bass and keeps transients punchier.
 //         NR    - 2:1 / 1:2 compander noise reduction, in / out: gentler and less pumpy than an 80s unit.
 // MIX     - blend of the coloured signal against the dry input.
-// IN/OUT  - input TRIM and GUARD, OUTPUT level, and the output band-saturation / clipper / limiter stage.
+// IN/OUT  - input TRIM and GUARD, OUTPUT level, and the output band-saturation / clipper stage.
 // PRESETS.
 
 import gfx-output.jsfx-inc
@@ -41,8 +41,8 @@ slider11:0<0,100,1>-Band sat (%)
 slider12:30<0,100,1>-Bias (%)
 slider13:120<40,400,1>-Sat low band (Hz)
 slider14:6000<2000,16000,10>-Sat high band (Hz)
-slider15:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider15:-0.3<-24,0,0.1>-Ceiling (dB)
+slider16:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider17:0<-24,12,0.1>-Input trim (dB)
 slider18:1<0,1,1{Off,On}>-Input guard
 
@@ -118,7 +118,7 @@ function update() (
   tpR.pe.bq_set(3, 2000, 0.6, 10); tpR.de.bq_set(3, 2000, 0.6, -10);
   tpL.vx_tape_set(); tpR.vx_tape_set();
   in_setup(slider17, slider18);
-  ost_setup(slider11 / 100, slider12 / 100, slider13, slider14, slider15, slider16);
+  ost_setup(slider11 / 100, slider12 / 100, slider13, slider14, slider15, 1);   // output stage: CLIP, always on
 );
 
 // ---------- presets (gain, mid freq, mid gain, treble, bass, drive, speed, nr, mix - output is left alone) ----------

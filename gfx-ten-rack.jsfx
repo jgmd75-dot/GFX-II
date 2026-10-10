@@ -30,7 +30,7 @@ desc:GFX Ten Rack [pedalboard]
 // ROUTING: SERIES 1 > 2 > ... > 6; PARALLEL - every slot fed from the input, the engaged slots averaged at the
 //   output; SPLIT - slots 1-3 (chain A) in parallel with slots 4-6 (chain B), blended with A/B BALANCE.
 //   The path display above the pedals shows the signal flow. Changing a pedal or the routing crossfades.
-// MASTER: MIX (dry / rack), OUTPUT, DRIFT, and the house IN / OUT strip (TRIM + GUARD, SAT, OFF / CLIP / LIMIT).
+// MASTER: MIX (dry / rack), OUTPUT, DRIFT, and the house IN / OUT strip (TRIM + GUARD, SAT; the output soft clip is always on).
 // DRIFT: the bucket-brigade clocks (delay times and BBD tone) and the LFO rates of every slot wander slowly and
 //   independently: at 100% the LFO rates by up to +/-25%, the clocks by up to +/-3%. 0% = rock steady.
 
@@ -42,8 +42,8 @@ slider5:25<0,100,1>-Drift (%)
 slider6:0<-24,12,0.1>-Input trim (dB)
 slider7:1<0,1,1{Off,On}>-Input guard
 slider8:0<0,100,1>-Band sat (%)
-slider9:1<0,2,1{Off,Clip,Limit}>-Output stage
-slider10:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider9:1<0,1,1{Off,Clip}>-(unused, was output stage)
+slider10:-0.3<-24,0,0.1>-Ceiling (dB)
 
 slider20:2<0,5,1{CF-1 Chorus/Flanger,TW-2 Twin Chorus,OC-3 Octave,SD-4 Session Drive,DS-5 Distortion,MD-6 Mod Delay}>-Slot 1 pedal
 slider21:0<0,1,1{Bypass,On}>-Slot 1 on
@@ -512,7 +512,7 @@ tk_bal = (slider2 + 100) / 200;
 mix_t = slider3 / 100; out_t = 10 ^ (slider4 / 20);
 tk_drift = slider5 / 100;
 in_setup(slider6, slider7);
-ost_setup(slider8 / 100, 0.3, 120, 6000, slider10, slider9);
+ost_setup(slider8 / 100, 0.3, 120, 6000, slider10, 1);   // output stage: CLIP, always on
 
 // drift generators (very slow: advanced once per block)
 tk_dinc = samplesblock / srate * (0.6 + 0.8 * tk_drift);
