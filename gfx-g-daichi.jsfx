@@ -363,7 +363,7 @@ function update() local(r, g) (
   dh_key = slider21 / 100; dh_fenv = slider22 / 100; dh_fvel = slider23 / 100;
   dh_fa4 = dh_c4(vo_coef(slider24)); dh_fd4 = dh_c4(vo_coef(slider25)); dh_fs = slider26 / 100; dh_fr4 = dh_c4(vo_coef(slider27));
   dh_aa = vo_coef(slider28); dh_ad = vo_coef(slider29); dh_as = slider30 / 100; dh_ar = vo_coef(slider31);
-  dh_gain = 10 ^ (slider32 / 20) * 0.62; dh_avel = slider33 / 100;
+  dh_gain = 10 ^ (slider32 / 20) * 0.9; dh_avel = slider33 / 100;
   dh_l1s = slider34; dh_l1a = slider38 / 100; dh_l1d = slider39; dh_k1 = slider40;
   dh_l1b = dh_lfo_beats(slider37); dh_l1y = slider36;
   dh_l2s = slider41; dh_l2a = slider45 / 100; dh_l2d = slider46; dh_k2 = slider47;
@@ -672,13 +672,268 @@ ost_out(dh_L, dh_R);
 spl0 = ost_l; spl1 = ost_r;
 dh_pk = max(dh_pk, max(abs(spl0), abs(spl1)));
 
-@gfx 1200 560
-ui_begin(1200, 560);
-ui_col(0x8E9196); gfx_rect(0, 0, gfx_w, gfx_h);
-rd_badge(36, 32, 16, 0xF4F5F2, 0x55585D);
-rd_title(62, 16, "G-DAICHI", 26, 0x26282B);
-gk_ = pk_preset(330 * sc, 16 * sc, 480 * sc, 34 * sc, pr_cur, #dh_pm);
+@gfx 1240 560
+ui_thm = 13; ui_hw = 1;
+ui_begin(1240, 560);
+
+// ---------- software grey: palette ----------
+PANEL = 0xB9BCC0; HDR = 0xA9ACB1; SHA = 0x9DA1A7; SHB = 0x979BA1; SHC = 0xA2A6AC;
+STRIP = 0x45494F; STINK = 0xEEEFEA; INK = 0x1C1E21; DIM = 0x3A3D42;
+LIT = 0xFF7A3C; PTR = 0xEEEFEA; CAPG = 0x9DA2A8;
+dy_ink = INK; dy_bg = SHA; dy_nov = 1; dy_kst = 0; dy_ntick = 11; rd_sqbg = 0x2A2C30;
+
+// ---------- panel helpers (GUI thread only) ----------
+function g_box(x, y, w, h, shade, title) (
+  pk_inset(x * sc, y * sc, w * sc, h * sc, shade);
+  ui_col(STRIP); gfx_rect(x * sc, y * sc, w * sc, 20 * sc);
+  ui_cola(0xFFFFFF, 0.10); gfx_rect(x * sc, y * sc, w * sc, 1 * sc);
+  gfx_setfont(4); ui_col(STINK); gfx_x = (x + 8) * sc; gfx_y = (y + 4) * sc; gfx_drawstr(title);
+);
+function g_set(idx, v) ( slider(idx) = v; ui_auto(idx); );
+// a knob, value shown on hover; st = 1 rounds it to whole steps
+function g_kn(cx, cy, r, idx, lo, hi, def, lg, label, fmt, st) (
+  sprintf(#gv, fmt, slider(idx)); dy_knob(cx, cy, r, idx, lo, hi, def, lg, PTR, label, #gv);
+  st ? ( g_r = floor(slider(idx) + 0.5); g_r != slider(idx) ? slider(idx) = g_r; );
+);
+// wave glyphs on the keys: 0 sine 1 triangle 2 saw 3 square 4 noise 5 s&h
+function g_glyph(cx, cy, t, col) local(i, x0, y0, x1, y1, w, hh, k) (
+  ui_col(col); w = 22; hh = 6; k = 0;
+  loop(2,
+    t == 0 ? ( i = 0; loop(22, x0 = cx - 11 + i; x1 = x0 + 1;
+               gfx_line(x0 * sc, (cy + k - sin(i / 22 * 2 * $pi) * hh) * sc, x1 * sc, (cy + k - sin((i + 1) / 22 * 2 * $pi) * hh) * sc, 1); i += 1; ); ) :
+    t == 1 ? ( gfx_line((cx - 11) * sc, (cy + k) * sc, (cx - 5.5) * sc, (cy + k - hh) * sc, 1); gfx_line((cx - 5.5) * sc, (cy + k - hh) * sc, (cx + 5.5) * sc, (cy + k + hh) * sc, 1);
+               gfx_line((cx + 5.5) * sc, (cy + k + hh) * sc, (cx + 11) * sc, (cy + k) * sc, 1); ) :
+    t == 2 ? ( gfx_line((cx - 11) * sc, (cy + k + hh) * sc, cx * sc, (cy + k - hh) * sc, 1); gfx_line(cx * sc, (cy + k - hh) * sc, cx * sc, (cy + k + hh) * sc, 1);
+               gfx_line(cx * sc, (cy + k + hh) * sc, (cx + 11) * sc, (cy + k - hh) * sc, 1); gfx_line((cx + 11) * sc, (cy + k - hh) * sc, (cx + 11) * sc, (cy + k + hh) * sc, 1); ) :
+    t == 3 ? ( gfx_line((cx - 11) * sc, (cy + k + hh) * sc, (cx - 11) * sc, (cy + k - hh) * sc, 1); gfx_line((cx - 11) * sc, (cy + k - hh) * sc, cx * sc, (cy + k - hh) * sc, 1);
+               gfx_line(cx * sc, (cy + k - hh) * sc, cx * sc, (cy + k + hh) * sc, 1); gfx_line(cx * sc, (cy + k + hh) * sc, (cx + 11) * sc, (cy + k + hh) * sc, 1);
+               gfx_line((cx + 11) * sc, (cy + k + hh) * sc, (cx + 11) * sc, (cy + k - hh) * sc, 1); ) :
+    t == 4 ? ( i = 0; x0 = cx - 11; y0 = cy + k; loop(11, x1 = cx - 11 + (i + 1) * 2; y1 = cy + k + (rd_hash(i * 3.7 + 1) * 2 - 1) * hh;
+               gfx_line(x0 * sc, y0 * sc, x1 * sc, y1 * sc, 1); x0 = x1; y0 = y1; i += 1; ); ) :
+    ( y0 = cy + k + hh * 0.2; i = 0; loop(4, y1 = cy + k + (i == 0 ? -0.8 : i == 1 ? 0.5 : i == 2 ? -0.2 : 0.9) * hh;
+               gfx_line((cx - 11 + i * 5.5) * sc, y0 * sc, (cx - 11 + i * 5.5) * sc, y1 * sc, 1);
+               gfx_line((cx - 11 + i * 5.5) * sc, y1 * sc, (cx - 5.5 + i * 5.5) * sc, y1 * sc, 1); y0 = y1; i += 1; ); );
+    k += 0.7;
+  );
+);
+// a row of keys for a stepped slider: labels "A|B|C"; glyphs >= 0: draw wave glyphs from that number on instead
+function g_keys(x, y, w, h, gap, idx, n, labels, glyphs) local(i, on) (
+  i = 0;
+  loop(n,
+    on = floor(slider(idx) + 0.5) == i;
+    glyphs >= 0 ? (
+      rd_sq(x + i * (w + gap), y, w, h, on, LIT, "") ? g_set(idx, i);
+      g_glyph(x + i * (w + gap) + w * 0.5, y + h * 0.5, glyphs + i, on ? 0x141414 : 0xD8D8D8);
+    ) : (
+      rd_sq(x + i * (w + gap), y, w, h, on, LIT, pk_pitem(labels, i + 1, #gk)) ? g_set(idx, i);
+    );
+    i += 1;
+  );
+);
+// an on / off key
+function g_tog(x, y, w, h, idx, label) ( rd_sq(x, y, w, h, slider(idx) >= 0.5, LIT, label) ? g_set(idx, slider(idx) >= 0.5 ? 0 : 1); );
+// a key that shows a stepped slider's setting and opens the list
+function g_menu(x, y, w, h, idx, labels) local(n, i, k) (
+  n = pk_pcount(labels); k = floor(slider(idx) + 0.5);
+  rd_sqdark = 1;
+  rd_sq(x, y, w, h, 1, 0xD9DCE0, pk_pitem(labels, k + 1, #gk)) ? (
+    strcpy(#gm, ""); i = 1;
+    loop(n, i == k + 1 ? strcat(#gm, "!"); strcat(#gm, pk_pitem(labels, i, #gk)); i < n ? strcat(#gm, "|"); i += 1; );
+    gfx_x = x * sc; gfx_y = (y + h) * sc; i = gfx_showmenu(#gm); i > 0 ? g_set(idx, i - 1);
+  );
+  rd_sqdark = 0;
+  ui_col(0x3A3D42); gfx_triangle((x + w - 12) * sc, (y + h * 0.5 - 2) * sc, (x + w - 6) * sc, (y + h * 0.5 - 2) * sc, (x + w - 9) * sc, (y + h * 0.5 + 2) * sc);
+);
+function g_cap(x, y, s) ( gfx_setfont(4); ui_cola(INK, 0.85); gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function g_capc(x, y, s) ( gfx_setfont(4); ui_cola(INK, 0.85); ui_text(x * sc, y * sc, s); );
+// an envelope sketch in a small dark window
+function g_env(x, y, w, h, a, d, s, r, col) local(t, ta, td, tr, tt, sx, x1, y1, x2) (
+  ui_col(0x24272B); gfx_rect(x * sc, y * sc, w * sc, h * sc);
+  ui_cola(0x000000, 0.5); gfx_rect(x * sc, y * sc, w * sc, 1 * sc);
+  ta = log(1 + a) ; td = log(1 + d); tr = log(1 + r); tt = ta + td + tr + 2.2;
+  sx = (w - 8) / tt;
+  ui_col(col);
+  x1 = x + 4; y1 = y + h - 3; x2 = x1 + ta * sx;
+  gfx_line(x1 * sc, y1 * sc, x2 * sc, (y + 3) * sc, 1);
+  x1 = x2; x2 = x1 + td * sx;
+  gfx_line(x1 * sc, (y + 3) * sc, x2 * sc, (y + 3 + (h - 6) * (1 - s)) * sc, 1);
+  x1 = x2; x2 = x1 + 2.2 * sx;
+  gfx_line(x1 * sc, (y + 3 + (h - 6) * (1 - s)) * sc, x2 * sc, (y + 3 + (h - 6) * (1 - s)) * sc, 1);
+  x1 = x2; x2 = x + w - 4;
+  gfx_line(x1 * sc, (y + 3 + (h - 6) * (1 - s)) * sc, x2 * sc, (y + h - 3) * sc, 1);
+);
+
+// ---------- the panel ----------
+ui_col(PANEL); gfx_rect(0, 0, gfx_w, gfx_h);
+gfx_gradrect(0, 0, 1240 * sc, 280 * sc, 1, 1, 1, 0.10, 0, 0, 0, 0, 0, 0, 0, -0.10 / (280 * sc));
+ui_col(HDR); gfx_rect(0, 0, 1240 * sc, 60 * sc);
+gfx_gradrect(0, 0, 1240 * sc, 60 * sc, 1, 1, 1, 0.16, 0, 0, 0, 0, 0, 0, 0, -0.16 / (60 * sc));
+ui_cola(0x000000, 0.35); gfx_rect(0, 60 * sc, 1240 * sc, 1 * sc);
+ui_cola(0xFFFFFF, 0.35); gfx_rect(0, 61 * sc, 1240 * sc, 1 * sc);
+ui_cola(0x000000, 0.25); gfx_rect(0, 556 * sc, 1240 * sc, 4 * sc);
+
+// header: roundel, name, preset bar, voice display, MIDI, size
+rd_badge(36, 30, 16, 0x2E3135, 0xEEEFEA);
+rd_title(62, 10, "G-DAICHI", 27, 0x202226);
+rd_sub(64, 41, "VIRTUAL ANALOGUE SYNTHESIZER", 0x2E3135, 0.85);
+gk_ = pk_preset(356 * sc, 13 * sc, 470 * sc, 34 * sc, pr_cur, #dh_pm);
 gk_ > 0 ? load_preset(gk_);
-ui_size_picker(1120 * sc, 24 * sc);
+pk_lcd(840 * sc, 13 * sc, 170 * sc, 34 * sc, 0);
+gn_ = 0; gi_ = 0; loop(16, DV[gi_ * 64 + 13] > 0 ? gn_ += 1; gi_ += 1; );
+pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
+sprintf(#gl, "%s  %s", slider48 == 0 ? "POLY" : slider48 == 1 ? "MONO" : "LEGATO", slider56 >= 0.5 ? "ARP" : ""); gfx_x = 850 * sc; gfx_y = 17 * sc; gfx_drawstr(#gl);
+sprintf(#gl, "VOICES %2d/%d", gn_, floor(slider49 + 0.5)); gfx_x = 850 * sc; gfx_y = 31 * sc; gfx_drawstr(#gl);
+rd_led(1030, 24, 4, ins_midi_lit(), 0x3ADF6A); rd_lbl(1030, 33, "MIDI", 0x2E3135, 0.9);
+sprintf(#gl, slider78 < 0.5 ? "OMNI" : "CH %.0f", slider78);
+rd_sqdark = 1;
+rd_sq(1052, 18, 50, 22, 1, 0xD9DCE0, #gl) ? (
+  strcpy(#gm, ""); gi_ = 0;
+  loop(17, gi_ == floor(slider78 + 0.5) ? strcat(#gm, "!"); gi_ == 0 ? strcat(#gm, "Omni") : ( sprintf(#gk, "Channel %d", gi_); strcat(#gm, #gk); ); gi_ < 16 ? strcat(#gm, "|"); gi_ += 1; );
+  gfx_x = 1052 * sc; gfx_y = 40 * sc; gi_ = gfx_showmenu(#gm); gi_ > 0 ? g_set(78, gi_ - 1);
+);
+rd_sqdark = 0;
+ui_size_picker(1160 * sc, 21 * sc);
+
+// ---------- top row ----------
+// OSC 1
+g_box(12, 72, 210, 228, SHA, "OSC 1");
+g_keys(22, 98, 34, 24, 4, 1, 5, "", 0);
+g_kn(52, 166, 17, 3, 0, 100, 0, 0, "SUB", "%.0f%%", 0);
+g_kn(117, 166, 17, 4, 0, 100, 0, 0, "FM", "%.0f%%", 0);
+g_kn(182, 166, 17, 12, 5, 95, 50, 0, "PW", "%.0f%%", 0);
+g_cap(22, 232, "SUB WAVE");
+g_keys(22, 248, 34, 24, 4, 2, 2, "", 0);
+g_cap(104, 232, "FM: OSC 2 > OSC 1");
+gfx_setfont(4); ui_cola(INK, 0.65); gfx_x = 104 * sc; gfx_y = 254 * sc; gfx_drawstr("SUB: ONE OCTAVE DOWN");
+
+// OSC 2
+g_box(232, 72, 250, 228, SHB, "OSC 2");
+g_keys(242, 98, 34, 24, 4, 5, 5, "", 0);
+g_tog(434, 98, 40, 24, 9, "SYNC");
+g_kn(266, 166, 17, 6, -24, 24, 0, 0, "PITCH", "%+.0f st", 1);
+g_kn(324, 166, 17, 7, -50, 50, 8, 0, "FINE", "%+.1f ct", 0);
+g_kn(382, 166, 17, 10, 0, 100, 0, 0, "RING", "%.0f%%", 0);
+g_kn(446, 166, 17, 11, 0, 100, 50, 0, "MIX", "%.0f%%", 0);
+gfx_setfont(4); ui_cola(INK, 0.7); ui_text(424 * sc, 196 * sc, "1"); ui_text(468 * sc, 196 * sc, "2");
+g_tog(242, 248, 64, 24, 8, "TRACK");
+g_cap(242, 232, "KEYBOARD");
+sprintf(#gl, "%+.0f st  %+.1f ct", slider6, slider7);
+pk_lcd(318 * sc, 236 * sc, 152 * sc, 40 * sc, 0); pk_lcdfont(9, 13 * sc); ui_col(pk_lcdc);
+ui_text(394 * sc, 250 * sc, #gl);
+
+// MOD ENV
+g_box(492, 72, 150, 228, SHC, "MOD ENV");
+g_keys(500, 98, 43, 24, 3, 16, 3, "OSC 2|FM|PW", -1);
+g_kn(530, 166, 17, 13, 0.5, 5000, 1, 1, "ATTACK", "%.1f ms", 0);
+g_kn(604, 166, 17, 14, 5, 5000, 300, 1, "DECAY", "%.0f ms", 0);
+g_kn(567, 244, 19, 15, -100, 100, 0, 0, "AMOUNT", "%+.0f%%", 0);
+gfx_setfont(4); ui_cola(INK, 0.7); ui_text(530 * sc, 266 * sc, "-"); ui_text(604 * sc, 266 * sc, "+");
+
+// FILTER
+g_box(652, 72, 350, 228, SHA, "FILTER");
+g_keys(662, 98, 52, 24, 4, 17, 4, "LP 12|LP 24|HP 12|BP 12", -1);
+sprintf(#gv, "%.0f Hz", slider18); dy_kf = slider17 >= 1.5 && slider17 < 2.5 ? 1 : 2;
+dy_knob(690, 166, 22, 18, 20, 20000, 6000, 1, PTR, "CUTOFF", #gv);
+g_kn(758, 166, 17, 19, 0, 100, 10, 0, "RESO", "%.0f%%", 0);
+g_kn(818, 166, 17, 20, 0, 100, 0, 0, "SAT", "%.0f%%", 0);
+g_kn(878, 166, 17, 21, 0, 100, 50, 0, "KEY", "%.0f%%", 0);
+g_kn(938, 166, 17, 23, 0, 100, 0, 0, "VELO", "%.0f%%", 0);
+g_kn(690, 244, 17, 22, -100, 100, 0, 0, "ENV", "%+.0f%%", 0);
+g_kn(758, 244, 17, 24, 0.5, 5000, 1, 1, "ATT", "%.1f ms", 0);
+g_kn(818, 244, 17, 25, 5, 8000, 400, 1, "DEC", "%.0f ms", 0);
+g_kn(878, 244, 17, 26, 0, 100, 50, 0, "SUS", "%.0f%%", 0);
+g_kn(938, 244, 17, 27, 5, 8000, 300, 1, "REL", "%.0f ms", 0);
+
+// AMP
+g_box(1012, 72, 216, 228, SHB, "AMP");
+g_env(1022, 98, 196, 40, slider28, slider29, slider30 / 100, slider31, 0x8FD0FF);
+g_kn(1060, 182, 19, 32, -24, 12, 0, 0, "GAIN", "%+.1f dB", 0);
+g_kn(1180, 182, 17, 33, 0, 100, 50, 0, "VELO", "%.0f%%", 0);
+g_kn(1036, 244, 16, 28, 0.5, 5000, 1, 1, "ATT", "%.1f ms", 0);
+g_kn(1088, 244, 16, 29, 5, 8000, 300, 1, "DEC", "%.0f ms", 0);
+g_kn(1140, 244, 16, 30, 0, 100, 100, 0, "SUS", "%.0f%%", 0);
+g_kn(1192, 244, 16, 31, 5, 8000, 200, 1, "REL", "%.0f ms", 0);
+
+// ---------- bottom row ----------
+// LFO 1 / 2
+gj_ = 0;
+loop(2,
+  gx_ = gj_ ? 208 : 12; gb_ = gj_ ? 41 : 34;
+  g_box(gx_, 314, 186, 232, gj_ ? SHC : SHA, gj_ ? "LFO 2" : "LFO 1");
+  g_keys(gx_ + 8, 340, 32, 24, 3, gb_, 5, "", 0);
+  slider(gb_ + 2) >= 0.5 ? (
+    sprintf(#gv, "%s", pk_pitem("4/1|2/1|1/1|1/2|1/2T|1/4|1/4T|1/8|1/8T|1/16|1/16T|1/32", floor(slider(gb_ + 3) + 0.5) + 1, #gk));
+    dy_knob(gx_ + 36, 402, 17, gb_ + 3, 0, 11, 5, 0, PTR, "RATE", #gv);
+    slider(gb_ + 3) = floor(slider(gb_ + 3) + 0.5);
+  ) : g_kn(gx_ + 36, 402, 17, gb_ + 1, 0.02, 30, 5, 1, "RATE", "%.2f Hz", 0);
+  g_kn(gx_ + 94, 402, 17, gb_ + 4, 0, 100, 0, 0, "AMOUNT", "%.0f%%", 0);
+  g_tog(gx_ + 128, 380, 50, 22, gb_ + 2, "SYNC");
+  g_tog(gx_ + 128, 408, 50, 22, gb_ + 6, "KEY");
+  g_cap(gx_ + 10, 458, "DESTINATION");
+  rd_led(gx_ + 170, 464, 3.5, (gj_ ? dh_l2 : dh_l1) > 0, LIT);
+  g_keys(gx_ + 8, 476, 40, 24, 3, gb_ + 5, 4, "PITCH|OSC 2|FILTER|AMP", -1);
+  gi_ = floor(slider(gb_ + 5) + 0.5);
+  rd_sq(gx_ + 8, 506, 40, 24, gi_ == 4, LIT, "PAN") ? g_set(gb_ + 5, 4);
+  rd_sq(gx_ + 51, 506, 40, 24, gi_ == 5, LIT, "FM") ? g_set(gb_ + 5, 5);
+  rd_sq(gx_ + 94, 506, 40, 24, gi_ == 6, LIT, "PW") ? g_set(gb_ + 5, 6);
+  gj_ += 1;
+);
+
+// VOICE / ARP
+g_box(404, 314, 352, 232, SHB, "VOICE");
+gfx_setfont(4); ui_col(STINK); gfx_x = 630 * sc; gfx_y = 318 * sc; gfx_drawstr("ARPEGGIATOR");
+ui_cola(0x000000, 0.25); gfx_rect(620 * sc, 334 * sc, 1 * sc, 212 * sc); ui_cola(0xFFFFFF, 0.25); gfx_rect(621 * sc, 334 * sc, 1 * sc, 212 * sc);
+g_keys(414, 340, 62, 24, 4, 48, 3, "POLY|MONO|LEGATO", -1);
+g_kn(436, 402, 17, 49, 1, 16, 8, 0, "VOICES", "%.0f", 1);
+g_kn(494, 402, 17, 50, 1, 8, 1, 0, "UNISON", "%.0f", 1);
+g_kn(552, 402, 17, 51, 0, 50, 15, 0, "DETUNE", "%.1f ct", 0);
+g_kn(604, 402, 15, 52, 0, 100, 60, 0, "SPREAD", "%.0f%%", 0);
+g_kn(436, 482, 17, 53, 0, 2000, 0, 0, "PORTA", "%.0f ms", 0);
+g_kn(494, 482, 17, 54, 0, 24, 2, 0, "BEND", "%.0f st", 1);
+g_menu(526, 466, 88, 24, 55, "OFF|VIBRATO|LFO 1|CUTOFF|FM");
+g_capc(570, 503, "WHEEL");
+g_tog(630, 340, 116, 24, 56, "ARP");
+g_cap(632, 380, "MODE");
+g_menu(672, 374, 74, 24, 57, "UP|DOWN|UP-DOWN|DOWN-UP|PLAYED|RANDOM|CHORD");
+g_cap(632, 414, "RATE");
+g_menu(672, 408, 74, 24, 59, "1/4|1/4T|1/8|1/8T|1/16|1/16T|1/32");
+dy_step = 4; dy_steps = "1|2|3|4"; sprintf(#gv, "%.0f oct", slider58); dy_knob(660, 488, 15, 58, 1, 4, 1, 0, PTR, "RANGE", #gv);
+slider58 = floor(slider58 + 0.5);
+g_kn(718, 488, 17, 60, 10, 200, 60, 0, "GATE", "%.0f%%", 0);
+rd_led(738, 448, 3.5, slider56 >= 0.5 && arp_step >= 0 && (arp_step % 2 == 0), LIT);
+
+// EFFECTS
+g_box(766, 314, 300, 232, SHC, "EFFECTS");
+ui_cola(0x000000, 0.2); gfx_rect(916 * sc, 340 * sc, 1 * sc, 200 * sc); gfx_rect(772 * sc, 440 * sc, 288 * sc, 1 * sc);
+ui_cola(0xFFFFFF, 0.25); gfx_rect(917 * sc, 340 * sc, 1 * sc, 200 * sc); gfx_rect(772 * sc, 441 * sc, 288 * sc, 1 * sc);
+g_tog(774, 342, 60, 22, 61, "DIST");
+g_keys(840, 342, 34, 22, 3, 62, 2, "DRV|BIT", -1);
+g_kn(842, 400, 16, 63, 0, 100, 30, 0, "AMOUNT", "%.0f%%", 0);
+g_tog(924, 342, 70, 22, 64, "PHASER");
+g_kn(960, 400, 16, 65, 0.05, 10, 0.4, 1, "RATE", "%.2f Hz", 0);
+g_kn(1024, 400, 16, 66, 0, 100, 60, 0, "DEPTH", "%.0f%%", 0);
+g_tog(774, 448, 60, 22, 67, "CHORUS");
+g_keys(840, 448, 34, 22, 3, 68, 2, "CHO|FLA", -1);
+g_kn(806, 504, 16, 69, 0.05, 10, 0.6, 1, "RATE", "%.2f Hz", 0);
+g_kn(872, 504, 16, 70, 0, 100, 50, 0, "DEPTH", "%.0f%%", 0);
+g_tog(924, 448, 60, 22, 71, "DELAY");
+g_tog(990, 448, 68, 22, 75, "PING-PONG");
+g_menu(924, 480, 48, 22, 72, "1/2|1/4D|1/4|1/4T|1/8D|1/8|1/8T|1/16");
+g_capc(948, 510, "TIME");
+g_kn(1000, 504, 16, 73, 0, 90, 35, 0, "FDBK", "%.0f%%", 0);
+g_kn(1042, 504, 16, 74, 0, 100, 25, 0, "MIX", "%.0f%%", 0);
+
+// MASTER
+g_box(1076, 314, 152, 232, SHA, "MASTER");
+g_kn(1114, 392, 21, 77, -24, 6, 0, 0, "VOLUME", "%+.1f dB", 0);
+dh_mtr.ui_ledm(1206 * sc, 344 * sc, 10 * sc, 188 * sc, dh_pk); dh_pk *= 0.85;
+dy_kst = 20;
+g_kn(1104, 492, 13, 76, 0, 100, 25, 0, "DRIFT", "%.0f%%", 0);
+dy_kst = 20;
+sprintf(#gv, "%.0f%%", slider79); dy_knob(1152, 492, 13, 79, 0, 100, 0, 0, 0xD8B040, "SAT", #gv);
+dy_kst = 0;
+g_capc(1176, 346, "OUT");
+ui_outkeys(1150, 360, 46, 16, 4, 84);
+
 pk_end();
 ui_end();
