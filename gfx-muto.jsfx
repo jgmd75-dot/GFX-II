@@ -10,8 +10,9 @@ desc:GFX MUTO
 // THE CORE (both units): a remote-cutoff valve as the gain element - its gain falls smoothly as the control
 // bias rises, and the bias comes from a rectifier on the unit's OUTPUT (feedback detection). The rectifier
 // works on voltage, the valve on bias, so the harder it works the steeper the gain law gets: the ratio rises
-// with the gain reduction (a soft, ever-increasing knee - about 2:1 at light GR, 4:1 at 3 dB, 6:1 at 6 dB,
-// 8-9:1 at 10 dB and on up towards limiting). The valve's curvature grows as it is biased towards cut-off,
+// with the gain reduction (a soft, ever-increasing knee). VINTAGE: about 2:1 at 1-2 dB GR, 2.6:1 at 3 dB,
+// 4.5:1 at 6 dB, 8:1 at 10 dB, 12-14:1 at 15-20 dB. MODERN (gentler): 2.5:1 at 3 dB, 4:1 at 6 dB, 5.5:1 at 10 dB,
+// 7:1 at 15 dB. The valve's curvature grows as it is biased towards cut-off,
 // so the harmonic colour (even + odd) grows with drive and with gain reduction; a little of the control
 // voltage leaks into the audio as a soft "thump" when the bias moves fast (kept tasteful), and output iron
 // thickens the lows.
@@ -89,7 +90,7 @@ function mu_slope(u) local(q) ( u = min(max(u, -3), 3); q = 9 - u * u; q * q / (
 // vf = the fast store (charged by the rectifier), vs = the slow store (charged from vf), vc = the bias in use
 // (in dB of gain reduction). Coefficients per channel (drift) in ka (attack), kf (fast release), ks (slow release).
 function mu_vca(x) instance(vc, vlp, dx, dy, gn, tk) local(d, b, y) (
-  d = mu_vd * (1 + vc * mu_vgd); b = mu_vb * (1 + vc * mu_vgb);
+  d = mu_vd * (1 + min(vc, 10) * mu_vgd); b = mu_vb * (1 + min(vc, 12) * mu_vgb);   // curvature grows towards cut-off
   y = (mu_sat(x * d + b) - mu_sat(b)) / (d * mu_slope(b));   // the valve's curve, unity small-signal slope
   y *= exp(-0.11512925465 * vc) * gn;                        // remote-cutoff gain: falls as the bias rises
   vlp += (vc - vlp) * mu_thc;
@@ -140,7 +141,7 @@ function mu_setup() local(tf, ts, tcs, rm, ta) (
     mu_hold ? ( tf = 1.6; mu_ws = 1; ts = 12; tcs = 0.35; mu_thr -= 8; ta = 0.003; );
     mu_vd = mu_hold ? 0.42 : 0.17; mu_vgd = 0.1; mu_vb = mu_hold ? 0.16 : 0.045; mu_vgb = 0.1;
     mu_thk = mu_hold ? 0.0008 : 0.0004;
-    mu_id = 1.2; mu_ish = 0.04;
+    mu_id = 0.9; mu_ish = 0.04;
     mu_hpa = mu_hpb = 0;
   ) : (
     mu_gin = mu_db2g(slider9); mu_thr = slider10; mu_hold = 0; mu_gout = mu_db2g(slider20);
@@ -150,7 +151,7 @@ function mu_setup() local(tf, ts, tcs, rm, ta) (
     ta = slider11 / 1000;
     mu_vd = 0.1; mu_vgd = 0.08; mu_vb = 0.03; mu_vgb = 0.08;
     mu_thk = 0.0001;
-    mu_id = 0.6 + 2 * slider18 / 100; mu_ish = 0.12 * slider18 / 100;
+    mu_id = 0.3 + 1.7 * slider18 / 100; mu_ish = 0.12 * slider18 / 100;
     mu_hpa = slider14 | 0; mu_hpb = slider15 | 0;
     mu_hpa != mu_hpal ? ( mu_hpal = mu_hpa; mu_hpa ? hpA.bq_set(1, mu_hpf(mu_hpa), 0.707, 0); );
     mu_hpb != mu_hpbl ? ( mu_hpbl = mu_hpb; mu_hpb ? hpB.bq_set(1, mu_hpf(mu_hpb), 0.707, 0); );
@@ -175,15 +176,15 @@ function load_preset(p) (
     mu_pv(0, -10, 2, 0, 0, 0, 100); slider21 = 50; slider22 = 1; slider23 = 0;
   ) :
   p == 2  ? mu_pv(4, -14, 2, 0, 3, 0, 100) :                     // Vintage Vocal
-  p == 3  ? mu_pv(8, -16, 3, 1, 1, 0, 80) :                      // Vintage Drums Hold
+  p == 3  ? mu_pv(4, -12, 3, 1, 3, 0, 80) :                      // Vintage Drums Hold
   p == 4  ? mu_pv(6, -14, 1, 0, 2, 0, 100) :                     // Vintage Bass
-  p == 5  ? mu_pv(16, -24, 5, 1, -4, 0, 100) :                   // Room Hold Crush
+  p == 5  ? mu_pv(12, -20, 5, 1, 7, 0, 100) :                   // Room Hold Crush
   p == 6  ? mu_pv(2, -14, 4, 0, 3, 0, 100) :                     // Piano Leveller
-  p == 7  ? mu_pm(0, -10, 20, 400, 1, 1, 1, 0, 100, 40, 100, 1.5) :     // Modern Mix Bus
+  p == 7  ? mu_pm(0, -16, 20, 400, 1, 1, 1, 0, 100, 40, 100, 1.5) :     // Modern Mix Bus
   p == 8  ? mu_pm(2, -16, 1, 120, 0, 2, 2, 0, 100, 50, 100, 3) :        // Modern Drum Bus Snap
-  p == 9  ? mu_pm(0, -12, 15, 500, 1, 1, 3, 2, 20, 30, 100, 1) :        // Modern M-S Glue
+  p == 9  ? mu_pm(0, -16, 15, 500, 1, 1, 3, 2, 20, 30, 100, 1) :        // Modern M-S Glue
   p == 10 ? mu_pm(4, -16, 3, 250, 0, 3, 3, 0, 100, 20, 100, 3) :        // Modern Vocal
-  p == 11 ? mu_pm(0, -8, 30, 800, 1, 2, 2, 0, 100, 25, 100, 0.5) :      // Modern Mastering Touch
+  p == 11 ? mu_pm(0, -12, 30, 800, 1, 2, 2, 0, 100, 25, 100, 0.5) :      // Modern Mastering Touch
   p == 12 ? mu_pm(6, -24, 5, 200, 0, 1, 1, 0, 100, 80, 40, 0);          // Modern Parallel Weight
   slider_automate(8388607);                                      // sliders 1-23
 );
@@ -432,7 +433,7 @@ function mg_tog(cx, cy, idx, up, dn, title) local(hov, v, ty) (
   hov = abs(mouse_x - cx * sc) < 22 * sc && abs(mouse_y - cy * sc) < 26 * sc;
   pressed && hov && drag_id == 0 ? ( slider(idx) = slider(idx) > 0.5 ? 0 : 1; ui_auto(idx); drag_id = -1; );
   v = slider(idx) > 0.5;
-  mg_lbl(cx, cy - 46, up, 14); mg_lbl(cx, cy + 32, dn, 14);
+  mg_lbl(cx, cy - 42, up, 14); mg_lbl(cx, cy + 27, dn, 14);
   strlen(title) ? mg_lbl(cx, cy + 50, title, 12);
   ui_cola(0x000000, 0.4); gfx_circle((cx + 1.5) * sc, (cy + 2.5) * sc, 13 * sc, 1, 1);
   ui_col(0x5C5F64); gfx_circle(cx * sc, cy * sc, 13 * sc, 1, 1);
@@ -495,8 +496,8 @@ mg_u == 0 ? (
   ui_cola(mg_sh, 0.5); mg_R(16, 58, 868, 1); ui_cola(0xFFFFFF, 0.25); mg_R(16, 59, 868, 1);
 
   // sections: lighter plates for the main controls, a darker strip for the switches
-  mg_plate(16, 66, 274, 172, ui_mix(FV, 0xFFFFFF, 0.06), mg_sh, 0.35, 0.18); mg_plate(610, 66, 274, 172, ui_mix(FV, 0xFFFFFF, 0.06), mg_sh, 0.35, 0.18);
-  mg_plate(16, 244, 274, 84, ui_mix(FV, 0x000000, 0.06), mg_sh, 0.35, 0.18); mg_plate(610, 244, 274, 84, ui_mix(FV, 0x000000, 0.06), mg_sh, 0.35, 0.18);
+  mg_plate(16, 66, 274, 162, ui_mix(FV, 0xFFFFFF, 0.06), mg_sh, 0.35, 0.18); mg_plate(610, 66, 274, 162, ui_mix(FV, 0xFFFFFF, 0.06), mg_sh, 0.35, 0.18);
+  mg_plate(16, 236, 274, 92, ui_mix(FV, 0x000000, 0.06), mg_sh, 0.35, 0.18); mg_plate(610, 236, 274, 92, ui_mix(FV, 0x000000, 0.06), mg_sh, 0.35, 0.18);
   // the meter bay: a recessed, slightly darker panel
   FM = ui_mix(FV, 0x1A2228, 0.22);
   pk_inset(300 * sc, 72 * sc, 300 * sc, 252 * sc, FM);
@@ -528,18 +529,18 @@ mg_u == 0 ? (
   mg_lbl(834, 202, "OUTPUT", 15); mg_act ? mg_val(834, 222, mg_db(slider6));
 
   // lower row: STEREO, METER | MIX, DRIFT, OUT | HOLD, pilot
-  mg_tog(62, 278, 7, "LINK", "DUAL", ""); mg_lbll(84, 270, "STEREO", 14);
-  mg_tog(196, 278, 23, "GR", "OUT", ""); mg_lbll(218, 270, "METER", 14);
+  mg_tog(62, 284, 7, "LINK", "DUAL", ""); mg_lbll(84, 276, "STEREO", 14);
+  mg_tog(196, 284, 23, "GR", "OUT", ""); mg_lbll(218, 276, "METER", 14);
   mg_ticks(352, 270, 22, 11, 5);
   mg_knob(352, 270, 22, 8, 0, 100, 100, 0, 0, 0, 0);
   mg_lbl(352, 304, "MIX", 14); mg_act ? mg_val(352, 214, mg_pc(slider8));
   mg_knob(430, 270, 15, 21, 0, 100, 50, 0, 0, 20, 0x9DA2A8);
   mg_lbl(430, 304, "DRIFT", 14); mg_act ? mg_val(430, 214, mg_pc(slider21));
   mg_outst(512, 236);
-  mg_tog(714, 278, 5, "NORMAL", "HOLD", "");
-  rd_led(748, 278, 6, slider5 > 0.5, 0xFF4A20);
-  mg_lbl(834, 246, "POWER", 11);
-  rd_lamp(834, 280, 13, 0.85 + 0.1 * sin(time_precise() * 0.7), 0xFF6A1A);
+  mg_tog(714, 284, 5, "NORMAL", "HOLD", "");
+  rd_led(748, 284, 6, slider5 > 0.5, 0xFF4A20);
+  mg_lbl(834, 248, "POWER", 11);
+  rd_lamp(834, 286, 13, 0.85 + 0.1 * sin(time_precise() * 0.7), 0xFF6A1A);
 ) : (
   // =====================================================================
   // MU-2 MODERN: deep anodised faceplate, machined aluminium knobs, precise legends, warm-lit meters
@@ -553,8 +554,8 @@ mg_u == 0 ? (
   mg_header(FV, mg_ink, "MU-2   STEREO VARI-MU");
   ui_col(0xFFB040); mg_R(16, 58, 868, 2);
 
-  mg_plate(16, 66, 274, 172, 0x22303A, 0x0A1013, 1, 0.08); mg_plate(610, 66, 274, 172, 0x22303A, 0x0A1013, 1, 0.08);
-  mg_plate(16, 244, 274, 84, 0x1A252B, 0x0A1013, 1, 0.08); mg_plate(610, 244, 274, 84, 0x1A252B, 0x0A1013, 1, 0.08);
+  mg_plate(16, 66, 274, 162, 0x22303A, 0x0A1013, 1, 0.08); mg_plate(610, 66, 274, 162, 0x22303A, 0x0A1013, 1, 0.08);
+  mg_plate(16, 236, 274, 92, 0x1A252B, 0x0A1013, 1, 0.08); mg_plate(610, 236, 274, 92, 0x1A252B, 0x0A1013, 1, 0.08);
   FM = 0x172126;
   pk_inset(300 * sc, 72 * sc, 300 * sc, 252 * sc, FM);
   mg_ms = slider16 > 1.5; mg_lkd = slider16 < 0.5 && slider17 >= 99.5;
@@ -588,16 +589,16 @@ mg_u == 0 ? (
   // lower row: SC HPF x2, MODE | LINK, IRON, MIX, METER | AUTO, DRIFT, OUTPUT, OUT stage
   mg_i = 0; loop(2,
     mg_x = 40 + mg_i * 74; mg_ix = 14 + mg_i;
-    mg_ticks(mg_x, 270, 18, 5, 1);
-    mg_knob(mg_x, 270, 18, mg_ix, 0, 4, 0, 0, 5, 20, 0xF2C21B);
-    mg_lbl(mg_x, 298, mg_ms ? (mg_i ? "HPF S" : "HPF M") : (mg_i ? "HPF R" : "HPF L"), 13);
+    mg_ticks(mg_x, 274, 17, 5, 1);
+    mg_knob(mg_x, 274, 17, mg_ix, 0, 4, 0, 0, 5, 20, 0xF2C21B);
+    mg_lbl(mg_x, 296, mg_ms ? (mg_i ? "HPF S" : "HPF M") : (mg_i ? "HPF R" : "HPF L"), 13);
     mg_hv = slider(mg_ix); mg_act ? mg_val(mg_x, 214, mg_hv < 0.5 ? "OFF" : mg_hv < 1.5 ? "60 Hz" : mg_hv < 2.5 ? "90 Hz" : mg_hv < 3.5 ? "150 Hz" : "250 Hz");
     mg_i += 1; );
-  mg_lbl(77, 316, "SIDE-CHAIN", 11);
-  mg_key(180, 240, 92, 22, slider16 == 0, mg_acc, "STEREO", 12) ? ( slider16 = 0; ui_auto(16); );
+  mg_lbl(77, 314, "SIDE-CHAIN", 11);
+  mg_key(180, 242, 92, 22, slider16 == 0, mg_acc, "STEREO", 12) ? ( slider16 = 0; ui_auto(16); );
   mg_key(180, 266, 92, 22, slider16 == 1, mg_acc, "DUAL MONO", 12) ? ( slider16 = 1; ui_auto(16); );
-  mg_key(180, 292, 92, 22, slider16 == 2, mg_acc, "M-S", 12) ? ( slider16 = 2; ui_auto(16); );
-  mg_lbl(226, 318, "MODE", 11);
+  mg_key(180, 290, 92, 22, slider16 == 2, mg_acc, "M-S", 12) ? ( slider16 = 2; ui_auto(16); );
+  mg_lbl(226, 314, "MODE", 11);
   mg_ticks(334, 266, 20, 11, 5);
   mg_knob(334, 266, 20, 17, 0, 100, 100, 0, 0, 1, 0);
   mg_lbl(334, 298, "LINK", 13); mg_act ? mg_val(334, 214, slider16 == 1 ? "DUAL MONO" : mg_pc(slider17));
@@ -608,15 +609,15 @@ mg_u == 0 ? (
   mg_knob(466, 266, 20, 19, 0, 100, 100, 0, 0, 1, 0);
   mg_lbl(466, 298, "MIX", 13); mg_act ? mg_val(466, 214, mg_pc(slider19));
   mg_outst(512, 236);
-  mg_key(628, 236, 64, 24, slider13 > 0.5, mg_acc, "AUTO", 12) ? ( slider13 = slider13 > 0.5 ? 0 : 1; ui_auto(13); );
-  mg_lbl(660, 263, "RELEASE", 11);
-  mg_key(628, 282, 64, 24, slider23 > 0.5, mg_acc, slider23 > 0.5 ? "OUT" : "GR", 12) ? ( slider23 = slider23 > 0.5 ? 0 : 1; ui_auto(23); );
-  mg_lbl(660, 309, "METER", 11);
-  mg_knob(742, 272, 15, 21, 0, 100, 50, 0, 0, 20, 0x9DA2A8);
-  mg_lbl(742, 298, "DRIFT", 13); mg_act ? mg_val(742, 214, mg_pc(slider21));
-  mg_ticks(834, 268, 26, 11, 5);
-  mg_knob(834, 268, 26, 20, -20, 20, 0, 0, 0, 1, 0);
-  mg_lbl(834, 304, "OUTPUT", 13); mg_act ? mg_val(834, 214, mg_db(slider20));
+  mg_key(628, 244, 64, 24, slider13 > 0.5, mg_acc, "AUTO", 12) ? ( slider13 = slider13 > 0.5 ? 0 : 1; ui_auto(13); );
+  mg_lbl(660, 270, "RELEASE", 11);
+  mg_key(628, 288, 64, 24, slider23 > 0.5, mg_acc, slider23 > 0.5 ? "OUT" : "GR", 12) ? ( slider23 = slider23 > 0.5 ? 0 : 1; ui_auto(23); );
+  mg_lbl(660, 314, "METER", 11);
+  mg_knob(742, 276, 15, 21, 0, 100, 50, 0, 0, 20, 0x9DA2A8);
+  mg_lbl(742, 300, "DRIFT", 13); mg_act ? mg_val(742, 214, mg_pc(slider21));
+  mg_ticks(834, 274, 24, 11, 5);
+  mg_knob(834, 274, 24, 20, -20, 20, 0, 0, 0, 1, 0);
+  mg_lbl(834, 306, "OUTPUT", 13); mg_act ? mg_val(834, 214, mg_db(slider20));
 );
 
 pk_end();
