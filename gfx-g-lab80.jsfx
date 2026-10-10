@@ -29,6 +29,7 @@ desc:GFX G Lab80 [workstation synth]
 //                      (the pipes breathe through a pitched band, not open hiss)
 //   BASSES           - BASS SYNTH, SUB, ACID, ROUND, PLUCK, HOLLOW, REESE (most are mono with glide)
 // Some sounds carry their own tempo-synced echo, tremolo or rotary speed.
+// Panel: the front page lists every sound (click one to play it); EDITOR opens the controls page and back.
 // Changing sound puts FILTER, RESO, TONE, ATTACK, RELEASE and CHORUS back to neutral for the new sound.
 // REVERB: the GFX Space engine (ROOM / HALL / PLATE), added as a send on top of the sound.
 // FILTER / RESONANCE: analogue sounds move each note's own 4-pole filter (RESONANCE up to self-oscillation);
@@ -608,6 +609,7 @@ ptr_s = patch_trim(slider1);
 pkL = 0; pkR = 0; midi_led = 0; nact = 0; vph = 0; flph = 0;
 !ui_dflt ? ui_thm = 10; !ui_dflt ? ui_hw = 1;  // fixed late-80s workstation faceplate
 !ui_dflt ? ui_kstyle = 0;
+!ui_dflt ? lx_page = 0;                                // the panel opens on the SOUNDS page (EDITOR shows the controls)
 BRW = 0x3A2E28; INKL = 0xE8DED2; TEAL = 0x2FB5A0; REDL = 0xFF3A2A;
 SH1 = 0x463830; SH2 = 0x403229; SH3 = 0x372B24;       // macros, reverb, utility
 function mgroup(x, y, w, h, sec, title, shade) (
@@ -679,6 +681,7 @@ dl_len = min(floor(dl_bt * 60 / tempo * srate), 131000);
 
 @serialize
 file_var(0, ui_sz);
+file_var(0, lx_page);                                  // (appended: older states read on as the SOUNDS page)
 
 @sample
 while (evi < evn && evq[evi * 4] <= spos) (
@@ -925,142 +928,155 @@ spl0 = ost_l;
 spl1 = ost_r;
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
-@gfx 1160 420
+@gfx 640 520
 ui_thm = 10; ui_hw = 1;
-ui_begin(1160, 420);
+ui_begin(640, 520);
 
 // ---------- chassis: dark brown workstation with teal accents ----------
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
-fh = 412;                                              // the panel, with the IN / OUT strip along the bottom
-pk_chassis(8 * sc, 4 * sc, 1144 * sc, fh * sc, BRW);
-ui_col(TEAL); gfx_rect(8 * sc, 42 * sc, 1144 * sc, 2 * sc);
+fh = 512;
+pk_chassis(8 * sc, 4 * sc, 624 * sc, fh * sc, BRW);
+ui_col(TEAL); gfx_rect(8 * sc, 42 * sc, 624 * sc, 2 * sc);
 ui_col(TEAL); gfx_circle(36 * sc, 24 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(BRW); ui_text(36 * sc, 19 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 20 * sc, 'b'); ui_col(INKL); gfx_x = 58 * sc; gfx_y = 12 * sc; gfx_drawstr("G-LAB80");
 gfx_setfont(4); ui_cola(INKL, 0.6); gfx_x = 152 * sc; gfx_y = 20 * sc; gfx_drawstr("DIGITAL SOUND WORKSTATION");
-ui_size_picker(968 * sc, 13 * sc);
-pk_ledbtn(1040 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;
-gfx_setfont(4); ui_col(INKL); gfx_x = 1078 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
+pk_led(358 * sc, 24 * sc, 4 * sc, ins_midi_lit() || nact > 0, REDL);
+gfx_setfont(4); ui_col(INKL); gfx_x = 368 * sc; gfx_y = 20 * sc; gfx_drawstr("MIDI IN");
+ui_size_picker(448 * sc, 13 * sc);
+pk_ledbtn(520 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;
+gfx_setfont(4); ui_col(INKL); gfx_x = 558 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
 
-// ---------- SOUND: PRESETS | < > | green LCD (click it for the list) ----------
+// ---------- SOUND: PRESETS | < > | green LCD (click it for the list) | EDITOR ----------
 cur_pos = snd_pos(slider1); cur_grp = pos_grp(cur_pos);
 ui_noled = 1; ui_button(20 * sc, 56 * sc, 86 * sc, 38 * sc, "PRESETS", 0, 1) ? snd_menu(20 * sc, 98 * sc);
 ui_noled = 1; ui_button(110 * sc, 56 * sc, 32 * sc, 38 * sc, "◄", 0, 1) ? ( slider1 = mord[(cur_pos + NSND - 1) % NSND]; slider_automate(1); );
 ui_noled = 1; ui_button(146 * sc, 56 * sc, 32 * sc, 38 * sc, "►", 0, 1) ? ( slider1 = mord[(cur_pos + 1) % NSND]; slider_automate(1); );
 ui_noled = 0;
-pk_lcd(188 * sc, 52 * sc, 436 * sc, 46 * sc, 1);
+pk_lcd(188 * sc, 52 * sc, 334 * sc, 46 * sc, 1);
 pk_lcdfont(7, 18 * sc); ui_col(pk_lcdc);
-gfx_x = 200 * sc; gfx_y = 56 * sc; gfx_drawstr(sname(slider1));
+sprintf(#kn, "%02d %s", cur_pos + 1, sname(slider1));
+gfx_x = 200 * sc; gfx_y = 56 * sc; gfx_drawstr(#kn);
 pk_lcdfont(8, 11 * sc);
 sprintf(#ks, "%s %d/%d   %02d SOUNDING%s", grp_name(cur_grp), cur_pos - GST[cur_grp] + 1, GSZ[cur_grp], nact, pedal ? "  SUS" : "");
 gfx_x = 200 * sc; gfx_y = 80 * sc; gfx_drawstr(#ks);
-pressed && drag_id == 0 && mouse_x >= 188 * sc && mouse_x < 624 * sc && mouse_y >= 52 * sc && mouse_y < 98 * sc ? (
+pressed && drag_id == 0 && mouse_x >= 188 * sc && mouse_x < 522 * sc && mouse_y >= 52 * sc && mouse_y < 98 * sc ? (
   drag_id = -1; snd_menu(188 * sc, 98 * sc);
 );
+// EDITOR: the sound-shaping controls on a page of their own (lit while it is open; press again for the sounds)
+ui_button(532 * sc, 56 * sc, 92 * sc, 38 * sc, "EDITOR", lx_page, 1) ? lx_page = !lx_page;
 
-// ---------- MACROS ----------
-mgroup(16, 112, 608, 92, 0, "MACROS", SH1);
-ui_knob(70 * sc,  156 * sc, 17, -6, 3, 0, 0, "FILTER", slider17 > -0.005 && slider17 < 0.005 ? "OPEN" : "%+.2f oct");
-ui_knob(144 * sc, 156 * sc, 18, 0, 100, 0, 0, "RESO", "%.0f%%");
-ui_knob(218 * sc, 156 * sc, 2, 0, 100, 50, 0, "TONE", "%.0f%%");
-ui_knob(292 * sc, 156 * sc, 3, 10, 400, 100, 1, "ATTACK", "%.0f%%");
-ui_knob(366 * sc, 156 * sc, 4, 10, 400, 100, 1, "RELEASE", "%.0f%%");
-ui_knob(440 * sc, 156 * sc, 5, 0, 200, 100, 0, "CHORUS", "%.0f%%");
-ui_knob(514 * sc, 156 * sc, 6, 0, 100, 70, 0, "VELOCITY", "%.0f%%");
-ui_knob(588 * sc, 156 * sc, 7, -50, 50, 0, 0, "TUNE", "%+.0f cents");
+!lx_page ? (
+  // ---------- SOUNDS: every sound, by group, in three columns - click a name to play it ----------
+  // (as the G M1K / G Pocket 70 patch pages: group headings as dark bars with a teal tab, zebra rows,
+  // the sound in use lit, hover shows where a click lands; the order and numbers are the PRESETS menu's)
+  mgroup(16, 106, 608, 402, 0, "SOUNDS", SH2);
+  // names and headings: the largest sizes (names 17 to 20, headings 13 to 16) at which every one fits its row -
+  // worked out once per window size
+  sc != lb_lsc ? (
+    lb_lsc = sc; lb_lfs = 20; lb_fit = 0;
+    loop(4,
+      !lb_fit ? (
+        gfx_setfont(9, "Trebuchet MS", lb_lfs * sc, 'b');
+        lb_mw = 0; i = 0; loop(NSND, gfx_measurestr(sname(i), lb_w, lb_h); lb_mw = max(lb_mw, lb_w); i += 1; );
+        lb_mw <= 156 * sc ? lb_fit = 1 : lb_lfs -= 1;
+      );
+    );
+    lb_hfs = 16; lb_fit = 0;
+    loop(4,
+      !lb_fit ? (
+        gfx_setfont(11, "Trebuchet MS", lb_hfs * sc, 'b');
+        lb_mw = 0; i = 0; loop(NGRP, gfx_measurestr(grp_name(i), lb_w, lb_h); lb_mw = max(lb_mw, lb_w); i += 1; );
+        lb_mw <= 176 * sc ? lb_fit = 1 : lb_hfs -= 1;
+      );
+    );
+  );
+  gfx_setfont(9, "Trebuchet MS", lb_lfs * sc, 'b');
+  gfx_setfont(10, "Courier New", 16 * sc, 'b');
+  gfx_setfont(11, "Trebuchet MS", lb_hfs * sc, 'b');
+  lb_e = 0; lb_q = 0; lb_g = 0;
+  loop(NSND + NGRP,
+    lb_col = floor(lb_e / 17); lb_row = lb_e % 17;
+    lb_x = 22 + lb_col * 199; lb_y = 112 + lb_row * 23;
+    lb_g < NGRP && lb_q == GST[lb_g] ? (
+      // group heading: a dark label bar with a teal tab
+      ui_col(0x1E1814); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 192 * sc, 21 * sc, 3 * sc);
+      ui_col(TEAL); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 5 * sc, 21 * sc, 1.5 * sc);
+      gfx_setfont(11); ui_col(INKL); gfx_measurestr(grp_name(lb_g), lb_w, lb_h);
+      gfx_x = (lb_x + 14) * sc; gfx_y = (lb_y + 11.5) * sc - lb_h * 0.5; gfx_drawstr(grp_name(lb_g));
+      lb_g += 1;
+    ) : (
+      lb_on = mord[lb_q] == slider1;
+      lb_hv = mouse_x >= lb_x * sc && mouse_x < (lb_x + 196) * sc && mouse_y >= lb_y * sc && mouse_y < (lb_y + 23) * sc;
+      lb_on ? ( ui_col(TEAL); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 192 * sc, 21 * sc, 3 * sc); )
+            : lb_hv ? ( ui_col(0x5A4A40); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 192 * sc, 21 * sc, 3 * sc); )
+            : lb_row % 2 ? ( ui_cola(0xFFFFFF, 0.05); gfx_rect((lb_x + 2) * sc, (lb_y + 1) * sc, 192 * sc, 21 * sc); );
+      gfx_setfont(10); ui_col(lb_on ? 0x14100D : ui_mix(INKL, BRW, 0.4)); sprintf(#lb_n, "%02d", lb_q + 1);
+      gfx_measurestr(#lb_n, lb_w, lb_h); gfx_x = (lb_x + 8) * sc; gfx_y = (lb_y + 11.5) * sc - lb_h * 0.5; gfx_drawstr(#lb_n);
+      gfx_setfont(9); ui_col(lb_on ? 0x14100D : INKL);
+      gfx_measurestr(sname(mord[lb_q]), lb_w, lb_h); gfx_x = (lb_x + 34) * sc; gfx_y = (lb_y + 11.5) * sc - lb_h * 0.5; gfx_drawstr(sname(mord[lb_q]));
+      pressed && drag_id == 0 && lb_hv ? ( drag_id = -1; slider1 = mord[lb_q]; slider_automate(1); );
+      lb_q += 1;
+    );
+    lb_e += 1;
+  );
+) : (
+  // ---------- EDITOR: the controls panel (macros, reverb, drift, MIDI, master) ----------
+  // the sound being edited, and what a sound change resets
+  ui_col(0x1E1814); ui_rrect(16 * sc, 108 * sc, 608 * sc, 38 * sc, 4 * sc);
+  ui_col(TEAL); ui_rrect(16 * sc, 108 * sc, 5 * sc, 38 * sc, 2 * sc);
+  gfx_setfont(6); ui_col(INKL); gfx_x = 32 * sc; gfx_y = 116 * sc; gfx_drawstr(#kn);
+  gfx_setfont(5); ui_cola(INKL, 0.7); gfx_measurestr("A NEW SOUND RESETS FILTER, RESO, TONE, ATTACK, RELEASE, CHORUS", lb_w, lb_h);
+  gfx_x = 612 * sc - lb_w; gfx_y = 127 * sc - lb_h * 0.5; gfx_drawstr("A NEW SOUND RESETS FILTER, RESO, TONE, ATTACK, RELEASE, CHORUS");
+  ey1 = 55; ey2 = 66; ey3 = 77;                          // each row's drop from the old single-page panel
 
-// ---------- REVERB ----------
-mgroup(16, 214, 608, 92, 0, "REVERB", SH2);
-i = 0;
-loop(3,
-  pk_ledbtn(34 * sc, (224 + i * 26) * sc, 26 * sc, 22 * sc, slider19 == i, TEAL) ? ( slider19 = i; slider_automate(262144); );
-  gfx_setfont(5); ui_col(INKL); gfx_x = 68 * sc; gfx_y = (229 + i * 26) * sc; gfx_drawstr(i == 0 ? "ROOM" : i == 1 ? "HALL" : "PLATE");
-  i += 1;
+  // ---------- MACROS ----------
+  mgroup(16, 112 + ey1, 608, 92, 0, "MACROS", SH1);
+  ui_knob(70 * sc,  (156 + ey1) * sc, 17, -6, 3, 0, 0, "FILTER", slider17 > -0.005 && slider17 < 0.005 ? "OPEN" : "%+.2f oct");
+  ui_knob(144 * sc, (156 + ey1) * sc, 18, 0, 100, 0, 0, "RESO", "%.0f%%");
+  ui_knob(218 * sc, (156 + ey1) * sc, 2, 0, 100, 50, 0, "TONE", "%.0f%%");
+  ui_knob(292 * sc, (156 + ey1) * sc, 3, 10, 400, 100, 1, "ATTACK", "%.0f%%");
+  ui_knob(366 * sc, (156 + ey1) * sc, 4, 10, 400, 100, 1, "RELEASE", "%.0f%%");
+  ui_knob(440 * sc, (156 + ey1) * sc, 5, 0, 200, 100, 0, "CHORUS", "%.0f%%");
+  ui_knob(514 * sc, (156 + ey1) * sc, 6, 0, 100, 70, 0, "VELOCITY", "%.0f%%");
+  ui_knob(588 * sc, (156 + ey1) * sc, 7, -50, 50, 0, 0, "TUNE", "%+.0f cents");
+
+  // ---------- REVERB ----------
+  mgroup(16, 214 + ey2, 608, 92, 0, "REVERB", SH2);
+  i = 0;
+  loop(3,
+    pk_ledbtn(34 * sc, (224 + ey2 + i * 26) * sc, 26 * sc, 22 * sc, slider19 == i, TEAL) ? ( slider19 = i; slider_automate(262144); );
+    gfx_setfont(5); ui_col(INKL); gfx_x = 68 * sc; gfx_y = (229 + ey2 + i * 26) * sc; gfx_drawstr(i == 0 ? "ROOM" : i == 1 ? "HALL" : "PLATE");
+    i += 1;
+  );
+  ui_knob(190 * sc, (258 + ey2) * sc, 20, 0, 150, 15, 0, "PRE-DELAY", "%.0f ms");
+  ui_knob(300 * sc, (258 + ey2) * sc, 21, 0.2, 10, 2.2, 1, "DECAY", "%.2f s");
+  ui_knob(410 * sc, (258 + ey2) * sc, 22, 0, 100, 50, 0, "DAMPING", "%.0f%%");
+  ui_knob(540 * sc, (258 + ey2) * sc, 23, 0, 100, 25, 0, "MIX", "%.0f%%");
+
+  // ---------- DRIFT ----------
+  mgroup(16, 316 + ey3, 112, 92, 1, "DRIFT", SH3);
+  ui_knob(72 * sc, (360 + ey3) * sc, 8, 0, 100, 25, 0, "DRIFT", "%.0f%%");
+
+  // ---------- MIDI ----------
+  mgroup(136, 316 + ey3, 214, 92, 3, "MIDI", SH3);
+  knob_step = 1;
+  ui_knob(186 * sc, (360 + ey3) * sc, 9, 0, 16, 0, 0, "CHANNEL", slider9 == 0 ? "OMNI" : "CH %.0f");
+  pk_led(246 * sc, (345 + ey3) * sc, 4 * sc, ins_midi_lit() || nact > 0, REDL);
+  gfx_setfont(5); ui_col(INKL);
+  gfx_x = 258 * sc; gfx_y = (338 + ey3) * sc; gfx_drawstr("MIDI IN");
+  ui_cola(INKL, 0.8);
+  gfx_x = 240 * sc; gfx_y = (360 + ey3) * sc; gfx_drawstr("CC64  SUSTAIN");
+  gfx_x = 240 * sc; gfx_y = (378 + ey3) * sc; gfx_drawstr("CC1  VIBRATO");
+
+  // ---------- MASTER ----------
+  mgroup(358, 316 + ey3, 266, 92, 2, "MASTER", SH3);
+  ui_knob(460 * sc, (360 + ey3) * sc, 10, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
+  mL.ui_ledm(570 * sc, (326 + ey3) * sc, 16 * sc, 70 * sc, pkL);
+  mR.ui_ledm(592 * sc, (326 + ey3) * sc, 16 * sc, 70 * sc, pkR);
+  gfx_setfont(4); ui_col(INKL); ui_text(590 * sc, (398 + ey3) * sc, "OUT");
 );
-ui_knob(190 * sc, 258 * sc, 20, 0, 150, 15, 0, "PRE-DELAY", "%.0f ms");
-ui_knob(300 * sc, 258 * sc, 21, 0.2, 10, 2.2, 1, "DECAY", "%.2f s");
-ui_knob(410 * sc, 258 * sc, 22, 0, 100, 50, 0, "DAMPING", "%.0f%%");
-ui_knob(540 * sc, 258 * sc, 23, 0, 100, 25, 0, "MIX", "%.0f%%");
-
-// ---------- DRIFT ----------
-mgroup(16, 316, 112, 92, 1, "DRIFT", SH3);
-ui_knob(72 * sc, 360 * sc, 8, 0, 100, 25, 0, "DRIFT", "%.0f%%");
-
-// ---------- MIDI ----------
-mgroup(136, 316, 214, 92, 3, "MIDI", SH3);
-knob_step = 1;
-ui_knob(186 * sc, 360 * sc, 9, 0, 16, 0, 0, "CHANNEL", slider9 == 0 ? "OMNI" : "CH %.0f");
-pk_led(246 * sc, 345 * sc, 4 * sc, ins_midi_lit() || nact > 0, REDL);
-gfx_setfont(5); ui_col(INKL);
-gfx_x = 258 * sc; gfx_y = 338 * sc; gfx_drawstr("MIDI IN");
-ui_cola(INKL, 0.8);
-gfx_x = 240 * sc; gfx_y = 360 * sc; gfx_drawstr("CC64  SUSTAIN");
-gfx_x = 240 * sc; gfx_y = 378 * sc; gfx_drawstr("CC1  VIBRATO");
-
-// ---------- MASTER ----------
-mgroup(358, 316, 266, 92, 2, "MASTER", SH3);
-ui_knob(460 * sc, 360 * sc, 10, -24, 12, 0, 0, "OUTPUT", "%.1f dB");
-mL.ui_ledm(570 * sc, 326 * sc, 16 * sc, 70 * sc, pkL);
-mR.ui_ledm(592 * sc, 326 * sc, 16 * sc, 70 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;
-gfx_setfont(4); ui_col(INKL); ui_text(590 * sc, 398 * sc, "OUT");
-
-// ---------- SOUNDS: every sound, by group, in three columns - click a name to play it ----------
-// (as the G M1K / G Pocket 70 patch pages: group headings as dark bars with a coloured tab, zebra rows,
-// the sound in use lit, hover shows where a click lands; the order is the PRESETS menu's)
-mgroup(648, 52, 496, 356, 0, "SOUNDS", SH2);
-// names and headings: the largest sizes (names 13 to 16, headings 11 to 14) at which every one fits its row -
-// worked out once per window size
-sc != lb_lsc ? (
-  lb_lsc = sc; lb_lfs = 16; lb_fit = 0;
-  loop(4,
-    !lb_fit ? (
-      gfx_setfont(9, "Trebuchet MS", lb_lfs * sc, 'b');
-      lb_mw = 0; i = 0; loop(NSND, gfx_measurestr(sname(i), lb_w, lb_h); lb_mw = max(lb_mw, lb_w); i += 1; );
-      lb_mw <= 124 * sc ? lb_fit = 1 : lb_lfs -= 1;
-    );
-  );
-  lb_hfs = 14; lb_fit = 0;
-  loop(4,
-    !lb_fit ? (
-      gfx_setfont(11, "Trebuchet MS", lb_hfs * sc, 'b');
-      lb_mw = 0; i = 0; loop(NGRP, gfx_measurestr(grp_name(i), lb_w, lb_h); lb_mw = max(lb_mw, lb_w); i += 1; );
-      lb_mw <= 140 * sc ? lb_fit = 1 : lb_hfs -= 1;
-    );
-  );
-);
-gfx_setfont(9, "Trebuchet MS", lb_lfs * sc, 'b');
-gfx_setfont(10, "Courier New", 14 * sc, 'b');
-gfx_setfont(11, "Trebuchet MS", lb_hfs * sc, 'b');
-lb_e = 0; lb_q = 0; lb_g = 0;
-loop(NSND + NGRP,
-  lb_col = floor(lb_e / 17); lb_row = lb_e % 17;
-  lb_x = 656 + lb_col * 162; lb_y = 58 + lb_row * 20.4;
-  lb_g < NGRP && lb_q == GST[lb_g] ? (
-    // group heading: a dark label bar with a teal tab
-    ui_col(0x1E1814); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc, 3 * sc);
-    ui_col(TEAL); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 4 * sc, 18.5 * sc, 1.5 * sc);
-    gfx_setfont(11); ui_col(INKL); gfx_measurestr(grp_name(lb_g), lb_w, lb_h);
-    gfx_x = (lb_x + 12) * sc; gfx_y = (lb_y + 10.25) * sc - lb_h * 0.5; gfx_drawstr(grp_name(lb_g));
-    lb_g += 1;
-  ) : (
-    lb_on = mord[lb_q] == slider1;
-    lb_hv = mouse_x >= lb_x * sc && mouse_x < (lb_x + 158) * sc && mouse_y >= lb_y * sc && mouse_y < (lb_y + 20.5) * sc;
-    lb_on ? ( ui_col(TEAL); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc, 3 * sc); )
-          : lb_hv ? ( ui_col(0x5A4A40); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc, 3 * sc); )
-          : lb_row % 2 ? ( ui_cola(0xFFFFFF, 0.05); gfx_rect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc); );
-    gfx_setfont(10); ui_col(lb_on ? 0x14100D : ui_mix(INKL, BRW, 0.4)); sprintf(#lb_n, "%02d", lb_q + 1);
-    gfx_measurestr(#lb_n, lb_w, lb_h); gfx_x = (lb_x + 7) * sc; gfx_y = (lb_y + 10.25) * sc - lb_h * 0.5; gfx_drawstr(#lb_n);
-    gfx_setfont(9); ui_col(lb_on ? 0x14100D : INKL);
-    gfx_measurestr(sname(mord[lb_q]), lb_w, lb_h); gfx_x = (lb_x + 30) * sc; gfx_y = (lb_y + 10.25) * sc - lb_h * 0.5; gfx_drawstr(sname(mord[lb_q]));
-    pressed && drag_id == 0 && lb_hv ? ( drag_id = -1; slider1 = mord[lb_q]; slider_automate(1); );
-    lb_q += 1;
-  );
-  lb_e += 1;
-);
-
-// ---------- IN / OUT strip: SAT, OUT, STEREO ----------
-// ins_strip(16, 414, 608, 11, 24, TEAL, SH3);
 
 pk_end();
 ui_end();
