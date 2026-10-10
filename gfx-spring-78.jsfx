@@ -330,7 +330,7 @@ sp_bal = sp_balt; sp_mx = sp_mxt; sp_o_ = sp_ot; sp_pre = sp_pret; sp_wd = sp_wd
 sp_bw = sp_bon; sp_hw = sp_hon; sp_fwB = sp_bft; sp_fwH = sp_hft; sp_gdB = sp_dgB; sp_gdH = sp_dgH;
 sp_bz = sp_hz = 0;
 ostL.ost_ch_init(); ostR.ost_ch_init();
-sp_gB = 1.15; sp_gH = 1.45;                               // output calibration of the two tanks (set below)
+sp_gB = 1.15; sp_gH = 1.22;                               // output calibration of the two tanks (set below)
 sp_gin = 0.35;                                          // driver -> springs
 
 ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
@@ -464,6 +464,441 @@ spl1 = abs(ost_r) < 0.00000000000000000001 ? 0 : ost_r;
 
 @gfx 1100 440
 ui_begin(1100, 440);
-//GFX_PLACEHOLDER
+gfx_setfont(6,  "Trebuchet MS", 27 * sc, 'b');          // title
+gfx_setfont(10, "Trebuchet MS", 12.5 * sc, 'b');        // scale numbers
+gfx_setfont(11, "Trebuchet MS", 13.5 * sc, 'b');        // silkscreen lines
+gfx_setfont(12, "Trebuchet MS", 13.5 * sc, 'b');        // key captions
+gfx_setfont(13, "Trebuchet MS", 14 * sc, 'b');          // small knob names
+gfx_setfont(14, "Trebuchet MS", 15 * sc, 'b');          // knob names
+gfx_setfont(15, "Trebuchet MS", 27 * sc, 'b');          // model numbers
+gfx_setfont(16, "Trebuchet MS", 16 * sc, 'b');          // the KICK key
+
+function sg_r(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc); );
+function sg_fr(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc, 0); );
+function sg_txt(x, y, s) ( gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function sg_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = cx * sc - tw * 0.5; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
+function sg_ltxt(lx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = lx * sc; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
+function sg_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
+
+// ---------- language: ENG / LOCAL (LOCAL: French on a BAMAKO face, Spanish on a HAVANA face) ----------
+sg_loc = slider26 >= 0.5;
+function sg_lang(f) ( sg_lg = sg_loc ? 1 + f : 0; );
+function sg_s(e, f, s) ( sg_lg == 1 ? f : sg_lg == 2 ? s : e; );
+// French and Spanish print decimal commas
+function sg_dec(s) local(i) ( sg_lg ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
+
+// =====================================================================
+// The faces: f = 0 BAMAKO ('Sahel Analog'), 1 HAVANA ('Malecon Sunset')
+// =====================================================================
+function sg_face(f) (
+  sg_f = f;
+  f == 0 ? (
+    SGF = 0x2E4226;                                     // olive chassis
+    SGS = 0x1F2D1A;                                     // recessed sections
+    SGI = 0xF2EAD3;                                     // cream legends
+    SGI2 = 0xB9B79E;
+    SGA = 0xE0B034;                                     // Malian gold: rings, LEDs, lit keys
+    SGP = 0xA62B2B;                                     // muted crimson: ON only
+    SGHI = 0xE0B034;
+    SGTR = 0x15200F;                                    // knob track
+    SGW = 0x0E140C;                                     // the tank window
+  ) : (
+    SGF = 0xD97D64;                                     // coral / terracotta chassis
+    SGS = 0xF4EAD4;                                     // aged cream plates
+    SGI = 0x2A1A14;                                     // deep brown legends
+    SGI2 = 0x4A2C20;
+    SGA = 0x4CA7A0;                                     // seafoam teal: rings, lit keys, the eye
+    SGP = 0x4CA7A0;
+    SGHI = 0x1E6E68;
+    SGTR = 0xCDBFA4;
+    SGW = 0x22160F;
+  );
+);
+
+// a section: BAMAKO a recessed tray with sloped walls; HAVANA an aged-cream plate with a brown frame
+function sg_sect(x, y, w, h) (
+  sg_f == 0 ? pk_inset((x + 4) * sc, (y + 4) * sc, (w - 8) * sc, (h - 8) * sc, SGS) : (
+    ui_cola(0x000000, 0.18); sg_r(x + 1, y + 2, w, h);
+    ui_col(0x5A3426); sg_r(x, y, w, h);
+    ui_col(SGS); sg_r(x + 1.5, y + 1.5, w - 3, h - 3);
+    gfx_gradrect((x + 1.5) * sc, (y + h - 20) * sc, (w - 3) * sc, 18.5 * sc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05 / (18.5 * sc));
+  );
+);
+
+// a lit key; returns 1 when clicked. col = its lit colour. BAMAKO: chunky dark keys with a deep bottom edge;
+// HAVANA: cream enamel keys in a brown bezel.
+function sg_key(x, y, w, h, lbl, on, col) local(hov, hit, c) (
+  hov = sg_hov(x, y, w, h);
+  hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;
+  sg_f == 0 ? (
+    ui_cola(0x000000, 0.5); rd_rr((x + 0.5) * sc, (y + 2.5) * sc, w * sc, h * sc, 3 * sc);
+    on ? ( ui_cola(col, 0.22); rd_rr((x - 3) * sc, (y - 3) * sc, (w + 6) * sc, (h + 6) * sc, 5 * sc); );
+    ui_col(0x0B0F09); rd_rr(x * sc, y * sc, w * sc, h * sc, 3 * sc);
+    c = on ? col : hov ? 0x3B4A34 : 0x313D2B;
+    ui_col(ui_mix(c, 0x000000, 0.35)); rd_rr((x + 1) * sc, (y + 1) * sc, (w - 2) * sc, (h - 2) * sc, 2.5 * sc);   // the deep bottom edge
+    ui_col(c); rd_rr((x + 1) * sc, (y + 1) * sc, (w - 2) * sc, (h - 5) * sc, 2.5 * sc);
+    ui_cola(0xFFFFFF, on ? 0.3 : 0.1); sg_r(x + 3, y + 1.5, w - 6, 1);
+    ui_col(on ? (col == SGP ? 0xF8EEDC : 0x1C1A10) : SGI);
+    gfx_setfont(12); sg_ctxt(x + w * 0.5, y + h * 0.5 - 1, lbl);
+  ) : (
+    ui_cola(0x000000, 0.25); sg_r(x + 1, y + 2, w, h);
+    on ? ( ui_cola(col, 0.3); sg_r(x - 2.5, y - 2.5, w + 5, h + 5); );
+    ui_col(0x3A2418); sg_r(x, y, w, h);
+    ui_col(on ? col : hov ? 0xFFF8E8 : 0xF4EAD4); sg_r(x + 1.5, y + 1.5, w - 3, h - 3);
+    ui_cola(0xFFFFFF, 0.4); sg_r(x + 1.5, y + 1.5, w - 3, 1);
+    ui_cola(0x000000, 0.12); sg_r(x + 1.5, y + h - 3, w - 3, 1.5);
+    ui_col(on ? 0x10201E : SGI);
+    gfx_setfont(12); sg_ctxt(x + w * 0.5, y + h * 0.5, lbl);
+  );
+  hit;
+);
+
+// ---------- knobs ----------
+function sg_arcw(cx, cy, r, a1, a2, w) local(k) (       // a smooth thick arc: anti-aliased arcs every half pixel
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+function sg_ptr(cx, cy, a, r1, r2, w) local(ca, sa, k) (
+  ca = sin(a); sa = -cos(a); k = -w * 0.5;
+  loop(max(1, floor(w * 2) + 1), gfx_line(cx + ca * r1 - sa * k, cy + sa * r1 + ca * k, cx + ca * r2 - sa * k, cy + sa * r2 + ca * k, 1); k += 0.5; );
+);
+// the house white cap (flat satin cap, one soft highlight on its upper-left edge, thin dark rim, dark pointer),
+// a thin smooth track and an anti-aliased value arc in acc. skirt >= 0: a bakelite skirt of that colour round it.
+function sg_wcap(cx, cy, r, n, acc, trk, skirt) local(rr, a, a0, rc, i, t) (
+  a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; rr = r + 6 * sc;
+  ui_col(trk); sg_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.4 * sc);
+  n > 0.004 ? (
+    ui_col(acc); sg_arcw(cx, cy, rr, a0, a, 3 * sc);
+    gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, 1.5 * sc, 1, 1); gfx_circle(cx + sin(a) * rr, cy - cos(a) * rr, 1.5 * sc, 1, 1);
+  );
+  ui_cola(0x000000, 0.3); gfx_circle(cx + 1 * sc, cy + 2.5 * sc, r, 1, 1);
+  skirt >= 0 ? (
+    ui_col(skirt); gfx_circle(cx, cy, r, 1, 1);
+    i = 0; loop(20, t = i / 20 * 2 * $pi; ui_cola(0xFFFFFF, 0.07);
+      gfx_circle(cx + sin(t) * r * 0.9, cy - cos(t) * r * 0.9, r * 0.075, 1, 1); i += 1; );
+    ui_cola(0xFFFFFF, 0.12); sg_arcw(cx, cy, r - 1 * sc, -0.7 * $pi, 0.1 * $pi, 1 * sc);
+    ui_col(0xF4EAD4); sg_ptr(cx, cy, a, r * 0.8, r - 1.5 * sc, 1.6 * sc);    // the skirt's cream index line
+    rc = r * 0.74;
+  ) : rc = r;
+  ui_col(0x50565E); gfx_circle(cx, cy, rc, 1, 1);
+  ui_col(0xB3B9C0); gfx_circle(cx, cy, rc - 1.5 * sc, 1, 1);
+  ui_col(0xD9DDE1); sg_arcw(cx, cy, rc - 3 * sc, -0.66 * $pi, 0.06 * $pi, 1.4 * sc);
+  ui_col(0x1A1E24); sg_ptr(cx, cy, a, rc * 0.3, rc - 3 * sc, 2 * sc);
+);
+// printed ticks round a knob (n positions) and numbers from a list "a|b|c" spread evenly
+function sg_ticks(cx, cy, r, nt, labels, ink) local(i, a, ca, sa, len, n, k, k0, c) (
+  i = 0;
+  loop(nt,
+    a = -0.75 * $pi + i / (nt - 1) * 1.5 * $pi; ca = sin(a); sa = -cos(a);
+    ui_cola(ink, 0.8); gfx_line((cx + ca * (r + 10)) * sc, (cy + sa * (r + 10)) * sc, (cx + ca * (r + 14)) * sc, (cy + sa * (r + 14)) * sc, 1);
+    i += 1;
+  );
+  len = strlen(labels); n = 1; k = 0; loop(len, str_getchar(labels, k) == 124 ? n += 1; k += 1; );
+  gfx_setfont(10); ui_col(ink); k0 = 0; i = 0; k = 0;
+  len ? loop(len + 1,
+    c = k < len ? str_getchar(labels, k) : 124;
+    c == 124 ? (
+      strcpy_substr(#sg_sl, labels, k0, k - k0);
+      a = -0.75 * $pi + i / max(n - 1, 1) * 1.5 * $pi; ca = sin(a); sa = -cos(a);
+      sg_ctxt(cx + ca * (r + 24), cy + sa * (r + 22), #sg_sl);
+      i += 1; k0 = k + 1;
+    );
+    k += 1;
+  );
+);
+// a knob. lg = 1: logarithmic travel. cap: 0 the face's main knob, 1 the bracket's white cap, -1 yellow (high-pass),
+// -2 black (low-pass), otherwise a small cap of that colour. The name under it; the value replaces it while touched.
+function sg_knob(cx, cy, r, idx, lg, lo, hi, def, st, cap, name, val) local(v, n, dx, dy, hov, did) (
+  did = 2100 + idx; v = slider(idx);
+  dx = mouse_x - cx * sc; dy = mouse_y - cy * sc; hov = dx * dx + dy * dy <= sqr((r + 6) * sc);
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - sg_lt < 0.35 && sg_lid == idx ? ( slider(idx) = def; ui_auto(idx); drag_id = -1; sg_lt = 0; ) : (
+      drag_id = did; sg_my = mouse_y; sg_lt = time_precise(); sg_lid = idx;
+      sg_n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+    );
+  );
+  drag_id == did ? (
+    sg_n = min(max(sg_n + (sg_my - mouse_y) / (((mouse_cap & 8) ? 1200 : 220) * sc), 0), 1); sg_my = mouse_y;
+    v = lg ? lo * (hi / lo) ^ sg_n : lo + sg_n * (hi - lo);
+    v = floor(v / st + 0.5) * st;
+    slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); );
+  );
+  hov && mouse_wheel != 0 && drag_id == 0 ? (
+    n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+    n = min(max(n + mouse_wheel / 120 * ((mouse_cap & 8) ? 0.005 : 0.025), 0), 1);
+    v = lg ? lo * (hi / lo) ^ n : lo + n * (hi - lo);
+    slider(idx) = min(max(floor(v / st + 0.5) * st, lo), hi); ui_auto(idx); mouse_wheel = 0;
+  );
+  v = slider(idx); n = min(max(lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo), 0), 1);
+  cap == 0 ? sg_wcap(cx * sc, cy * sc, r * sc, n, SGA, SGTR, sg_f ? 0x2E1F18 : -1) :
+  cap == 1 ? sg_wcap(cx * sc, cy * sc, r * sc, n, 0x2A2C2F, 0x6E747A, -1) :
+  cap < 0 ? ui_knob_filter(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, 0, -cap) :
+  dy_fcap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, cap);
+  sg_act = hov || drag_id == did;
+  sg_act ? ( ui_cola(0xFFFFFF, 0.1); gfx_circle(cx * sc, cy * sc, (r + 2) * sc, 1, 1); );
+  ui_col(sg_act ? sg_hic : sg_ink);
+  gfx_setfont(r >= 19 ? 14 : 13);
+  sg_ctxt(cx, cy + r + (r >= 25 ? 27 : r >= 19 ? 24 : 17), sg_act ? val : name);
+);
+
+// =====================================================================
+// The emblems (single-colour line drawings in the legend colour); x, y = top left, k = scale (unscaled units)
+// =====================================================================
+function sg_mv(x, y) ( sg_px = sg_ex + x * sg_ek; sg_py = sg_ey + y * sg_ek; );
+function sg_ln(x, y) local(nx, ny) (
+  nx = sg_ex + x * sg_ek; ny = sg_ey + y * sg_ek;
+  gfx_line(sg_px * sc, sg_py * sc, nx * sc, ny * sc, 1);
+  gfx_line(sg_px * sc + 0.6 * sc, sg_py * sc, nx * sc + 0.6 * sc, ny * sc, 1);       // strokes about 1.6 px
+  gfx_line(sg_px * sc, sg_py * sc + 0.6 * sc, nx * sc, ny * sc + 0.6 * sc, 1);
+  sg_px = nx; sg_py = ny;
+);
+// BAMAKO: a crocodile in profile (60 x 18): long tapering tail, raised eye, long snout, splayed legs
+function sg_croc(x, y, k) (
+  sg_ex = x; sg_ey = y; sg_ek = k;
+  sg_mv(0, 11); sg_ln(8, 10.2); sg_ln(16, 9); sg_ln(22, 7.6); sg_ln(28, 6.6); sg_ln(34, 6.4); sg_ln(38, 6.8); sg_ln(41, 6.3);
+  sg_ln(43, 5.0); sg_ln(45.2, 6.3); sg_ln(48, 7.3); sg_ln(57, 8.4); sg_ln(59.6, 9.4);
+  sg_ln(58, 10.6); sg_ln(48, 10.9); sg_ln(44, 11.6); sg_ln(40, 12.6); sg_ln(34, 13.4); sg_ln(26, 13.8); sg_ln(20, 13);
+  sg_ln(14, 12); sg_ln(8, 11.4); sg_ln(0, 11);
+  sg_mv(45.5, 9.5); sg_ln(58.6, 9.6);                                     // the jaw line
+  sg_mv(38, 12.8); sg_ln(40, 16.4); sg_ln(43.2, 17);                      // legs
+  sg_mv(35, 13.2); sg_ln(34, 16.6); sg_ln(36.6, 17.2);
+  sg_mv(24, 13.6); sg_ln(22.5, 17); sg_ln(25.2, 17.6);
+  sg_mv(20, 13); sg_ln(17, 16.2); sg_ln(19.6, 16.8);
+  sg_mv(10, 10); sg_ln(11, 8.6); sg_mv(14, 9.4); sg_ln(15, 8);           // the scutes
+  sg_mv(18, 8.6); sg_ln(19, 7.1); sg_mv(22, 7.6); sg_ln(23, 6.1); sg_mv(26, 7); sg_ln(27, 5.5); sg_mv(30, 6.5); sg_ln(31, 5.1);
+  gfx_circle((x + 43.2 * k) * sc, (y + 6.7 * k) * sc, max(1.2, 1.1 * k * sc), 1, 1);                 // the eye
+  gfx_circle((x + 57.4 * k) * sc, (y + 8.4 * k) * sc, max(1, 0.7 * k * sc), 1, 1);                   // the nostril
+);
+// HAVANA: the harbour-mouth castle lighthouse - the tower on its fortress rock, a small pennant on top (26 x 34)
+function sg_tower(x, y, k) (
+  sg_ex = x; sg_ey = y; sg_ek = k;
+  sg_mv(0, 34); sg_ln(1.6, 31); sg_ln(4.5, 29.5); sg_ln(4.5, 25.5); sg_ln(21.5, 25.5); sg_ln(21.5, 29.5); sg_ln(24.2, 30.6); sg_ln(26, 34);   // rock and walls
+  sg_mv(4.5, 25.5); sg_ln(4.5, 23.6); sg_ln(7, 23.6); sg_ln(7, 25.5);                                        // battlements
+  sg_mv(19, 25.5); sg_ln(19, 23.6); sg_ln(21.5, 23.6); sg_ln(21.5, 25.5);
+  sg_mv(4.5, 29.5); sg_ln(21.5, 29.5);
+  sg_mv(10, 25.5); sg_ln(11, 11); sg_mv(16, 25.5); sg_ln(15, 11);                                            // the tower
+  sg_mv(10.6, 20); sg_ln(15.4, 20); sg_mv(10.9, 15.5); sg_ln(15.1, 15.5);
+  sg_mv(9.4, 11); sg_ln(16.6, 11); sg_mv(10, 11); sg_ln(10, 9.4); sg_ln(16, 9.4); sg_ln(16, 11);             // the gallery
+  sg_mv(11.2, 9.4); sg_ln(11.2, 6.6); sg_mv(14.8, 9.4); sg_ln(14.8, 6.6); sg_mv(11.2, 6.6); sg_ln(14.8, 6.6); // the lantern
+  gfx_arc((x + 13 * k) * sc, (y + 6.6 * k) * sc, 1.8 * k * sc, -0.5 * $pi, 0.5 * $pi, 1);
+  sg_mv(18, 7.6); sg_ln(21.5, 6.4); sg_mv(8, 7.6); sg_ln(4.5, 6.4);                                          // its light
+  sg_mv(13, 4.8); sg_ln(13, 0.4);                                                                            // the staff
+  gfx_triangle((x + 13 * k) * sc, (y + 0.4 * k) * sc, (x + 19 * k) * sc, (y + 1.8 * k) * sc, (x + 13 * k) * sc, (y + 3.2 * k) * sc);   // pennant
+);
+
+// =====================================================================
+// The tank window: the springs, shaking with what they carry (n springs, lv = their levels 0..1 in sg_lv*)
+// =====================================================================
+function sg_coil(x1, x2, yc, amp, turns, lvl, ph) local(n, j, t, th, px, py, nx, ny, d, fr) (
+  n = floor(turns * 10); j = 0;
+  px = x1; py = yc;
+  loop(n + 1,
+    t = j / n; th = 2 * $pi * turns * t;
+    d = lvl * 4.5 * sin($pi * t) * sin(ph + 9 * t);
+    nx = x1 + t * (x2 - x1); ny = yc + amp * cos(th) + d;
+    fr = sin(th) > 0;
+    j > 0 ? ( ui_col(fr ? 0xD3D8DD : 0x5A6066); gfx_line(px * sc, py * sc, nx * sc, ny * sc, 1); );
+    px = nx; py = ny; j += 1;
+  );
+);
+function sg_tank(x, y, w, h, n) local(i, yc, sp, lv) (
+  ui_col(0x0A0A0A); sg_r(x - 1.5, y - 1.5, w + 3, h + 3);
+  ui_col(SGW); sg_r(x, y, w, h);
+  gfx_gradrect(x * sc, y * sc, w * sc, 16 * sc, 0, 0, 0, 0.35, 0, 0, 0, 0, 0, 0, 0, -0.35 / (16 * sc));
+  // the transducers
+  ui_col(0x3E4348); sg_r(x + 6, y + 10, 20, h - 20); sg_r(x + w - 26, y + 10, 20, h - 20);
+  ui_col(0x6C737A); sg_r(x + 7, y + 11, 18, 3); sg_r(x + w - 25, y + 11, 18, 3);
+  ui_col(0x8A5A2A); sg_r(x + 10, y + 20, 12, h - 40); sg_r(x + w - 22, y + 20, 12, h - 40);   // the coils
+  ui_cola(0x000000, 0.3); i = 0; loop(floor((h - 40) / 3), sg_r(x + 10, y + 20 + i * 3, 12, 1); sg_r(x + w - 22, y + 20 + i * 3, 12, 1); i += 1; );
+  sp = (h - 24) / n; i = 0;
+  loop(n,
+    yc = y + 12 + sp * (i + 0.5);
+    lv = i == 0 ? sg_lv0 : i == 1 ? sg_lv1 : sg_lv2;
+    ui_col(0x9AA0A6); sg_r(x + 26, yc - 0.6, 6, 1.2); sg_r(x + w - 32, yc - 0.6, 6, 1.2);
+    sg_coil(x + 32, x + w - 32, yc, min(sp * 0.2, 6.5), 24 + i * 3 + (n == 3) * 4, lv, sg_now * (13 + 3 * i) + i * 1.7);
+    i += 1;
+  );
+  ui_cola(0xFFFFFF, 0.05); sg_r(x, y, w, h * 0.35);
+);
+
+// a unit's level display: BAMAKO a row of chunky gold LEDs; HAVANA a teal magic eye. q = level in dB (0 = the
+// driver's limit)
+function sg_level(x, y, w, q) local(i, d, c, lit, bx, cx, cy, R, sh) (
+  sg_f == 0 ? (
+    ui_col(0x0A0E08); sg_r(x - 4, y - 4, w + 8, 30);
+    i = 0;
+    loop(10,
+      d = i == 0 ? -24 : i == 1 ? -18 : i == 2 ? -12 : i == 3 ? -9 : i == 4 ? -6 : i == 5 ? -4 : i == 6 ? -2 : i == 7 ? 0 : i == 8 ? 2 : 4;
+      c = i >= 8 ? 0xE0503A : i == 7 ? 0xF07A2A : SGA; lit = q >= d;
+      bx = x + i * w / 10;
+      lit ? ( ui_cola(c, 0.25); sg_r(bx - 1, y - 1, w / 10 - 1, 24); ui_col(c); ) : ui_col(ui_mix(c, 0x0A0E08, 0.8));
+      sg_r(bx + 0.5, y + 0.5, w / 10 - 3, 21);
+      lit ? ( ui_cola(0xFFFFFF, 0.3); sg_r(bx + 0.5, y + 0.5, w / 10 - 3, 2); );
+      i += 1;
+    );
+    gfx_setfont(11); ui_col(SGI2); sg_ctxt(x + w * 0.5, y + 40, sg_s("DRIVER LEVEL", "NIVEAU", "NIVEL"));
+  ) : (
+    cx = x + w * 0.5; cy = y + 18; R = 25;
+    // the bezel, the glass, the fluorescent target with its shadow wedge closing as the level rises
+    ui_cola(0x000000, 0.25); gfx_circle((cx + 1) * sc, (cy + 2) * sc, (R + 6) * sc, 1, 1);
+    ui_col(0x3A2418); gfx_circle(cx * sc, cy * sc, (R + 6) * sc, 1, 1);
+    ui_col(0x5A3A2A); sg_arcw(cx * sc, cy * sc, (R + 5) * sc, -0.8 * $pi, 0.1 * $pi, 1.2 * sc);
+    ui_col(0x061210); gfx_circle(cx * sc, cy * sc, R * sc, 1, 1);
+    sh = 0.08 + 0.42 * $pi * min(max(1 - (q + 30) / 32, 0), 1);
+    ui_col(ui_mix(SGA, 0x061210, 0.55)); sg_arcw(cx * sc, cy * sc, R * 0.66 * sc, sh, 2 * $pi - sh, R * 0.5 * sc);
+    ui_col(ui_mix(SGA, 0xC8FFF4, 0.25)); sg_arcw(cx * sc, cy * sc, R * 0.66 * sc, sh, 2 * $pi - sh, R * 0.3 * sc);
+    ui_cola(SGA, 0.18); gfx_circle(cx * sc, cy * sc, R * 0.95 * sc, 1, 1);
+    ui_col(0x1E2624); gfx_circle(cx * sc, cy * sc, R * 0.36 * sc, 1, 1);
+    ui_col(0x3E4A48); gfx_circle((cx - 2) * sc, (cy - 2) * sc, R * 0.16 * sc, 1, 1);
+    ui_cola(0xFFFFFF, 0.12); sg_arcw(cx * sc, cy * sc, R * 0.85 * sc, -0.7 * $pi, -0.2 * $pi, 2 * sc);
+    gfx_setfont(11); ui_col(SGI2); sg_ctxt(cx, y + 58, sg_s("DRIVER LEVEL", "NIVEAU", "NIVEL"));
+  );
+);
+
+// =====================================================================
+// A unit: case, screws, model plate and emblem, ON key, tank window, face keys, level display, knobs
+// u = 0 2S-78 (sliders 1-5), 1 3S-78 (sliders 6-10)
+// =====================================================================
+function sg_unit(x, u) local(y, w, h, f, b, tw, th, ex, q, n) (
+  y = 60; w = 426; h = 372; b = u * 5;
+  f = slider(b + 2) >= 0.5; sg_face(f); sg_lang(f);
+  sg_ink = SGI; sg_hic = SGHI;
+  ui_cola(0x000000, 0.45); sg_r(x + 2, y + 4, w, h);
+  ui_col(0x0A0A0A); sg_r(x, y, w, h);
+  f == 0 ? rd_brushed(x + 1, y + 1, w - 2, h - 2, SGF) : (
+    ui_col(SGF); sg_r(x + 1, y + 1, w - 2, h - 2);
+    gfx_gradrect((x + 1) * sc, (y + 1) * sc, (w - 2) * sc, 60 * sc, 1, 1, 1, 0.10, 0, 0, 0, 0, 0, 0, 0, -0.10 / (60 * sc));
+  );
+  rd_screw(x + 11, y + 11); rd_screw(x + w - 11, y + 11); rd_screw(x + 11, y + h - 11); rd_screw(x + w - 11, y + h - 11);
+  // model plate: name, emblem, silkscreen
+  gfx_setfont(15); ui_col(SGI); sg_txt(x + 24, y + 9, u ? "3S-78" : "2S-78");
+  gfx_measurestr(u ? "3S-78" : "2S-78", tw, th); ex = x + 24 + tw / sc + 10;
+  ui_col(SGI);
+  f == 0 ? ( sg_croc(ex, y + 10, 1.08); ex += 66; ) : ( sg_tower(ex, y + 6, 1.0); ex += 27; );
+  ui_col(SGA); sg_r(x + 24, y + 42, tw / sc, 3);
+  gfx_setfont(11); ui_col(SGI2);
+  sg_txt(ex + 12, y + 12, u ? sg_s("LONG TANK", "CUVE LONGUE", "TANQUE LARGO") : sg_s("SHORT TANK", "CUVE COURTE", "TANQUE CORTO"));
+  sg_txt(ex + 12, y + 28, u ? sg_s("3 SPRINGS", "3 RESSORTS", "3 RESORTES") : sg_s("2 SPRINGS", "2 RESSORTS", "2 RESORTES"));
+  sg_key(x + w - 84, y + 12, 66, 28, sg_s("ON", "MARCHE", "MARCHA"), slider(b + 1) >= 0.5, SGP) ? ( slider(b + 1) = slider(b + 1) >= 0.5 ? 0 : 1; ui_auto(b + 1); );
+  // the tank window and the face keys / level display
+  sg_sect(x + 12, y + 54, w - 24, 150);
+  sg_lv0 = u ? sg_eC : sg_eA; sg_lv1 = u ? sg_eD : sg_eB; sg_lv2 = sg_eE;
+  sg_tank(x + 24, y + 66, 220, 126, u ? 3 : 2);
+  sg_key(x + 256, y + 66, 74, 26, "BAMAKO", !f, SGA) ? ( slider(b + 2) = 0; ui_auto(b + 2); );
+  sg_key(x + 334, y + 66, 74, 26, "HAVANA", f, SGA) ? ( slider(b + 2) = 1; ui_auto(b + 2); );
+  q = u ? sg_qH : sg_qB;
+  sg_level(x + 262, y + (f ? 108 : 116), 140, slider(b + 1) >= 0.5 ? q : -100);
+  // the knobs: DWELL, DECAY, TONE
+  sg_sect(x + 12, y + 212, w - 24, 150);
+  n = 278;
+  sg_ticks(x + 80, y + n, 30, 11, "0||5||10", SGI2);
+  sprintf(#sgv, "%.0f %%", slider(b + 3));
+  sg_knob(x + 80, y + n, 30, b + 3, 0, 0, 100, u ? 35 : 40, 1, 0, sg_s("DWELL", "ATTAQUE", "ATAQUE"), #sgv);
+  sprintf(#sgv, "%.2f s", slider(b + 4)); sg_dec(#sgv);
+  u ? sg_ticks(x + 213, y + n, 30, 11, "1.5||7", SGI2) : sg_ticks(x + 213, y + n, 30, 11, "0.8||4", SGI2);
+  sg_knob(x + 213, y + n, 30, b + 4, 1, u ? 1.5 : 0.8, u ? 7 : 4, u ? 3.5 : 2, 0.01, 0, sg_s("DECAY", "DURÉE", "DURACIÓN"), #sgv);
+  sprintf(#sgv, "%+.1f dB", sp_tdb(slider(b + 5) / 100)); sg_dec(#sgv);
+  sg_ticks(x + 346, y + n, 30, 11, "-||0||+", SGI2);
+  sg_knob(x + 346, y + n, 30, b + 5, 0, 0, 100, 50, 1, 0, sg_s("TONE", "TIMBRE", "TONO"), #sgv);
+);
+
+// =====================================================================
+// Panel and header
+// =====================================================================
+sg_hdr = 0x24262A; sg_hw = 0xEEEFEA;
+ui_col(0x1B1C1E); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(sg_hdr); sg_r(0, 0, 1100, 54);
+ui_cola(0xFFFFFF, 0.06); sg_r(0, 0, 1100, 1);
+ui_col(0x101112); sg_r(0, 54, 1100, 2);
+ui_col(sg_hw); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
+gfx_setfont(4); ui_col(sg_hdr); ui_text(31 * sc, 21.5 * sc, "GFX");
+gfx_setfont(6); ui_col(sg_hw); sg_txt(58, 12, "SPRING 78");
+gfx_measurestr("SPRING 78", sg_tw, sg_th); sg_bx = 58 + sg_tw / sc + 24;
+// the 78 badge: a record with its centre label
+ui_col(0x0C0C0D); gfx_circle(sg_bx * sc, 27 * sc, 17 * sc, 1, 1);
+ui_col(0x3A3B3E); gfx_circle(sg_bx * sc, 27 * sc, 17 * sc, 0, 1);
+ui_cola(0xFFFFFF, 0.12); gfx_arc(sg_bx * sc, 27 * sc, 14.5 * sc, -0.4 * $pi, 0.2 * $pi, 1); gfx_arc(sg_bx * sc, 27 * sc, 12.5 * sc, 0.6 * $pi, 1.2 * $pi, 1);
+ui_col(0xE0B034); gfx_circle(sg_bx * sc, 27 * sc, 10 * sc, 1, 1);
+gfx_setfont(10); ui_col(0x1A1408); sg_ctxt(sg_bx, 27.5, "78");
+sg_face(slider2 >= 0.5); sg_lang(slider2 >= 0.5);       // the header and the bracket follow the left unit's face
+gfx_setfont(11); ui_col(0xB2A4A4);
+sg_txt(sg_bx + 28, 13, sg_s("DUAL SPRING", "DOUBLE RÉVERB.", "REVERB DOBLE"));
+sg_txt(sg_bx + 28, 29, sg_s("REVERB SYSTEM", "À RESSORTS", "DE RESORTES"));
+pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
+sg_k = pk_preset(436 * sc, 10 * sc, 512 * sc, 34 * sc, pr_cur,
+  "Init|Surf Drip|Dub Splash|Vocal Long Tank|Organ Springs|Snare Boing|Subtle Keys|Twang Combo|Long Studio Tank|Crunchy Drip|Wide Pair|Lo-Fi Radio|Send 100%|Ghost Wash");
+sg_k > 0 ? ( load_preset(sg_k); pr_cur = sg_k > 14 ? 1 : sg_k; );
+// the language key (ENG / LOCAL) with its LED, left of the size picker
+ui_button(976 * sc, 18 * sc, 54 * sc, 18 * sc, sg_loc ? "LOCAL" : "ENG", 0, 1) ? ( slider26 = sg_loc ? 0 : 1; ui_auto(26); sg_loc = slider26 >= 0.5; );
+rd_led(966, 27, 3, sg_loc, 0xE0B034);
+ui_size_picker(1032 * sc, 18 * sc);
+
+// ---------- meters (frame-rate independent) ----------
+sg_now = time_precise();
+sg_dt = sg_t0 > 0 ? min(max(sg_now - sg_t0, 0), 0.25) : 1; sg_t0 = sg_now;
+function sg_shk(e, old) ( max(min(e * 6, 1), old * (1 - min(3 * sg_dt, 1))); );
+sg_eA = sg_shk(spA.e, sg_eA); spA.e = 0; sg_eB = sg_shk(spB.e, sg_eB); spB.e = 0;
+sg_eC = sg_shk(spC.e, sg_eC); spC.e = 0; sg_eD = sg_shk(spD.e, sg_eD); spD.e = 0; sg_eE = sg_shk(spE.e, sg_eE); spE.e = 0;
+sg_q = 20 * log10(max(sp_dpB, 0.00001)); sp_dpB = 0; sg_qB = max(sg_q, sg_qB - 30 * sg_dt);
+sg_q = 20 * log10(max(sp_dpH, 0.00001)); sp_dpH = 0; sg_qH = max(sg_q, sg_qH - 30 * sg_dt);
+
+sg_unit(8, 0);
+sg_unit(666, 1);
+
+// =====================================================================
+// The central bracket: KICK, BLEND, MIX, PRE-DELAY, WIDTH, LOW / HIGH CUT, DRIFT, OUTPUT, SAT, output stage
+// =====================================================================
+sg_face(slider2 >= 0.5); sg_lang(slider2 >= 0.5);
+sg_ink = 0x1C1C1C; sg_hic = 0x7A1E1E;
+ui_cola(0x000000, 0.5); sg_r(442, 62, 220, 376);
+rd_brushed(440, 58, 220, 376, 0x9AA0A6);
+ui_cola(0x000000, 0.45); sg_fr(440, 58, 220, 376);
+ui_cola(0xFFFFFF, 0.35); sg_r(441, 59, 218, 1);
+ui_cola(0x000000, 0.25); sg_r(452, 66, 1, 362); sg_r(648, 66, 1, 362);
+rd_screw(446, 72); rd_screw(654, 72); rd_screw(446, 420); rd_screw(654, 420);
+// KICK: crimson, lit while the springs swing
+sg_kh = sg_hov(478, 68, 144, 36);
+pressed && sg_kh && drag_id == 0 ? ( drag_id = -1; sp_kreq += 1; );
+sg_kl = sp_klit;
+sg_kl > 0.01 ? ( ui_cola(0xA62B2B, 0.35 * min(sg_kl * 1.5, 1)); rd_rr(474 * sc, 64 * sc, 152 * sc, 44 * sc, 6 * sc); );
+ui_cola(0x000000, 0.5); rd_rr(478.5 * sc, 70.5 * sc, 144 * sc, 36 * sc, 4 * sc);
+ui_col(0x1A0808); rd_rr(478 * sc, 68 * sc, 144 * sc, 36 * sc, 4 * sc);
+sg_c = ui_mix(0x5A1A1A, 0xC83434, min(sg_kl * 1.4, 1)); sg_kh && !(sg_kl > 0.01) ? sg_c = 0x6A2222;
+ui_col(ui_mix(sg_c, 0x000000, 0.35)); rd_rr(479 * sc, 69 * sc, 142 * sc, 34 * sc, 3.5 * sc);
+ui_col(sg_c); rd_rr(479 * sc, 69 * sc, 142 * sc, 30 * sc, 3.5 * sc);
+ui_cola(0xFFFFFF, 0.18); sg_r(482, 70, 136, 1);
+gfx_setfont(16); ui_col(0xF8EEDC); sg_ctxt(550, 84, sg_s("KICK", "CHOC", "GOLPE"));
+// BLEND, MIX
+sprintf(#sgv, "2S %.0f / 3S %.0f", 100 - slider11, slider11);
+sg_ticks(500, 144, 20, 11, "", 0x2A2C2F); sg_knob(500, 144, 20, 11, 0, 0, 100, 50, 1, 1, sg_s("BLEND", "BALANCE", "BALANCE"), #sgv);
+sprintf(#sgv, "%.0f %%", slider12);
+sg_ticks(600, 144, 20, 11, "", 0x2A2C2F); sg_knob(600, 144, 20, 12, 0, 0, 100, 30, 1, 1, sg_s("MIX", "MÉLANGE", "MEZCLA"), #sgv);
+// PRE-DELAY, WIDTH
+sprintf(#sgv, "%.0f ms", slider13);
+sg_ticks(500, 230, 17, 11, "", 0x2A2C2F); sg_knob(500, 230, 17, 13, 0, 0, 250, 0, 0.1, 1, sg_s("PRE-DELAY", "PRÉ-DÉLAI", "PRE-RETARDO"), #sgv);
+sprintf(#sgv, "%.0f %%", slider16);
+sg_ticks(600, 230, 17, 11, "", 0x2A2C2F); sg_knob(600, 230, 17, 16, 0, 0, 150, 100, 1, 1, sg_s("WIDTH", "LARGEUR", "ANCHO"), #sgv);
+// LOW CUT (yellow cap), HIGH CUT (black cap)
+sprintf(#sgv, "%.0f Hz", slider14);
+sg_ticks(500, 301, 15, 11, "", 0x2A2C2F); sg_knob(500, 301, 15, 14, 1, 20, 600, 60, 1, -1, sg_s("LOW CUT", "COUPE-BAS", "CORTE BAJO"), #sgv);
+slider15 >= 19950 ? strcpy(#sgv, sg_s("OFF", "ARRÊT", "APAGADO")) : ( sprintf(#sgv, "%.1f kHz", slider15 / 1000); sg_dec(#sgv); );
+sg_ticks(600, 301, 15, 11, "", 0x2A2C2F); sg_knob(600, 301, 15, 15, 1, 2000, 20000, 20000, 10, -2, sg_s("HIGH CUT", "COUPE-HAUT", "CORTE ALTO"), #sgv);
+// DRIFT (small silver cap), OUTPUT, SAT
+ui_cola(0x000000, 0.3); sg_r(458, 340, 184, 1); ui_cola(0xFFFFFF, 0.3); sg_r(458, 341, 184, 1);
+sprintf(#sgv, "%.0f %%", slider17);
+sg_ticks(486, 368, 12, 11, "", 0x2A2C2F); sg_knob(486, 368, 12, 17, 0, 0, 100, 50, 1, 0x9DA2A8, sg_s("DRIFT", "DÉRIVE", "DERIVA"), #sgv);
+sprintf(#sgv, "%+.1f dB", slider18); sg_dec(#sgv);
+sg_ticks(550, 368, 12, 11, "", 0x2A2C2F); sg_knob(550, 368, 12, 18, 0, -24, 12, 0, 0.1, 0x9DA2A8, sg_s("OUTPUT", "SORTIE", "SALIDA"), #sgv);
+sprintf(#sgv, "%.0f %%", slider19);
+sg_ticks(614, 368, 12, 11, "", 0x2A2C2F); sg_knob(614, 368, 12, 19, 0, 0, 100, 0, 1, 0xD8B040, "SAT", #sgv);
+// the house output stage keys
+ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
+sg_i = 0;
+loop(3,
+  sg_c = sg_i == 0 ? 0x3A9CFF : sg_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
+  ui_okey(465 + sg_i * 58, 407, 56, 20, (slider24 | 0) == sg_i || (sg_i == 1 && ui_okclp > 0.1), sg_c) ? ( slider24 = sg_i; ui_auto(24); );
+  gfx_setfont(12); ui_col(0x141414);
+  ui_keytext((493 + sg_i * 58) * sc, 417 * sc, sg_i == 0 ? sg_s("OFF", "ARRÊT", "APAG.") : sg_i == 1 ? sg_s("CLIP", "ÉCRÊT.", "RECORT.") : sg_s("LIMIT", "LIMIT.", "LÍMITE"));
+  sg_i += 1;
+);
 pk_end();
 ui_end();
