@@ -75,6 +75,7 @@ slider15:120<40,400,1>-Sat low band (Hz)
 slider16:6000<2000,16000,10>-Sat high band (Hz)
 slider17:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider19:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -506,6 +507,7 @@ ui_begin(820, 320);
 // The two faceplates (they follow the WEST / EAST key)
 // =====================================================================
 pv_e = slider10 >= 0.5;
+pv_de = slider19 >= 0.5;                                // the language key: ENG / DE labels (the WEST / EAST key only sets the look)
 pv_e ? (                                                // EAST: bone-grey baked-enamel laboratory panel (the 45 family)
   PVF  = 0xD6D2C4;                                      // section faces
   PVP  = ui_mix(PVF, 0x000000, 0.10);                   // the panel around them
@@ -537,8 +539,8 @@ gfx_setfont(15, "Trebuchet MS", 20 * sc, 'b');          // meter caption
 function pv_r(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc); );
 function pv_txt(x, y, s) ( gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
 function pv_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = cx * sc - tw * 0.5; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
-// EAST prints decimal commas
-function pv_dec(s) local(i) ( pv_e ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
+// DE prints decimal commas
+function pv_dec(s) local(i) ( pv_de ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
 function pv_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
 // print: WEST engraved (a dark cut under the white fill), EAST plain charcoal
 function pv_ptxt(cx, cy, s, c) local(tw, th) (
@@ -597,6 +599,56 @@ function pv_lamp(x, y, on, col, s) (
   gfx_setfont(11); pv_ptxt(x, y + 16, s, pv_e ? PVI : PVI2);
 );
 
+// EAST laboratory knob (45 family): a thin smooth track, an anti-aliased value arc, a flat satin cap with one soft
+// highlight on its upper-left edge, a dark pointer line (pixel coordinates)
+function pv_arcw(cx, cy, r, a1, a2, w) local(k) (       // a smooth thick arc: anti-aliased arcs every half pixel
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+function pv_lcap(cx, cy, r, n, col) local(rr, a, a0, ca, sa, w, i) (
+  rr = r + 6 * sc; w = 3 * sc; a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
+  ui_col(ui_mix(PVF, 0x000000, 0.30)); pv_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.3 * sc);
+  n > 0.004 ? (
+    ui_col(col); pv_arcw(cx, cy, rr, a0, a, w);
+    gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, w * 0.5, 1, 1); gfx_circle(cx + ca * rr, cy + sa * rr, w * 0.5, 1, 1);
+  );
+  ui_cola(0x000000, 0.25); gfx_circle(cx + 1 * sc, cy + 2 * sc, r, 1, 1);
+  ui_col(0x50565E); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0xB3B9C0); gfx_circle(cx, cy, r - 1.5 * sc, 1, 1);
+  ui_col(0xD9DDE1); pv_arcw(cx, cy, r - 3 * sc, -0.66 * $pi, 0.06 * $pi, 1.4 * sc);
+  ui_col(0x1A1E24); i = -1;
+  loop(3, gfx_line(cx + ca * r * 0.3 - sa * i * 0.7 * sc, cy + sa * r * 0.3 + ca * i * 0.7 * sc,
+                   cx + ca * (r - 3 * sc) - sa * i * 0.7 * sc, cy + sa * (r - 3 * sc) + ca * i * 0.7 * sc, 1); i += 1; );
+);
+// a knob: EAST the laboratory knob above, WEST the house dy_knob (black knurled); drag, SHIFT = fine, double-click, wheel
+function pv_knob(cx, cy, r, idx, lo, hi, def, lg, cap, label, val) local(v, n, dx, dy, hov, did) (
+  !pv_e ? dy_knob(cx, cy, r, idx, lo, hi, def, lg, cap, label, val) : (
+    did = 1600 + idx; v = slider(idx);
+    dx = mouse_x - cx * sc; dy = mouse_y - cy * sc; hov = dx * dx + dy * dy <= sqr((r + 5) * sc);
+    pressed && hov && drag_id == 0 ? (
+      time_precise() - dy_lt < 0.35 && dy_lid == idx ? ( slider(idx) = def; ui_auto(idx); drag_id = -1; dy_lt = 0; ) : (
+        drag_id = did; dy_y = mouse_y; dy_lt = time_precise(); dy_lid = idx;
+        dy_n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+      );
+    );
+    drag_id == did ? (
+      dy_n = min(max(dy_n + (dy_y - mouse_y) / (((mouse_cap & 8) ? 1200 : 220) * sc), 0), 1); dy_y = mouse_y;
+      v = lg ? lo * (hi / lo) ^ dy_n : lo + dy_n * (hi - lo);
+      slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); );
+    );
+    hov && mouse_wheel != 0 && drag_id == 0 ? (
+      n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+      n = min(max(n + mouse_wheel / 120 * ((mouse_cap & 8) ? 0.005 : 0.025), 0), 1);
+      slider(idx) = lg ? lo * (hi / lo) ^ n : lo + n * (hi - lo);
+      ui_auto(idx); mouse_wheel = 0;
+    );
+    v = slider(idx); n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+    pv_lcap(cx * sc, cy * sc, r * sc, n, cap);
+    (hov || drag_id == did) ? ( ui_cola(0xFFFFFF, 0.10); gfx_circle(cx * sc, cy * sc, (r - 1.5) * sc, 1, 1); );
+    gfx_setfont(5); ui_col(dy_ink); ui_text(cx * sc, (cy + r + 12) * sc, label);
+    (hov || drag_id == did) ? dy_lbl(cx, cy + r + 26, val, 1);
+  );
+);
+
 // =====================================================================
 // Panel and header
 // =====================================================================
@@ -607,13 +659,16 @@ pv_e ? ( ui_col(PVI); pv_r(0, 54, 820, 2); ) : ( ui_cola(0x000000, 0.35); pv_r(0
 ui_col(PVI); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(PVH); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); pv_e ? ( ui_col(PVI); pv_txt(58, 12, "PLATTE 140"); ) : ( ui_cola(0x000000, 0.4); pv_txt(59, 13, "PLATTE 140"); ui_col(PVI); pv_txt(58, 12, "PLATTE 140"); );
-gfx_setfont(11); ui_col(PVI2); pv_txt(228, 15, "STEREO"); pv_txt(228, 29, pv_e ? "HALLPLATTE" : "PLATE REVERB");
+gfx_setfont(11); ui_col(PVI2); pv_txt(228, 15, "STEREO"); pv_txt(228, 29, pv_de ? "HALLPLATTE" : "PLATE REVERB");
 pv_key(330, 14, 48, 26, "WEST", !pv_e) ? ( slider10 = 0; ui_auto(10); );
-pv_key(382, 14, 48, 26, "EAST", pv_e) ? ( slider10 = 1; ui_auto(10); );
+pv_key(382, 14, 48, 26, pv_de ? "OST" : "EAST", pv_e) ? ( slider10 = 1; ui_auto(10); );
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
-k_ = pk_preset(440 * sc, 10 * sc, 310 * sc, 34 * sc, pr_cur,
+k_ = pk_preset(440 * sc, 10 * sc, 266 * sc, 34 * sc, pr_cur,
   "Init|Vocal Plate|Snare Plate|Short Plate|Long Wash|Drum Bus|Plate Send|Ost Vocal|Ost Snare|Iron Curtain|Broadcast Hall|Spring Hybrid");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 12 ? 1 : k_; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(730 * sc, 18 * sc, 27 * sc, 18 * sc, pv_de ? "DE" : "ENG", 0, 1) ? ( slider19 = pv_de ? 0 : 1; ui_auto(19); );
+rd_led(721, 27, 3, pv_de, 0xFFA126);
 ui_size_picker(758 * sc, 18 * sc);
 
 dy_ink = PVI; dy_bg = PVF; dy_ntick = 11;
@@ -623,7 +678,7 @@ dy_ink = PVI; dy_bg = PVF; dy_ntick = 11;
 // =====================================================================
 function pv_pos(t) ( 1 + 9 * log(5 / t) / log(12.5) );
 function pv_tim(p) ( 5 * 12.5 ^ (-(p - 1) / 9) );
-pv_sect(10, 64, 256, 248, pv_e ? "DÄMPFUNG" : "DAMPING");
+pv_sect(10, 64, 256, 248, pv_de ? "DÄMPFUNG" : "DAMPING");
 pv_cx = 138; pv_cy = 190; pv_kr = 50;
 pv_dx = mouse_x - pv_cx * sc; pv_dy = mouse_y - pv_cy * sc;
 pv_dh = pv_dx * pv_dx + pv_dy * pv_dy <= sqr((pv_kr + 8) * sc);
@@ -661,8 +716,8 @@ loop(19,
 );
 pv_e ? (
   // EAST: an orange band over the pressed-pad end, the laboratory knob with its glowing ring
-  ui_col(PVA); pv_i = 0; loop(3 * sc, gfx_arc(pv_cx * sc, pv_cy * sc, (pv_kr + 21) * sc + pv_i, 0.45 * $pi, 0.75 * $pi, 1); pv_i += 1; );
-  dy_lcap(pv_cx * sc, pv_cy * sc, pv_kr * sc, pv_n, PVA);
+  ui_col(PVA); pv_arcw(pv_cx * sc, pv_cy * sc, (pv_kr + 22) * sc, 0.45 * $pi, 0.75 * $pi, 3 * sc);
+  pv_lcap(pv_cx * sc, pv_cy * sc, pv_kr * sc, pv_n, PVA);
 ) : (
   ui_cola(PVI2, 0.7); gfx_arc(pv_cx * sc, pv_cy * sc, (pv_kr + 9) * sc, -0.75 * $pi, 0.75 * $pi, 1);
   pk_kstyle = 0; pk_ptr = 0xF4FDFF; pk_ink = PVI;
@@ -673,15 +728,15 @@ pv_e ? (
 // the legend; the value replaces it while the dial is touched
 gfx_setfont(11);
 (pv_dh || drag_id == 1701) ? (
-  sprintf(#pvs, pv_e ? "%.2f s   STUFE %.1f" : "%.2f s   POS %.1f", slider1, pv_p);
+  sprintf(#pvs, pv_de ? "%.2f s   STUFE %.1f" : "%.2f s   POS %.1f", slider1, pv_p);
   pv_dec(#pvs);
   pv_ptxt(pv_cx, 290, #pvs, PVI);
-) : pv_ptxt(pv_cx, 290, pv_e ? "1 = 5 s    10 = 0,4 s" : "1 = 5 s    10 = 0.4 s", PVI2);
+) : pv_ptxt(pv_cx, 290, pv_de ? "1 = 5 s    10 = 0,4 s" : "1 = 5 s    10 = 0.4 s", PVI2);
 
 // =====================================================================
 // DRIVE: the send amplifier, its meter, pre-delay and the spring blend
 // =====================================================================
-pv_sect(272, 64, 262, 248, pv_e ? "ANTRIEB" : "DRIVE");
+pv_sect(272, 64, 262, 248, pv_de ? "ANTRIEB" : "DRIVE");
 // meter (0 = the send amp's nominal level; the red / orange zone is where it starts to saturate)
 pv_now = time_precise(); pv_dt = pv_t0 > 0 ? min(max(pv_now - pv_t0, 0), 0.25) : 1; pv_t0 = pv_now;
 pv_vdb = 10 * log10(max(pl_vums, 0.0000000001)) + 12.04;
@@ -693,7 +748,7 @@ ui_col(pv_e ? ui_mix(PVF, 0xFFFFFF, 0.25) : PVA); pv_r(pv_mx, pv_my_, pv_mw, pv_
 pv_px = pv_mx + pv_mw * 0.5; pv_py = pv_my_ + pv_mh + 30; pv_rad = 94; pv_sp = 0.72;
 // zone band and arc
 ui_col(pv_e ? PVA : 0xD8281C); pv_i = 0;
-loop(5 * sc, gfx_arc(pv_px * sc, pv_py * sc, pv_rad * sc + pv_i, -pv_sp + 2 * pv_sp * pv_vpos(0), pv_sp, 1); pv_i += 1; );
+pv_arcw(pv_px * sc, pv_py * sc, (pv_rad + 2.5) * sc, -pv_sp + 2 * pv_sp * pv_vpos(0), pv_sp, 5 * sc);
 ui_col(0x1A1A1A); gfx_arc(pv_px * sc, pv_py * sc, pv_rad * sc, -pv_sp, pv_sp, 1); gfx_arc(pv_px * sc, pv_py * sc, pv_rad * sc - 1, -pv_sp, pv_sp, 1);
 gfx_setfont(10);
 pv_i = 0;
@@ -717,50 +772,50 @@ loop(2, gfx_line((pv_px + pv_ca * 40) * sc + pv_i, (pv_py + pv_sa * 40) * sc, (p
 // bottom band over the pivot
 ui_col(pv_e ? PVI : 0x1E221E); pv_r(pv_mx, pv_my_ + pv_mh - 20, pv_mw, 20);
 gfx_setfont(11); ui_col(pv_e ? PVF : PVA);
-pv_ctxt(pv_px, pv_my_ + pv_mh - 10, pv_e ? "AUSSTEUERUNG" : "DRIVE LEVEL");
+pv_ctxt(pv_px, pv_my_ + pv_mh - 10, pv_de ? "AUSSTEUERUNG" : "DRIVE LEVEL");
 ui_cola(0xFFFFFF, pv_e ? 0.0 : 0.16); pv_r(pv_mx, pv_my_, pv_mw, 1);
 
 dy_kst = pv_e ? 31 : 0; dy_nov = 1;
-sprintf(#pvv, "%.0f%%", slider5);  dy_knob(318, 218, 20, 5, 0, 100, 20, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "ANTRIEB" : "DRIVE", #pvv);
-sprintf(#pvv, "%.0f ms", slider2); dy_knob(403, 218, 20, 2, 0, 250, 10, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "VERZÖG." : "PRE-DELAY", #pvv);
-sprintf(#pvv, "%.0f%%", slider11); dy_knob(487, 218, 17, 11, 0, 100, 0, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "FEDER" : "SPRING", #pvv);
+sprintf(#pvv, "%.0f%%", slider5);  pv_knob(318, 218, 20, 5, 0, 100, 20, 0, pv_e ? PVA : 0xF4FDFF, pv_de ? "ANTRIEB" : "DRIVE", #pvv);
+sprintf(#pvv, "%.0f ms", slider2); pv_knob(403, 218, 20, 2, 0, 250, 10, 0, pv_e ? PVA : 0xF4FDFF, pv_de ? "VERZÖG." : "PRE-DELAY", #pvv);
+sprintf(#pvv, "%.0f%%", slider11); pv_knob(487, 221, 17, 11, 0, 100, 0, 0, pv_e ? PVA : 0xF4FDFF, pv_de ? "FEDER" : "SPRING", #pvv);
 // status lamps
 pv_ov = pl_ovl; pl_ovl = 0;
 pv_ov > 1.6 ? pv_ovt = pv_now;
 pv_wp = pl_wpk; pl_wpk = 0;
 pv_wp > 0.003 ? pv_sgt = pv_now;
 pv_e ? (
-  pv_lamp(306, 282, 1, PVL, "POWER");
-  pv_lamp(376, 282, min(max((pv_vq + 20) / 20, 0), 1), PVL, "ANTRIEB");
-  pv_lamp(474, 282, pv_now - pv_ovt < 0.25, PVRED, "ÜBERSTEUERUNG");
+  pv_lamp(304, 282, 1, PVL, pv_de ? "NETZ" : "POWER");
+  pv_lamp(370, 282, min(max((pv_vq + 20) / 20, 0), 1), PVL, pv_de ? "ANTRIEB" : "DRIVE");
+  pv_lamp(474, 282, pv_now - pv_ovt < 0.25, PVRED, pv_de ? "ÜBERSTEUERUNG" : "OVERLOAD");
 ) : (
   pv_lamp(320, 282, pv_now - pv_sgt < 0.15, PVL, "SIGNAL");
-  pv_lamp(403, 282, pv_vq > -3, 0xFFB030, "NOMINAL");
-  pv_lamp(487, 282, pv_now - pv_ovt < 0.25, PVRED, "PEAK");
+  pv_lamp(403, 282, pv_vq > -3, 0xFFB030, pv_de ? "NENNPEGEL" : "NOMINAL");
+  pv_lamp(487, 282, pv_now - pv_ovt < 0.25, PVRED, pv_de ? "SPITZE" : "PEAK");
 );
 
 // =====================================================================
 // TONE: LOW CUT (yellow cap) and HIGH CUT (black cap) on the return, MIX, WIDTH, MONO IN
 // =====================================================================
-pv_sect(540, 64, 148, 248, pv_e ? "FILTER" : "TONE");
-sprintf(#pvv, "%.0f Hz", slider3); dy_kf = 1; dy_knob(579, 116, 17, 3, 20, 600, 100, 1, 0, pv_e ? "TIEFEN" : "LOW CUT", #pvv);
-slider4 >= 19950 ? strcpy(#pvv, "OFF") : ( sprintf(#pvv, "%.1f kHz", slider4 / 1000); pv_dec(#pvv); );
-dy_kf = 2; dy_knob(649, 116, 17, 4, 2000, 20000, 16000, 1, 0, pv_e ? "HÖHEN" : "HIGH CUT", #pvv);
-sprintf(#pvv, "%.0f%%", slider6);  dy_knob(579, 216, 19, 6, 0, 100, 30, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "MISCHUNG" : "MIX", #pvv);
-sprintf(#pvv, "%.0f%%", slider7);  dy_knob(649, 216, 19, 7, 0, 150, 100, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "BREITE" : "WIDTH", #pvv);
-pv_key(552, 276, 124, 24, pv_e ? "MONO EIN" : "MONO IN", slider9 >= 0.5) ? ( slider9 = slider9 >= 0.5 ? 0 : 1; ui_auto(9); );
+pv_sect(540, 64, 148, 248, pv_e ? "FILTER" : pv_de ? "KLANG" : "TONE");
+sprintf(#pvv, "%.0f Hz", slider3); dy_kf = 1; dy_knob(579, 116, 17, 3, 20, 600, 100, 1, 0, pv_de ? "TIEFEN" : "LOW CUT", #pvv);
+slider4 >= 19950 ? strcpy(#pvv, pv_de ? "AUS" : "OFF") : ( sprintf(#pvv, "%.1f kHz", slider4 / 1000); pv_dec(#pvv); );
+dy_kf = 2; dy_knob(649, 116, 17, 4, 2000, 20000, 16000, 1, 0, pv_de ? "HÖHEN" : "HIGH CUT", #pvv);
+sprintf(#pvv, "%.0f%%", slider6);  pv_knob(579, 216, 19, 6, 0, 100, 30, 0, pv_e ? PVA : 0xF4FDFF, pv_de ? "MISCHUNG" : "MIX", #pvv);
+sprintf(#pvv, "%.0f%%", slider7);  pv_knob(649, 216, 19, 7, 0, 150, 100, 0, pv_e ? PVA : 0xF4FDFF, pv_de ? "BREITE" : "WIDTH", #pvv);
+pv_key(552, 276, 124, 24, pv_de ? "MONO EIN" : "MONO IN", slider9 >= 0.5) ? ( slider9 = slider9 >= 0.5 ? 0 : 1; ui_auto(9); );
 
 // =====================================================================
 // OUTPUT: level, the house output stage, SAT, DRIFT and the output meter
 // =====================================================================
-pv_sect(694, 64, 116, 248, pv_e ? "AUSGANG" : "OUTPUT");
+pv_sect(694, 64, 116, 248, pv_de ? "AUSGANG" : "OUTPUT");
 dy_kst = 20;
-sprintf(#pvv, "%+.1f dB", slider12); pv_dec(#pvv); dy_knob(726, 122, 15, 12, -24, 12, 0, 0, 0x9DA2A8, pv_e ? "PEGEL" : "OUTPUT", #pvv);
+sprintf(#pvv, "%+.1f dB", slider12); pv_dec(#pvv); dy_knob(726, 122, 15, 12, -24, 12, 0, 0, 0x9DA2A8, pv_de ? "PEGEL" : "OUTPUT", #pvv);
 ui_outkeys(756, 98, 44, 16, 5, 18);
 sprintf(#pvv, "%.0f%%", slider13); dy_knob(726, 198, 12, 13, 0, 100, 0, 0, 0xD8B040, "SAT", #pvv);
 sprintf(#pvv, "%.0f%%", slider8);  dy_knob(776, 198, 12, 8, 0, 100, 50, 0, pv_e ? 0x6F8794 : 0x9DA2A8, "DRIFT", #pvv);
 dy_kst = 7; dy_nov = 0;
-gfx_setfont(11); pv_ptxt(752, 252, pv_e ? "SPITZE" : "PEAK", PVI2);
+gfx_setfont(11); pv_ptxt(752, 252, pv_de ? "SPITZE" : "PEAK", PVI2);
 mtL.ui_ledm(708 * sc, 266 * sc, 88 * sc, 8 * sc, pl_opkL); mtR.ui_ledm(708 * sc, 280 * sc, 88 * sc, 8 * sc, pl_opkR);
 pl_opkL = 0; pl_opkR = 0;
 

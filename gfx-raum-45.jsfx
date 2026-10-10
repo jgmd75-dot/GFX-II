@@ -28,8 +28,8 @@ desc:GFX Raum 45
 //      (band SAT, OFF / CLIP / LIMIT). MONO SUM (the SUM key) folds the output to mono to check the collapse.
 //
 // THE FOUR BUTTONS (each a fixed rate / depth pairing, 1 subtlest ... 4 strongest; approximations of the hardware):
-//   1  0.25 Hz  +/-0.30 ms      2  0.25 Hz  +/-0.55 ms      3  0.25 Hz  +/-0.85 ms      4  0.50 Hz  +/-1.10 ms
-//   (the wet level also rises a little from 1 to 4). Two buttons at once give the combination modes, as when two
+//   1  0.25 Hz  +/-0.35 ms      2  0.25 Hz  +/-0.65 ms      3  0.25 Hz  +/-1.00 ms      4  0.50 Hz  +/-1.35 ms
+//   (the wet level also rises from 1 to 4: about -6, -4.7, -3.6 and -2.5 dB under the dry). Two buttons at once give the combination modes, as when two
 //   buttons are held in on the hardware: the rate is the average of the two, the depth a little more than either
 //   (1+4 is the deepest-sounding of the gentle settings). All changes glide (no zipper, no pitch jump).
 //   Click = that button alone (click the lit button again = all out = OFF, dry). SHIFT- or CTRL-click, or the COMBI
@@ -93,8 +93,8 @@ function rz_idx(b) (
 );
 // one button's settings (i = 0..3): rate Hz, depth ms (+/-), wet level
 function rz_brate(i) ( i == 3 ? 0.5 : 0.25 );
-function rz_bdep(i)  ( i == 0 ? 0.30 : i == 1 ? 0.55 : i == 2 ? 0.85 : 1.10 );
-function rz_bwet(i)  ( i == 0 ? 0.36 : i == 1 ? 0.40 : i == 2 ? 0.44 : 0.48 );
+function rz_bdep(i)  ( i == 0 ? 0.35 : i == 1 ? 0.65 : i == 2 ? 1.00 : 1.35 );
+function rz_bwet(i)  ( i == 0 ? 0.50 : i == 1 ? 0.58 : i == 2 ? 0.66 : 0.75 );
 // the mode's targets: rz_rt (Hz), rz_dt (ms), rz_wt (wet, 0 = off)
 function rz_modeset(m) local(b, i, n, a, c) (
   b = rz_bits(m); n = 0; a = -1; c = -1;
