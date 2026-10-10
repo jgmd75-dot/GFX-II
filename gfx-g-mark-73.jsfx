@@ -1130,12 +1130,12 @@ slider11 != floor(slider11 + 0.5) ? slider11 = floor(slider11 + 0.5);
 
 mg_sect(652, mg_y, 196, mg_h, mg_s3, "TUNING");
 mg_kn(700, mg_ky, 23, 12, -50, 50, 0, 0, mg_grey, "FINE", "%+.1f ct");
-mg_kn(800, mg_ky, 23, 13, 0, 10, 0.5, 0, mg_grey, "RANDOM", "%.1f ct");
+mg_kn(800, mg_ky, 23, 13, 0, 10, 0, 0, mg_grey, "RANDOM", "%.1f ct");
 
 mg_sect(862, mg_y, 224, mg_h, mg_s4, "MASTER");
 mg_kn(912, mg_y + 60, 25, 18, -24, 6, 0, 0, mg_cream, "VOLUME", "%+.1f dB");
-mg_small(892, mg_y + 136, 12, 17, 0, 100, 25, mg_grey, "DRIFT", "%.0f%%");
-mg_small(944, mg_y + 136, 12, 16, 0, 100, 35, mg_grey, "MECH", "%.0f%%");
+mg_small(892, mg_y + 136, 12, 17, 0, 100, 15, mg_grey, "DRIFT", "%.0f%%");
+mg_small(944, mg_y + 136, 12, 16, 0, 100, 30, mg_grey, "MECH", "%.0f%%");
 mg_small(996, mg_y + 136, 12, 19, 0, 100, 0, 0xD8B040, "SAT", "%.0f%%");
 gfx_setfont(5); ui_col(mg_dim); mg_ct(997, mg_y + 14, "OUT");
 mg_okf = ui_okfs; ui_okfs = 1.7; ui_outkeys(964, mg_y + 30, 66, 24, 5, 24); ui_okfs = mg_okf;

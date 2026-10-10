@@ -21,8 +21,10 @@ desc:GFX faceplate parts (include)
 @init
 
 // rounded rectangle without seams (scaled inputs): whole pixels, pieces overlap
-function rd_rr(x, y, w, h, r) (
-  ui_rrect(floor(x + 0.5), floor(y + 0.5), w, h, r);   // pixel-snapped, one non-overlapping pass (gfx-ui)
+function rd_rr(x, y, w, h, r) local(x2, y2) (
+  x = floor(x + 0.5); y = floor(y + 0.5); x2 = floor(x + w + 0.5); y2 = floor(y + h + 0.5); w = x2 - x; h = y2 - y;
+  r = floor(min(r, min(w, h) * 0.5) + 0.5);
+  ui_rrpx(x, y, w, h, r);   // one non-overlapping pass (gfx-ui): translucent shadows don't double at the corners
 );
 function rd_brushed(x, y, w, h, col) local(i, yy, a) (
   ui_col(col); gfx_rect(x * sc, y * sc, w * sc, h * sc);
