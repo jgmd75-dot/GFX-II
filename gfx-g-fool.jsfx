@@ -11,9 +11,13 @@ desc:GFX G Fool
 //   PATH I / II / III   ON; MODE up / down / up-down / random (a fixed random order, repeats every LENGTH steps) /
 //                       as played / chord; RATE (1/2 - 1/32, dotted and triplet, locked to the project tempo);
 //                       LENGTH (2-16 steps); OCTAVES (1-4); OFFSET (-2..+2 octaves); GATE; SWING; PROB (step chance)
-//                       and its own voice: SAW / SQUARE / TRIANGLE / BELL (soft two-operator FM) / PLUCK (plucked
-//                       string), CUTOFF and RESO (12 dB low-pass with a little envelope and key tracking), DECAY
-//                       (plucky to sustained), LEVEL, PAN and SEND (to the shared delay + reverb)
+//                       and its own voice, in the world of the early minimalists' combo and electric organs:
+//                       SQUARE (combo-organ pulse; WIDTH narrows it, thin and reedy), TRI (transistor triangle; EDGE folds
+//                       in a buzz) or ORGAN (drawbars 8' + 4' + 2 2/3' + 2', BARS pulls them out; a touch of leakage, key
+//                       click and percussion), CUTOFF and RESO (12 dB low-pass with key tracking), DECAY (plucky to HOLD:
+//                       fully up the note sustains for its gate, organ-like), LEVEL, PAN and SEND (to MD-6 and the plate)
+//   LFO (one per path)  SHAPE sine / triangle / saw / square / S&H / smooth random; DESTINATION cutoff / reso / decay /
+//                       level / pan / send; RATE synced (4 bars - 1/16) or free (0.02 - 20 Hz); DEPTH +/-; RETRIG
 //   STEP OFF            throws all three paths into a fresh pattern: MODE, LENGTH, OFFSET and PROB are re-dealt within
 //                       musical limits from a SEED (shown on the display; the same seed always deals the same hand).
 //                       RETURN swaps back to the pattern before (press again to step off to it once more).
@@ -21,8 +25,12 @@ desc:GFX G Fool
 //   HOLD                latch: the chord stays until a new one is played.  KEY SYNC restarts the patterns on every
 //                       new chord (on the next step of the grid); FREE keeps them locked to the song position.
 //   TRANSPOSE, SCALE (off / major / minor / dorian / pentatonic) and ROOT keep random patterns in key.
-//   THE JOURNEY         shared stereo send: tempo-synced ping-pong DELAY (RATE, FEEDBACK, LEVEL) into a REVERB
-//                       (SIZE, LEVEL).
+//   THE JOURNEY         CF-1  the Ten Rack's chorus / flanger pedal, an insert on the dry paths (the organ's shimmer):
+//                             MORPH, RATE, DEPTH, MANUAL, REGEN, ON
+//                       MD-6  the Ten Rack's modulated delay on the paths' SENDs, with tempo SYNC (1/16 - 1 bar) or free
+//                             time (20 ms - 2 s): TIME, FEEDBACK, LEVEL, WOW (rate), DEPTH, ON - the tape-echo canon
+//                       PLATE the Platte 140's West plate with its Vocal Plate settings, fed by the sends and the echoes:
+//                             DECAY, PRE (delay), MIX, ON
 //   FATE (the series' drift, 0-100 %, 50 % = the standard amount): the cards reshuffle a little - each path's
 //                       micro-timing, step chance, filter cutoff and pan wander slowly and independently; the tuning
 //                       wanders a touch and every note lands slightly differently in tune.
@@ -40,63 +48,63 @@ import gfx-voice.jsfx-inc
 
 slider1:1<0,1,1{Off,On}>-I on
 slider2:0<0,5,1{Up,Down,Up-Down,Random,As played,Chord}>-I mode
-slider3:7<0,10,1{1/2,1/4,1/4D,1/4T,1/8,1/8D,1/8T,1/16,1/16D,1/16T,1/32}>-I rate
-slider4:8<2,16,1>-I length (steps)
-slider5:2<1,4,1>-I octaves
+slider3:4<0,10,1{1/2,1/4,1/4D,1/4T,1/8,1/8D,1/8T,1/16,1/16D,1/16T,1/32}>-I rate
+slider4:6<2,16,1>-I length (steps)
+slider5:1<1,4,1>-I octaves
 slider6:0<-2,2,1>-I octave offset
-slider7:50<10,100,1>-I gate (%)
+slider7:80<10,100,1>-I gate (%)
 slider8:0<0,75,1>-I swing (%)
 slider9:100<0,100,1>-I probability (%)
-slider10:1<0,4,1{Saw,Square,Triangle,Bell,Pluck}>-I wave
-slider11:3200<80,16000,1>-I cutoff (Hz)
-slider12:20<0,100,1>-I resonance (%)
-slider13:220<20,4000,1>-I decay (ms)
+slider10:2<0,2,1{Square,Triangle,Organ}>-I wave
+slider11:6000<80,16000,1>-I cutoff (Hz)
+slider12:10<0,100,1>-I resonance (%)
+slider13:5000<20,5000,1>-I decay (ms, 5000 = hold)
 slider14:70<0,100,1>-I level (%)
 slider15:-35<-100,100,1>-I pan
-slider16:25<0,100,1>-I send (%)
+slider16:35<0,100,1>-I send (%)
 slider17:1<0,1,1{Off,On}>-II on
-slider18:3<0,5,1{Up,Down,Up-Down,Random,As played,Chord}>-II mode
-slider19:5<0,10,1{1/2,1/4,1/4D,1/4T,1/8,1/8D,1/8T,1/16,1/16D,1/16T,1/32}>-II rate
-slider20:5<2,16,1>-II length (steps)
+slider18:2<0,5,1{Up,Down,Up-Down,Random,As played,Chord}>-II mode
+slider19:4<0,10,1{1/2,1/4,1/4D,1/4T,1/8,1/8D,1/8T,1/16,1/16D,1/16T,1/32}>-II rate
+slider20:7<2,16,1>-II length (steps)
 slider21:2<1,4,1>-II octaves
-slider22:1<-2,2,1>-II octave offset
-slider23:40<10,100,1>-II gate (%)
+slider22:0<-2,2,1>-II octave offset
+slider23:60<10,100,1>-II gate (%)
 slider24:0<0,75,1>-II swing (%)
-slider25:85<0,100,1>-II probability (%)
-slider26:3<0,4,1{Saw,Square,Triangle,Bell,Pluck}>-II wave
-slider27:9000<80,16000,1>-II cutoff (Hz)
-slider28:0<0,100,1>-II resonance (%)
-slider29:900<20,4000,1>-II decay (ms)
+slider25:100<0,100,1>-II probability (%)
+slider26:0<0,2,1{Square,Triangle,Organ}>-II wave
+slider27:3500<80,16000,1>-II cutoff (Hz)
+slider28:15<0,100,1>-II resonance (%)
+slider29:600<20,5000,1>-II decay (ms, 5000 = hold)
 slider30:55<0,100,1>-II level (%)
-slider31:10<-100,100,1>-II pan
+slider31:35<-100,100,1>-II pan
 slider32:45<0,100,1>-II send (%)
 slider33:1<0,1,1{Off,On}>-III on
 slider34:1<0,5,1{Up,Down,Up-Down,Random,As played,Chord}>-III mode
 slider35:1<0,10,1{1/2,1/4,1/4D,1/4T,1/8,1/8D,1/8T,1/16,1/16D,1/16T,1/32}>-III rate
-slider36:7<2,16,1>-III length (steps)
+slider36:8<2,16,1>-III length (steps)
 slider37:1<1,4,1>-III octaves
 slider38:-1<-2,2,1>-III octave offset
-slider39:80<10,100,1>-III gate (%)
+slider39:90<10,100,1>-III gate (%)
 slider40:0<0,75,1>-III swing (%)
 slider41:100<0,100,1>-III probability (%)
-slider42:0<0,4,1{Saw,Square,Triangle,Bell,Pluck}>-III wave
-slider43:900<80,16000,1>-III cutoff (Hz)
-slider44:30<0,100,1>-III resonance (%)
-slider45:1400<20,4000,1>-III decay (ms)
-slider46:65<0,100,1>-III level (%)
-slider47:35<-100,100,1>-III pan
-slider48:20<0,100,1>-III send (%)
+slider42:1<0,2,1{Square,Triangle,Organ}>-III wave
+slider43:1800<80,16000,1>-III cutoff (Hz)
+slider44:10<0,100,1>-III resonance (%)
+slider45:5000<20,5000,1>-III decay (ms, 5000 = hold)
+slider46:60<0,100,1>-III level (%)
+slider47:0<-100,100,1>-III pan
+slider48:25<0,100,1>-III send (%)
 slider49:0<0,1,1{Off,On}>-Hold (latch)
 slider50:1<0,1,1{Free,Key sync}>-Sync
 slider51:0<-12,12,1>-Transpose (st)
 slider52:0<0,4,1{Off,Major,Minor,Dorian,Pentatonic}>-Scale
 slider53:0<0,11,1{C,C#,D,D#,E,F,F#,G,G#,A,A#,B}>-Root
 slider54:0<0,9999,1>-Seed
-slider55:3<0,7,1{1/16,1/8T,1/8,1/8D,1/4T,1/4,1/4D,1/2}>-Delay rate
-slider56:35<0,90,1>-Delay feedback (%)
-slider57:30<0,100,1>-Delay level (%)
-slider58:60<0,100,1>-Reverb size (%)
-slider59:30<0,100,1>-Reverb level (%)
+slider55:6<0,9,1{1/16,1/8T,1/8,1/8D,1/4T,1/4,1/4D,1/2,1/2D,1 bar}>-MD-6 sync time
+slider56:45<0,100,0.1>-MD-6 feedback (%)
+slider57:40<0,100,0.1>-MD-6 level (%)
+slider58:2.6<0.4,5,0.01>-Plate decay (s)
+slider59:30<0,100,1>-Plate mix (%)
 slider60:35<0,100,1>-Fate (%)
 slider61:0<-24,6,0.1>-Volume (dB)
 slider62:0<0,16,1>-MIDI channel (0 = omni)
@@ -127,6 +135,22 @@ slider86:0<-100,100,1>-III LFO depth (%)
 slider87:5<0,5,1{Sine,Triangle,Saw,Square,S&H,Smooth random}>-III LFO shape
 slider88:0<0,5,1{Cutoff,Resonance,Decay,Level,Pan,Send}>-III LFO destination
 slider89:0<0,1,1{Off,On}>-III LFO retrigger
+slider90:1<0,1,1{Off,On}>-CF-1 on
+slider91:0<0,100,0.1>-CF-1 morph (chorus - flanger)
+slider92:25<0,100,0.1>-CF-1 rate
+slider93:45<0,100,0.1>-CF-1 depth
+slider94:50<0,100,0.1>-CF-1 manual
+slider95:0<0,100,0.1>-CF-1 regen
+slider96:1<0,1,1{Off,On}>-MD-6 on
+slider97:1<0,1,1{Off,On}>-MD-6 sync
+slider98:60<0,100,0.1>-MD-6 time (free: 20 ms - 2 s)
+slider99:35<0,100,0.1>-MD-6 mod rate
+slider100:15<0,100,0.1>-MD-6 mod depth
+slider101:1<0,1,1{Off,On}>-Plate on
+slider102:40<0,250,1>-Plate pre-delay (ms)
+slider103:50<0,100,1>-I tone (%)
+slider104:45<0,100,1>-II tone (%)
+slider105:25<0,100,1>-III tone (%)
 
 in_pin:none
 out_pin:left output
@@ -139,8 +163,8 @@ ext_noinit = 1;
 // ---------- memory ----------
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
 FO_HELD = 25000; FO_SET = 25200; FO_SETV = 25400; FO_SRT = 25600; FO_SRTV = 25800;   // held keys, note set, its velocities, sorted copy
-FO_DEF = 26000;                                            // the Init values of sliders 1-89 (62-68 unused)
-FO_TMP = 26100;                                            // preset parser scratch (400)
+FO_DEF = 26000;                                            // the Init values of sliders 1-105 (62-68 unused)
+FO_TMP = 26200;                                            // preset parser scratch (400)
 FO_PREV = 26600; FO_CUR = 26620;                           // the pattern before STEP OFF (13 values), swap scratch
 FO_AS = 26700;                                             // arp state, 16 per path
 FO_AP = 26760;                                             // per-path voice values for the audio loop, 16 per path
@@ -149,12 +173,11 @@ FO_LS = 28400;                                             // LFO state, 16 per 
 FO_V = 27000;                                              // 18 voices x 32 slots (6 per path)
 FO_QO = 27600; FO_QA = 27730; FO_QN = 27860; FO_QV = 27990; FO_QG = 28120;   // note event queue (128 each)
 FO_RLEN = 28300; FO_RIDX = 28310; FO_RZ = 28320; FO_RAL = 28330; FO_RAI = 28340; // reverb lengths / indices / states
-FO_KS = 30000;                                             // plucked-string lines, 18 x 4096
-FO_DN = 524288;
-FO_DBL = 110000; FO_DBR = 110000 + FO_DN;                  // delay lines (2^19 each)
-FO_RC = 1160000;                                           // reverb combs, 8 x 8192
-FO_RA = 1226000;                                           // reverb allpasses, 4 x 4096
-memset(25000, 0, 4000);
+FO_CFST = 29000;                                             // CF-1 state (64), MD-6 state (64 from 29100)
+FO_MDST = 29100;
+// the long buffers follow the sample rate: fo_srinit() lays them out again when it changes
+//   110000 -   MD-6 delay lines (2 x 2^n, about 5 s each), then the CF-1 lines, then the plate
+memset(25000, 0, 4300);
 memset(FO_V, 0, 18 * 32);
 
 // voice slots (p = FO_V + 32 * voice):
@@ -164,7 +187,7 @@ memset(FO_V, 0, 18 * 32);
 //   22 attack step  23 note  24 key tracking  25 age  26 filter envelope (octaves)
 
 // ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
-#fo_def = "1 0 7 8 2 0 50 0 100 1 3200 20 220 70 -35 25 1 3 5 5 2 1 40 0 85 3 9000 0 900 55 10 45 1 1 1 7 1 -1 80 0 100 0 900 30 1400 65 35 20 0 1 0 0 0 0 3 35 30 60 30 35 0 0 0 0 0 0 0 0 0.7 2 1 0 0 0 0 0.31 3 1 0 1 4 0 0.13 1 1 0 5 0 0";
+#fo_def = "1 0 4 6 1 0 80 0 100 2 6000 10 5000 70 -35 35 1 2 4 7 2 0 60 0 100 0 3500 15 600 55 35 45 1 1 1 8 1 -1 90 0 100 1 1800 10 5000 60 0 25 0 1 0 0 0 0 6 45 40 2.6 30 35 0 0 0 0 0 0 0 0 0.7 2 1 0 0 0 0 0.31 3 1 0 1 4 0 0.13 1 1 0 5 0 0 1 0 25 45 50 0 1 1 60 35 15 1 40 50 45 25";
 function fo_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
   n = 0; i = 0; inn = 0; len = strlen(s);
   loop(len + 1,
@@ -185,28 +208,28 @@ function fo_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
 );
 fo_nums(#fo_def, FO_DEF);
 
-#fo_pm = "Init (The Journey)|First Step|Three Paths|Wanderer's Bells|Cliff Edge|Bundle of Stars|Innocent Pulse|Desert Walk|Fool's Gold|Open Road|Little Dog|Zero Hour|Free Fall|Endless Beginning";
+#fo_pm = "Init (The Journey)|Phase Walk|Organ Canon|Additive|Pulse Field|Mirror Steps|Desert Organ|Three Paths|Wanderer's Reeds|Cliff Edge|Open Road|Little Dog|Free Fall|Endless Beginning";
 function fo_pstr(p) (
-  p == 2  ? "3:4 4:4 10:4 13:900 14:75 16:30 17:0 34:0 35:0 36:4 59:40 60:30 61:0.5" :
-  p == 3  ? "2:0 3:7 4:5 10:4 13:500 15:-50 18:2 19:7 20:7 22:1 26:4 29:600 30:60 31:0 34:1 35:7 36:9 37:2 42:4 43:1800 44:20 45:700 47:50 57:35 61:-0.5" :
-  p == 4  ? "3:5 10:3 11:7000 13:1200 19:4 26:3 27:10000 29:1600 35:1 42:3 43:5000 45:2000 57:35 58:80 59:50 61:-2.5 70:1 72:60 74:4 79:-50" :
-  p == 5  ? "3:7 4:6 10:0 11:1400 12:60 20:7 26:1 27:2500 28:40 36:5 43:500 44:55 45:800 52:2 56:50 60:50 61:1" :
-  p == 6  ? "3:9 4:9 6:1 10:2 11:9000 19:6 20:6 22:2 26:3 35:4 36:11 37:2 38:1 42:3 43:9000 52:4 58:85 59:55 61:-3.5" :
-  p == 7  ? "3:4 4:8 7:60 10:1 11:2500 18:0 19:4 20:6 22:1 23:30 25:100 26:1 34:2 35:4 36:4 39:70 42:1 43:1200 57:20 59:20 61:0.5" :
-  p == 8  ? "3:7 4:6 8:30 10:2 11:2200 19:4 20:5 24:30 26:2 27:3000 35:4 36:4 40:30 42:0 43:700 52:3 61:-2 70:0 72:45 86:30" :
-  p == 9  ? "3:7 4:7 10:4 13:800 19:5 20:9 26:4 29:900 42:3 43:6000 45:1500 52:1 55:3 56:55 57:50" :
-  p == 10 ? "3:4 4:8 7:90 10:0 11:1500 13:2500 19:1 20:5 23:90 26:2 29:3000 35:0 36:3 39:100 45:4000 58:90 59:55 61:-3 84:1 86:40 87:0 88:3" :
-  p == 11 ? "2:3 3:9 4:7 9:70 10:1 11:5000 12:40 13:120 18:3 19:7 20:5 25:60 26:4 34:3 35:5 41:75 42:1 43:2500 45:150 60:60 61:3 70:5 72:60 73:4 74:2" :
-  p == 12 ? "3:7 4:12 10:4 13:300 19:3 20:3 26:1 27:1800 35:0 36:2 37:1 38:-2 42:0 43:300 44:60 55:5 56:60 57:40 61:1.5" :
-  p == 13 ? "2:3 3:9 4:11 9:75 18:3 19:7 20:13 22:2 25:70 34:3 35:4 36:7 38:-2 41:80 56:65 57:45 59:45 60:85 70:7 72:70 73:4 74:1 77:8 79:60 80:4 81:1" :
-  p == 14 ? "3:4 4:3 10:3 13:2000 19:2 20:5 26:4 29:2500 35:1 36:7 42:3 45:4000 56:50 57:40 58:95 59:60 60:45 61:-3 77:0 79:50 80:5 81:5" :
+  p == 2  ? "3:7 4:12 15:-45 18:0 19:7 20:13 21:1 22:0 23:80 26:2 29:5000 30:65 31:45 104:50 33:0 55:5 57:30" :
+  p == 3  ? "3:4 4:8 5:2 16:60 19:1 20:3 21:1 22:-1 30:40 33:0 56:70 57:60 58:3.2 61:2" :
+  p == 4  ? "4:4 19:4 20:5 34:0 35:4 36:6 37:2 39:60 42:0 43:2500 45:400 105:40 61:2.5" :
+  p == 5  ? "2:5 3:4 4:7 5:1 7:35 10:2 13:300 14:55 18:5 19:4 20:8 21:1 22:1 23:30 26:0 29:300 30:45 34:5 35:4 36:9 37:1 38:-1 39:40 42:1 45:300 46:55 61:1" :
+  p == 6  ? "3:7 5:2 18:1 19:7 20:8 21:2 22:0 26:2 29:5000 34:2 35:4 36:6 61:-0.5" :
+  p == 7  ? "3:4 4:6 8:20 11:2500 19:5 20:5 24:20 35:1 36:4 52:3 70:0 72:45 86:30" :
+  p == 8  ? "3:7 4:7 19:7 20:8 23:50 26:1 104:30 34:2 35:7 36:9 37:2 39:50 42:0 43:2000 45:500 105:60 61:2" :
+  p == 9  ? "3:5 10:0 11:4500 103:85 19:4 20:5 26:0 104:75 70:1 72:60 74:4 79:-50 61:2.5" :
+  p == 10 ? "3:7 4:6 10:1 11:1400 12:60 103:50 20:7 27:2500 28:40 36:5 43:500 44:55 45:800 52:2 56:50 60:50 61:1.5" :
+  p == 11 ? "3:1 4:4 7:95 19:0 20:3 23:95 26:2 29:5000 35:0 36:2 58:4.5 59:50 84:1 86:40 87:0 88:3 61:-0.5" :
+  p == 12 ? "2:3 3:7 4:7 9:75 10:0 13:150 103:70 18:3 19:7 20:5 25:70 34:3 35:4 41:80 60:55 70:5 72:60 73:4 74:2 61:4" :
+  p == 13 ? "2:3 3:9 4:11 9:75 12:40 18:3 19:7 20:13 22:2 25:70 28:40 34:3 35:4 36:7 38:-2 41:80 56:65 57:45 59:45 60:85 70:7 72:70 73:4 74:1 77:8 79:60 80:4 81:1 61:3" :
+  p == 14 ? "3:1 4:3 19:2 20:5 26:2 29:5000 35:0 36:7 45:5000 55:7 56:80 57:55 58:5 59:60 60:45 77:0 79:50 80:5 81:5 61:-1.5" :
   "";
 );
 function load_preset(p) local(n, i) (
-  i = 0; loop(89, i < 61 || i > 67 ? slider(i + 1) = FO_DEF[i]; i += 1; );
+  i = 0; loop(105, i < 61 || i > 67 ? slider(i + 1) = FO_DEF[i]; i += 1; );
   n = fo_nums(fo_pstr(p), FO_TMP);
-  i = 0; loop(floor(n / 2), FO_TMP[i * 2] >= 1 && FO_TMP[i * 2] <= 89 && (FO_TMP[i * 2] <= 61 || FO_TMP[i * 2] >= 69) ? slider(FO_TMP[i * 2]) = FO_TMP[i * 2 + 1]; i += 1; );
-  i = 1; loop(89, i <= 61 || i >= 69 ? ui_auto(i); i += 1; );
+  i = 0; loop(floor(n / 2), FO_TMP[i * 2] >= 1 && FO_TMP[i * 2] <= 105 && (FO_TMP[i * 2] <= 61 || FO_TMP[i * 2] >= 69) ? slider(FO_TMP[i * 2]) = FO_TMP[i * 2 + 1]; i += 1; );
+  i = 1; loop(105, i <= 61 || i >= 69 ? ui_auto(i); i += 1; );
   pr_cur = p;
 );
 
@@ -303,8 +326,6 @@ function fo_rname(r) (
   r == 0 ? "1/2" : r == 1 ? "1/4" : r == 2 ? "1/4." : r == 3 ? "1/4T" : r == 4 ? "1/8" : r == 5 ? "1/8." : r == 6 ? "1/8T" :
   r == 7 ? "1/16" : r == 8 ? "1/16." : r == 9 ? "1/16T" : "1/32";
 );
-function fo_db(r) ( r == 0 ? 0.25 : r == 1 ? 1 / 3 : r == 2 ? 0.5 : r == 3 ? 0.75 : r == 4 ? 2 / 3 : r == 5 ? 1 : r == 6 ? 1.5 : 2; );
-function fo_dname(r) ( r == 0 ? "1/16" : r == 1 ? "1/8T" : r == 2 ? "1/8" : r == 3 ? "1/8." : r == 4 ? "1/4T" : r == 5 ? "1/4" : r == 6 ? "1/4." : "1/2"; );
 function fo_odd(k) ( k - 2 * floor(k / 2); );
 // start of step k (in beats) on a grid of L-beat steps, every second step pushed later by the swing
 function fo_sbt(k, L, sw) ( floor(k / 2) * 2 * L + (fo_odd(k) ? L * (1 + sw) : 0); );
@@ -397,9 +418,9 @@ function fo_arp(a, t0, t1, bps) local(b, s, L, sw, k, t, ln, guard) (
   );
 );
 
-// ---------- voices ----------
-function fo_wgain(w) ( w == 0 ? 0.55 : w == 1 ? 0.6 : w == 2 ? 0.85 : w == 3 ? 0.6 : 1.1; );
-function fo_vstart(a, note, vel, gl) local(i, p, best, ba, vi, f, d, m, k, x, z, mean, dec, w, kb) (
+// ---------- voices: SQUARE / TRI in the spirit of the transistor combo organs, ORGAN a drawbar additive organ ----------
+function fo_wgain(w) ( w == 0 ? 0.62 : w == 1 ? 0.8 : 0.78; );
+function fo_vstart(a, note, vel, gl) local(i, p, best, ba, vi, f, dec, w) (
   best = -1; ba = 0;
   i = 0; loop(6, p = FO_V + (a * 6 + i) * 32; p[0] == 0 && (best < 0 || p[25] < ba) ? ( best = i; ba = p[25]; ); i += 1; );
   best < 0 ? ( i = 0; loop(6, p = FO_V + (a * 6 + i) * 32; best < 0 || p[25] < ba ? ( best = i; ba = p[25]; ); i += 1; ); );
@@ -409,38 +430,282 @@ function fo_vstart(a, note, vel, gl) local(i, p, best, ba, vi, f, d, m, k, x, z,
   p[0] == 0 ? ( p[10] = 0; p[11] = 0; p[1] = 0; p[3] = rand(1); );
   p[4] = min(f / srate, 0.45); p[5] = w; p[6] = a; p[23] = note;
   p[24] = 2 ^ ((note - 60) / 24);
-  p[26] = w <= 2 ? 1.6 : w == 3 ? 0.8 : 0.5;
-  p[22] = 1 / ((w >= 3 ? 0.0015 : 0.003) * srate);
-  p[20] = w == 4 ? 1 : exp(-6.9 / (dec * srate));
-  p[21] = exp(-6.9 / ((0.02 + min(dec * 0.35, 0.35)) * srate));
+  p[26] = w == 2 ? 0.3 : 1.0;                         // a little filter envelope (organ: hardly any)
+  p[22] = 1 / ((w == 2 ? 0.0015 : 0.0025) * srate);   // fast attack
+  p[20] = dec >= 4.9 ? 1 : exp(-6.9 / (dec * srate)); // DECAY fully up = HOLD: the note sustains for its gate
+  p[21] = exp(-6.9 / ((dec >= 4.9 ? (w == 2 ? 0.03 : 0.045) : 0.015 + min(dec * 0.3, 0.3)) * srate));
   p[19] = (0.35 + 0.65 * min(vel, 127) / 127) * fo_wgain(w);
   p[2] = max(floor(gl), 1);
   p[18] = 0;
   fo_age += 1; p[25] = fo_age;
-  w == 3 ? ( p[3] = 0; p[13] = 0; );
-  w == 4 ? (
-    // the string: a burst of softened noise, as long as one period
-    kb = FO_KS + vi * 4096;
-    d = min(max(srate / f - 0.5, 2), 4000);
-    m = ceil(d) + 2; z = 0; mean = 0;
-    i = 0; loop(m, x = rand(2) - 1; z += (x - z) * 0.6; kb[i] = z; mean += z; i += 1; );
-    mean /= m; i = 0; loop(m, kb[i] -= mean; i += 1; );
-    p[14] = d; p[15] = m; p[16] = 0;
-    p[17] = min(max(0.001 ^ (1 / (max(dec, 0.03) * f)), 0.5), 0.9995);
-    p[1] = 0;
-  );
+  // organ: key click (a few ms of contact noise), slight percussion on the 2 2/3', the upper drawbars band-limited
+  p[13] = w == 2 ? 0.22 : 0; p[14] = w == 2 ? 0.3 : 0; p[15] = 0;
+  p[16] = 3 * f < fo_nyq; p[17] = 4 * f < fo_nyq;
   p[0] = 1;
 );
 
-// ---------- reverb ----------
-function fo_rvinit() local(i, r) (
-  r = srate / 44100;
-  FO_RLEN[0] = floor(1116 * r); FO_RLEN[1] = floor(1188 * r); FO_RLEN[2] = floor(1277 * r); FO_RLEN[3] = floor(1356 * r);
-  FO_RLEN[4] = floor(1139 * r); FO_RLEN[5] = floor(1211 * r); FO_RLEN[6] = floor(1300 * r); FO_RLEN[7] = floor(1379 * r);
-  FO_RAL[0] = floor(556 * r); FO_RAL[1] = floor(441 * r); FO_RAL[2] = floor(579 * r); FO_RAL[3] = floor(464 * r);
-  i = 0; loop(8, FO_RLEN[i] = min(FO_RLEN[i], 8190); FO_RIDX[i] = 0; FO_RZ[i] = 0; i += 1; );
-  i = 0; loop(4, FO_RAL[i] = min(FO_RAL[i], 4094); FO_RAI[i] = 0; i += 1; );
-  memset(FO_RC, 0, 8 * 8192); memset(FO_RA, 0, 4 * 4096);
+// =====================================================================
+// THE JOURNEY: three units from the house pedals and plate
+//   CF-1  the chorus / flanger pedal of the GFX Ten Rack (an insert on the dry paths: the organ's own shimmer)
+//   MD-6  the Ten Rack's modulated delay (fed by the paths' SENDs), with tempo sync added: the tape-echo canon
+//   PLATE the WEST plate of the GFX Platte 140 with its 'Vocal Plate' settings (fed by the SENDs and the echoes)
+// =====================================================================
+function fo_p2(n) local(p) ( p = 1; while (p < n) ( p *= 2; ); p; );
+function fo_opc(fc) ( 1 - exp(-2 * $pi * min(fc, srate * 0.45) / srate); );   // one-pole coefficient
+function fo_sat(x) ( x = max(-3, min(3, x)); x * (27 + x * x) / (27 + 9 * x * x); );
+function fo_tri(p) local(t) ( p -= floor(p); t = 4 * abs(p - 0.5) - 1; t * (1.5 - 0.5 * t * t); );
+// 4-point Hermite read d samples behind the write head wp of a line of n samples
+function fo_rd(buf, d, wp, n) local(rp, i, f, im, i1, i2, xm1, x0, x1, x2) (
+  rp = wp - d; rp < 0 ? rp += n;
+  i = floor(rp); f = rp - i;
+  im = i - 1; im < 0 ? im += n;
+  i1 = i + 1; i1 >= n ? i1 -= n;
+  i2 = i1 + 1; i2 >= n ? i2 -= n;
+  xm1 = buf[im]; x0 = buf[i]; x1 = buf[i1]; x2 = buf[i2];
+  ((((0.5 * (x2 - xm1) + 1.5 * (x0 - x1)) * f + (xm1 - 2.5 * x0 + 2 * x1 - 0.5 * x2)) * f + 0.5 * (x1 - xm1)) * f) + x0;
+);
+// biquad (as the house dynamics include): 0 LP, 1 HP
+function fo_bqs(type, f, q) instance(b0, b1, b2, a1, a2) local(w0, cw, sw, al, n) (
+  w0 = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w0); sw = sin(w0); al = sw / (2 * q); n = 1 + al;
+  type == 0 ? ( b0 = (1 - cw) * 0.5 / n; b1 = (1 - cw) / n; b2 = b0; ) : ( b0 = (1 + cw) * 0.5 / n; b1 = -(1 + cw) / n; b2 = b0; );
+  a1 = -2 * cw / n; a2 = (1 - al) / n;
+);
+function fo_bqr(x) instance(b0, b1, b2, a1, a2, x1, x2, y1, y2) local(y) (
+  y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+  x2 = x1; x1 = x; y2 = y1; y1 = y;
+  y;
+);
+function fo_db(r) ( r == 0 ? 0.25 : r == 1 ? 1 / 3 : r == 2 ? 0.5 : r == 3 ? 0.75 : r == 4 ? 2 / 3 : r == 5 ? 1 : r == 6 ? 1.5 : r == 7 ? 2 : r == 8 ? 3 : 4; );
+function fo_dname(r) ( r == 0 ? "1/16" : r == 1 ? "1/8T" : r == 2 ? "1/8" : r == 3 ? "1/8." : r == 4 ? "1/4T" : r == 5 ? "1/4" : r == 6 ? "1/4." : r == 7 ? "1/2" : r == 8 ? "1/2." : "1 BAR"; );
+
+// ---------- CF-1 (knobs 0..1: morph, rate, depth, manual, regen). P[0..7] targets, P[8..15] smoothed ----------
+function fo_cftgt() local(P, a, bb, c, d, e, m, cc, fc, cm) (
+  P = FO_CFST;
+  a = slider91 / 100; bb = slider92 / 100; c = slider93 / 100; d = slider94 / 100; e = slider95 / 100;
+  cm = 1 + 0.03 * dm_a * FO_FRT[0];               // FATE: the bucket-brigade clock wanders a touch
+  m = a;
+  P[0] = 0.1 * 100 ^ bb;                          // rate 0.1 .. 10 Hz
+  cc = 3 * 4 ^ d; fc = 0.4 * 10 ^ d;              // MANUAL: chorus 3 .. 12 ms, flanger 0.4 .. 4 ms
+  P[1] = cc ^ (1 - m) * fc ^ m * cm;
+  P[2] = c * 2.2 * min(1, cc / 4);
+  P[3] = c * 1.7;
+  P[4] = 0.92 * e * (0.3 + 0.7 * m);
+  P[5] = m;
+  P[6] = 0.5 * (1 - m) + 0.18 * m;
+  P[7] = 1 - 0.4 * P[4];
+  P[40] = fo_opc(7500 + 4500 * m);
+);
+function fo_cf(xl, xr) local(P, ph, lf, lr, m, cen, dl, dr, wl, wr, c, fb, g) (
+  P = FO_CFST;
+  P[8]  += fo_cfs * (P[0] - P[8]);  P[9]  += fo_cfs * (P[1] - P[9]);  P[10] += fo_cfs * (P[2] - P[10]); P[11] += fo_cfs * (P[3] - P[11]);
+  P[12] += fo_cfs * (P[4] - P[12]); P[13] += fo_cfs * (P[5] - P[13]); P[14] += fo_cfs * (P[6] - P[14]); P[15] += fo_cfs * (P[7] - P[15]);
+  ph = P[16] + P[8] / srate; ph -= floor(ph); P[16] = ph;
+  lf = fo_tri(ph); lr = fo_tri(ph + P[14]);
+  m = P[13]; cen = P[9];
+  dl = (1 - m) * (cen + P[10] * lf) + m * cen * 2 ^ (P[11] * lf);
+  dr = (1 - m) * (cen + P[10] * lr) + m * cen * 2 ^ (P[11] * lr);
+  wl = fo_rd(FO_CFL, max(3, min(fo_cfn - 8, dl * fo_msr)), fo_cfw, fo_cfn);
+  wr = fo_rd(FO_CFR, max(3, min(fo_cfn - 8, dr * fo_msr)), fo_cfw, fo_cfn);
+  c = P[40];
+  P[17] += c * (wl - P[17]); P[18] += c * (P[17] - P[18]); wl = P[18];     // BBD reconstruction filter
+  P[19] += c * (wr - P[19]); P[20] += c * (P[19] - P[20]); wr = P[20];
+  fb = P[12];
+  P[21] += c * (xl + fb * fo_sat(wl) - P[21]); FO_CFL[fo_cfw] = P[21] + fo_dn;
+  P[22] += c * (xr + fb * fo_sat(wr) - P[22]); FO_CFR[fo_cfw] = P[22] + fo_dn;
+  fo_cfw += 1; fo_cfw >= fo_cfn ? fo_cfw = 0;
+  g = P[15];
+  fo_yl = 0.5 * (xl + g * wl) * (1.5 - 0.4 * m); fo_yr = 0.5 * (xr + g * wr) * (1.5 - 0.4 * m);
+);
+
+// ---------- MD-6 (knobs: time, feedback, mod rate, mod depth, level) with tempo sync ----------
+function fo_mdtgt() local(P, t, bt) (
+  P = FO_MDST;
+  slider97 >= 0.5 ? (
+    bt = fo_db(slider55);
+    t = bt * 60 / fo_tempo * srate;
+    while (t > fo_mdn - 16 && bt > 0.25) ( bt *= 0.5; t = bt * 60 / fo_tempo * srate; );   // too long for the tape: half the time
+  ) : t = 20 * 100 ^ (slider98 / 100) * fo_msr;      // free: 20 ms .. 2 s
+  P[0] = max(3, min(fo_mdn - 16, t));
+  P[1] = 0.95 * slider56 / 100;
+  P[2] = 0.05 * 160 ^ (slider99 / 100) * (1 + 0.2 * dm_a * FO_FRT[1]);
+  P[3] = 9 * sqr(slider100 / 100);
+  P[4] = slider57 / 100;
+  P[40] = fo_opc(4200 * (1 + 0.1 * dm_a * FO_FRT[2])); P[41] = fo_opc(60);
+);
+function fo_md(xl, xr) local(P, ph, dm, dl, dr, yl, yr, fb, fl, fr) (
+  P = FO_MDST;
+  P[9]  += fo_cfs * (P[1] - P[9]);  P[10] += fo_cfs * (P[2] - P[10]);
+  P[11] += fo_cfs * (P[3] - P[11]); P[12] += fo_cfs * (P[4] - P[12]);
+  P[16] += fo_glc * (P[0] - P[16]);                                         // time glide: tape-like bend
+  ph = P[17] + P[10] / srate; ph -= floor(ph); P[17] = ph;
+  dm = P[11] * fo_msr;
+  // the wow is centred on the set time (so a synced echo stays on the beat)
+  dl = max(3, min(fo_mdn - 8, P[16] + dm * sin(2 * $pi * ph)));
+  dr = max(3, min(fo_mdn - 8, P[16] + dm * sin(2 * $pi * (ph + 0.25))));
+  yl = fo_rd(FO_MDL, dl, fo_mdw, fo_mdn); yr = fo_rd(FO_MDR, dr, fo_mdw, fo_mdn);
+  P[18] += P[40] * (yl - P[18]); P[19] += P[41] * (P[18] - P[19]); fl = P[18] - P[19];
+  P[20] += P[40] * (yr - P[20]); P[21] += P[41] * (P[20] - P[21]); fr = P[20] - P[21];
+  fb = P[9];
+  FO_MDL[fo_mdw] = xl + fo_sat(fb * fl * 1.1) / 1.1 + fo_dn;
+  FO_MDR[fo_mdw] = xr + fo_sat(fb * fr * 1.1) / 1.1 + fo_dn;
+  fo_mdw += 1; fo_mdw >= fo_mdn ? fo_mdw = 0;
+  fo_yl = P[12] * fl; fo_yr = P[12] * fr;                                   // the echoes only (the dry stays with the paths)
+);
+
+// ---------- PLATE (the Platte 140's WEST plate) ----------
+function fp_alloc(n) local(p) ( p = fp_next; fp_next += n; memset(p, 0, n); p; );
+function fp_mem(base) (
+  fp_next = base;
+  fp_bsz = fo_p2(0.16 * srate);  fp_bm = fp_bsz - 1;
+  fp_asz = fo_p2(0.02 * srate);  fp_am = fp_asz - 1;
+  fp_psz = fo_p2(0.26 * srate);  fp_pm = fp_psz - 1;
+  fp_lb = fp_alloc(16 * fp_bsz); fp_ab = fp_alloc(16 * fp_asz); fp_ab2 = fp_alloc(16 * fp_asz);
+  fp_dbf = fp_alloc(12 * fp_asz); fp_pb = fp_alloc(2 * fp_psz);
+  fp_len = fp_alloc(16); fp_apl = fp_alloc(16); fp_g = fp_alloc(16); fp_kl = fp_alloc(16); fp_ja = fp_alloc(16); fp_jb = fp_alloc(16);
+  fp_c = fp_alloc(16); fp_tpl = fp_alloc(16); fp_tpr = fp_alloc(16); fp_sgl = fp_alloc(16); fp_sgr = fp_alloc(16); fp_is = fp_alloc(16);
+  fp_o = fp_alloc(16); fp_dv = fp_alloc(16); fp_dr = fp_alloc(64); fp_dln = fp_alloc(12); fp_dgn = fp_alloc(12);
+  fp_ap2n = fp_alloc(16); fp_g2 = fp_alloc(16);
+  fp_lo = fp_alloc(16); fp_y = fp_alloc(16); fp_d1x = fp_alloc(16); fp_d1y = fp_alloc(16); fp_d2x = fp_alloc(16); fp_d2y = fp_alloc(16);
+  fp_dc = fp_alloc(32);
+);
+function fp_lines() local(i, ms, ap, f) (
+  i = 0;
+  loop(16,
+    ms = i == 0 ? 17.3 : i == 1 ? 19.9 : i == 2 ? 22.7 : i == 3 ? 24.1 : i == 4 ? 26.9 : i == 5 ? 29.3 : i == 6 ? 31.7 : i == 7 ? 33.1 :
+         i == 8 ? 35.9 : i == 9 ? 38.3 : i == 10 ? 40.1 : i == 11 ? 43.7 : i == 12 ? 46.1 : i == 13 ? 49.3 : i == 14 ? 52.7 : 56.9;
+    ap = i == 0 ? 3.1 : i == 1 ? 4.3 : i == 2 ? 5.3 : i == 3 ? 6.1 : i == 4 ? 2.7 : i == 5 ? 3.7 : i == 6 ? 4.9 : i == 7 ? 5.7 :
+         i == 8 ? 2.3 : i == 9 ? 3.3 : i == 10 ? 4.1 : i == 11 ? 5.9 : i == 12 ? 6.7 : i == 13 ? 2.9 : i == 14 ? 3.9 : 4.7;
+    fp_len[i] = floor(ms * 1.6 * 0.001 * srate) | 1;
+    fp_apl[i] = floor(ap * 0.001 * srate) | 1;
+    fp_g[i] = (i & 1 ? -1 : 1) * 0.62;
+    ap = 7.3 + 5.8 * (i * 0.7548777 + 0.31 - floor(i * 0.7548777 + 0.31));
+    fp_ap2n[i] = floor(ap * 0.001 * srate) | 1;
+    fp_g2[i] = (i & 2 ? -1 : 1) * 0.5;
+    f = i * 0.6180339 + 0.13 - floor(i * 0.6180339 + 0.13); fp_tpl[i] = max(floor((0.3 + 70 * f * f) * 0.001 * srate), 1);
+    f = i * 0.3819661 + 0.71 - floor(i * 0.3819661 + 0.71); fp_tpr[i] = max(floor((0.3 + 70 * f * f) * 0.001 * srate), 1);
+    fp_sgl[i] = (i == 1 || i == 2 || i == 6 || i == 9 || i == 11 || i == 12 || i == 13 || i == 15) ? -1 : 1;
+    fp_sgr[i] = (i == 0 || i == 3 || i == 4 || i == 6 || i == 10 || i == 11 || i == 13 || i == 14) ? -1 : 1;
+    fp_is[i] = (i == 2 || i == 3 || i == 6 || i == 7 || i == 9 || i == 12 || i == 13 || i == 14) ? -1 : 1;
+    i += 1;
+  );
+  i = 0;
+  loop(12,
+    ms = i == 0 ? 0.31 : i == 1 ? 0.53 : i == 2 ? 0.89 : i == 3 ? 1.37 : i == 4 ? 2.11 : i == 5 ? 3.23 :
+         i == 6 ? 0.37 : i == 7 ? 0.61 : i == 8 ? 0.97 : i == 9 ? 1.53 : i == 10 ? 2.33 : 3.61;
+    fp_dln[i] = floor(ms * 0.35 * 0.001 * srate) | 1;
+    fp_dgn[i] = 0.7;
+    i += 1;
+  );
+  fp_c0 = -0.42; fp_hipad = 2.2; fp_thf = 3.0; fp_lomul = 1.1;
+);
+function fp_dinit(p) ( p[0] = rand(2) - 1; p[1] = rand(2) - 1; p[2] = rand(1); p[3] = 0.7 + rand(0.6); );
+function fp_dtick(p, inc) (
+  p[2] += inc * p[3];
+  p[2] >= 1 ? ( p[2] -= 1; p[0] = p[1]; p[1] = rand(2) - 1; );
+  p[0] + (p[1] - p[0]) * (0.5 - 0.5 * cos($pi * p[2]));
+);
+function fp_satw(u) ( ost_tanh(u * 0.6) * 1.6666667 );
+function fp_diff(x, k0) local(j, b, d, g, y) (
+  j = 0;
+  loop(6,
+    b = fp_dbf + (k0 + j) * fp_asz; g = fp_dgn[k0 + j];
+    d = b[(fp_dw - fp_dln[k0 + j]) & fp_am];
+    y = d - g * x; b[fp_dw] = x + g * y; x = y;
+    j += 1;
+  );
+  x;
+);
+function fp_disp(x, k0) local(j, p, y) (
+  j = 0;
+  loop(6,
+    p = fp_dc + k0 + j * 2;
+    y = -0.5 * x + p[0] + 0.5 * p[1]; p[0] = x; p[1] = y; x = y;
+    j += 1;
+  );
+  x;
+);
+// control rate (every 32 samples): DECAY -> the loss filters of the 16 lines
+function fp_ctl() local(i, T, Tl, Th, L, gl, gm, gh) (
+  fp_ts += (fp_tt - fp_ts) * fp_tk;
+  T = fp_ts * (1 + fp_ddv);
+  Tl = T * fp_lomul;
+  Th = 1 / (1 / (T * fp_hipad) + 1 / fp_thf);
+  i = 0;
+  loop(16,
+    L = (fp_len[i] + fp_apl[i] + fp_ap2n[i]) * -6.9077553 / srate;
+    gl = exp(L / Tl); gm = exp(L / T); gh = exp(L / Th);
+    fp_kl[i] = gl / gm - 1;
+    fp_ja[i] = gh / gm - 1; fp_jb[i] = gm;
+    fp_c[i] = fp_c0 + 0.035 * fp_dv[i];
+    i += 1;
+  );
+  fp_wg = 1.26 * (2.2 / fp_ts) ^ 0.12;
+);
+// the Vocal Plate's settings: low cut 150 Hz, high cut 12 kHz, drive 25 %, width 100 %, mono in (DECAY, PRE-DELAY, MIX on the panel)
+function fp_srinit() local(i) (
+  fp_lines();
+  fp_clo = 1 - exp(-2 * $pi * 300 / srate); fp_chi = 1 - exp(-2 * $pi * 2500 / srate);
+  fp_tk = 1 - exp(-32 / (0.12 * srate));
+  fpdA.fo_bqs(1, 55, 0.6);
+  fplL.fo_bqs(1, 150, 0.7071); fplR.fo_bqs(1, 150, 0.7071);
+  fphL.fo_bqs(0, 12000, 0.7071); fphR.fo_bqs(0, 12000, 0.7071);
+  fp_dg = 10 ^ (0.25 * 24 / 20);
+  i = 0; loop(16, fp_dinit(fp_dr + i * 4); i += 1; );
+  fp_w = 0; fp_aw = 0; fp_dw = 0; fp_pw = 0; fp_cc = 0;
+  fp_ts = fp_tt = 2.6; fp_ddv = 0; fp_ctl();
+  fp_pre = 0.04 * srate;
+);
+// the plate on (xl, xr) -> fp_wl, fp_wr (wet only)
+function fp_run(xl, xr) local(i, bb, v, u, y, cf, m, xa, xb, rp, ri, rf, i0, i1, da, db) (
+  (fp_cc -= 1) <= 0 ? ( fp_cc = 32; fp_ctl(); );
+  fp_pre += (fp_pret - fp_pre) * 0.0004;
+  m = 0.5 * (xl + xr);                                   // mono in: one driver, fed L + R
+  xa = fpdA.fo_bqr(fp_satw(m * fp_dg) / fp_dg);
+  fp_pb[fp_pw] = xa;
+  rp = fp_pw - fp_pre; rp < 0 ? rp += fp_psz;
+  ri = floor(rp); rf = rp - ri; i0 = ri & fp_pm; i1 = (ri + 1) & fp_pm;
+  xa = fp_pb[i0] + (fp_pb[i1] - fp_pb[i0]) * rf; xb = xa;
+  fp_pw = (fp_pw + 1) & fp_pm;
+  da = fp_diff(fp_disp(xa, 0), 0) * 0.5;
+  db = fp_diff(fp_disp(xb, 16), 6) * 0.5;
+  fp_dw = (fp_dw + 1) & fp_am;
+  fp_tl = 0; fp_tr = 0;
+  i = 0;
+  loop(16,
+    bb = fp_lb + i * fp_bsz;
+    v = bb[(fp_w - fp_len[i]) & fp_bm];
+    fp_tl += fp_sgl[i] * bb[(fp_w - fp_tpl[i]) & fp_bm];
+    fp_tr += fp_sgr[i] * bb[(fp_w - fp_tpr[i]) & fp_bm];
+    fp_lo[i] += (v - fp_lo[i]) * fp_clo;
+    v += fp_kl[i] * fp_lo[i];
+    fp_y[i] += (v - fp_y[i]) * fp_chi;
+    fp_o[i] = fp_jb[i] * (v + fp_ja[i] * (v - fp_y[i]));
+    i += 1;
+  );
+  // 16 x 16 Hadamard (four butterfly stages)
+  i = 0; loop(8, u = fp_o[2 * i]; v = fp_o[2 * i + 1]; fp_o[2 * i] = u + v; fp_o[2 * i + 1] = u - v; i += 1; );
+  i = 0; loop(16, (i & 2) == 0 ? ( u = fp_o[i]; v = fp_o[i + 2]; fp_o[i] = u + v; fp_o[i + 2] = u - v; ); i += 1; );
+  i = 0; loop(16, (i & 4) == 0 ? ( u = fp_o[i]; v = fp_o[i + 4]; fp_o[i] = u + v; fp_o[i + 4] = u - v; ); i += 1; );
+  i = 0; loop(8, u = fp_o[i]; v = fp_o[i + 8]; fp_o[i] = u + v; fp_o[i + 8] = u - v; i += 1; );
+  i = 0;
+  loop(16,
+    u = fp_o[i] * 0.25 + fp_is[i] * (i & 1 ? db : da);
+    bb = fp_ab + i * fp_asz;
+    v = bb[(fp_aw - fp_apl[i]) & fp_am];
+    y = v - fp_g[i] * u; bb[fp_aw] = u + fp_g[i] * y;
+    bb = fp_ab2 + i * fp_asz;
+    v = bb[(fp_aw - fp_ap2n[i]) & fp_am];
+    u = v - fp_g2[i] * y; bb[fp_aw] = y + fp_g2[i] * u; y = u;
+    cf = fp_c[i];
+    u = cf * y + fp_d1x[i] - cf * fp_d1y[i]; fp_d1x[i] = y; fp_d1y[i] = u;
+    v = cf * u + fp_d2x[i] - cf * fp_d2y[i]; fp_d2x[i] = u; fp_d2y[i] = v;
+    bb = fp_lb + i * fp_bsz; bb[fp_w] = min(max(v + fo_dn, -4), 4);
+    i += 1;
+  );
+  fp_w = (fp_w + 1) & fp_bm;
+  fp_aw = (fp_aw + 1) & fp_am;
+  fp_wl = fplL.fo_bqr(fp_tl * 0.25 * fp_wg); fp_wr = fplR.fo_bqr(fp_tr * 0.25 * fp_wg);
+  fp_wl = fphL.fo_bqr(fp_wl); fp_wr = fphR.fo_bqr(fp_wr);
 );
 
 // ---------- the three LFOs (one per path) ----------
@@ -490,15 +755,15 @@ function fo_ctl(adv) local(a, b, lb, ls, s, c, ph, raw, v, d, dest, cut, res, de
     s[2] = cut;
     s[3] = 2 - 1.9 * min(max(res, 0), 0.98);
     pan = min(max(pan, -1), 1); th = (pan + 1) * $pi / 4; lg *= s[7]; sd = min(max(sd, 0), 1);
-    a == 0 ? ( fo_tl0 = cos(th) * 1.41421356 * lg; fo_tr0 = sin(th) * 1.41421356 * lg; fo_ts0 = sd * lg; ) :
-    a == 1 ? ( fo_tl1 = cos(th) * 1.41421356 * lg; fo_tr1 = sin(th) * 1.41421356 * lg; fo_ts1 = sd * lg; ) :
-             ( fo_tl2 = cos(th) * 1.41421356 * lg; fo_tr2 = sin(th) * 1.41421356 * lg; fo_ts2 = sd * lg; );
+    a == 0 ? ( fo_tl0 = cos(th) * 1.41421356 * lg; fo_tr0 = sin(th) * 1.41421356 * lg; fo_ts0 = sd; ) :
+    a == 1 ? ( fo_tl1 = cos(th) * 1.41421356 * lg; fo_tr1 = sin(th) * 1.41421356 * lg; fo_ts1 = sd; ) :
+             ( fo_tl2 = cos(th) * 1.41421356 * lg; fo_tr2 = sin(th) * 1.41421356 * lg; fo_ts2 = sd; );
     a += 1;
   );
 );
 
 // ---------- parameters (every block) ----------
-function fo_params() local(a, b, s) (
+function fo_params() local(a, b, s, t) (
   fo_l2 = slider49 >= 0.5;
   fo_latch && !fo_l2 ? fo_relatch = 1;
   fo_latch = fo_l2;
@@ -507,9 +772,10 @@ function fo_params() local(a, b, s) (
   fo_chan = slider62;
   ins_output_setup(63);
   fo_volt = 10 ^ (slider61 / 20) * fo_trim;
-  fo_dfb = slider56 / 100; fo_dlev = sqr(slider57 / 100) * 1.4;
-  fo_rfb = 0.72 + 0.26 * slider58 / 100; fo_rlev = sqr(slider59 / 100) * 1.6;
-  fo_dtt = min(fo_db(slider55) * 60 / fo_tempo * srate, FO_DN - 4);
+  fo_cfon = slider90 >= 0.5; fo_mdon = slider96 >= 0.5; fo_plon = slider101 >= 0.5;
+  fo_cftgt(); fo_mdtgt();
+  fp_tt = min(max(slider58, 0.4), 5); fp_pret = min(max(slider102, 0), 250) * 0.001 * srate;
+  fo_plmx = sqr(slider59 / 100) * 1.2;
   a = 0;
   loop(3,
     b = 1 + 16 * a; s = FO_AP + 16 * a;
@@ -521,6 +787,12 @@ function fo_params() local(a, b, s) (
     s[7] = sqr(slider(b + 13) / 100);
     s[8] = slider(b + 14) / 100 + FO_FN[a];
     s[9] = slider(b + 15) / 100;
+    // the voice: SQUARE pulse width, TRI fold, ORGAN drawbars (8' always; TONE pulls out 4', 2 2/3', 2')
+    t = slider(103 + a) / 100;
+    s[13] = 0.5 - 0.42 * t;
+    s[14] = t;
+    s[10] = 0.02 + 0.78 * min(1, t * 3); s[11] = 0.015 + 0.6 * min(1, max(0, t * 3 - 1)); s[12] = 0.02 + 0.55 * min(1, max(0, t * 3 - 2));
+    s[15] = 1 / (0.55 * (1 + s[10] + s[11] + s[12]));
     a += 1;
   );
 );
@@ -538,6 +810,7 @@ fz0j.drift_init(0.8 + rand(0.5)); fz1j.drift_init(0.8 + rand(0.5)); fz2j.drift_i
 fz0p.drift_init(0.8 + rand(0.5)); fz1p.drift_init(0.8 + rand(0.5)); fz2p.drift_init(0.8 + rand(0.5));
 fz0c.drift_init(0.8 + rand(0.5)); fz1c.drift_init(0.8 + rand(0.5)); fz2c.drift_init(0.8 + rand(0.5));
 fz0r.drift_init(0.8 + rand(0.5)); fz1r.drift_init(0.8 + rand(0.5)); fz2r.drift_init(0.8 + rand(0.5));
+fzpl.drift_init(0.8 + rand(0.5));
 fz0n.drift_init(0.8 + rand(0.5)); fz1n.drift_init(0.8 + rand(0.5)); fz2n.drift_init(0.8 + rand(0.5));
 ins_drift_init();
 
@@ -546,12 +819,20 @@ function fo_srinit() (
   fo_sm3 = 1 - exp(-1 / (0.003 * srate));                     // path gains (fast enough for a level LFO)
   fo_lsF = 1 - exp(-16 / (0.0015 * srate)); fo_lsS = 1 - exp(-16 / (0.008 * srate));
   ost_init(20000);
-  memset(FO_DBL, 0, FO_DN * 2); fo_dwp = 0; fo_dts = -1;
-  fo_rvinit();
-  fo_hpx = fo_hpy = 0; fo_dcxl = fo_dcyl = fo_dcxr = fo_dcyr = 0; fo_dll = fo_dlr = 0;
+  fo_msr = srate / 1000;
+  fo_cfs = 1 - exp(-1 / (0.03 * srate)); fo_glc = 1 - exp(-1 / (0.18 * srate)); fo_fxg = 1 - exp(-1 / (0.012 * srate));
+  fo_pdc = exp(-1 / (0.18 * srate)); fo_ckc = exp(-1 / (0.0025 * srate));       // organ percussion, key click
+  // the long lines: MD-6 (about 5 s each), CF-1 (about 60 ms each), then the plate
+  fo_mdn = fo_p2(4.5 * srate); FO_MDL = 110000; FO_MDR = FO_MDL + fo_mdn; memset(FO_MDL, 0, 2 * fo_mdn); fo_mdw = 0;
+  fo_cfn = fo_p2(0.06 * srate); FO_CFL = FO_MDR + fo_mdn; FO_CFR = FO_CFL + fo_cfn; memset(FO_CFL, 0, 2 * fo_cfn); fo_cfw = 0;
+  memset(FO_CFST, 0, 64); memset(FO_MDST, 0, 64);
+  fp_mem(FO_CFR + fo_cfn + 64); fp_srinit();
+  fo_fxsnap = 1; fo_cfg = fo_mdg = fo_plg = 0;
+  fo_dcxl = fo_dcyl = fo_dcxr = fo_dcyr = 0;
 );
+fo_dn = 0.000000000000001;                               // anti-denormal whisper in the feedback loops (-300 dB)
 fo_srinit();
-fo_trim = 1.6;
+fo_trim = 0.68;
 fo_tempo = 120; fo_pn = 0; fo_sn = 0; fo_qc = 0; fo_age = 0; fo_fb = 0; fo_was = 0; fo_expect = -1;
 fo_latch = 0; fo_fresh = 0; fo_relatch = 0; fo_panic = 0;
 fo_ai = 0; loop(3, FO_AS[fo_ai * 16 + 8] = 1; FO_AS[fo_ai * 16 + 6] = -1; fo_ai += 1; );
@@ -621,11 +902,12 @@ fo_eqi = 0; fo_spos = 0;
 
 ins_drift_block(slider60 / 100 * 0.4, fo_ns);
 fo_pm = ins_pitch;
-fo_dts < 0 ? fo_dts = fo_dtt;
-
-// feedback states left ringing near zero: flush them (no denormals)
-abs(fo_dll) + abs(fo_dlr) < 0.0000000001 ? fo_dll = fo_dlr = 0;
-abs(fo_dcyl) + abs(fo_dcyr) + abs(fo_hpy) < 0.0000000001 ? fo_dcyl = fo_dcyr = fo_hpy = 0;
+fo_fxsnap ? ( fo_fxsnap = 0; memcpy(FO_CFST + 8, FO_CFST, 8); memcpy(FO_MDST + 8, FO_MDST, 8); FO_MDST[16] = FO_MDST[0]; );
+// DRIFT (FATE) on the plate: tension wander - decay and every line's dispersion
+fp_di = 0.12 * dm_s * fo_ns / srate;
+fp_ddv = 0.045 * dm_a * fzpl.drift_tick(fp_di);
+fo_ai = 0; loop(16, fp_dv[fo_ai] = dm_a * fp_dtick(fp_dr + fo_ai * 4, fp_di); fo_ai += 1; );
+abs(fo_dcyl) + abs(fo_dcyr) < 0.0000000001 ? fo_dcyl = fo_dcyr = 0;
 
 @serialize
 file_var(0, ui_sz);
@@ -655,26 +937,25 @@ loop(18,
     fo_e < 0.00003 && fo_p[0] >= 2 ? ( fo_e = 0; fo_p[0] = 0; );
     fo_p[1] = fo_e;
     fo_w = fo_p[5];
-    fo_w == 4 ? (
-      fo_kb = FO_KS + fo_i * 4096;
-      fo_rp = fo_p[15] - fo_p[14]; fo_rp < 0 ? fo_rp += 4096;
-      fo_ri = floor(fo_rp); fo_fr = fo_rp - fo_ri;
-      fo_a0 = fo_kb[fo_ri]; fo_ri += 1; fo_ri >= 4096 ? fo_ri = 0;
-      fo_y = fo_a0 + (fo_kb[fo_ri] - fo_a0) * fo_fr;
-      fo_kb[fo_p[15]] = fo_p[17] * 0.5 * (fo_y + fo_p[16]); fo_p[16] = fo_y;
-      fo_p[15] += 1; fo_p[15] >= 4096 ? fo_p[15] = 0;
+    fo_inc = fo_p[4] * fo_pm;
+    fo_ph = fo_p[3] + fo_inc; fo_ph -= floor(fo_ph); fo_p[3] = fo_ph;
+    fo_vap = FO_AP + fo_p[6] * 16;
+    fo_w == 0 ? (
+      // combo-organ square: TONE narrows the pulse (thin, reedy) - band-limited
+      fo_q2 = fo_ph + 1 - fo_vap[13]; fo_q2 -= floor(fo_q2);
+      fo_y = 0.5 * ((2 * fo_ph - 1 - vo_blep(fo_ph, fo_inc)) - (2 * fo_q2 - 1 - vo_blep(fo_q2, fo_inc)));
+    ) : fo_w == 1 ? (
+      // transistor triangle: TONE folds in a buzzy edge
+      fo_y = 1 - 4 * abs(fo_ph - 0.5);
+      fo_y += fo_vap[14] * (vo_tanh(fo_y * 3.5) - fo_y);
     ) : (
-      fo_inc = fo_p[4] * fo_pm;
-      fo_ph = fo_p[3] + fo_inc; fo_ph -= floor(fo_ph); fo_p[3] = fo_ph;
-      fo_w == 0 ? fo_y = 2 * fo_ph - 1 - vo_blep(fo_ph, fo_inc) :
-      fo_w == 1 ? (
-        fo_p2 = fo_ph + 0.5; fo_p2 -= floor(fo_p2);
-        fo_y = 0.5 * ((2 * fo_ph - 1 - vo_blep(fo_ph, fo_inc)) - (2 * fo_p2 - 1 - vo_blep(fo_p2, fo_inc)));
-      ) :
-      fo_w == 2 ? fo_y = 1 - 4 * abs(fo_ph - 0.5) : (
-        fo_mp = fo_p[13] + fo_inc * 3.5; fo_mp -= floor(fo_mp); fo_p[13] = fo_mp;
-        fo_y = sin(2 * $pi * fo_ph + (0.2 + 2.4 * fo_e * fo_e) * sin(2 * $pi * fo_mp));
-      );
+      // drawbars 8' 4' 2 2/3' 2' from one sine / cosine pair (Chebyshev), a whisper of leakage, click, percussion
+      fo_s1 = sin(2 * $pi * fo_ph); fo_c1 = cos(2 * $pi * fo_ph);
+      fo_s2 = 2 * fo_s1 * fo_c1; fo_c2 = 1 - 2 * fo_s1 * fo_s1;
+      fo_s3 = fo_s1 * (3 - 4 * fo_s1 * fo_s1); fo_s4 = 2 * fo_s2 * fo_c2;
+      fo_p[14] *= fo_pdc;
+      fo_y = (fo_s1 + fo_vap[10] * fo_s2 + (fo_vap[11] + fo_p[14]) * fo_s3 * fo_p[16] + fo_vap[12] * fo_s4 * fo_p[17]) * fo_vap[15];
+      fo_p[13] > 0.0005 ? ( fo_n = rand(2) - 1; fo_y += fo_p[13] * (fo_n - fo_p[15]); fo_p[15] = fo_n; fo_p[13] *= fo_ckc; );
     );
     // 12 dB low-pass, its coefficients refreshed every 16 samples (cutoff x key track x a little envelope)
     fo_p[18] -= 1;
@@ -699,44 +980,22 @@ fo_gl1 += (fo_tl1 - fo_gl1) * fo_sm3; fo_gr1 += (fo_tr1 - fo_gr1) * fo_sm3; fo_g
 fo_gl2 += (fo_tl2 - fo_gl2) * fo_sm3; fo_gr2 += (fo_tr2 - fo_gr2) * fo_sm3; fo_gs2 += (fo_ts2 - fo_gs2) * fo_sm3;
 fo_oL = fo_b0 * fo_gl0 + fo_b1 * fo_gl1 + fo_b2 * fo_gl2;
 fo_oR = fo_b0 * fo_gr0 + fo_b1 * fo_gr1 + fo_b2 * fo_gr2;
-fo_s = fo_b0 * fo_gs0 + fo_b1 * fo_gs1 + fo_b2 * fo_gs2;
+fo_snL = fo_b0 * fo_gl0 * fo_gs0 + fo_b1 * fo_gl1 * fo_gs1 + fo_b2 * fo_gl2 * fo_gs2;     // the SENDs, panned with their paths
+fo_snR = fo_b0 * fo_gr0 * fo_gs0 + fo_b1 * fo_gr1 * fo_gs1 + fo_b2 * fo_gr2 * fo_gs2;
+fo_dn = -fo_dn;
 
-// ---------- THE JOURNEY: ping-pong delay into the reverb ----------
-fo_dts += (fo_dtt - fo_dts) * 0.0004;
-fo_rp = fo_dwp - fo_dts; fo_rp < 0 ? fo_rp += FO_DN;
-fo_ri = floor(fo_rp); fo_fr = fo_rp - fo_ri; fo_r2 = fo_ri + 1; fo_r2 >= FO_DN ? fo_r2 = 0;
-fo_dl = FO_DBL[fo_ri] + (FO_DBL[fo_r2] - FO_DBL[fo_ri]) * fo_fr;
-fo_dr = FO_DBR[fo_ri] + (FO_DBR[fo_r2] - FO_DBR[fo_ri]) * fo_fr;
-fo_dll += (fo_dl - fo_dll) * 0.42; fo_dlr += (fo_dr - fo_dlr) * 0.42;     // a darker echo each time round
-FO_DBL[fo_dwp] = fo_s + vo_tanh(fo_dfb * fo_dlr);
-FO_DBR[fo_dwp] = vo_tanh(fo_dfb * fo_dll);
-fo_dwp += 1; fo_dwp >= FO_DN ? fo_dwp = 0;
-
-fo_x = (fo_s * 0.8 + (fo_dl + fo_dr) * 0.3);
-fo_hpy = 0.985 * (fo_hpy + fo_x - fo_hpx); fo_hpx = fo_x;         // lows kept out of the reverb
-fo_x = fo_hpy * 0.045;
-fo_rl = fo_rr = 0;
-fo_c = 0;
-loop(8,
-  fo_cb = FO_RC + fo_c * 8192; fo_ci = FO_RIDX[fo_c];
-  fo_y = fo_cb[fo_ci];
-  FO_RZ[fo_c] = fo_y * 0.68 + FO_RZ[fo_c] * 0.32;
-  fo_cb[fo_ci] = fo_x + FO_RZ[fo_c] * fo_rfb;
-  fo_ci += 1; fo_ci >= FO_RLEN[fo_c] ? fo_ci = 0; FO_RIDX[fo_c] = fo_ci;
-  fo_c < 4 ? fo_rl += fo_y : fo_rr += fo_y;
-  fo_c += 1;
-);
-fo_c = 0;
-loop(4,
-  fo_cb = FO_RA + fo_c * 4096; fo_ci = FO_RAI[fo_c];
-  fo_y = fo_cb[fo_ci];
-  fo_c < 2 ? ( fo_cb[fo_ci] = fo_rl + fo_y * 0.5; fo_rl = fo_y - fo_rl; ) : ( fo_cb[fo_ci] = fo_rr + fo_y * 0.5; fo_rr = fo_y - fo_rr; );
-  fo_ci += 1; fo_ci >= FO_RAL[fo_c] ? fo_ci = 0; FO_RAI[fo_c] = fo_ci;
-  fo_c += 1;
-);
-
-fo_oL += fo_dl * fo_dlev + fo_rl * fo_rlev;
-fo_oR += fo_dr * fo_dlev + fo_rr * fo_rlev;
+// ---------- THE JOURNEY ----------
+// CF-1 on the dry paths (ON key crossfades in / out)
+fo_cfg += fo_fxg * (fo_cfon - fo_cfg);
+fo_cfg > 0.0001 ? ( fo_cf(fo_oL, fo_oR); fo_oL += fo_cfg * (fo_yl - fo_oL); fo_oR += fo_cfg * (fo_yr - fo_oR); );
+// MD-6 on the sends: the echoes
+fo_mdg += fo_fxg * (fo_mdon - fo_mdg);
+fo_mdg > 0.0001 ? ( fo_md(fo_snL, fo_snR); fo_el = fo_yl * fo_mdg; fo_er = fo_yr * fo_mdg; ) : ( fo_el = fo_er = 0; );
+// the plate on the sends and the echoes
+fo_plg += fo_fxg * (fo_plon - fo_plg);
+fo_plg > 0.0001 ? ( fp_run(fo_snL + 0.6 * fo_el, fo_snR + 0.6 * fo_er); fo_rl = fp_wl * fo_plmx * fo_plg; fo_rr = fp_wr * fo_plmx * fo_plg; ) : ( fo_rl = fo_rr = 0; );
+fo_oL += fo_el + fo_rl;
+fo_oR += fo_er + fo_rr;
 
 // ---------- output ----------
 fo_vol += (fo_volt - fo_vol) * fo_sm;
@@ -749,9 +1008,9 @@ spl0 = ost_l;
 spl1 = ost_r;
 fo_pkl = max(fo_pkl, abs(spl0)); fo_pkr = max(fo_pkr, abs(spl1));
 
-@gfx 1100 660
+@gfx 1100 760
 ui_thm = 0; ui_hw = 1;
-ui_begin(1100, 660);
+ui_begin(1100, 760);
 
 // ---------- palette: flat card colours ----------
 INK = 0x221C26; CARD = 0xF4E8CB; KEYF = 0xFFF8E6; SAND = 0xE9D49F; OCHRE = 0xD48A1E; TURQ = 0x1E9F9C;
@@ -1000,62 +1259,66 @@ function fg_path(a, x, y, w, h, bg, ac) local(b, s, i, sx, sy, len, pos, lit, md
     i += 1; );
   // pattern knobs
   cx = x + w * 0.5;
-  sprintf(#fgv, "%s", fo_rname(slider(b + 2)));          fg_knob(cx - 84, y + 128, 15, b + 2, 0, 10, FO_DEF[b + 1], 0, 1, ac, "RATE", #fgv);
-  sprintf(#fgv, "%d steps", slider(b + 3));             fg_knob(cx - 28, y + 128, 15, b + 3, 2, 16, FO_DEF[b + 2], 0, 1, ac, "LENGTH", #fgv);
-  sprintf(#fgv, "%d oct", slider(b + 4));               fg_knob(cx + 28, y + 128, 15, b + 4, 1, 4, FO_DEF[b + 3], 0, 1, ac, "RANGE", #fgv);
-  sprintf(#fgv, "%+d oct", slider(b + 5));              fg_knob(cx + 84, y + 128, 15, b + 5, -2, 2, FO_DEF[b + 4], 0, 1, ac, "OFFSET", #fgv);
-  sprintf(#fgv, "%d%%", slider(b + 6));                 fg_knob(cx - 60, y + 188, 15, b + 6, 10, 100, FO_DEF[b + 5], 0, 1, ac, "GATE", #fgv);
-  sprintf(#fgv, "%d%%", slider(b + 7));                 fg_knob(cx, y + 188, 15, b + 7, 0, 75, FO_DEF[b + 6], 0, 1, ac, "SWING", #fgv);
-  sprintf(#fgv, "%d%%", slider(b + 8));                 fg_knob(cx + 60, y + 188, 15, b + 8, 0, 100, FO_DEF[b + 7], 0, 1, ac, "PROB", #fgv);
-  // the voice
-  ui_cola(INK, 0.3); fg_r(x + 12, y + 220, w - 24, 1.5);
-  kx = (w - 20) / 5;
-  i = 0; loop(5,
-    fg_key(x + 10 + i * kx + 1, y + 227, kx - 2, 22, i == 0 ? "SAW" : i == 1 ? "SQR" : i == 2 ? "TRI" : i == 3 ? "BELL" : "PLUCK", slider(b + 9) == i, ac) ? fg_set(b + 9, i);
+  sprintf(#fgv, "%s", fo_rname(slider(b + 2)));          fg_knob(cx - 84, y + 134, 15, b + 2, 0, 10, FO_DEF[b + 1], 0, 1, ac, "RATE", #fgv);
+  sprintf(#fgv, "%d steps", slider(b + 3));             fg_knob(cx - 28, y + 134, 15, b + 3, 2, 16, FO_DEF[b + 2], 0, 1, ac, "LENGTH", #fgv);
+  sprintf(#fgv, "%d oct", slider(b + 4));               fg_knob(cx + 28, y + 134, 15, b + 4, 1, 4, FO_DEF[b + 3], 0, 1, ac, "RANGE", #fgv);
+  sprintf(#fgv, "%+d oct", slider(b + 5));              fg_knob(cx + 84, y + 134, 15, b + 5, -2, 2, FO_DEF[b + 4], 0, 1, ac, "OFFSET", #fgv);
+  sprintf(#fgv, "%d%%", slider(b + 6));                 fg_knob(cx - 60, y + 196, 15, b + 6, 10, 100, FO_DEF[b + 5], 0, 1, ac, "GATE", #fgv);
+  sprintf(#fgv, "%d%%", slider(b + 7));                 fg_knob(cx, y + 196, 15, b + 7, 0, 75, FO_DEF[b + 6], 0, 1, ac, "SWING", #fgv);
+  sprintf(#fgv, "%d%%", slider(b + 8));                 fg_knob(cx + 60, y + 196, 15, b + 8, 0, 100, FO_DEF[b + 7], 0, 1, ac, "PROB", #fgv);
+  // the voice: SQUARE / TRI / ORGAN, filter, decay, tone, level, pan, send
+  ui_cola(INK, 0.3); fg_r(x + 12, y + 240, w - 24, 1.5);
+  kx = (w - 20) / 3;
+  i = 0; loop(3,
+    fg_key(x + 10 + i * kx + 1, y + 252, kx - 2, 24, i == 0 ? "SQUARE" : i == 1 ? "TRI" : "ORGAN", slider(b + 9) == i, ac) ? fg_set(b + 9, i);
     i += 1; );
   sprintf(#fgv, slider(b + 10) >= 1000 ? "%.1f kHz" : "%.0f Hz", slider(b + 10) >= 1000 ? slider(b + 10) / 1000 : slider(b + 10));
-  fg_knob(cx - 60, y + 280, 15, b + 10, 80, 16000, FO_DEF[b + 9], 1, 1, ac, "CUTOFF", #fgv);
-  sprintf(#fgv, "%d%%", slider(b + 11));                fg_knob(cx, y + 280, 15, b + 11, 0, 100, FO_DEF[b + 10], 0, 1, ac, "RESO", #fgv);
+  fg_knob(cx - 84, y + 316, 15, b + 10, 80, 16000, FO_DEF[b + 9], 1, 1, ac, "CUTOFF", #fgv);
+  sprintf(#fgv, "%d%%", slider(b + 11));                fg_knob(cx - 28, y + 316, 15, b + 11, 0, 100, FO_DEF[b + 10], 0, 1, ac, "RESO", #fgv);
+  slider(b + 12) >= 4900 ? strcpy(#fgv, "HOLD") :
   sprintf(#fgv, slider(b + 12) >= 1000 ? "%.2f s" : "%.0f ms", slider(b + 12) >= 1000 ? slider(b + 12) / 1000 : slider(b + 12));
-  fg_knob(cx + 60, y + 280, 15, b + 12, 20, 4000, FO_DEF[b + 11], 1, 1, ac, "DECAY", #fgv);
-  sprintf(#fgv, "%d%%", slider(b + 13));                fg_knob(cx - 60, y + 336, 15, b + 13, 0, 100, FO_DEF[b + 12], 0, 1, ac, "LEVEL", #fgv);
+  fg_knob(cx + 28, y + 316, 15, b + 12, 20, 5000, FO_DEF[b + 11], 1, 1, ac, "DECAY", #fgv);
+  sprintf(#fgv, "%d%%", slider(103 + a));
+  fg_knob(cx + 84, y + 316, 15, 103 + a, 0, 100, FO_DEF[102 + a], 0, 1, ac, slider(b + 9) == 0 ? "WIDTH" : slider(b + 9) == 1 ? "EDGE" : "BARS", #fgv);
+  sprintf(#fgv, "%d%%", slider(b + 13));                fg_knob(cx - 60, y + 378, 15, b + 13, 0, 100, FO_DEF[b + 12], 0, 1, ac, "LEVEL", #fgv);
   slider(b + 14) == 0 ? strcpy(#fgv, "C") : sprintf(#fgv, slider(b + 14) < 0 ? "L%d" : "R%d", abs(slider(b + 14)));
-  fg_bip = 1; fg_knob(cx, y + 336, 15, b + 14, -100, 100, FO_DEF[b + 13], 0, 1, ac, "PAN", #fgv);
-  sprintf(#fgv, "%d%%", slider(b + 15));                fg_knob(cx + 60, y + 336, 15, b + 15, 0, 100, FO_DEF[b + 14], 0, 1, ac, "SEND", #fgv);
+  fg_bip = 1; fg_knob(cx, y + 378, 15, b + 14, -100, 100, FO_DEF[b + 13], 0, 1, ac, "PAN", #fgv);
+  sprintf(#fgv, "%d%%", slider(b + 15));                fg_knob(cx + 60, y + 378, 15, b + 15, 0, 100, FO_DEF[b + 14], 0, 1, ac, "SEND", #fgv);
   // the LFO: shape, destination, rate (synced or free), depth, SYNC and RETRIG
   lb = 69 + 7 * a;
-  ui_cola(INK, 0.3); fg_r(x + 12, y + 376, w - 24, 1.5);
-  gfx_setfont(12); ui_col(INK); fg_txt(x + 12, y + 386, "LFO");
+  ui_col(ui_mix(bg, 0x000000, 0.06)); fg_rr(x + 8, y + 424, w - 16, h - 432, 6);
+  ui_cola(INK, 0.3); fg_r(x + 12, y + 422, w - 24, 1.5);
+  gfx_setfont(12); ui_col(INK); fg_txt(x + 14, y + 439, "LFO");
   lv = FO_LS[a * 16 + 7] * (slider(lb + 3) != 0);
-  ui_col(INK); fg_disc(x + 52, y + 394, 5); ui_col(ui_mix(KEYF, ac, 0.5 + 0.5 * lv)); fg_disc(x + 52, y + 394, 3.6);
-  kx = (w - 72) / 6;
+  ui_col(INK); fg_disc(x + 54, y + 447, 5); ui_col(ui_mix(KEYF, ac, 0.5 + 0.5 * lv)); fg_disc(x + 54, y + 447, 3.6);
+  kx = (w - 76) / 6;
   i = 0; loop(6,
-    gx = x + 62 + i * kx + 1;
-    fg_key(gx, y + 383, kx - 2, 22, "", slider(lb + 4) == i, ac) ? fg_set(lb + 4, i);
-    fg_glyph(gx + (kx - 2) * 0.5, y + 394, i, slider(lb + 4) == i ? ui_ink(ac) : INK);
+    gx = x + 64 + i * kx + 1;
+    fg_key(gx, y + 435, kx - 2, 24, "", slider(lb + 4) == i, ac) ? fg_set(lb + 4, i);
+    fg_glyph(gx + (kx - 2) * 0.5, y + 447, i, slider(lb + 4) == i ? ui_ink(ac) : INK);
     i += 1; );
-  kx = (w - 20) / 6;
+  kx = (w - 24) / 6;
   i = 0; loop(6,
-    fg_key(x + 10 + i * kx + 1, y + 411, kx - 2, 22, i == 0 ? "CUT" : i == 1 ? "RES" : i == 2 ? "DEC" : i == 3 ? "LVL" : i == 4 ? "PAN" : "SND", slider(lb + 5) == i, ac) ? fg_set(lb + 5, i);
+    fg_key(x + 12 + i * kx + 1, y + 471, kx - 2, 24, i == 0 ? "CUT" : i == 1 ? "RES" : i == 2 ? "DEC" : i == 3 ? "LVL" : i == 4 ? "PAN" : "SND", slider(lb + 5) == i, ac) ? fg_set(lb + 5, i);
     i += 1; );
   slider(lb + 2) >= 0.5 ? (
-    sprintf(#fgv, "%s", fo_lname(slider(lb + 1)));   fg_knob(x + 40, y + 456, 15, lb + 1, 0, 9, FO_DEF[lb], 0, 1, ac, "RATE", #fgv);
+    sprintf(#fgv, "%s", fo_lname(slider(lb + 1)));   fg_knob(x + 42, y + 538, 15, lb + 1, 0, 9, FO_DEF[lb], 0, 1, ac, "RATE", #fgv);
   ) : (
-    sprintf(#fgv, slider(lb) < 1 ? "%.2f Hz" : "%.1f Hz", slider(lb)); fg_knob(x + 40, y + 456, 15, lb, 0.02, 20, FO_DEF[lb - 1], 1, 0.01, ac, "RATE", #fgv);
+    sprintf(#fgv, slider(lb) < 1 ? "%.2f Hz" : "%.1f Hz", slider(lb)); fg_knob(x + 42, y + 538, 15, lb, 0.02, 20, FO_DEF[lb - 1], 1, 0.01, ac, "RATE", #fgv);
   );
-  sprintf(#fgv, "%+d%%", slider(lb + 3));              fg_bip = 1; fg_knob(x + 100, y + 456, 15, lb + 3, -100, 100, 0, 0, 1, ac, "DEPTH", #fgv);
-  fg_key(x + 134, y + 440, w - 144, 22, "SYNC", slider(lb + 2) >= 0.5, ac) ? fg_set(lb + 2, slider(lb + 2) >= 0.5 ? 0 : 1);
-  fg_key(x + 134, y + 466, w - 144, 22, "RETRIG", slider(lb + 6) >= 0.5, ac) ? fg_set(lb + 6, slider(lb + 6) >= 0.5 ? 0 : 1);
+  sprintf(#fgv, "%+d%%", slider(lb + 3));              fg_bip = 1; fg_knob(x + 102, y + 538, 15, lb + 3, -100, 100, 0, 0, 1, ac, "DEPTH", #fgv);
+  fg_key(x + 136, y + 512, w - 148, 26, "SYNC", slider(lb + 2) >= 0.5, ac) ? fg_set(lb + 2, slider(lb + 2) >= 0.5 ? 0 : 1);
+  fg_key(x + 136, y + 546, w - 148, 26, "RETRIG", slider(lb + 6) >= 0.5, ac) ? fg_set(lb + 6, slider(lb + 6) >= 0.5 ? 0 : 1);
 );
 
 // =====================================================================
 // the card
 // =====================================================================
 ui_col(0x16121A); gfx_rect(0, 0, gfx_w, gfx_h);
-ui_col(CARD); fg_rr(3, 3, 1094, 654, 14);
-ui_col(INK); fg_rr(9, 9, 1082, 642, 10);
-ui_col(CARD); fg_rr(11.5, 11.5, 1077, 637, 8);
-ui_cola(INK, 0.5); fg_rr(15, 15, 1070, 630, 7); ui_col(CARD); fg_rr(16, 16, 1068, 628, 6);
+ui_col(CARD); fg_rr(3, 3, 1094, 754, 14);
+ui_col(INK); fg_rr(9, 9, 1082, 742, 10);
+ui_col(CARD); fg_rr(11.5, 11.5, 1077, 737, 8);
+ui_cola(INK, 0.5); fg_rr(15, 15, 1070, 730, 7); ui_col(CARD); fg_rr(16, 16, 1068, 728, 6);
 
 // ---------- header: badge, presets, the numeral, the held chord, MIDI, size ----------
 ui_col(INK); fg_disc(42, 39, 17); ui_col(CARD); fg_disc(42, 39, 15);
@@ -1081,24 +1344,24 @@ gfx_setfont(4); ui_col(INK); fg_ctxt(952, 47, "MIDI");
 ui_size_picker(1016 * sc, 30 * sc);
 
 // ---------- the emblem column: the card picture, STEP OFF, RETURN, SEED, HOLD, KEY SYNC ----------
-fg_emblem(24, 66, 184, 300);
+fg_emblem(24, 66, 184, 340);
 fg_flash = time_precise() - fg_sot < 0.25;
-ui_cola(MAG, fg_flash ? 0.5 : 0.25); fg_rr(20, 374, 192, 60, 10);
-ui_cola(0x000000, 0.22); fg_rr(25, 380, 184, 52, 7);
-ui_col(INK); fg_rr(24, 378, 184, 52, 7);
-fg_hv = fg_hov(24, 378, 184, 52);
-ui_col(fg_flash ? 0xFF5C93 : fg_hv ? 0xD93A77 : MAG); fg_rr(26.5, 380.5, 179, 47, 5);
-ui_cola(0xFFFFFF, 0.35); fg_r(32, 382.5, 168, 1.5);
-gfx_setfont(16); ui_col(0xFFF6DC); fg_ctxt(116, 404, "STEP OFF");
+ui_cola(MAG, fg_flash ? 0.5 : 0.25); fg_rr(20, 414, 192, 60, 10);
+ui_cola(0x000000, 0.22); fg_rr(25, 420, 184, 52, 7);
+ui_col(INK); fg_rr(24, 418, 184, 52, 7);
+fg_hv = fg_hov(24, 418, 184, 52);
+ui_col(fg_flash ? 0xFF5C93 : fg_hv ? 0xD93A77 : MAG); fg_rr(26.5, 420.5, 179, 47, 5);
+ui_cola(0xFFFFFF, 0.35); fg_r(32, 422.5, 168, 1.5);
+gfx_setfont(16); ui_col(0xFFF6DC); fg_ctxt(116, 444, "STEP OFF");
 fg_hv && pressed && drag_id == 0 ? ( drag_id = -1; fo_stepoff(-1); fg_sot = time_precise(); );
 
-fg_key(24, 442, 76, 34, "RETURN", 0, SUN) ? fo_return();
-!fo_hasprev ? ( ui_cola(CARD, 0.55); fg_rr(24, 442, 76, 34, 4); );
-pk_lcd(106 * sc, 442 * sc, 102 * sc, 34 * sc, 0);
-pk_lcdfont(9, 9.5 * sc); ui_col(pk_lcdc); fg_txt(114, 445, "SEED");
-pk_lcdfont(9, 17 * sc); sprintf(#fgl, "%04d", slider54); fg_txt(114, 456, #fgl);
-ui_cola(pk_lcdc, 0.8); fg_tri(194, 450, 190, 456, 198, 456); fg_tri(190, 462, 198, 462, 194, 468);
-fg_hov(106, 442, 102, 34) ? (
+fg_key(24, 482, 76, 34, "RETURN", 0, SUN) ? fo_return();
+!fo_hasprev ? ( ui_cola(CARD, 0.55); fg_rr(24, 482, 76, 34, 4); );
+pk_lcd(106 * sc, 482 * sc, 102 * sc, 34 * sc, 0);
+pk_lcdfont(9, 9.5 * sc); ui_col(pk_lcdc); fg_txt(114, 485, "SEED");
+pk_lcdfont(9, 17 * sc); sprintf(#fgl, "%04d", slider54); fg_txt(114, 496, #fgl);
+ui_cola(pk_lcdc, 0.8); fg_tri(194, 490, 190, 496, 198, 496); fg_tri(190, 502, 198, 502, 194, 508);
+fg_hov(106, 482, 102, 34) ? (
   mouse_wheel != 0 ? ( fo_stepoff(min(max(slider54 + (mouse_wheel > 0 ? 1 : -1), 0), 9999)); mouse_wheel = 0; fg_sot = time_precise(); );
   pressed && drag_id == 0 ? ( drag_id = 2900; fg_sy = mouse_y; );
 );
@@ -1107,8 +1370,8 @@ drag_id == 2900 ? (
     fo_stepoff(min(max(slider54 + (mouse_y < fg_sy ? 1 : -1), 0), 9999)); fg_sy = mouse_y; fg_sot = time_precise();
   );
 );
-fg_key(24, 488, 89, 30, "HOLD", slider49 >= 0.5, SUN) ? fg_set(49, slider49 >= 0.5 ? 0 : 1);
-fg_key(119, 488, 89, 30, slider50 >= 0.5 ? "KEY SYNC" : "FREE", slider50 >= 0.5, SKY2) ? fg_set(50, slider50 >= 0.5 ? 0 : 1);
+fg_key(24, 530, 89, 34, "HOLD", slider49 >= 0.5, SUN) ? fg_set(49, slider49 >= 0.5 ? 0 : 1);
+fg_key(119, 530, 89, 34, slider50 >= 0.5 ? "KEY SYNC" : "FREE", slider50 >= 0.5, SKY2) ? fg_set(50, slider50 >= 0.5 ? 0 : 1);
 // the full circle: after how many beats the three paths line up again (the LCM of their pattern lengths in time)
 fg_cyc = 1; fg_i = 0;
 loop(3,
@@ -1123,79 +1386,103 @@ loop(3,
 );
 fg_cyc /= 24;
 sprintf(#fgl, fg_cyc == floor(fg_cyc) ? "FULL CIRCLE %.0f BEATS" : "FULL CIRCLE %.1f BEATS", fg_cyc);
-gfx_setfont(10); ui_cola(INK, 0.85); fg_ctxt(116, 540, #fgl);
+gfx_setfont(10); ui_cola(INK, 0.85); fg_ctxt(116, 600, #fgl);
 
 // ---------- the three paths ----------
-fg_path(0, 218, 66, 222, 496, P1BG, TURQ);
-fg_path(1, 446, 66, 222, 496, P2BG, MAG);
-fg_path(2, 674, 66, 222, 496, P3BG, OCHRE);
+fg_path(0, 218, 66, 222, 594, P1BG, TURQ);
+fg_path(1, 446, 66, 222, 594, P2BG, MAG);
+fg_path(2, 674, 66, 222, 594, P3BG, OCHRE);
 
-// ---------- THE JOURNEY: delay and reverb ----------
-fg_field(904, 66, 176, 248, FXBG);
+// ---------- THE JOURNEY: CF-1 chorus / flanger, MD-6 echo, the vocal plate ----------
+function fg_unit(y, on, idx, s) (
+  fg_key(914, y, 40, 24, "ON", on, LAPIS) ? fg_set(idx, on ? 0 : 1);
+  gfx_setfont(12); ui_col(INK); fg_txt(962, y + 4, s);
+);
+fg_field(904, 66, 176, 482, FXBG);
 fg_band(904, 66, 176, 30, LAPIS, "THE JOURNEY");
 fg_trk = ui_mix(FXBG, 0x000000, 0.28);
-gfx_setfont(10); ui_cola(INK, 0.75); fg_ctxt(992, 116, "DELAY");
-sprintf(#fgv, "%s", fo_dname(slider55));      fg_knob(936, 156, 15, 55, 0, 7, 3, 0, 1, LAPIS, "RATE", #fgv);
-sprintf(#fgv, "%d%%", slider56);              fg_knob(992, 156, 15, 56, 0, 90, 35, 0, 1, LAPIS, "FDBK", #fgv);
-sprintf(#fgv, "%d%%", slider57);              fg_knob(1048, 156, 15, 57, 0, 100, 30, 0, 1, LAPIS, "LEVEL", #fgv);
-ui_cola(INK, 0.3); fg_r(916, 208, 152, 1.5);
-gfx_setfont(10); ui_cola(INK, 0.75); fg_ctxt(992, 224, "REVERB");
-sprintf(#fgv, "%d%%", slider58);              fg_knob(956, 264, 15, 58, 0, 100, 60, 0, 1, LAPIS, "SIZE", #fgv);
-sprintf(#fgv, "%d%%", slider59);              fg_knob(1028, 264, 15, 59, 0, 100, 30, 0, 1, LAPIS, "LEVEL", #fgv);
+// CF-1
+fg_unit(106, slider90 >= 0.5, 90, "CF-1 CHORUS");
+sprintf(#fgv, slider91 < 1 ? "CHORUS" : slider91 > 99 ? "FLANGER" : "%d%%", slider91); fg_knob(936, 164, 14, 91, 0, 100, 0, 0, 0, LAPIS, "MORPH", #fgv);
+sprintf(#fgv, slider92 < 50 ? "%.2f Hz" : "%.1f Hz", 0.1 * 100 ^ (slider92 / 100)); fg_knob(992, 164, 14, 92, 0, 100, 25, 0, 0, LAPIS, "RATE", #fgv);
+sprintf(#fgv, "%d%%", slider93);              fg_knob(1048, 164, 14, 93, 0, 100, 45, 0, 0, LAPIS, "DEPTH", #fgv);
+fg_cm = slider91 / 100; sprintf(#fgv, "%.2f ms", (3 * 4 ^ (slider94 / 100)) ^ (1 - fg_cm) * (0.4 * 10 ^ (slider94 / 100)) ^ fg_cm);
+fg_knob(956, 224, 14, 94, 0, 100, 50, 0, 0, LAPIS, "MANUAL", #fgv);
+sprintf(#fgv, "%d%%", slider95);              fg_knob(1028, 224, 14, 95, 0, 100, 0, 0, 0, LAPIS, "REGEN", #fgv);
+ui_cola(INK, 0.3); fg_r(916, 266, 152, 1.5);
+// MD-6
+fg_unit(276, slider96 >= 0.5, 96, "MD-6 ECHO");
+slider97 >= 0.5 ? (
+  sprintf(#fgv, "%s", fo_dname(slider55));    fg_knob(936, 336, 14, 55, 0, 9, 6, 0, 1, LAPIS, "TIME", #fgv);
+) : (
+  fg_t = 20 * 100 ^ (slider98 / 100); sprintf(#fgv, fg_t < 1000 ? "%.0f ms" : "%.2f s", fg_t < 1000 ? fg_t : fg_t / 1000);
+  fg_knob(936, 336, 14, 98, 0, 100, 60, 0, 0, LAPIS, "TIME", #fgv);
+);
+sprintf(#fgv, "%d%%", slider56);              fg_knob(992, 336, 14, 56, 0, 100, 45, 0, 0, LAPIS, "FDBK", #fgv);
+sprintf(#fgv, "%d%%", slider57);              fg_knob(1048, 336, 14, 57, 0, 100, 40, 0, 0, LAPIS, "LEVEL", #fgv);
+sprintf(#fgv, slider99 < 60 ? "%.2f Hz" : "%.1f Hz", 0.05 * 160 ^ (slider99 / 100)); fg_knob(936, 396, 14, 99, 0, 100, 35, 0, 0, LAPIS, "WOW", #fgv);
+sprintf(#fgv, "%.2f ms", 9 * sqr(slider100 / 100)); fg_knob(992, 396, 14, 100, 0, 100, 15, 0, 0, LAPIS, "DEPTH", #fgv);
+fg_key(1024, 384, 48, 24, "SYNC", slider97 >= 0.5, LAPIS) ? fg_set(97, slider97 >= 0.5 ? 0 : 1);
+ui_cola(INK, 0.3); fg_r(916, 438, 152, 1.5);
+// the vocal plate
+fg_unit(448, slider101 >= 0.5, 101, "VOCAL PLATE");
+sprintf(#fgv, "%.2f s", slider58);            fg_knob(936, 506, 14, 58, 0.4, 5, 2.6, 1, 0.01, LAPIS, "DECAY", #fgv);
+sprintf(#fgv, "%d ms", slider102);            fg_knob(992, 506, 14, 102, 0, 250, 40, 0, 1, LAPIS, "PRE", #fgv);
+sprintf(#fgv, "%d%%", slider59);              fg_knob(1048, 506, 14, 59, 0, 100, 30, 0, 1, LAPIS, "MIX", #fgv);
 
 // ---------- FATE and VOLUME, the output meter ----------
-fg_field(904, 322, 176, 240, FATEBG);
-fg_band(904, 322, 176, 30, 0x6A3E8E, "FATE");
+fg_field(904, 556, 176, 104, FATEBG);
+fg_band(904, 556, 176, 28, 0x6A3E8E, "FATE");
 fg_trk = ui_mix(FATEBG, 0x000000, 0.28);
-sprintf(#fgv, "%d%%", slider60);              fg_knob(948, 410, 22, 60, 0, 100, 35, 0, 1, 0x8A4FB8, "FATE", #fgv);
-sprintf(#fgv, "%+.1f dB", slider61);          fg_knob(1036, 410, 22, 61, -24, 6, 0, 0, 0.1, 0x8A4FB8, "VOLUME", #fgv);
+sprintf(#fgv, "%d%%", slider60);              fg_knob(936, 614, 15, 60, 0, 100, 35, 0, 1, 0x8A4FB8, "FATE", #fgv);
+sprintf(#fgv, "%+.1f dB", slider61);          fg_knob(998, 614, 15, 61, -24, 6, 0, 0, 0.1, 0x8A4FB8, "VOLUME", #fgv);
 fg_mL = max(fo_pkl, fg_mL * 0.86); fg_mR = max(fo_pkr, fg_mR * 0.86); fo_pkl = 0; fo_pkr = 0;
 fg_i = 0;
 loop(2,
   fg_v = fg_i == 0 ? fg_mL : fg_mR;
   fg_db = 20 * log10(max(fg_v, 0.00001)); fg_f = min(max((fg_db + 48) / 48, 0), 1);
-  ui_col(INK); fg_r(918, 504 + fg_i * 16, 148, 10);
-  ui_col(0xFFF6DC); fg_r(919.5, 505.5 + fg_i * 16, 145, 7);
-  ui_col(fg_db > -1 ? 0xE0402A : fg_db > -6 ? SUN : TURQ); fg_r(919.5, 505.5 + fg_i * 16, 145 * fg_f, 7);
+  ui_col(INK); fg_r(1040 + fg_i * 16, 592, 11, 60);
+  ui_col(0xFFF6DC); fg_r(1041.5 + fg_i * 16, 593.5, 8, 57);
+  ui_col(fg_db > -1 ? 0xE0402A : fg_db > -6 ? SUN : TURQ); fg_r(1041.5 + fg_i * 16, 593.5 + 57 * (1 - fg_f), 8, 57 * fg_f);
   fg_i += 1;
 );
-ui_cola(INK, 0.5); fg_i = 0; loop(5, fg_r(919.5 + 145 * (1 - fg_i * 12 / 48), 498, 1, 4); fg_i += 1; );
+ui_cola(INK, 0.5); fg_i = 0; loop(5, fg_r(1035, 593.5 + 57 * fg_i * 12 / 48, 3, 1); fg_i += 1; );
 
 // ---------- the bottom strip: key, scale, channel, SAT, OUT ----------
-fg_field(24, 572, 1056, 40, SAND);
+fg_field(24, 670, 1056, 40, SAND);
 fg_trk = ui_mix(CARD, 0x000000, 0.28);
-sprintf(#fgv, "%+d st", slider51);            fg_bip = 1; fg_knob(50, 592, 12, 51, -12, 12, 0, 0, 1, OCHRE, "", #fgv);
-gfx_setfont(10); ui_col(INK); fg_txt(70, 585, "TRANSPOSE");
-fg_txt(156, 585, "SCALE");
+sprintf(#fgv, "%+d st", slider51);            fg_bip = 1; fg_knob(50, 690, 12, 51, -12, 12, 0, 0, 1, OCHRE, "", #fgv);
+gfx_setfont(10); ui_col(INK); fg_txt(70, 683, "TRANSPOSE");
+fg_txt(156, 683, "SCALE");
 fg_i = 0; loop(5,
-  fg_key(204 + fg_i * 52, 579, 48, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "MAJ" : fg_i == 2 ? "MIN" : fg_i == 3 ? "DOR" : "PENT", slider52 == fg_i, OCHRE) ? fg_set(52, fg_i);
+  fg_key(204 + fg_i * 52, 677, 48, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "MAJ" : fg_i == 2 ? "MIN" : fg_i == 3 ? "DOR" : "PENT", slider52 == fg_i, OCHRE) ? fg_set(52, fg_i);
   fg_i += 1; );
-sprintf(#fgv, "%s", fg_pc(slider53));         fg_knob(486, 592, 12, 53, 0, 11, 0, 0, 1, OCHRE, "", #fgv);
-gfx_setfont(10); ui_col(INK); fg_txt(506, 585, "ROOT");
-gfx_setfont(12); ui_col(INK); fg_txt(548, 583, fg_pc(slider53));
+sprintf(#fgv, "%s", fg_pc(slider53));         fg_knob(486, 690, 12, 53, 0, 11, 0, 0, 1, OCHRE, "", #fgv);
+gfx_setfont(10); ui_col(INK); fg_txt(506, 683, "ROOT");
+gfx_setfont(12); ui_col(INK); fg_txt(548, 681, fg_pc(slider53));
 // MIDI channel
-fg_hv = fg_hov(650, 579, 84, 26);
-ui_col(INK); fg_rr(650, 579, 84, 26, 4); ui_col(fg_hv ? 0xFFFFFF : KEYF); fg_rr(651.5, 580.5, 81, 23, 3);
-gfx_setfont(11); ui_col(INK); slider62 < 0.5 ? strcpy(#fgl, "MIDI OMNI") : sprintf(#fgl, "MIDI CH %d", slider62); fg_ctxt(692, 592, #fgl);
+fg_hv = fg_hov(650, 677, 84, 26);
+ui_col(INK); fg_rr(650, 677, 84, 26, 4); ui_col(fg_hv ? 0xFFFFFF : KEYF); fg_rr(651.5, 678.5, 81, 23, 3);
+gfx_setfont(11); ui_col(INK); slider62 < 0.5 ? strcpy(#fgl, "MIDI OMNI") : sprintf(#fgl, "MIDI CH %d", slider62); fg_ctxt(692, 690, #fgl);
 fg_hv && pressed && drag_id == 0 ? (
   drag_id = -1; strcpy(#fgm, ""); fg_i = 0;
   loop(17, fg_i == floor(slider62 + 0.5) ? strcat(#fgm, "!"); fg_i == 0 ? strcat(#fgm, "Omni") : ( sprintf(#fgn, "Channel %d", fg_i); strcat(#fgm, #fgn); ); fg_i < 16 ? strcat(#fgm, "|"); fg_i += 1; );
-  gfx_x = 650 * sc; gfx_y = 607 * sc; fg_i = gfx_showmenu(#fgm); fg_i > 0 ? fg_set(62, fg_i - 1);
+  gfx_x = 650 * sc; gfx_y = 705 * sc; fg_i = gfx_showmenu(#fgm); fg_i > 0 ? fg_set(62, fg_i - 1);
 );
 // SAT and the OUT stage
-sprintf(#fgv, "%d%%", slider63);              fg_knob(800, 592, 12, 63, 0, 100, 0, 0, 1, 0xD8B040, "", #fgv);
-gfx_setfont(10); ui_col(INK); fg_txt(820, 585, "SAT");
-fg_txt(862, 585, "OUT");
+sprintf(#fgv, "%d%%", slider63);              fg_knob(800, 690, 12, 63, 0, 100, 0, 0, 1, 0xD8B040, "", #fgv);
+gfx_setfont(10); ui_col(INK); fg_txt(820, 683, "SAT");
+fg_txt(862, 683, "OUT");
 fg_i = 0; loop(3,
-  fg_key(898 + fg_i * 58, 579, 56, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "CLIP" : "LIMIT", slider68 == fg_i,
+  fg_key(898 + fg_i * 58, 677, 56, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "CLIP" : "LIMIT", slider68 == fg_i,
          fg_i == 0 ? 0x3A9CFF : fg_i == 1 ? (ost_clipped ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22) ? fg_set(68, fg_i);
   fg_i += 1; );
 ost_clipped = 0;
 
 // ---------- the title ----------
-ui_col(INK); fg_th(250, 632, 446, 632, 2); fg_th(654, 632, 850, 632, 2);
-fg_disc(244, 632, 3); fg_disc(856, 632, 3);
-gfx_setfont(13); ui_col(INK); fg_ctxt(550, 632, "THE FOOL");
+ui_col(INK); fg_th(250, 730, 446, 730, 2); fg_th(654, 730, 850, 730, 2);
+fg_disc(244, 730, 3); fg_disc(856, 730, 3);
+gfx_setfont(13); ui_col(INK); fg_ctxt(550, 730, "THE FOOL");
 
 pk_end();
 ui_end();
