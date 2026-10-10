@@ -391,10 +391,9 @@ pm_ = rd_sq(676, 20, 78, 30, 0, KEYC, "PRESETS");
 rd_sq(760, 20, 30, 30, 0, KEYC, "◄") ? ( pr_cur = pr_cur <= 1 ? PRESET_N : pr_cur - 1; load_preset(pr_cur); );
 rd_sq(794, 20, 30, 30, 0, KEYC, "►") ? ( pr_cur = pr_cur >= PRESET_N ? 1 : pr_cur + 1; load_preset(pr_cur); );
 pk_lcd(832 * sc, 12 * sc, 232 * sc, 46 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-pr_cur >= 1 && pr_cur <= PRESET_N ? sprintf(#plcd, "PRESET %02d/%02d", pr_cur, PRESET_N) : sprintf(#plcd, "PRESET --/%02d", PRESET_N);
-gfx_x = 844 * sc; gfx_y = 18 * sc; gfx_drawstr(#plcd);
-pk_lcdfont(9, 15 * sc); gfx_x = 844 * sc; gfx_y = 33 * sc; gfx_drawstr(pr_cur >= 1 && pr_cur <= PRESET_N ? pname(pr_cur) : "Custom");
+ui_col(pk_lcdc);
+strcpy(#plcd, pr_cur >= 1 && pr_cur <= PRESET_N ? pname(pr_cur) : "Custom");
+pk_lcdfont(9, 27 * sc); gfx_measurestr(#plcd, ltw_, lth_); pk_fitstr(#plcd, 844 * sc, 35 * sc - lth_ * 0.5, 27 * sc, 212 * sc);
 pm_ || (pressed && drag_id == 0 && mouse_x >= 832 * sc && mouse_x < 1064 * sc && mouse_y >= 12 * sc && mouse_y < 58 * sc) ? (
   drag_id = -1;
   strcpy(#pmenu, ""); k_ = 1;

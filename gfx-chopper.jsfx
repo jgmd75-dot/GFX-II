@@ -533,8 +533,9 @@ hm ? (
   gfx_setfont(8); TX(76, 122, #lcdn);
   gfx_setfont(7); TX(76, 150, #lcdv);
 ) : (
-  gfx_setfont(8); sprintf(#lcd1, "PRESET %02d/19", slider1 + 1); TX(76, 122, #lcd1);
-  gfx_setfont(7); TX(76, 150, pname(slider1));
+  lfs_ = 50*S; gfx_setfont(10, "Courier New", lfs_, 'b'); gfx_measurestr(pname(slider1), ltw_, lth_);
+  ltw_ > 238*S ? ( lfs_ *= 238*S / ltw_; gfx_setfont(10, "Courier New", lfs_, 'b'); gfx_measurestr(pname(slider1), ltw_, lth_); );
+  gfx_x = ox + 76*S; gfx_y = oy + 154*S - lth_*0.5; gfx_drawstr(pname(slider1));
 );
 // PRESETS key or a click on the LCD: every preset in a drop-down
 pm_ = btn(60, 212, 130, 36, "PRESETS", 0, 6);
