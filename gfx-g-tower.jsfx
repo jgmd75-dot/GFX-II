@@ -1,0 +1,1251 @@
+desc:GFX G Tower
+//tags: instrument synth poly formant vowel choir xy lfo tarot
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-voice (.jsfx-inc) in the same folder.
+//
+// THE TOWER (card XVI of the GFX Tarot series): sudden upheaval - lightning strikes the tower, the structure
+// shatters so that something truer can be built. A polysynth whose heart is a QUADRANT FORMANT FILTER: an XY pad
+// with a formant set in each corner, the point flown around by two LFOs and knocked into a corner by LIGHTNING.
+//   OSC 1 / 2  SAW, PULSE (PW) or CHOIR (a buzzy five-saw stack, SPREAD); OSC 2 PITCH and DETUNE; MIX, SUB (one
+//              octave below OSC 1), NOISE
+//   FORMANT    per voice: five parallel resonant band-passes (zero-delay state-variable, unity peak gain); the four
+//              corners each hold a formant set (A, E, I, O, U, STONE dark, GLASS bright, STORM nasal, CHOIR), every
+//              peak with its frequency, bandwidth and gain. The XY point morphs them bilinearly - frequencies and
+//              bandwidths in log-frequency, gains in dB. RESONANCE scales every Q (0.5x - 4x), SHIFT moves all the
+//              peaks (+/-12 st), DEPTH mixes the formants against the raw oscillators.
+//              Per voice rather than on the sum: every note gets its own velocity and envelope offsets on the pad,
+//              and chords stay clean (no intermodulation through one shared resonant bank). Cost: 40 band-passes at
+//              8 voices, their coefficients worked out every 8 samples.
+//   LFO X / Y  sine, triangle, saw, S&H, smooth random; RATE free or synced; DEPTH; PHASE between them.
+//              PATH: FREE (the two LFOs as set), CIRCLE (Y follows X at the PHASE offset: circles and ellipses,
+//              diamonds with the triangle), FIGURE-8 (Y at twice X), SPIRAL (a circle that breathes in and out over
+//              eight turns), WALK (a smooth random walk). Drag the pad to move the centre the LFOs orbit.
+//   MOD        mod WHEEL and VELOCITY to X and Y; a formant ENVELOPE (attack / decay) to Y
+//   LIGHTNING  the big lit key, a MIDI note or a hard velocity: the point is jolted towards a random corner (STRIKE
+//              sets how far), the resonance is slammed up and a noise CRACK (and its thunder) rings through the
+//              formants; everything rebuilds over RECOVERY. AUTO strikes at random, a chance on every bar.
+//   AMP        ADSR, VELOCITY; POLY (8 voices) / MONO / LEGATO, GLIDE, BEND range
+//   EFFECTS    DRIVE (stone crumble: a biased soft clip that crumbles into grit at the top), stereo ping-pong
+//              DELAY (tempo divisions), a big eight-line REVERB (SIZE, TONE, MIX)
+//   MASTER     FATE, VOLUME, SAT and the OUT stage (OFF / CLIP / LIMIT)
+// FATE (the Tarot series drift, 0-100 %): the cards reshuffle a little - the LFO rates, the phase between them and
+//   their depths wander, each corner's formant set slides a little in frequency, the pad centre drifts, the chance
+//   of an AUTO strike rises and falls; the tuning wanders gently and each note lands slightly differently in tune.
+// MIDI: pitch bend (BEND range), CC1 mod wheel, CC64 sustain, CC120 / CC123 all notes off.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-voice.jsfx-inc
+
+// ---------- OSCILLATORS ----------
+slider1:2<0,2,1{Saw,Pulse,Choir}>-Osc 1 wave
+slider2:0<0,2,1{Saw,Pulse,Choir}>-Osc 2 wave
+slider3:0<-24,24,1>-Osc 2 pitch (st)
+slider4:7<-50,50,0.1>-Osc 2 detune (cents)
+slider5:40<0,100,1>-Osc mix (1 <> 2, %)
+slider6:50<5,95,1>-Pulse width (%)
+slider7:22<0,60,0.1>-Choir spread (cents)
+slider8:20<0,100,1>-Sub (%)
+slider9:4<0,100,1>-Noise (%)
+// ---------- FORMANT ----------
+slider10:0<0,8,1{A,E,I,O,U,Stone,Glass,Storm,Choir}>-Corner top left
+slider11:3<0,8,1{A,E,I,O,U,Stone,Glass,Storm,Choir}>-Corner top right
+slider12:2<0,8,1{A,E,I,O,U,Stone,Glass,Storm,Choir}>-Corner bottom left
+slider13:4<0,8,1{A,E,I,O,U,Stone,Glass,Storm,Choir}>-Corner bottom right
+slider14:50<0,100,0.1>-Pad X (%)
+slider15:50<0,100,0.1>-Pad Y (%)
+slider16:40<0,100,1>-Resonance (%)
+slider17:90<0,100,1>-Formant depth (%)
+slider18:0<-12,12,0.1>-Formant shift (st)
+// ---------- LFO X / Y ----------
+slider19:0<0,4,1{Sine,Triangle,Saw,S&H,Smooth}>-LFO X shape
+slider20:0.2<0.01,20,0.01>-LFO X rate (Hz)
+slider21:0<0,1,1{Free,Sync}>-LFO X sync
+slider22:3<0,11,1{8 bars,4 bars,2 bars,1 bar,1/2,1/2T,1/4,1/4T,1/8,1/8T,1/16,1/16T}>-LFO X synced rate
+slider23:35<0,100,1>-LFO X depth (%)
+slider24:0<0,4,1{Sine,Triangle,Saw,S&H,Smooth}>-LFO Y shape
+slider25:0.2<0.01,20,0.01>-LFO Y rate (Hz)
+slider26:0<0,1,1{Free,Sync}>-LFO Y sync
+slider27:3<0,11,1{8 bars,4 bars,2 bars,1 bar,1/2,1/2T,1/4,1/4T,1/8,1/8T,1/16,1/16T}>-LFO Y synced rate
+slider28:35<0,100,1>-LFO Y depth (%)
+slider29:90<0,360,1>-LFO phase (degrees)
+slider30:1<0,4,1{Free,Circle,Figure-8,Spiral,Walk}>-Path
+// ---------- MOD ----------
+slider31:0<-100,100,1>-Wheel to X (%)
+slider32:40<-100,100,1>-Wheel to Y (%)
+slider33:0<-100,100,1>-Velocity to X (%)
+slider34:15<-100,100,1>-Velocity to Y (%)
+slider35:0<-100,100,1>-Envelope to Y (%)
+slider36:10<1,5000,0.1>-Envelope attack (ms)
+slider37:600<10,8000,1>-Envelope decay (ms)
+// ---------- LIGHTNING ----------
+slider38:70<0,100,1>-Strike (%)
+slider39:1500<50,10000,1>-Recovery (ms)
+slider40:40<0,100,1>-Crack (%)
+slider41:0<0,100,1>-Auto strike (% per bar)
+slider42:0<0,2,1{Off,Note,Velocity}>-MIDI strike
+slider43:24<0,127,1>-Strike note
+slider44:120<1,127,1>-Strike velocity
+// ---------- VOICE / AMP ----------
+slider45:0<0,2,1{Poly,Mono,Legato}>-Voice mode
+slider46:0<0,2000,1>-Glide (ms)
+slider47:2<0,24,1>-Pitch bend range (st)
+slider48:30<1,5000,0.1>-Amp attack (ms)
+slider49:800<5,8000,1>-Amp decay (ms)
+slider50:85<0,100,1>-Amp sustain (%)
+slider51:600<5,10000,1>-Amp release (ms)
+slider52:40<0,100,1>-Amp velocity (%)
+// ---------- EFFECTS ----------
+slider53:10<0,100,1>-Drive (%)
+slider54:2<0,7,1{1/2,1/4D,1/4,1/4T,1/8D,1/8,1/8T,1/16}>-Delay time
+slider55:30<0,90,1>-Delay feedback (%)
+slider56:12<0,100,1>-Delay mix (%)
+slider57:60<0,100,1>-Reverb size (%)
+slider58:55<0,100,1>-Reverb tone (%)
+slider59:25<0,100,1>-Reverb mix (%)
+// ---------- MASTER ----------
+slider60:35<0,100,1>-Fate (%)
+slider61:0<-24,6,0.1>-Volume (dB)
+slider62:0<0,16,1>-MIDI channel (0 = omni)
+slider63:0<0,100,1>-Band sat (%)
+slider64:30<0,100,1>-Bias (%)
+slider65:120<40,400,1>-Sat low band (Hz)
+slider66:6000<2000,16000,10>-Sat high band (Hz)
+slider67:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider68:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-tower";                                   // the ? pop-up links to this manual
+ext_noinit = 1;
+
+// ---------- memory ----------
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
+TV   = 30000;                                              // 8 voices x 64 slots
+THN  = 30600;                                              // mono held-note stack (128)
+TQO  = 30800; TQT = 31100; TQN = 31400; TQV = 31700;       // note event queue (300 each)
+TDEF = 32100;                                              // the Init values of sliders 1-68
+TTMP = 32200;                                              // preset parser scratch (400)
+TFS  = 32700;                                              // formant sets: 9 x 5 peaks x (Hz, bandwidth Hz, dB)
+TCT  = 32900;                                              // the four corners: 5 peaks x (ln Hz, ln Q, dB)
+TCR  = 33000;                                              // choir saw ratios (5)
+TGC  = 33100;                                              // shared formant coefficients (20) when no voice has its own point
+TRLT = 33020; TRG = 33050;                                 // reverb: line lengths, gains
+TAPL = 33070; TAPW = 33080;                                // reverb input allpasses: lengths, write positions
+TGX  = 33200; TGY = 33300;                                 // GUI: the point's trail (64 each)
+TGPX = 33400; TGPY = 33800;                                // GUI: the LFO path (400 each)
+TRV  = 40000; TRVN = 16384;                                // reverb lines 8 x 16384  (40000 - 171071)
+TAP  = 172000; TAPN = 4096;                                // 4 allpass rings x 4096 (172000 - 188383)
+TDL  = 200000; TDR = 200000 + 524288; TDM = 524287;        // delay lines (2^19 each)
+memset(TV, 0, 600);
+tw_i = 0; loop(8, TV[tw_i * 64] = -1; tw_i += 1; );
+memset(TRV, 0, 8 * TRVN); memset(TAP, 0, 4 * TAPN);
+memset(TDL, 0, 524288 * 2);
+
+// voice slots (p = TV + 64 * voice):
+//   0 note (-1 free)  1 key held  2 age  3 held by pedal  4 pitch now (st)  5 pitch target  6 velocity 0..1
+//   7 note detune (st)  8 amp stage (0 idle, 1 att, 2 dec / sus, 3 rel)  9 amp level  10 formant env stage  11 its level
+//   12-16 osc 1 phases (choir: five saws)  17-21 osc 2 phases  22 sub phase  23 osc 1 inc  24 osc 2 inc
+//   25-34 formant band-pass states (5 x 2)  35-54 their coefficients (5 x a1, a2, a3, gain)
+//   55 voice gain  56 / 57 pan gains L / R  58 needs its control values now  61 where its coefficients are (own or shared)
+
+L12 = log(2) / 12; LN2 = log(2);
+
+// ---------- formant sets: each peak Hz, bandwidth Hz, gain dB (vowels from the classic tenor tables) ----------
+function tw_fset(s, f1, b1, g1, f2, b2, g2, f3, b3, g3, f4, b4, g4, f5, b5, g5) local(p) (
+  p = TFS + s * 15;
+  p[0] = f1; p[1] = b1; p[2] = g1;   p[3] = f2; p[4] = b2; p[5] = g2;   p[6] = f3; p[7] = b3; p[8] = g3;
+  p[9] = f4; p[10] = b4; p[11] = g4; p[12] = f5; p[13] = b5; p[14] = g5;
+);
+tw_fset(0, 650, 80, 0,  1080, 90, -6,   2650, 120, -7,  2900, 130, -8,  3250, 140, -22);   // A
+tw_fset(1, 400, 70, 0,  1700, 80, -14,  2600, 100, -12, 3200, 120, -14, 3580, 120, -20);   // E
+tw_fset(2, 290, 40, 0,  1870, 90, -15,  2800, 100, -18, 3250, 120, -20, 3540, 120, -30);   // I
+tw_fset(3, 400, 40, 0,  800,  80, -10,  2600, 100, -12, 2800, 120, -12, 3000, 120, -26);   // O
+tw_fset(4, 350, 40, 0,  600,  60, -20,  2700, 100, -17, 2900, 120, -14, 3300, 120, -26);   // U
+tw_fset(5, 220, 60, 0,  480,  80, -3,   850,  110, -9,  1500, 160, -18, 2400, 220, -26);   // STONE: dark, low, chesty
+tw_fset(6, 1100, 110, -10, 2300, 90, -2, 3400, 100, 0,  5000, 140, -5,  7200, 200, -9);    // GLASS: bright, high
+tw_fset(7, 270, 45, 0,  1000, 60, -4,   2100, 70, -7,   2900, 80, -9,   4200, 110, -15);   // STORM: narrow, nasal
+tw_fset(8, 620, 70, 0,  1050, 80, -6,   2350, 110, -12, 2950, 100, -4,  3500, 130, -14);   // CHOIR: open, singer's ring
+
+// ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
+#tw_def = "2 0 0 7 40 50 22 20 4 0 3 2 4 50 50 40 90 0 0 0.2 0 3 35 0 0.2 0 3 35 90 1 0 40 0 15 0 10 600 70 1500 40 0 0 24 120 0 0 2 30 800 85 600 40 10 2 30 12 60 55 25 35 0 0 0 30 120 6000 -0.3 1";
+
+function tw_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
+  n = 0; i = 0; inn = 0; len = strlen(s);
+  loop(len + 1,
+    c = i < len ? str_getchar(s, i) : 32;
+    c >= 48 && c <= 57 ? (
+      !inn ? ( inn = 1; acc = 0; fr = 0; scl = 1; neg = 0; );
+      fr ? ( scl *= 0.1; acc += (c - 48) * scl; ) : acc = acc * 10 + c - 48;
+    ) : c == 46 ? (
+      !inn ? ( inn = 1; acc = 0; scl = 1; neg = 0; ); fr = 1;
+    ) : c == 45 ? (
+      inn = 1; acc = 0; fr = 0; scl = 1; neg = 1;
+    ) : (
+      inn ? ( dst[n] = neg ? -acc : acc; n += 1; inn = 0; );
+    );
+    i += 1;
+  );
+  n;
+);
+tw_nums(#tw_def, TDEF);
+
+#tw_pm = "Tower Choir|Lightning Vowels|Falling Stones|Storm Chant|Glass Spire|Stone Throat|Crown of Fire|Babel|Ruin Drone|Revelation|Sudden Change|Dark Choir|Thunder Bass|Rebuild";
+function tw_pstr(p) (
+  p == 2  ? "" :
+  "";
+);
+function load_preset(p) local(n, i) (
+  i = 0; loop(62, i != 59 && i != 60 && i != 61 ? slider(i + 1) = TDEF[i]; i += 1; );   // FATE, VOLUME and channel stay
+  n = tw_nums(tw_pstr(p), TTMP);
+  i = 0; loop(floor(n / 2), TTMP[i * 2] >= 1 && TTMP[i * 2] <= 62 ? slider(TTMP[i * 2]) = TTMP[i * 2 + 1]; i += 1; );
+  i = 1; loop(62, ui_auto(i); i += 1; );
+  pr_cur = p; tw_panic = 1;
+);
+
+// ---------- voices ----------
+function tw_vrel(p) ( p[1] = 0; p[3] = 0; p[8] > 0 ? p[8] = 3; );
+function tw_vstart(p, n, v, retrig, from) local(i) (
+  p[8] == 0 ? (
+    // a fresh voice: random phases (chords and the choir saws never line up), clean filters
+    i = 0; loop(11, p[12 + i] = rand(1); i += 1; );
+    memset(p + 25, 0, 10); p[9] = 0; p[11] = 0;
+    p[4] = from;                                       // GLIDE comes in from the last note played
+  );
+  tw_gc >= 1 ? p[4] = n;
+  p[0] = n; p[1] = 1; p[3] = 0; p[5] = n; p[6] = v / 127;
+  retrig || p[8] == 0 || p[8] == 3 ? (
+    p[7] = log(ins_note_detune()) / LN2 * 12;
+    p[8] = 1; p[10] = 1;
+  );
+  p[55] = (1 - tw_avel + tw_avel * p[6]) * 0.62;
+  i = ((p - TV) / 64) & 1 ? 0.22 : -0.22;                // the voices stand a little apart, left and right
+  p[56] = 1 - max(i, 0); p[57] = 1 + min(i, 0);
+  p[58] = 1;
+);
+function tw_alloc() local(i, p, best, ba) (
+  best = -1;
+  i = 0; loop(8, p = TV + i * 64; p[8] == 0 && (best < 0 || p[2] < ba) ? ( best = i; ba = p[2]; ); i += 1; );
+  best < 0 ? ( i = 0; loop(8, p = TV + i * 64; !p[1] && (best < 0 || p[2] < ba) ? ( best = i; ba = p[2]; ); i += 1; ); );
+  best < 0 ? ( i = 0; loop(8, p = TV + i * 64; best < 0 || p[2] < ba ? ( best = i; ba = p[2]; ); i += 1; ); );
+  TV + best * 64;
+);
+function tw_poly_on(n, v) local(i, p, from) (
+  i = 0; loop(8, p = TV + i * 64; p[0] == n && p[1] ? tw_vrel(p); i += 1; );
+  from = tw_last >= 0 && tw_glide > 0 ? tw_last : n;
+  p = tw_alloc(); tw_age += 1; p[2] = tw_age;
+  tw_vstart(p, n, v, 1, from);
+);
+function tw_poly_off(n) local(i, p) (
+  i = 0; loop(8, p = TV + i * 64; p[0] == n && p[1] ? ( tw_pedal ? p[3] = 1 : tw_vrel(p); ); i += 1; );
+);
+function tw_mono_on(n, v) local(i, f, held, p) (
+  held = tw_hc > 0;
+  f = -1; i = 0; loop(tw_hc, THN[i] == n ? f = i; i += 1; );
+  f >= 0 ? ( i = f; loop(tw_hc - f - 1, THN[i] = THN[i + 1]; i += 1; ); tw_hc -= 1; );
+  tw_hc < 127 ? ( THN[tw_hc] = n; tw_hc += 1; );
+  p = TV; tw_age += 1; p[2] = tw_age;
+  tw_vstart(p, n, v, !(held && tw_mode == 2), p[8] > 0 ? p[4] : (tw_last >= 0 && tw_glide > 0 ? tw_last : n));
+);
+function tw_mono_off(n) local(i, f, p) (
+  f = -1; i = 0; loop(tw_hc, THN[i] == n ? f = i; i += 1; );
+  f >= 0 ? (
+    i = f; loop(tw_hc - f - 1, THN[i] = THN[i + 1]; i += 1; ); tw_hc -= 1;
+    p = TV;
+    tw_hc > 0 ? ( p[0] = THN[tw_hc - 1]; p[5] = p[0]; tw_gc >= 1 ? p[4] = p[0]; )
+              : ( tw_pedal ? p[3] = 1 : tw_vrel(p); );
+  );
+);
+function tw_all_off() local(i, p) (
+  i = 0; loop(8, p = TV + i * 64; p[1] ? tw_vrel(p); p[1] = 0; p[3] = 0; i += 1; );
+  tw_hc = 0;
+);
+function tw_pedal_up() local(i, p) ( i = 0; loop(8, p = TV + i * 64; p[3] ? tw_vrel(p); i += 1; ); );
+function tw_qpush(ofs, t, n, v) local(i) (
+  tw_qc < 300 ? (
+    i = tw_qc; while (i > 0 && TQO[i - 1] > ofs) ( TQO[i] = TQO[i - 1]; TQT[i] = TQT[i - 1]; TQN[i] = TQN[i - 1]; TQV[i] = TQV[i - 1]; i -= 1; );
+    TQO[i] = ofs; TQT[i] = t; TQN[i] = n; TQV[i] = v; tw_qc += 1;
+  );
+);
+
+// ---------- LIGHTNING ----------
+// jolt the point towards a random corner (never the one it is nearest), slam the resonance, crack the sky
+function tw_strike(amt) local(c, near, cx, cy) (
+  near = (tw_gx >= 0.5 ? 1 : 0) + (tw_gy >= 0.5 ? 0 : 2);         // corners: 0 TL, 1 TR, 2 BL, 3 BR
+  c = floor(rand(3)); c >= near ? c += 1;
+  cx = c == 1 || c == 3 ? 1 : 0; cy = c < 2 ? 1 : 0;
+  tw_sk = amt * tw_samt;                                             // how far, how hard
+  tw_jx = (cx - tw_gx) * tw_sk; tw_jy = (cy - tw_gy) * tw_sk;
+  tw_sev = 1; tw_shold = tw_holdn;
+  tw_ce = 0.35 + 0.65 * amt; tw_re = amt;
+  tw_cbf = 3200;                                                     // the crack's band sweeps down from here
+  tw_scorner = c; tw_scount += 1;                                    // (for the panel)
+);
+
+// ---------- rates ----------
+function tw_lfo_beats(r) ( r == 0 ? 32 : r == 1 ? 16 : r == 2 ? 8 : r == 3 ? 4 : r == 4 ? 2 : r == 5 ? 4 / 3 : r == 6 ? 1 :
+                           r == 7 ? 2 / 3 : r == 8 ? 0.5 : r == 9 ? 1 / 3 : r == 10 ? 0.25 : 1 / 6; );
+function tw_dly_beats(r) ( r == 0 ? 2 : r == 1 ? 1.5 : r == 2 ? 1 : r == 3 ? 2 / 3 : r == 4 ? 0.75 : r == 5 ? 0.5 : r == 6 ? 1 / 3 : 0.25; );
+
+// LFO value: shape at phase ph; hv = held value (S&H), a / b the smooth-random end points
+function tw_lfov(sh, ph, hv, a, b) (
+  sh == 0 ? sin(2 * $pi * ph) : sh == 1 ? 1 - 4 * abs(ph - 0.5) : sh == 2 ? 2 * ph - 1 : sh == 3 ? hv :
+  a + (b - a) * (0.5 - 0.5 * cos($pi * ph));
+);
+
+// one reverb line: read (its length glides to the target; m swims it a little), damp, scale
+function tw_rl(base, lt, g, m) instance(ln, z) local(rp, ri, rf, d) (
+  ln += (lt - ln) * 0.0004;
+  rp = tw_rw - ln - m; ri = floor(rp); rf = rp - ri;
+  d = base[ri & (TRVN - 1)] * (1 - rf) + base[(ri + 1) & (TRVN - 1)] * rf;
+  z += (d - z) * tw_rdc;
+  abs(z) < 0.0000000001 ? z = 0;
+  z * g;
+);
+function tw_rinit(lt) instance(ln, z) ( ln = lt; z = 0; );
+
+// ---------- the corner tables (ln Hz, ln Q, dB) from the chosen sets, with FATE's slide per corner ----------
+function tw_corners() local(c, s, k, p, q, d) (
+  c = 0;
+  loop(4,
+    s = min(max(floor(slider(10 + c) + 0.5), 0), 8);
+    d = c == 0 ? tw_fc0 : c == 1 ? tw_fc1 : c == 2 ? tw_fc2 : tw_fc3;
+    p = TFS + s * 15; q = TCT + c * 15; k = 0;
+    loop(5,
+      q[0] = log(p[0]) + d; q[1] = log(p[0] / p[1]); q[2] = p[2];
+      p += 3; q += 3; k += 1;
+    );
+    c += 1;
+  );
+);
+
+// the formant coefficients of one voice at the point (x, y)
+function tw_fcoef(q, x, y) local(w1, w2, w3, w4, c, lf, lq, gd, f, kk, g, a1) (
+  x = min(max(x, 0), 1); y = min(max(y, 0), 1);
+  w1 = (1 - x) * y; w2 = x * y; w3 = (1 - x) * (1 - y); w4 = x * (1 - y);
+  c = TCT;
+  loop(5,
+    lf = w1 * c[0] + w2 * c[15] + w3 * c[30] + w4 * c[45];
+    lq = w1 * c[1] + w2 * c[16] + w3 * c[31] + w4 * c[46];
+    gd = w1 * c[2] + w2 * c[17] + w3 * c[32] + w4 * c[47];
+    f = min(exp(lf + tw_lsh), tw_fmax);
+    kk = 1 / max(exp(lq) * tw_rq, 0.4);
+    g = tan(f * tw_pis);
+    a1 = 1 / (1 + g * (g + kk));
+    q[0] = a1; q[1] = g * a1; q[2] = g * g * a1; q[3] = exp(gd * 0.11512925) * kk;
+    c += 3; q += 4;
+  );
+);
+
+// ---------- parameters ----------
+function tw_c4(c) ( 1 - (1 - c) ^ 4; );
+function tw_c8(ms) ( 1 - exp(-4.6 * 8 / (max(ms, 0.05) * 0.001 * srate)); );   // a one-pole step at the 8-sample tick
+function update() local(r, sp) (
+  tw_w1 = slider1; tw_w2 = slider2; tw_o2st = slider3 + slider4 / 100;
+  r = slider5 / 100; tw_m1 = (1 - r) * 0.5; tw_m2 = r * 0.5;
+  tw_pw = slider6 / 100; tw_spr = slider7;
+  tw_sub = slider8 / 100 * 0.55; tw_noi = sqr(slider9 / 100) * 0.9;
+  tw_res = slider16 / 100; tw_rq0 = 0.5 * 8 ^ tw_res;
+  tw_dep = slider17 / 100; tw_shift = slider18;
+  tw_xs = slider19; tw_xy = slider21; tw_xb = tw_lfo_beats(slider22); tw_xd = slider23 / 100;
+  tw_ys = slider24; tw_yy = slider26; tw_yb = tw_lfo_beats(slider27); tw_yd = slider28 / 100;
+  tw_phs = slider29 / 360; tw_path = slider30;
+  tw_tmp = tempo > 0 ? tempo : 120;
+  tw_xr0 = tw_xy ? tw_tmp / 60 / tw_xb : slider20;
+  tw_yr0 = tw_yy ? tw_tmp / 60 / tw_yb : slider25;
+  tw_wx = slider31 / 100; tw_wy = slider32 / 100; tw_vx = slider33 / 100; tw_vy = slider34 / 100;
+  tw_ey = slider35 / 100; tw_ea = tw_c8(slider36); tw_ed = tw_c8(slider37);
+  tw_samt = slider38 / 100; tw_rec = slider39 / 1000; tw_crk = slider40 / 100; tw_auto = slider41 / 100;
+  tw_mstr = slider42; tw_snote = floor(slider43 + 0.5); tw_svel = slider44;
+  tw_rdec = exp(-8 * 3.5 / (tw_rec * srate));        // the strike lets go: ~95 % rebuilt after RECOVERY
+  tw_holdn = floor(0.08 * tw_rec * srate / 8);
+  tw_mode = slider45; tw_glide = slider46; tw_gc = slider46 > 0 ? tw_c4(vo_coef(slider46)) : 1;
+  tw_brng = slider47;
+  tw_aa = vo_coef(slider48); tw_ad = vo_coef(slider49); tw_as = slider50 / 100; tw_ar = vo_coef(slider51);
+  tw_avel = slider52 / 100;
+  tw_drv = slider53 / 100; tw_dg = 1 + 14 * tw_drv * tw_drv; tw_db = 0.18 * tw_drv;
+  tw_dn = 1 / (1 + 2.2 * tw_drv); tw_crum = max(tw_drv - 0.45, 0) / 0.55; tw_qs = 2 ^ (9 - 5 * tw_crum);
+  tw_dlb = tw_dly_beats(slider54); tw_dfb = slider55 / 100; tw_dmx = slider56 / 100;
+  tw_dlt = min(tw_dlb * 60 / tw_tmp * srate, TDM - 4);
+  tw_rsz = slider57 / 100; tw_rtone = slider58 / 100; tw_rmx = slider59 / 100;
+  tw_fate = slider60 / 100; tw_volt = 10 ^ (slider61 / 20); tw_chan = slider62;
+  tw_fmax = srate * 0.45; tw_pis = $pi / srate; tw_440s = 440 / srate;
+  // reverb: lengths (ms, mutually prime-ish), decay from SIZE, damping from TONE
+  sp = srate / 1000 * (0.55 + 1.05 * tw_rsz);
+  TRLT[0] = 37.1 * sp; TRLT[1] = 41.3 * sp; TRLT[2] = 47.9 * sp; TRLT[3] = 53.3 * sp;
+  TRLT[4] = 59.7 * sp; TRLT[5] = 67.1 * sp; TRLT[6] = 73.9 * sp; TRLT[7] = 81.7 * sp;
+  r = 0; loop(8, TRLT[r] = min(TRLT[r], TRVN - 40); r += 1; );
+  tw_t60 = 1.2 + 10 * tw_rsz ^ 1.5;
+  r = 0; loop(8, TRG[r] = 10 ^ (-3 * TRLT[r] / (tw_t60 * srate)); r += 1; );
+  tw_rdc = 1 - exp(-2 * $pi * min(1200 * 2 ^ (tw_rtone * 3.6), srate * 0.45) / srate);
+  ins_output_setup(63);
+);
+
+ins_drift_init();
+tw_dXr.drift_init(0.8 + rand(0.5)); tw_dYr.drift_init(0.8 + rand(0.5)); tw_dPh.drift_init(0.8 + rand(0.5));
+tw_dXd.drift_init(0.8 + rand(0.5)); tw_dYd.drift_init(0.8 + rand(0.5)); tw_dCx.drift_init(0.8 + rand(0.5));
+tw_dCy.drift_init(0.8 + rand(0.5)); tw_dPr.drift_init(0.8 + rand(0.5));
+tw_dF0.drift_init(0.8 + rand(0.5)); tw_dF1.drift_init(0.8 + rand(0.5)); tw_dF2.drift_init(0.8 + rand(0.5)); tw_dF3.drift_init(0.8 + rand(0.5));
+tw_bend = 0; tw_mw = 0; tw_pedal = 0; tw_hc = 0; tw_age = 0; tw_last = -1; tw_qc = 0; tw_ct = 0;
+tw_xph = 0; tw_yph = 0; tw_xcyc = 0; tw_xh = 0; tw_yh = 0; tw_xa = 0; tw_xb2 = rand(2) - 1; tw_ya = 0; tw_yb2 = rand(2) - 1;
+tw_gx = 0.5; tw_gy = 0.5; tw_px = 0.5; tw_py = 0.5; tw_se = 0; tw_sev = 0; tw_jx = tw_jy = 0; tw_ce = 0; tw_re = 0;
+tw_sseen = 0; tw_lastbar = -1; tw_fbeat = 0; tw_vol = 1; tw_wp = 0; tw_rw = 0; tw_dts = -1;
+tw_fc0 = tw_fc1 = tw_fc2 = tw_fc3 = 0; tw_lastmode = -1;
+function tw_srinit() local(i) (
+  tw_sr = srate; tw_sm = 1 - exp(-1 / (0.03 * srate)); ost_init(20000); tw_dts = -1;
+  TAPL[0] = min(floor(4.77 * srate / 1000), TAPN - 2); TAPL[1] = min(floor(3.59 * srate / 1000), TAPN - 2);
+  TAPL[2] = min(floor(12.73 * srate / 1000), TAPN - 2); TAPL[3] = min(floor(9.31 * srate / 1000), TAPN - 2);
+  memset(TAPW, 0, 4);
+  update();
+  tw_r0.tw_rinit(TRLT[0]); tw_r1.tw_rinit(TRLT[1]); tw_r2.tw_rinit(TRLT[2]); tw_r3.tw_rinit(TRLT[3]);
+  tw_r4.tw_rinit(TRLT[4]); tw_r5.tw_rinit(TRLT[5]); tw_r6.tw_rinit(TRLT[6]); tw_r7.tw_rinit(TRLT[7]);
+  tw_kc = 1 - exp(-8 / (0.005 * srate));               // the point's smoothing at the tick (5 ms)
+  tw_ju = 1 - exp(-8 / (0.004 * srate));               // the strike's jolt rises in 4 ms (no click)
+  tw_crd = exp(-1 / (0.045 * srate));                  // crack
+  tw_cbd = exp(-1 / (0.12 * srate));                   // its band sweeps down
+);
+tw_srinit();
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );               // a new instance opens Large, on Init
+tw_corners();
+tw_vol = tw_volt;
+ui_dflt = 1;
+
+@slider
+update();
+
+@block
+srate != tw_sr ? tw_srinit();
+tw_treq > 0 ? ( load_preset(tw_treq); tw_treq = 0; );     // a preset asked for from outside the panel (test hook)
+update();
+
+// MIDI in, sample-accurate through the queue (type 1 on, 0 off, 2 pedal up, 3 all off, 4 strike)
+tw_qc = 0;
+while (midirecv(mofs, m1, m2, m3)) (
+  ins_chan_ok(m1, tw_chan) ? (
+    tw_st = m1 & 0xF0;
+    tw_st == 0x90 || tw_st == 0x80 ? (
+      tw_on = tw_st == 0x90 && m3 > 0;
+      tw_mstr == 1 && m2 == tw_snote ? (
+        tw_on ? tw_qpush(mofs, 4, 0, m3);                // the strike note only strikes, it does not sound
+      ) : (
+        tw_qpush(mofs, tw_on, m2, m3);
+        tw_mstr == 2 && tw_on && m3 >= tw_svel ? tw_qpush(mofs, 4, 0, m3);
+      );
+      tw_on ? ins_midi_hit();
+    ) :
+    tw_st == 0xE0 ? tw_bend = (((m3 * 128 + m2) - 8192) / 8192) * tw_brng :
+    tw_st == 0xB0 ? (
+      m2 == 1 ? tw_mw = m3 / 127 :
+      m2 == 64 ? ( tw_pedal = m3 >= 64; !tw_pedal ? tw_qpush(mofs, 2, 0, 0); ) :
+      m2 == 123 || m2 == 120 ? tw_qpush(mofs, 3, 0, 0);
+    );
+  );
+);
+tw_mode != tw_lastmode ? ( tw_qpush(0, 3, 0, 0); tw_lastmode = tw_mode; );
+tw_panic ? ( tw_all_off(); tw_panic = 0; );
+// the LIGHTNING key on the panel (the GUI counts presses, the audio side follows)
+tw_sreq != tw_sseen ? ( tw_sseen = tw_sreq; tw_qpush(0, 4, 0, 127); );
+
+// AUTO strike: a chance on every bar (the project's bars while it plays, a free bar clock at its tempo when not)
+ts_num > 0 && ts_denom > 0 ? tw_barlen = ts_num * 4 / ts_denom : tw_barlen = 4;
+play_state & 1 ? tw_bar = floor(beat_position / tw_barlen) : (
+  tw_fbeat += samplesblock / srate * tw_tmp / 60; tw_bar = floor(tw_fbeat / tw_barlen);
+);
+tw_bar != tw_lastbar ? (
+  tw_lastbar >= 0 && tw_auto > 0 && rand(1) < min(tw_auto * (1 + 0.6 * tw_fate * tw_dpr), 1) ? tw_qpush(0, 4, 0, 70 + rand(57));
+  tw_lastbar = tw_bar;
+);
+tw_eqi = 0; tw_spos = 0;
+
+// FATE: the cards reshuffle a little
+ins_drift_block(tw_fate * 0.6, samplesblock);
+tw_dps = 12 * log(ins_pitch) / LN2;
+tw_di = 0.09 * samplesblock / srate;
+tw_xrm = 2 ^ (tw_dXr.drift_tick(tw_di) * tw_fate * 0.45);         // LFO rates up to about +/-35 %
+tw_yrm = 2 ^ (tw_dYr.drift_tick(tw_di) * tw_fate * 0.45);
+tw_dph = tw_dPh.drift_tick(tw_di) * tw_fate * 0.12;                // phase up to +/-43 degrees
+tw_xdm = 1 + tw_dXd.drift_tick(tw_di) * tw_fate * 0.25;            // depths +/-25 %
+tw_ydm = 1 + tw_dYd.drift_tick(tw_di) * tw_fate * 0.25;
+tw_dcx = tw_dCx.drift_tick(tw_di * 0.7) * tw_fate * 0.08;          // the centre wanders +/-8 %
+tw_dcy = tw_dCy.drift_tick(tw_di * 0.7) * tw_fate * 0.08;
+tw_dpr = tw_dPr.drift_tick(tw_di * 0.5);                           // the AUTO chance rises and falls
+tw_fc0 = tw_dF0.drift_tick(tw_di * 0.6) * tw_fate * 0.07;          // each corner's set slides up to +/-7 %
+tw_fc1 = tw_dF1.drift_tick(tw_di * 0.6) * tw_fate * 0.07;
+tw_fc2 = tw_dF2.drift_tick(tw_di * 0.6) * tw_fate * 0.07;
+tw_fc3 = tw_dF3.drift_tick(tw_di * 0.6) * tw_fate * 0.07;
+tw_corners();
+tw_lsh = tw_shift * L12;
+tw_xr = tw_xr0 * (tw_xy ? 1 : tw_xrm); tw_yr = tw_yr0 * (tw_yy ? 1 : tw_yrm);
+// synced LFOs follow the project's beat while it plays
+play_state & 1 ? (
+  tw_xy ? ( tw_t = beat_position / tw_xb; tw_xcyc = floor(tw_t); tw_xph = tw_t - tw_xcyc; );
+  tw_yy && tw_path == 0 ? ( tw_t = beat_position / tw_yb; tw_yph = tw_t - floor(tw_t); );
+);
+tw_dts < 0 ? tw_dts = tw_dlt;
+abs(tw_dfl) + abs(tw_dfr) < 0.0000000001 ? tw_dfl = tw_dfr = 0;
+abs(tw_dcyl) + abs(tw_dcyr) < 0.0000000001 ? tw_dcyl = tw_dcyr = 0;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+while (tw_eqi < tw_qc && TQO[tw_eqi] <= tw_spos) (
+  tw_et = TQT[tw_eqi];
+  tw_et == 1 ? ( tw_mode ? tw_mono_on(TQN[tw_eqi], TQV[tw_eqi]) : tw_poly_on(TQN[tw_eqi], TQV[tw_eqi]); tw_last = TQN[tw_eqi]; ) :
+  tw_et == 0 ? ( tw_mode ? tw_mono_off(TQN[tw_eqi]) : tw_poly_off(TQN[tw_eqi]); ) :
+  tw_et == 2 ? tw_pedal_up() : tw_et == 3 ? tw_all_off() : tw_strike(TQV[tw_eqi] / 127);
+  tw_eqi += 1;
+);
+tw_spos += 1;
+
+// ---------- control tick (every 8 samples): LFOs, the point, LIGHTNING ----------
+tw_ct += 1;
+tw_tick = tw_ct >= 8;
+tw_tick ? (
+  tw_ct = 0;
+  // LFO X
+  tw_xph += tw_xr * 8 / srate;
+  tw_xph >= 1 ? ( tw_xph -= floor(tw_xph); tw_xcyc += 1; tw_xh = rand(2) - 1; tw_xa = tw_xb2; tw_xb2 = rand(2) - 1; );
+  tw_path == 4 ? (
+    // WALK: two smooth random walks at their own rates
+    tw_yph += tw_yr * 8 / srate;
+    tw_yph >= 1 ? ( tw_yph -= floor(tw_yph); tw_ya = tw_yb2; tw_yb2 = rand(2) - 1; );
+    tw_lx = tw_lfov(4, tw_xph, 0, tw_xa, tw_xb2); tw_ly = tw_lfov(4, tw_yph, 0, tw_ya, tw_yb2);
+  ) : (
+    tw_lx = tw_lfov(tw_xs, tw_xph, tw_xh, tw_xa, tw_xb2);
+    tw_path == 0 ? (
+      tw_yph += tw_yr * 8 / srate; tw_ywr = tw_yph >= 1; tw_yph -= floor(tw_yph);
+    ) : (
+      // CIRCLE / SPIRAL: Y runs with X; FIGURE-8: at twice its rate (a 1:2 figure)
+      tw_t = (tw_path == 2 ? 2 : 1) * (tw_xcyc + tw_xph); tw_t -= floor(tw_t);
+      tw_ywr = tw_t < tw_yph; tw_yph = tw_t;
+    );
+    tw_ywr ? ( tw_yh = rand(2) - 1; tw_ya = tw_yb2; tw_yb2 = rand(2) - 1; );
+    tw_t = tw_yph + tw_phs + tw_dph; tw_t -= floor(tw_t);
+    tw_ly = tw_lfov(tw_ys, tw_t, tw_yh, tw_ya, tw_yb2);
+    tw_path == 3 ? (
+      // SPIRAL: the radius breathes in and out over eight turns
+      tw_t = (tw_xcyc + tw_xph) / 8; tw_t -= floor(tw_t);
+      tw_t = 0.12 + 0.88 * (1 - abs(2 * tw_t - 1));
+      tw_lx *= tw_t; tw_ly *= tw_t;
+    );
+  );
+  tw_lfx = tw_lx; tw_lfy = tw_ly;                                  // (for the panel)
+  // the point: the centre (dragged on the pad), the LFOs, the wheel, FATE
+  tw_tx = slider14 / 100 + tw_dcx + tw_lx * tw_xd * tw_xdm * 0.5 + tw_mw * tw_wx * 0.5;
+  tw_ty = slider15 / 100 + tw_dcy + tw_ly * tw_yd * tw_ydm * 0.5 + tw_mw * tw_wy * 0.5;
+  tw_gx += (min(max(tw_tx, 0), 1) - tw_gx) * tw_kc;
+  tw_gy += (min(max(tw_ty, 0), 1) - tw_gy) * tw_kc;
+  // LIGHTNING: the jolt rises in 4 ms, holds a moment, then lets go over RECOVERY
+  tw_shold > 0 ? tw_shold -= 1 : tw_sev *= tw_rdec;
+  tw_sev < 0.0001 ? tw_sev = 0;
+  tw_se += (tw_sev - tw_se) * (tw_sev > tw_se ? tw_ju : 1);
+  tw_px = min(max(tw_gx + tw_jx * tw_se, 0), 1);
+  tw_py = min(max(tw_gy + tw_jy * tw_se, 0), 1);
+  tw_rq = tw_rq0 * (1 + 3.5 * tw_sk * tw_se);                      // the resonance slammed up
+  tw_fcomp = 4.5 * (tw_rq0 * (1 + 1.2 * tw_sk * tw_se)) ^ 0.22;    // narrower peaks pass less: make it up
+  // one shared set of coefficients unless velocity or the envelope give each voice its own point
+  tw_own = tw_vx != 0 || tw_vy != 0 || tw_ey != 0;
+  !tw_own ? tw_fcoef(TGC, tw_px, tw_py);
+  tw_pmod = tw_bend + tw_dps;
+  tw_o2i = 2 ^ (tw_o2st / 12);
+  // the choir: five saws spread in cents
+  TCR[0] = 2 ^ (-tw_spr / 1200); TCR[1] = 2 ^ (-tw_spr * 0.42 / 1200); TCR[2] = 1;
+  TCR[3] = 2 ^ (tw_spr * 0.39 / 1200); TCR[4] = 2 ^ (tw_spr * 1.03 / 1200);
+);
+
+// the crack: noise and sparks, through a band that falls; the thunder after it
+tw_ce > 0.00002 || tw_re > 0.00002 ? (
+  tw_nz = rand(2) - 1;
+  tw_ce *= tw_crd; tw_cbf = max(tw_cbf * tw_cbd, 180);
+  tw_cx = (tw_nz * 0.7 + (rand(1) < 0.012 ? (rand(2) - 1) * 3 : 0)) * tw_ce * tw_ce;
+  tw_g = tan(tw_cbf * tw_pis); tw_a1 = 1 / (1 + tw_g * (tw_g + 0.6)); tw_a2 = tw_g * tw_a1; tw_a3 = tw_g * tw_a2;
+  tw_v3 = tw_cx - tw_cz2; tw_v1 = tw_a1 * tw_cz1 + tw_a2 * tw_v3; tw_v2 = tw_cz2 + tw_a2 * tw_cz1 + tw_a3 * tw_v3;
+  tw_cz1 = 2 * tw_v1 - tw_cz1; tw_cz2 = 2 * tw_v2 - tw_cz2;
+  tw_re *= tw_rdec ^ 0.125 * 0.99999;
+  tw_rl += (tw_nz - tw_rl) * 0.006; tw_rl2 += (tw_rl - tw_rl2) * 0.006;
+  tw_crack = (tw_v1 * 0.9 + tw_cx * 0.25 + tw_rl2 * 9 * tw_re * tw_re) * tw_crk;
+  tw_ce <= 0.00002 && tw_re <= 0.00002 ? ( tw_ce = tw_re = 0; tw_cz1 = tw_cz2 = tw_rl = tw_rl2 = 0; );
+) : tw_crack = 0;
+tw_cin = tw_crack * 0.6;                                           // what rings through the formants
+
+// ---------- the voices ----------
+tw_L = tw_R = 0;
+tw_p = TV;
+loop(8,
+  tw_p[8] > 0 ? (
+    (tw_tick || tw_p[58]) ? (
+      tw_p[58] = 0;
+      tw_p[4] += (tw_p[5] - tw_p[4]) * tw_gc;
+      // formant envelope (attack / decay)
+      tw_e = tw_p[11];
+      tw_p[10] == 1 ? ( tw_e += (1.25 - tw_e) * tw_ea; tw_e >= 1 ? ( tw_e = 1; tw_p[10] = 2; ); ) :
+      tw_p[10] == 2 ? tw_e -= tw_e * tw_ed;
+      tw_p[11] = tw_e;
+      tw_b = tw_p[4] + tw_p[7] + tw_pmod;
+      tw_p[23] = min(exp((tw_b - 69) * L12) * tw_440s, 0.45);
+      tw_p[24] = min(tw_p[23] * tw_o2i, 0.45);
+      tw_own ? (
+        tw_v = tw_p[6] * 2 - 1;
+        tw_fcoef(tw_p + 35, tw_px + tw_v * tw_vx * 0.5, tw_py + tw_v * tw_vy * 0.5 + tw_e * tw_ey * 0.6);
+        tw_p[61] = tw_p + 35;
+      ) : tw_p[61] = TGC;
+    );
+
+    // ----- OSC 1 -----
+    tw_i1 = tw_p[23];
+    tw_w1 == 0 ? (
+      tw_ph = tw_p[12] + tw_i1; tw_ph -= floor(tw_ph); tw_p[12] = tw_ph;
+      tw_o1 = 2 * tw_ph - 1 - vo_blep(tw_ph, tw_i1);
+    ) : tw_w1 == 1 ? (
+      tw_ph = tw_p[12] + tw_i1; tw_ph -= floor(tw_ph); tw_p[12] = tw_ph;
+      tw_q = tw_ph + 1 - tw_pw; tw_q -= floor(tw_q);
+      tw_o1 = (2 * tw_ph - 1 - vo_blep(tw_ph, tw_i1)) - (2 * tw_q - 1 - vo_blep(tw_q, tw_i1));
+    ) : (
+      tw_o1 = 0; tw_k = 0;
+      loop(5,
+        tw_d = tw_i1 * TCR[tw_k];
+        tw_ph = tw_p[12 + tw_k] + tw_d; tw_ph -= floor(tw_ph); tw_p[12 + tw_k] = tw_ph;
+        tw_o1 += 2 * tw_ph - 1 - vo_blep(tw_ph, tw_d);
+        tw_k += 1;
+      );
+      tw_o1 *= 0.42;
+    );
+    // ----- OSC 2 -----
+    tw_i2 = tw_p[24];
+    tw_w2 == 0 ? (
+      tw_ph = tw_p[17] + tw_i2; tw_ph -= floor(tw_ph); tw_p[17] = tw_ph;
+      tw_o2 = 2 * tw_ph - 1 - vo_blep(tw_ph, tw_i2);
+    ) : tw_w2 == 1 ? (
+      tw_ph = tw_p[17] + tw_i2; tw_ph -= floor(tw_ph); tw_p[17] = tw_ph;
+      tw_q = tw_ph + 1 - tw_pw; tw_q -= floor(tw_q);
+      tw_o2 = (2 * tw_ph - 1 - vo_blep(tw_ph, tw_i2)) - (2 * tw_q - 1 - vo_blep(tw_q, tw_i2));
+    ) : (
+      tw_o2 = 0; tw_k = 0;
+      loop(5,
+        tw_d = tw_i2 * TCR[tw_k];
+        tw_ph = tw_p[17 + tw_k] + tw_d; tw_ph -= floor(tw_ph); tw_p[17 + tw_k] = tw_ph;
+        tw_o2 += 2 * tw_ph - 1 - vo_blep(tw_ph, tw_d);
+        tw_k += 1;
+      );
+      tw_o2 *= 0.42;
+    );
+    // sub (square, one octave below OSC 1) and noise
+    tw_sub > 0 ? (
+      tw_q = tw_p[22] + tw_i1 * 0.5; tw_q -= floor(tw_q); tw_p[22] = tw_q; tw_qr = tw_q + 0.5; tw_qr -= floor(tw_qr);
+      tw_su = (2 * tw_q - 1 - vo_blep(tw_q, tw_i1 * 0.5)) - (2 * tw_qr - 1 - vo_blep(tw_qr, tw_i1 * 0.5));
+    ) : tw_su = 0;
+    tw_x = tw_o1 * tw_m1 + tw_o2 * tw_m2 + tw_su * tw_sub * 0.5 + (tw_noi > 0 ? (rand(2) - 1) * tw_noi : 0);
+
+    // ----- the formant bank: five parallel zero-delay band-passes, unity peak gain -----
+    tw_xf = tw_x + tw_cin;
+    tw_q = tw_p + 25; tw_c = tw_p[61]; tw_y = 0;
+    loop(5,
+      tw_v3 = tw_xf - tw_q[1]; tw_v1 = tw_c[0] * tw_q[0] + tw_c[1] * tw_v3; tw_v2 = tw_q[1] + tw_c[1] * tw_q[0] + tw_c[2] * tw_v3;
+      tw_q[0] = 2 * tw_v1 - tw_q[0]; tw_q[1] = 2 * tw_v2 - tw_q[1];
+      tw_y += tw_v1 * tw_c[3];
+      tw_q += 2; tw_c += 4;
+    );
+    abs(tw_p[25]) > 30 ? memset(tw_p + 25, 0, 10);               // safety: never let a band run away
+    tw_y = tw_x * (1 - tw_dep) + tw_y * tw_dep * tw_fcomp;
+
+    // ----- amp envelope -----
+    tw_a = tw_p[9];
+    tw_p[8] == 1 ? ( tw_a += (1.3 - tw_a) * tw_aa; tw_a >= 1 ? ( tw_a = 1; tw_p[8] = 2; ); ) :
+    tw_p[8] == 2 ? tw_a += (tw_as - tw_a) * tw_ad :
+    ( tw_a -= tw_a * tw_ar; tw_a < 0.00002 ? ( tw_a = 0; tw_p[8] = 0; tw_p[10] = 0; tw_p[0] = -1; memset(tw_p + 25, 0, 10); ); );
+    tw_p[9] = tw_a;
+    tw_y *= tw_a * tw_p[55];
+    tw_L += tw_y * tw_p[56]; tw_R += tw_y * tw_p[57];
+  );
+  tw_p += 64;
+);
+tw_L += tw_crack * 0.5; tw_R += tw_crack * 0.5;
+
+// ---------- DRIVE: stone crumble ----------
+tw_drv > 0.001 ? (
+  tw_L = (vo_tanh(tw_L * tw_dg + tw_db) - vo_tanh(tw_db)) * tw_dn;
+  tw_R = (vo_tanh(tw_R * tw_dg + tw_db) - vo_tanh(tw_db)) * tw_dn;
+  tw_crum > 0 ? (
+    tw_L += (floor(tw_L * tw_qs + 0.5) / tw_qs - tw_L) * tw_crum * 0.6;
+    tw_R += (floor(tw_R * tw_qs + 0.5) / tw_qs - tw_R) * tw_crum * 0.6;
+  );
+);
+
+// ---------- DELAY: stereo ping-pong ----------
+tw_dmx > 0.001 ? (
+  tw_dts += (tw_dlt * (1 + 0.004 * ins_fx) - tw_dts) * 0.0002;
+  tw_rp = tw_wp - tw_dts; tw_ri = floor(tw_rp); tw_rf = tw_rp - tw_ri;
+  tw_dl1 = TDL[tw_ri & TDM] * (1 - tw_rf) + TDL[(tw_ri + 1) & TDM] * tw_rf;
+  tw_dr1 = TDR[tw_ri & TDM] * (1 - tw_rf) + TDR[(tw_ri + 1) & TDM] * tw_rf;
+  tw_dfl += (tw_dl1 - tw_dfl) * 0.45; tw_dfr += (tw_dr1 - tw_dfr) * 0.45;
+  TDL[tw_wp] = (tw_L + tw_R) * 0.5 + vo_tanh(tw_dfr * tw_dfb);
+  TDR[tw_wp] = vo_tanh(tw_dfl * tw_dfb);
+  tw_L += tw_dl1 * tw_dmx; tw_R += tw_dr1 * tw_dmx;
+) : ( TDL[tw_wp] = 0; TDR[tw_wp] = 0; );
+tw_wp = (tw_wp + 1) & TDM;
+
+// ---------- REVERB: eight lines, Hadamard feedback, damped ----------
+tw_rmx > 0.001 ? (
+  // input diffusion (four allpasses)
+  tw_x = (tw_L + tw_R) * 0.5; tw_k = 0;
+  loop(4,
+    tw_ri = TAP + tw_k * TAPN; tw_rp = TAPW[tw_k] - TAPL[tw_k]; tw_rp < 0 ? tw_rp += TAPN;
+    tw_d = tw_ri[tw_rp]; tw_v = tw_x + 0.6 * tw_d; tw_ri[TAPW[tw_k]] = tw_v; tw_x = tw_d - 0.6 * tw_v;
+    TAPW[tw_k] = (TAPW[tw_k] + 1) & (TAPN - 1);
+    tw_k += 1;
+  );
+  // two lines swim a little against the metallic ring
+  tw_tick ? ( tw_rmo += 0.37 * 8 / srate; tw_rmo -= floor(tw_rmo); tw_rm1 = sin(2 * $pi * tw_rmo) * 7 * srate / 48000; tw_rm2 = cos(2 * $pi * tw_rmo * 0.77) * 6 * srate / 48000; );
+  tw_y0 = tw_r0.tw_rl(TRV,            TRLT[0], TRG[0], 0);
+  tw_y1 = tw_r1.tw_rl(TRV + TRVN,     TRLT[1], TRG[1], tw_rm1);
+  tw_y2 = tw_r2.tw_rl(TRV + 2 * TRVN, TRLT[2], TRG[2], 0);
+  tw_y3 = tw_r3.tw_rl(TRV + 3 * TRVN, TRLT[3], TRG[3], 0);
+  tw_y4 = tw_r4.tw_rl(TRV + 4 * TRVN, TRLT[4], TRG[4], 0);
+  tw_y5 = tw_r5.tw_rl(TRV + 5 * TRVN, TRLT[5], TRG[5], 0);
+  tw_y6 = tw_r6.tw_rl(TRV + 6 * TRVN, TRLT[6], TRG[6], tw_rm2);
+  tw_y7 = tw_r7.tw_rl(TRV + 7 * TRVN, TRLT[7], TRG[7], 0);
+  // 8-point Hadamard
+  tw_a0 = tw_y0 + tw_y1; tw_a1 = tw_y0 - tw_y1; tw_a2 = tw_y2 + tw_y3; tw_a3 = tw_y2 - tw_y3;
+  tw_a4 = tw_y4 + tw_y5; tw_a5 = tw_y4 - tw_y5; tw_a6 = tw_y6 + tw_y7; tw_a7 = tw_y6 - tw_y7;
+  tw_b0 = tw_a0 + tw_a2; tw_b2 = tw_a0 - tw_a2; tw_b1 = tw_a1 + tw_a3; tw_b3 = tw_a1 - tw_a3;
+  tw_b4 = tw_a4 + tw_a6; tw_b6 = tw_a4 - tw_a6; tw_b5 = tw_a5 + tw_a7; tw_b7 = tw_a5 - tw_a7;
+  tw_h = 0.35355339;
+  tw_ri = tw_rw & (TRVN - 1);
+  TRV[tw_ri]            = (tw_b0 + tw_b4) * tw_h + tw_x;
+  TRV[TRVN + tw_ri]     = (tw_b1 + tw_b5) * tw_h - tw_x;
+  TRV[2 * TRVN + tw_ri] = (tw_b2 + tw_b6) * tw_h + tw_x;
+  TRV[3 * TRVN + tw_ri] = (tw_b3 + tw_b7) * tw_h - tw_x;
+  TRV[4 * TRVN + tw_ri] = (tw_b0 - tw_b4) * tw_h + tw_x;
+  TRV[5 * TRVN + tw_ri] = (tw_b1 - tw_b5) * tw_h - tw_x;
+  TRV[6 * TRVN + tw_ri] = (tw_b2 - tw_b6) * tw_h + tw_x;
+  TRV[7 * TRVN + tw_ri] = (tw_b3 - tw_b7) * tw_h - tw_x;
+  tw_wl = (tw_y0 - tw_y2 + tw_y4 - tw_y6) * 0.5;
+  tw_wr = (tw_y1 - tw_y3 + tw_y5 - tw_y7) * 0.5;
+  tw_L = tw_L * (1 - 0.3 * tw_rmx) + tw_wl * tw_rmx;
+  tw_R = tw_R * (1 - 0.3 * tw_rmx) + tw_wr * tw_rmx;
+);
+tw_rw = (tw_rw + 1) & (TRVN - 1);
+
+// DC block
+tw_dcyl = tw_L - tw_dcxl + 0.9996 * tw_dcyl; tw_dcxl = tw_L; tw_L = tw_dcyl;
+tw_dcyr = tw_R - tw_dcxr + 0.9996 * tw_dcyr; tw_dcxr = tw_R; tw_R = tw_dcyr;
+
+// ---------- MASTER ----------
+tw_vol += (tw_volt - tw_vol) * tw_sm;
+tw_L = ostL.ost_band(tw_L * tw_vol); tw_R = ostR.ost_band(tw_R * tw_vol);
+ost_out(tw_L, tw_R);
+spl0 = ost_l; spl1 = ost_r;
+tw_pk = max(tw_pk, max(abs(spl0), abs(spl1)));
+
+@gfx 1100 480
+ui_thm = 13; ui_hw = 1;
+ui_begin(1100, 480);
+
+// ---------- the card's colours: storm lapis, ochre, flame orange, cream, ink ----------
+INK = 0x1A1E24; CREAM = 0xF4E8C4; CREAMH = 0xFFF6DC; LBL = 0xF6EBCB;
+LAPIS = 0x24408A; LAPX = 0x172B63; LAPL = 0x3558A8;
+SHA = 0x2A4994; SHB = 0x264490; SHC = 0x2C4E9A;
+OCHRE = 0xDDA43C; OCHRED = 0xA97A22; FLAME = 0xF2662B; FLAMEL = 0xFFA040; SKY = 0x48B4D2;
+KEYOFF = 0x1E3672; KEYHOV = 0x2B4890;
+
+// fonts, calibrated once per scale (the house way: a reference word fills the same width everywhere)
+sc != tg_calsc ? (
+  tg_calsc = sc;
+  tg_f10 = ui_fitfont(10, 12.5 * sc);       // knob labels
+  tg_f11 = ui_fitfont(11, 11.5 * sc);       // key captions
+  tg_f12 = ui_fitfont(12, 13.5 * sc);       // section titles
+  tg_f13 = ui_fitfont(13, 17 * sc);         // corner names
+  tg_f16 = ui_fitfont(16, 11 * sc);         // values, small print
+);
+gfx_setfont(10, "Trebuchet MS", tg_f10, 'b'); gfx_setfont(11, "Trebuchet MS", tg_f11, 'b');
+gfx_setfont(12, "Trebuchet MS", tg_f12, 'b'); gfx_setfont(13, "Trebuchet MS", tg_f13, 'b');
+gfx_setfont(16, "Trebuchet MS", tg_f16, 'b');
+gfx_setfont(14, "Georgia", 27 * sc, 'b');   // the card's name
+gfx_setfont(15, "Georgia", 23 * sc, 'b');   // the numeral
+
+// ---------- drawing helpers (GUI thread only; base coordinates) ----------
+function tg_r(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc); );
+function tg_rr(x, y, w, h, r) ( ui_rrect(x * sc, y * sc, w * sc, h * sc, r * sc); );
+function tg_t(x, y, s) ( gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function tg_tc(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = floor(cx * sc - tw * 0.5 + 0.5); gfx_y = floor(cy * sc - th * 0.55 + 0.5); gfx_drawstr(s); );
+function tg_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
+function tg_set(idx, v) ( slider(idx) = v; ui_auto(idx); );
+// a bold ink line (a filled quad with round ends)
+function tg_ln(x1, y1, x2, y2, w) local(dx, dy, l, nx, ny) (
+  x1 *= sc; y1 *= sc; x2 *= sc; y2 *= sc; w *= sc * 0.5;
+  dx = x2 - x1; dy = y2 - y1; l = max(sqrt(dx * dx + dy * dy), 0.001); nx = -dy / l * w; ny = dx / l * w;
+  w < 0.7 ? gfx_line(x1, y1, x2, y2, 1) : (
+    gfx_triangle(x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 - nx, y2 - ny, x1 - nx, y1 - ny);
+    gfx_circle(x1, y1, w, 1, 1); gfx_circle(x2, y2, w, 1, 1);
+  );
+);
+function tg_frame(x, y, w, h, t) ( tg_r(x, y, w, t); tg_r(x, y + h - t, w, t); tg_r(x, y, t, h); tg_r(x + w - t, y, t, h); );
+
+// a section: a recessed tray in its own shade of lapis, an ochre title band ruled in ink
+function tg_sect(x, y, w, h, shade, title) (
+  pk_inset(x * sc, y * sc, w * sc, h * sc, shade);
+  ui_col(OCHRE); tg_r(x, y, w, 20);
+  ui_cola(0xFFFFFF, 0.22); tg_r(x, y, w, 1);
+  ui_col(INK); tg_r(x, y + 20, w, 1.5);
+  strlen(title) ? ( gfx_setfont(12); ui_col(INK); tg_t(x + 9, y + 3, title); );
+);
+// a title placed over part of a band, with an ink tick between groups
+function tg_sub(x, y, s) ( gfx_setfont(12); ui_col(INK); tg_t(x, y + 3, s); );
+function tg_div(x, y, h) ( ui_col(INK); tg_r(x, y, 1.5, h); );
+
+// ---------- the HOUSE WHITE CAP knob ----------
+function tg_arcw(cx, cy, r, a1, a2, w) local(k) (       // a smooth thick arc: anti-aliased arcs every half pixel
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+function tg_lcap(cx, cy, r, n, col, trk) local(rr, a, a0, ca, sa, w, i) (
+  rr = r + 5.5 * sc; w = 3 * sc; a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
+  ui_col(trk); tg_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.4 * sc);
+  n > 0.004 ? (
+    ui_col(col); tg_arcw(cx, cy, rr, a0, a, w);
+    gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, w * 0.5, 1, 1); gfx_circle(cx + ca * rr, cy + sa * rr, w * 0.5, 1, 1);
+  );
+  ui_cola(0x000000, 0.28); gfx_circle(cx + 1 * sc, cy + 2 * sc, r, 1, 1);
+  ui_col(0x50565E); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0xC9CED4); gfx_circle(cx, cy, r - 1.4 * sc, 1, 1);
+  ui_col(0xE6E9EC); tg_arcw(cx, cy, r - 3 * sc, -0.66 * $pi, 0.06 * $pi, 1.4 * sc);
+  ui_col(0x1A1E24); i = -1;
+  loop(3, gfx_line(cx + ca * r * 0.3 - sa * i * 0.7 * sc, cy + sa * r * 0.3 + ca * i * 0.7 * sc,
+                   cx + ca * (r - 3 * sc) - sa * i * 0.7 * sc, cy + sa * (r - 3 * sc) + ca * i * 0.7 * sc, 1); i += 1; );
+);
+// the value pill (shown only while the knob is touched)
+function tg_pill(cx, y, s) local(tw, th) (
+  gfx_setfont(16); gfx_measurestr(s, tw, th);
+  ui_col(INK); ui_rrect(cx * sc - tw * 0.5 - 6 * sc, y * sc, tw + 12 * sc, th + 3 * sc, 3 * sc);
+  ui_col(CREAMH); ui_rrect(cx * sc - tw * 0.5 - 5 * sc, y * sc + 1 * sc, tw + 10 * sc, th + 1 * sc, 2.5 * sc);
+  ui_col(INK); gfx_x = floor(cx * sc - tw * 0.5 + 0.5); gfx_y = y * sc + 1.5 * sc; gfx_drawstr(s);
+);
+// a knob: drag, SHIFT = fine, double-click = default, wheel; stp > 0 rounds to steps; fmt "" shows #tg_vs
+function tg_knob(cx, cy, r, idx, lo, hi, def, lg, label, fmt, stp) local(v, n, dx, dy, hov, did) (
+  did = 2000 + idx; v = slider(idx);
+  dx = mouse_x - cx * sc; dy = mouse_y - cy * sc; hov = dx * dx + dy * dy <= sqr((r + 6) * sc);
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - tg_lt < 0.35 && tg_lid == idx ? ( tg_set(idx, def); drag_id = -1; tg_lt = 0; ) : (
+      drag_id = did; tg_ky = mouse_y; tg_lt = time_precise(); tg_lid = idx;
+      tg_kn = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+    );
+  );
+  drag_id == did ? (
+    tg_kn = min(max(tg_kn + (tg_ky - mouse_y) / (((mouse_cap & 8) ? 1200 : 220) * sc), 0), 1); tg_ky = mouse_y;
+    v = lg ? lo * (hi / lo) ^ tg_kn : lo + tg_kn * (hi - lo);
+    stp > 0 ? v = lo + floor((v - lo) / stp + 0.5) * stp;
+    slider(idx) != v ? tg_set(idx, v);
+  );
+  hov && mouse_wheel != 0 && drag_id == 0 ? (
+    n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+    n = min(max(n + mouse_wheel / 120 * (stp > 0 ? stp / (hi - lo) : ((mouse_cap & 8) ? 0.005 : 0.025)), 0), 1);
+    v = lg ? lo * (hi / lo) ^ n : lo + n * (hi - lo);
+    stp > 0 ? v = lo + floor((v - lo) / stp + 0.5) * stp;
+    tg_set(idx, v); mouse_wheel = 0;
+  );
+  v = slider(idx); n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
+  tg_lcap(cx * sc, cy * sc, r * sc, min(max(n, 0), 1), tg_acc, tg_trk);
+  (hov || drag_id == did) ? (
+    ui_cola(0xFFFFFF, 0.12); gfx_circle(cx * sc, cy * sc, (r - 1.5) * sc, 1, 1);
+    strlen(fmt) ? sprintf(#tg_vv, fmt, v) : strcpy(#tg_vv, #tg_vs);
+    tg_pill(cx, cy + r + 5, #tg_vv);
+  ) : (
+    gfx_setfont(10); ui_col(tg_ink); tg_tc(cx, cy + r + 13, label);
+  );
+);
+tg_acc = FLAME; tg_trk = 0x14244F; tg_ink = LBL;
+
+// ---------- keys that light up (lit = on); returns 1 when clicked ----------
+function tg_key(x, y, w, h, on, s) local(hov, hit) (
+  hov = tg_hov(x, y, w, h); hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;
+  on ? ( ui_cola(FLAMEL, 0.30); tg_rr(x - 2.5, y - 2.5, w + 5, h + 5, 4); );
+  ui_cola(0x000000, 0.3); tg_rr(x + 1, y + 2, w, h, 3);
+  ui_col(INK); tg_rr(x, y, w, h, 3);
+  ui_col(on ? FLAME : hov ? KEYHOV : KEYOFF); tg_rr(x + 1.5, y + 1.5, w - 3, h - 3, 2);
+  on ? ( ui_cola(0xFFFFFF, 0.38); tg_r(x + 3.5, y + 2.5, w - 7, 1.2); ) : ( ui_cola(0xFFFFFF, 0.10); tg_r(x + 3.5, y + 2.5, w - 7, 1); );
+  strlen(s) ? ( gfx_setfont(11); ui_col(on ? INK : LBL); tg_tc(x + w * 0.5, y + h * 0.5, s); );
+  hit;
+);
+// a row of keys for a stepped slider
+function tg_keys(x, y, w, h, gap, idx, n, labels) local(i) (
+  i = 0;
+  loop(n, tg_key(x + i * (w + gap), y, w, h, floor(slider(idx) + 0.5) == i, pk_pitem(labels, i + 1, #tg_k)) ? tg_set(idx, i); i += 1; );
+);
+// LFO shape glyphs: 0 sine 1 triangle 2 saw 3 S&H 4 smooth random
+function tg_glyph(cx, cy, t, col) local(i, x0, y0, x1, y1, hh) (
+  ui_col(col); hh = 5;
+  t == 0 ? ( i = 0; loop(16, x0 = cx - 8 + i; x1 = x0 + 1;
+             tg_ln(x0, cy - sin(i / 16 * 2 * $pi) * hh, x1, cy - sin((i + 1) / 16 * 2 * $pi) * hh, 1.6); i += 1; ); ) :
+  t == 1 ? ( tg_ln(cx - 8, cy, cx - 4, cy - hh, 1.6); tg_ln(cx - 4, cy - hh, cx + 4, cy + hh, 1.6); tg_ln(cx + 4, cy + hh, cx + 8, cy, 1.6); ) :
+  t == 2 ? ( tg_ln(cx - 8, cy + hh, cx + 6, cy - hh, 1.6); tg_ln(cx + 6, cy - hh, cx + 6, cy + hh, 1.6); ) :
+  t == 3 ? ( tg_ln(cx - 8, cy + 2, cx - 3, cy + 2, 1.6); tg_ln(cx - 3, cy + 2, cx - 3, cy - hh, 1.6); tg_ln(cx - 3, cy - hh, cx + 2, cy - hh, 1.6);
+             tg_ln(cx + 2, cy - hh, cx + 2, cy + hh, 1.6); tg_ln(cx + 2, cy + hh, cx + 8, cy + hh, 1.6); ) :
+  ( x0 = cx - 8; y0 = cy + 1; i = 0;
+    loop(16, x1 = cx - 8 + i + 1; y1 = cy + (sin((i + 1) * 0.55) * 0.6 + sin((i + 1) * 0.23 + 1) * 0.5) * hh;
+             tg_ln(x0, y0, x1, y1, 1.6); x0 = x1; y0 = y1; i += 1; ); );
+);
+// a field that shows a setting; returns 1 when clicked
+function tg_field(x, y, w, h, s) local(hov, hit) (
+  hov = tg_hov(x, y, w, h); hit = pressed && hov && drag_id == 0; hit ? drag_id = -1;
+  ui_col(INK); tg_rr(x, y, w, h, 3);
+  ui_col(hov ? CREAMH : CREAM); tg_rr(x + 1.5, y + 1.5, w - 3, h - 3, 2);
+  gfx_setfont(11); ui_col(INK); tg_tc(x + (w - 9) * 0.5, y + h * 0.5, s);
+  gfx_triangle((x + w - 12) * sc, (y + h * 0.5 - 2) * sc, (x + w - 5) * sc, (y + h * 0.5 - 2) * sc, (x + w - 8.5) * sc, (y + h * 0.5 + 2.5) * sc);
+  hit;
+);
+function tg_setname(k) ( k == 0 ? "A" : k == 1 ? "E" : k == 2 ? "I" : k == 3 ? "O" : k == 4 ? "U" : k == 5 ? "STONE" : k == 6 ? "GLASS" : k == 7 ? "STORM" : "CHOIR"; );
+function tg_nname(n) local(o) (
+  o = floor(n / 12) - 1;
+  sprintf(#tg_nn, "%s%d", pk_pitem("C|C#|D|D#|E|F|F#|G|G#|A|A#|B", (n % 12) + 1, #tg_k), o);
+  #tg_nn;
+);
+
+// ---------- the emblem: a tower struck by lightning, its crown thrown off, stones falling ----------
+function tg_emblem(x, y, w, h, fl) local(cx, by, tw, th, ty, i, k, sx, sy, bc, ex, ey) (
+  // the cartouche
+  ui_cola(0x000000, 0.3); tg_rr(x + 1.5, y + 2.5, w, h, 6);
+  ui_col(INK); tg_rr(x, y, w, h, 6);
+  ui_col(CREAM); tg_rr(x + 2, y + 2, w - 4, h - 4, 5);
+  // the sky in flat bands, lit up by the strike
+  k = 0; loop(5, ui_col(ui_mix(ui_mix(0x1B3474, 0x3E66B8, k / 4), CREAMH, fl * 0.55)); tg_r(x + 5, y + 5 + k * (h - 30) / 5, w - 10, (h - 30) / 5 + 0.5); k += 1; );
+  // the ground
+  ui_col(OCHRED); tg_r(x + 5, y + h - 25, w - 10, 20);
+  ui_col(INK); tg_r(x + 5, y + h - 25, w - 10, 1.5);
+  ui_col(INK); tg_frame(x + 4, y + 4, w - 8, h - 8, 1.2);
+  // the tower
+  cx = x + w * 0.56; by = y + h - 22; th = h * 0.50; ty = by - th; tw = w * 0.30;
+  ui_col(INK); gfx_triangle((cx - tw * 0.5 - 1.5) * sc, (by + 1) * sc, (cx + tw * 0.5 + 1.5) * sc, (by + 1) * sc,
+                            (cx + tw * 0.42 + 1.5) * sc, (ty - 1.5) * sc, (cx - tw * 0.42 - 1.5) * sc, (ty - 1.5) * sc);
+  ui_col(OCHRE); gfx_triangle((cx - tw * 0.5) * sc, by * sc, (cx + tw * 0.5) * sc, by * sc, (cx + tw * 0.42) * sc, ty * sc, (cx - tw * 0.42) * sc, ty * sc);
+  // stone courses
+  ui_col(INK); i = 1;
+  loop(6, sy = by - i * th / 7; k = tw * (0.5 - 0.08 * i / 7);
+          gfx_line((cx - k) * sc, sy * sc, (cx + k) * sc, sy * sc, 1);
+          sx = cx + ((i & 1) ? -k * 0.35 : k * 0.3); gfx_line(sx * sc, sy * sc, sx * sc, (sy + th / 7) * sc, 1);
+          i += 1; );
+  // door and windows (lit with fire)
+  ui_col(INK); gfx_circle(cx * sc, (by - 8) * sc, 3.5 * sc, 1, 1); tg_r(cx - 3.5, by - 8, 7, 8);
+  ui_col(FLAME); tg_r(cx - tw * 0.25 - 2, ty + th * 0.36, 4, 6); tg_r(cx + tw * 0.25 - 2, ty + th * 0.36, 4, 6);
+  ui_col(INK); tg_frame(cx - tw * 0.25 - 2.5, ty + th * 0.36 - 0.5, 5, 7, 1); tg_frame(cx + tw * 0.25 - 2.5, ty + th * 0.36 - 0.5, 5, 7, 1);
+  // flames licking from the broken top
+  ui_col(FLAME); gfx_triangle((cx - tw * 0.4) * sc, ty * sc, (cx - tw * 0.1) * sc, ty * sc, (cx - tw * 0.3) * sc, (ty - 9) * sc);
+  gfx_triangle((cx - tw * 0.15) * sc, ty * sc, (cx + tw * 0.2) * sc, ty * sc, (cx + tw * 0.05) * sc, (ty - 13) * sc);
+  gfx_triangle((cx + tw * 0.1) * sc, ty * sc, (cx + tw * 0.42) * sc, ty * sc, (cx + tw * 0.32) * sc, (ty - 8) * sc);
+  ui_col(FLAMEL); gfx_triangle((cx - tw * 0.05) * sc, ty * sc, (cx + tw * 0.12) * sc, ty * sc, (cx + tw * 0.05) * sc, (ty - 7) * sc);
+  // the crown, knocked off and tumbling right
+  sx = cx + tw * 0.62; sy = ty - 10;
+  ui_col(INK); gfx_triangle((sx - 9.5) * sc, (sy + 1) * sc, (sx + 6) * sc, (sy - 5.5) * sc, (sx + 9.5) * sc, (sy + 3) * sc, (sx - 6) * sc, (sy + 9.5) * sc);
+  ui_col(OCHRE); gfx_triangle((sx - 7.5) * sc, (sy + 1.5) * sc, (sx + 5.2) * sc, (sy - 3.6) * sc, (sx + 7.6) * sc, (sy + 2.6) * sc, (sx - 5.2) * sc, (sy + 7.6) * sc);
+  ui_col(INK); tg_ln(sx - 3, sy - 2.2, sx - 4.2, sy - 5.2, 2); tg_ln(sx + 2.4, sy - 4.4, sx + 1.2, sy - 7.4, 2);
+  // falling stones
+  i = 0;
+  loop(5,
+    sx = i == 0 ? x + 14 : i == 1 ? x + 22 : i == 2 ? x + w - 12 : i == 3 ? x + w - 19 : x + 12;
+    sy = i == 0 ? y + h * 0.46 : i == 1 ? y + h * 0.62 : i == 2 ? y + h * 0.50 : i == 3 ? y + h * 0.68 : y + h * 0.72;
+    k = i == 1 || i == 3 ? 2.6 : 3.4;
+    ui_col(INK); gfx_triangle((sx - k - 1) * sc, sy * sc, sx * sc, (sy - k - 1) * sc, (sx + k + 1) * sc, sy * sc, sx * sc, (sy + k + 1) * sc);
+    ui_col(OCHRE); gfx_triangle((sx - k) * sc, sy * sc, sx * sc, (sy - k) * sc, (sx + k) * sc, sy * sc, sx * sc, (sy + k) * sc);
+    ui_cola(INK, 0.7); gfx_line(sx * sc, (sy - k - 3) * sc, sx * sc, (sy - k - 6) * sc, 1);
+    i += 1;
+  );
+  // the bolt: from the top left corner down onto the tower's top
+  bc = fl > 0.05 ? ui_mix(FLAME, CREAMH, min(fl * 1.4, 1)) : FLAME;
+  sx = x + 9; sy = y + 7; ex = cx - tw * 0.3; ey = ty - 3;
+  ui_col(INK);
+  gfx_triangle((sx - 2) * sc, (sy - 1.5) * sc, (sx + 11.5) * sc, (sy - 1.5) * sc, (sx + 19.5) * sc, (sy + 17) * sc, (sx + 6) * sc, (sy + 17) * sc);
+  gfx_triangle((sx + 1) * sc, (sy + 12) * sc, (sx + 25) * sc, (sy + 12) * sc, (ex + 1.5) * sc, (ey + 3.5) * sc);
+  ui_col(bc);
+  gfx_triangle(sx * sc, sy * sc, (sx + 10) * sc, sy * sc, (sx + 17) * sc, (sy + 15) * sc, (sx + 7.5) * sc, (sy + 15) * sc);
+  gfx_triangle((sx + 3.5) * sc, (sy + 13.5) * sc, (sx + 22) * sc, (sy + 13.5) * sc, ex * sc, ey * sc);
+  ui_cola(0xFFFFFF, 0.5); gfx_line((sx + 2) * sc, (sy + 1) * sc, (sx + 8) * sc, (sy + 13) * sc, 1);
+);
+
+// ---------- the LFO path the point will trace (from the settings, around the centre) ----------
+function tg_shape(sh, ph) ( ph -= floor(ph); sh == 0 ? sin(2 * $pi * ph) : sh == 1 ? 1 - 4 * abs(ph - 0.5) : 2 * ph - 1; );
+function tg_path() local(n, i, t, lx, ly, rad, cx0, cy0, xd, yd, sx, sy, ph, tt) (
+  cx0 = slider14 / 100 + tw_dcx; cy0 = slider15 / 100 + tw_dcy;
+  xd = slider23 / 100 * 0.5; yd = slider28 / 100 * 0.5; sx = floor(slider19 + 0.5); sy = floor(slider24 + 0.5); ph = slider29 / 360;
+  tg_pn = 0; tg_pbox = 0;
+  slider30 == 4 || (sx >= 3) || (sy >= 3 && slider30 == 0) || (sy >= 3) ? tg_pbox = 1 : (
+    n = slider30 == 3 ? 320 : slider30 == 0 ? 360 : 120;
+    tt = slider30 == 0 ? 3 / max(min(tw_xr, tw_yr), 0.0001) : 1;
+    i = 0;
+    loop(n + 1,
+      t = i / n;
+      slider30 == 0 ? (
+        lx = tg_shape(sx, tw_xr * tt * t); ly = tg_shape(sy, tw_yr * tt * t + ph);
+      ) : slider30 == 3 ? (
+        lx = tg_shape(sx, 8 * t); ly = tg_shape(sy, 8 * t + ph); rad = 0.12 + 0.88 * (1 - abs(2 * t - 1));
+        lx *= rad; ly *= rad;
+      ) : (
+        lx = tg_shape(sx, t); ly = tg_shape(sy, (slider30 == 2 ? 2 : 1) * t + ph);
+      );
+      TGPX[i] = min(max(cx0 + lx * xd, 0), 1); TGPY[i] = min(max(cy0 + ly * yd, 0), 1);
+      i += 1;
+    );
+    tg_pn = n + 1;
+  );
+);
+
+// ---------- the XY pad ----------
+function tg_pad(x, y, w, h) local(i, k, px, py, qx, qy, a, ox, oy, mx, my, inpad, c, tx, ty, tw2, hit, sev, bx, by, nx, ny) (
+  // a storm sky in flat bands
+  k = 0; loop(7, ui_col(ui_mix(0x13285E, 0x2F5AAE, k / 6)); tg_r(x, y + k * h / 7, w, h / 7 + 0.5); k += 1; );
+  sev = tw_se;
+  sev > 0.02 ? ( ui_cola(CREAMH, min(sev, 1) * 0.28); tg_r(x, y, w, h); );
+  // quarter guides
+  ui_cola(LBL, 0.16); tg_r(x + w * 0.5, y, 1, h); tg_r(x, y + h * 0.5, w, 1);
+  ui_cola(LBL, 0.07); tg_r(x + w * 0.25, y, 1, h); tg_r(x + w * 0.75, y, 1, h); tg_r(x, y + h * 0.25, w, 1); tg_r(x, y + h * 0.75, w, 1);
+  // the path
+  tg_path();
+  tg_pbox ? (
+    ui_cola(OCHRE, 0.75);
+    ox = min(max(slider14 / 100 + tw_dcx - slider23 / 200, 0), 1); oy = min(max(slider15 / 100 + tw_dcy + slider28 / 200, 0), 1);
+    qx = min(max(slider14 / 100 + tw_dcx + slider23 / 200, 0), 1); qy = min(max(slider15 / 100 + tw_dcy - slider28 / 200, 0), 1);
+    i = 0; loop(24, a = i / 24;
+      tg_r(x + (ox + (qx - ox) * a) * w, y + (1 - oy) * h, w * (qx - ox) / 48, 1.5); tg_r(x + (ox + (qx - ox) * a) * w, y + (1 - qy) * h - 1.5, w * (qx - ox) / 48, 1.5);
+      tg_r(x + ox * w, y + (1 - oy + (oy - qy) * a) * h, 1.5, h * (oy - qy) / 48); tg_r(x + qx * w - 1.5, y + (1 - oy + (oy - qy) * a) * h, 1.5, h * (oy - qy) / 48);
+      i += 2; );
+  ) : tg_pn > 1 ? (
+    ui_cola(OCHRE, 0.85); i = 1;
+    loop(tg_pn - 1, tg_ln(x + TGPX[i - 1] * w, y + (1 - TGPY[i - 1]) * h, x + TGPX[i] * w, y + (1 - TGPY[i]) * h, 1.6); i += 1; );
+  );
+  // the trail (the last half second or so)
+  tg_tn < 40 ? tg_tn += 1;
+  i = 39; loop(39, TGX[i] = TGX[i - 1]; TGY[i] = TGY[i - 1]; i -= 1; );
+  TGX[0] = tw_px; TGY[0] = tw_py;
+  i = tg_tn - 1;
+  loop(tg_tn - 1,
+    ui_cola(FLAMEL, 0.75 * (1 - i / 40)); tg_ln(x + TGX[i] * w, y + (1 - TGY[i]) * h, x + TGX[i - 1] * w, y + (1 - TGY[i - 1]) * h, 3.2 * (1 - i / 50));
+    i -= 1;
+  );
+  // the centre the LFOs orbit, joined to the point
+  ox = x + slider14 / 100 * w; oy = y + (1 - slider15 / 100) * h;
+  px = x + tw_px * w; py = y + (1 - tw_py) * h;
+  ui_cola(LBL, 0.35); gfx_line(ox * sc, oy * sc, px * sc, py * sc, 1);
+  ui_col(INK); gfx_circle(ox * sc, oy * sc, 6 * sc, 1, 1); ui_col(LBL); gfx_circle(ox * sc, oy * sc, 4.5 * sc, 1, 1); ui_col(INK); gfx_circle(ox * sc, oy * sc, 2 * sc, 1, 1);
+  // a strike: the bolt comes down onto the point
+  sev > 0.04 ? (
+    ui_cola(CREAMH, min(sev * 1.5, 1));
+    bx = px - 30 + tg_hash1 * 10; by = y + 2; k = 0;
+    loop(5, nx = px + (k < 4 ? (k & 1 ? 10 : -12) * (1 - k / 5) : 0); ny = by + (py - by) * (k + 1) / 5;
+            tg_ln(bx, by, nx, ny, 3.5 * min(sev * 2, 1)); bx = nx; by = ny; k += 1; );
+  );
+  ui_cola(0x000000, 0.35); gfx_circle((px + 1) * sc, (py + 2) * sc, 9 * sc, 1, 1);
+  ui_col(INK); gfx_circle(px * sc, py * sc, 9 * sc, 1, 1);
+  ui_col(sev > 0.04 ? ui_mix(FLAME, CREAMH, min(sev, 1) * 0.7) : FLAME); gfx_circle(px * sc, py * sc, 7.2 * sc, 1, 1);
+  ui_cola(0xFFFFFF, 0.55); gfx_circle((px - 2.2) * sc, (py - 2.4) * sc, 2.2 * sc, 1, 1);
+  // the four corners: their formant sets (click to choose)
+  hit = 0; c = 0;
+  loop(4,
+    k = floor(slider(10 + c) + 0.5);
+    tw2 = k < 5 ? 32 : 66;
+    tx = c == 0 || c == 2 ? x + 7 : x + w - 7 - tw2; ty = c < 2 ? y + 7 : y + h - 7 - 27;
+    ui_cola(0x000000, 0.35); tg_rr(tx + 1, ty + 2, tw2, 27, 5);
+    ui_col(INK); tg_rr(tx, ty, tw2, 27, 5);
+    ui_col(tg_hov(tx, ty, tw2, 27) ? CREAMH : CREAM); tg_rr(tx + 1.5, ty + 1.5, tw2 - 3, 24, 4);
+    gfx_setfont(k < 5 ? 13 : 11); ui_col(INK); tg_tc(tx + tw2 * 0.5, ty + 14, tg_setname(k));
+    tg_hov(tx, ty, tw2, 27) && pressed && drag_id == 0 ? (
+      drag_id = -1; hit = 1;
+      strcpy(#tg_m, ""); i = 0;
+      loop(9, i == k ? strcat(#tg_m, "!"); strcat(#tg_m, i < 5 ? tg_setname(i) : i == 5 ? "STONE (dark)" : i == 6 ? "GLASS (bright)" : i == 7 ? "STORM (nasal)" : "CHOIR");
+              i < 8 ? strcat(#tg_m, "|"); i += 1; );
+      gfx_x = tx * sc; gfx_y = (ty + 27) * sc; i = gfx_showmenu(#tg_m); i > 0 ? tg_set(10 + c, i - 1);
+    );
+    c += 1;
+  );
+  // drag the centre (double-click: back to the middle)
+  inpad = tg_hov(x, y, w, h);
+  pressed && inpad && drag_id == 0 ? (
+    time_precise() - tg_plt < 0.35 ? ( tg_set(14, 50); tg_set(15, 50); drag_id = -1; tg_plt = 0; ) : ( drag_id = 3001; tg_plt = time_precise(); );
+  );
+  drag_id == 3001 ? (
+    mx = min(max((mouse_x / sc - x) / w, 0), 1); my = min(max(1 - (mouse_y / sc - y) / h, 0), 1);
+    slider14 != mx * 100 ? tg_set(14, mx * 100); slider15 != my * 100 ? tg_set(15, my * 100);
+  );
+  (inpad || drag_id == 3001) ? ( sprintf(#tg_vv, "X %.0f   Y %.0f", slider14, slider15); tg_pill(x + w * 0.5, y + h - 20, #tg_vv); );
+  // the frame
+  ui_col(INK); tg_frame(x - 2, y - 2, w + 4, h + 4, 2);
+);
+
+// ---------- the card ----------
+// card stock with an ink frame, the field in storm lapis
+ui_col(CREAM); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(INK); tg_rr(4, 4, 1092, 472, 9);
+ui_col(CREAM); tg_rr(6.5, 6.5, 1087, 467, 7);
+ui_col(INK); tg_r(11, 11, 1078, 458);
+ui_col(LAPIS); tg_r(13, 13, 1074, 454);
+// header band
+ui_col(LAPX); tg_r(13, 13, 1074, 44);
+ui_col(INK); tg_r(13, 57, 1074, 2);
+
+// the numeral, in a cream cartouche at the top of the card
+ui_col(INK); tg_rr(497, 15, 106, 38, 6); ui_col(CREAM); tg_rr(499, 17, 102, 34, 5);
+ui_col(INK); tg_frame(502, 20, 96, 28, 1);
+gfx_setfont(15); ui_col(INK); tg_tc(550, 34.5, "XVI");
+ui_col(OCHRE); k_ = 0; loop(2, tg_x = k_ ? 618 : 482;
+  gfx_triangle((tg_x - 6) * sc, 35 * sc, tg_x * sc, 29 * sc, (tg_x + 6) * sc, 35 * sc, tg_x * sc, 41 * sc); k_ += 1; );
+ui_col(FLAME); gfx_circle(470 * sc, 35 * sc, 2.5 * sc, 1, 1); gfx_circle(630 * sc, 35 * sc, 2.5 * sc, 1, 1);
+
+// preset bar
+k_ = pk_preset(22 * sc, 18 * sc, 372 * sc, 34 * sc, pr_cur, #tw_pm);
+k_ > 0 ? load_preset(k_);
+gfx_setfont(12); ui_col(LBL); tg_t(650, 19, "QUADRANT FORMANT"); ui_cola(LBL, 0.75); tg_t(650, 35, "SYNTHESIZER");
+// MIDI: activity LED and channel
+pk_led(816 * sc, 35 * sc, 4.5 * sc, ins_midi_lit() || tw_sseen != tg_lastseen, FLAMEL);
+gfx_setfont(16); ui_col(LBL); tg_tc(816, 22, "MIDI");
+sprintf(#tg_g, slider62 < 0.5 ? "OMNI" : "CH %.0f", slider62);
+tg_field(832, 23, 70, 24, #tg_g) ? (
+  strcpy(#tg_m, ""); k_ = 0;
+  loop(17, k_ == floor(slider62 + 0.5) ? strcat(#tg_m, "!"); k_ == 0 ? strcat(#tg_m, "Omni") : ( sprintf(#tg_k, "Channel %d", k_); strcat(#tg_m, #tg_k); ); k_ < 16 ? strcat(#tg_m, "|"); k_ += 1; );
+  gfx_x = 832 * sc; gfx_y = 47 * sc; k_ = gfx_showmenu(#tg_m); k_ > 0 ? tg_set(62, k_ - 1);
+);
+tg_n = 0; k_ = 0; loop(8, TV[k_ * 64 + 8] > 0 ? tg_n += 1; k_ += 1; );
+gfx_setfont(16); ui_col(LBL); sprintf(#tg_g, "VOICES %d/8", tg_n); tg_t(918, 29, #tg_g);
+ui_size_picker(1018 * sc, 26 * sc);
+
+// ---------- OSCILLATORS ----------
+tg_sect(20, 66, 368, 112, SHA, "OSCILLATORS");
+gfx_setfont(12); ui_col(LBL); tg_tc(37, 102, "1"); tg_tc(212, 102, "2");
+tg_keys(47, 91, 48, 22, 4, 1, 3, "SAW|PULSE|CHOIR");
+tg_keys(222, 91, 48, 22, 4, 2, 3, "SAW|PULSE|CHOIR");
+tg_knob(48,  145, 14, 3, -24, 24, 0, 0, "PITCH", "%+.0f st", 1);
+tg_knob(98,  145, 14, 4, -50, 50, 7, 0, "DETUNE", "%+.1f ct", 0);
+tg_knob(148, 145, 14, 5, 0, 100, 40, 0, "MIX", "%.0f%%", 0);
+tg_knob(198, 145, 14, 6, 5, 95, 50, 0, "PW", "%.0f%%", 0);
+tg_knob(248, 145, 14, 7, 0, 60, 22, 0, "SPREAD", "%.1f ct", 0);
+tg_knob(298, 145, 14, 8, 0, 100, 20, 0, "SUB", "%.0f%%", 0);
+tg_knob(348, 145, 14, 9, 0, 100, 4, 0, "NOISE", "%.0f%%", 0);
+
+// ---------- VOICE / AMP ----------
+tg_sect(20, 188, 368, 112, SHB, "VOICE  ·  AMP");
+tg_keys(28, 213, 56, 22, 4, 45, 3, "POLY|MONO|LEGATO");
+// the envelope's shape
+ui_col(INK); tg_r(214, 211, 166, 26); ui_col(LAPX); tg_r(215.5, 212.5, 163, 23);
+tg_ea = log(1 + slider48); tg_ed = log(1 + slider49); tg_er = log(1 + slider51); tg_es = slider50 / 100;
+tg_tt = tg_ea + tg_ed + tg_er + 2; tg_sx = 155 / tg_tt; tg_x = 219;
+ui_col(OCHRE);
+tg_ln(tg_x, 233, tg_x + tg_ea * tg_sx, 215, 1.6); tg_x += tg_ea * tg_sx;
+tg_ln(tg_x, 215, tg_x + tg_ed * tg_sx, 233 - 18 * tg_es, 1.6); tg_x += tg_ed * tg_sx;
+tg_ln(tg_x, 233 - 18 * tg_es, tg_x + 2 * tg_sx, 233 - 18 * tg_es, 1.6); tg_x += 2 * tg_sx;
+tg_ln(tg_x, 233 - 18 * tg_es, 375, 233, 1.6);
+tg_knob(48,  267, 14, 48, 1, 5000, 30, 1, "ATT", "%.0f ms", 0);
+tg_knob(98,  267, 14, 49, 5, 8000, 800, 1, "DEC", "%.0f ms", 0);
+tg_knob(148, 267, 14, 50, 0, 100, 85, 0, "SUS", "%.0f%%", 0);
+tg_knob(198, 267, 14, 51, 5, 10000, 600, 1, "REL", "%.0f ms", 0);
+tg_knob(248, 267, 14, 52, 0, 100, 40, 0, "VELO", "%.0f%%", 0);
+tg_knob(298, 267, 14, 46, 0, 2000, 0, 0, "GLIDE", "%.0f ms", 0);
+tg_knob(348, 267, 14, 47, 0, 24, 2, 0, "BEND", "%.0f st", 1);
+
+// ---------- MOD ----------
+tg_sect(20, 310, 368, 110, SHC, "");
+tg_sub(29, 310, "WHEEL"); tg_div(124, 310, 20); tg_sub(133, 310, "VELOCITY"); tg_div(228, 310, 20); tg_sub(237, 310, "ENVELOPE");
+tg_knob(50,  365, 16, 31, -100, 100, 0, 0, "TO X", "%+.0f%%", 0);
+tg_knob(100, 365, 16, 32, -100, 100, 40, 0, "TO Y", "%+.0f%%", 0);
+tg_knob(155, 365, 16, 33, -100, 100, 0, 0, "TO X", "%+.0f%%", 0);
+tg_knob(205, 365, 16, 34, -100, 100, 15, 0, "TO Y", "%+.0f%%", 0);
+tg_knob(260, 365, 16, 35, -100, 100, 0, 0, "TO Y", "%+.0f%%", 0);
+tg_knob(310, 365, 16, 36, 1, 5000, 10, 1, "ATTACK", "%.0f ms", 0);
+tg_knob(358, 365, 16, 37, 10, 8000, 600, 1, "DECAY", "%.0f ms", 0);
+
+// ---------- FORMANT: the XY pad ----------
+tg_sect(398, 66, 304, 354, SHB, "FORMANT  ·  XY");
+gfx_setfont(16); ui_col(INK); tg_t(560, 69, "drag the centre");
+tg_pad(410, 96, 280, 222);
+gfx_setfont(12); ui_col(LBL);
+tg_keys(410, 330, 52.8, 22, 4, 30, 5, "FREE|CIRCLE|FIG 8|SPIRAL|WALK");
+tg_knob(456, 383, 15, 16, 0, 100, 40, 0, "RESONANCE", "%.0f%%", 0);
+tg_knob(550, 383, 15, 17, 0, 100, 90, 0, "DEPTH", "%.0f%%", 0);
+tg_knob(644, 383, 15, 18, -12, 12, 0, 0, "SHIFT", "%+.1f st", 0);
+
+// ---------- LFO X / Y ----------
+tg_sect(712, 66, 368, 112, SHA, "");
+tg_sub(721, 66, "LFO X"); tg_div(895, 66, 20); tg_sub(904, 66, "LFO Y");
+k_ = 0;
+loop(2,
+  tg_x = k_ ? 903 : 720; tg_b = k_ ? 24 : 19;
+  tg_i = 0;
+  loop(5,
+    tg_key(tg_x + tg_i * 25, 91, 23, 22, floor(slider(tg_b) + 0.5) == tg_i, "") ? tg_set(tg_b, tg_i);
+    tg_glyph(tg_x + tg_i * 25 + 11.5, 102, tg_i, floor(slider(tg_b) + 0.5) == tg_i ? INK : LBL);
+    tg_i += 1;
+  );
+  tg_key(tg_x + 128, 91, 40, 22, slider(tg_b + 2) >= 0.5, "SYNC") ? tg_set(tg_b + 2, slider(tg_b + 2) >= 0.5 ? 0 : 1);
+  tg_cx = k_ ? 966 : 752;
+  slider(tg_b + 2) >= 0.5 ? (
+    strcpy(#tg_vs, pk_pitem("8 bars|4 bars|2 bars|1 bar|1/2|1/2T|1/4|1/4T|1/8|1/8T|1/16|1/16T", floor(slider(tg_b + 3) + 0.5) + 1, #tg_k));
+    tg_knob(tg_cx, 145, 14, tg_b + 3, 0, 11, 3, 0, "RATE", "", 1);
+  ) : tg_knob(tg_cx, 145, 14, tg_b + 1, 0.01, 20, 0.2, 1, "RATE", "%.2f Hz", 0);
+  tg_knob(tg_cx + 68, 145, 14, tg_b + 4, 0, 100, 35, 0, "DEPTH", "%.0f%%", 0);
+  k_ += 1;
+);
+tg_knob(894, 145, 14, 29, 0, 360, 90, 0, "PHASE", "%.0f°", 0);            // the phase of Y against X, between the two
+
+// ---------- LIGHTNING ----------
+pk_inset(712 * sc, 188 * sc, 368 * sc, 112 * sc, SHC);
+tg_hash1 = (tw_scount * 0.6180339) - floor(tw_scount * 0.6180339);
+tg_emblem(719, 193, 94, 102, tw_se);
+tg_fl = tw_se > 0.05;
+tg_key(822, 194, 128, 38, tg_fl, "") ? tw_sreq += 1;
+tg_fl ? ( ui_cola(CREAMH, min(tw_se, 1) * 0.5); tg_rr(823.5, 195.5, 125, 35, 2); );
+gfx_setfont(12); ui_col(tg_fl ? INK : LBL); tg_tc(886, 213, "LIGHTNING");
+tg_keys(958, 194, 36, 20, 3, 42, 3, "OFF|NOTE|VEL");
+// the MIDI trigger: drag the field to set the note or the velocity
+tg_mm = floor(slider42 + 0.5);
+tg_mm == 1 ? sprintf(#tg_g, "NOTE %s", tg_nname(floor(slider43 + 0.5))) : tg_mm == 2 ? sprintf(#tg_g, "VEL %d+", floor(slider44 + 0.5)) : strcpy(#tg_g, "MIDI OFF");
+ui_col(INK); tg_rr(958, 218, 114, 18, 3); ui_col(tg_mm ? CREAM : 0x8F98B5); tg_rr(959.5, 219.5, 111, 15, 2);
+gfx_setfont(16); ui_col(INK); tg_tc(1015, 227.5, #tg_g);
+tg_hov(958, 218, 114, 18) && pressed && drag_id == 0 && tg_mm ? ( drag_id = 3101; tg_fy = mouse_y; tg_fv = tg_mm == 1 ? slider43 : slider44; );
+drag_id == 3101 ? (
+  tg_fv = min(max(tg_fv + (tg_fy - mouse_y) / (4 * sc), tg_mm == 1 ? 0 : 1), 127); tg_fy = mouse_y;
+  tg_set(tg_mm == 1 ? 43 : 44, floor(tg_fv + 0.5));
+);
+tg_knob(848,  263, 14, 38, 0, 100, 70, 0, "STRIKE", "%.0f%%", 0);
+tg_knob(912,  263, 14, 39, 50, 10000, 1500, 1, "RECOVERY", "%.0f ms", 0);
+tg_knob(978,  263, 14, 40, 0, 100, 40, 0, "CRACK", "%.0f%%", 0);
+tg_knob(1043, 263, 14, 41, 0, 100, 0, 0, "AUTO", "%.0f%% / bar", 0);
+
+// ---------- EFFECTS ----------
+tg_sect(712, 310, 368, 110, SHB, "");
+tg_sub(721, 310, "DRIVE"); tg_div(770, 310, 20); tg_sub(779, 310, "DELAY"); tg_div(924, 310, 20); tg_sub(933, 310, "REVERB");
+tg_knob(742,  365, 16, 53, 0, 100, 10, 0, "DRIVE", "%.0f%%", 0);
+strcpy(#tg_vs, pk_pitem("1/2|1/4 D|1/4|1/4 T|1/8 D|1/8|1/8 T|1/16", floor(slider54 + 0.5) + 1, #tg_k));
+tg_knob(799,  365, 16, 54, 0, 7, 2, 0, "TIME", "", 1);
+tg_knob(848,  365, 16, 55, 0, 90, 30, 0, "FDBK", "%.0f%%", 0);
+tg_knob(897,  365, 16, 56, 0, 100, 12, 0, "MIX", "%.0f%%", 0);
+tg_knob(954,  365, 16, 57, 0, 100, 60, 0, "SIZE", "%.0f%%", 0);
+tg_knob(1004, 365, 16, 58, 0, 100, 55, 0, "TONE", "%.0f%%", 0);
+tg_knob(1053, 365, 16, 59, 0, 100, 25, 0, "MIX", "%.0f%%", 0);
+
+// ---------- the foot of the card: FATE, VOLUME, the name, OUT ----------
+ui_col(INK); tg_r(13, 426, 1074, 2);
+ui_col(LAPX); tg_r(13, 428, 1074, 39);
+tg_acc = OCHRE;
+tg_knob(40, 447, 12, 60, 0, 100, 35, 0, "", "%.0f%%", 0);
+drag_id != 2060 && !(sqr(mouse_x - 40 * sc) + sqr(mouse_y - 447 * sc) <= sqr(18 * sc)) ? ( gfx_setfont(12); ui_col(LBL); tg_t(59, 440, "FATE"); );
+tg_acc = FLAME;
+tg_knob(132, 447, 13, 61, -24, 6, 0, 0, "", "%+.1f dB", 0);
+drag_id != 2061 && !(sqr(mouse_x - 132 * sc) + sqr(mouse_y - 447 * sc) <= sqr(19 * sc)) ? ( gfx_setfont(12); ui_col(LBL); tg_t(152, 440, "VOLUME"); );
+// the name plate
+ui_col(INK); tg_rr(398, 431, 304, 33, 5); ui_col(CREAM); tg_rr(400, 433, 300, 29, 4);
+gfx_setfont(14); ui_col(INK); tg_tc(550, 448, "THE TOWER");
+ui_col(FLAME); gfx_circle(414 * sc, 447.5 * sc, 3 * sc, 1, 1); gfx_circle(686 * sc, 447.5 * sc, 3 * sc, 1, 1);
+ui_col(OCHRE); tg_r(240, 446.5, 146, 2); tg_r(714, 446.5, 120, 2);
+// IN / OUT and a level bar
+ins_io(852, 429, 63, LBL);
+tg_lv = min(max((20 * log10(max(tw_pk, 0.00001)) + 48) / 48, 0), 1); tw_pk *= 0.8;
+ui_col(INK); tg_r(960, 440, 112, 14); ui_col(0x0E1A3C); tg_r(961.5, 441.5, 109, 11);
+tg_i = 0; loop(18, tg_on = tg_i / 18 < tg_lv; ui_col(tg_on ? (tg_i >= 16 ? 0xFF3A2A : tg_i >= 13 ? FLAMEL : OCHRE) : 0x1E2C55); tg_r(963 + tg_i * 6, 443, 4.6, 8); tg_i += 1; );
+gfx_setfont(16); ui_col(LBL); tg_t(960, 428.5, "LEVEL");
+tg_lastseen = tw_sseen;
+
+pk_end();
+ui_end();
