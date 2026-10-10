@@ -1,0 +1,386 @@
+desc:GFX Stimm 45
+//tags: tuner guitar bass chromatic strobe needle ladder utility
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-ui and gfx-panel (.jsfx-inc) in the same folder.
+//
+// Stimm 45 - a chromatic guitar / bass tuner in the spirit of 1980s / 90s Eastern Bloc laboratory and studio test
+// hardware: brutalist, flat, sharp-cornered, thin framing lines, big readable figures. A matched pair with the
+// Pegel 45 meter.
+//   DISPLAY   LADDER - centre-zero LED ladder: the centre lamp is in tune, blocks light to the left (flat) or the
+//                      right (sharp), green near the centre shifting to amber and red further out; a 1-cent vernier
+//                      row below covers +/-10 cents.
+//             NEEDLE - a heavy, damped needle with a slight overshoot on an arched -50 .. +50 cent scale.
+//             STROBE - three bands of bars that scroll left when flat, right when sharp, at a speed proportional
+//                      to the error (the finer bands move faster), and stand still when the note is in tune.
+//   THEME     ENAMEL (bone-grey laboratory enamel), VFD (gas-discharge display), MATRIX (military LED matrix).
+//   A4 REF    the reference pitch, 400 - 480 Hz in 1 Hz steps (the up / down keys; the mouse wheel or a double-click
+//             on the value, which returns it to 440).
+//   SENS      input sensitivity: the level the tuner needs before it reads (higher = quieter signals read too).
+//   NAMES     sharps (C#) or flats (Db).
+//   MUTE      silences the output (a short fade, no click) for silent tuning. Off by default.
+// The readout shows the note (e.g. E 2), the error to 0.1 cent and the frequency in Hz.
+// Audio passes through untouched (bit-exact, no latency) unless MUTE is on.
+//
+// Pitch detection: the mono sum (L+R)/2 is low-passed, decimated to about 8 kHz and kept in a ring buffer.
+// Every ~30 ms (in @block) a YIN-style period search (difference function, cumulative mean normalised, first
+// dip, parabolic interpolation) finds the period between ~24 Hz and 1.4 kHz; the period is then refined by
+// comparing the waveform with itself several periods later (up to ~0.16 s), which takes the resolution well
+// below 0.1 cent on a steady note. A median of three, gentle smoothing and note hysteresis keep the reading calm.
+
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+
+slider1:1<0,2,1{Ladder,Needle,Strobe}>-Display mode
+slider2:0<0,2,1{Enamel,VFD,Matrix}>-Theme
+slider3:440<400,480,1>-Reference A4 (Hz)
+slider4:60<0,100,1>-Sensitivity (%)
+slider5:0<0,1,1{Off,On}>-Mute
+slider6:0<0,1,1{Sharps,Flats}>-Note names
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-stimm-45";                               // the ? pop-up links to this manual
+
+// ---------- analysis set-up (audio thread: st_ names) ----------
+st_D = max(1, floor(srate / 7500 + 0.5));              // decimation factor: ~7.3 - 9.6 kHz analysis rate
+st_fs = srate / st_D;
+st_N = 4096; st_MASK = st_N - 1;                        // ring buffer of decimated samples
+st_RB = 0;                                              // 0 .. 4095   ring buffer
+st_X = 4096;                                            // 4096 .. 6143 linear copy of the newest st_L samples
+st_DF = 6144;                                           // 6144 .. 7167 difference function d(tau)
+st_CM = 7168;                                           // 7168 .. 8191 cumulative mean normalised d'(tau)
+st_L = 2048;
+st_W = floor(0.04 * st_fs);                             // YIN integration window (40 ms)
+st_tmin = max(2, floor(st_fs / 1400));                  // shortest period searched (1.4 kHz)
+st_tmax = min(ceil(st_fs / 24), 1000);                  // longest period searched (24 Hz)
+st_hop = floor(0.03 * st_fs);                           // a new reading every ~30 ms
+st_W2min = floor(0.03 * st_fs);                         // refinement window (at least 30 ms, whole periods)
+st_Lref = floor(0.16 * st_fs);                          // longest refinement lag (~0.16 s)
+
+// anti-alias low-pass (4th-order Butterworth, two biquads) before the decimation
+function st_lp_set(f, q) instance(b0, b1, b2, a1, a2) local(w, cs, al, a0) (
+  w = 2 * $pi * f / srate; cs = cos(w); al = sin(w) / (2 * q); a0 = 1 + al;
+  b0 = (1 - cs) * 0.5 / a0; b1 = (1 - cs) / a0; b2 = b0; a1 = -2 * cs / a0; a2 = (1 - al) / a0;
+);
+function st_lp(x) instance(b0, b1, b2, a1, a2, z1, z2) local(y) (
+  y = b0 * x + z1; z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y;
+  abs(z1) < 0.000000000001 ? z1 = 0; abs(z2) < 0.000000000001 ? z2 = 0;   // no denormals
+  y;
+);
+st_fc = min(1900, 0.3 * st_fs);
+st_lpA.st_lp_set(st_fc, 0.5412); st_lpB.st_lp_set(st_fc, 1.3066);
+st_hpR = exp(-2 * $pi * 12 / st_fs);                     // DC blocker (12 Hz) on the decimated stream
+st_mstep = 1 / (0.02 * srate);                          // MUTE fade: 20 ms
+
+// difference function at one integer lag over the newest W2 samples; also leaves the two energies
+function st_dl(lag, w2) local(a, b, v, d, ea, eb) (
+  b = st_X + st_L - w2; a = b - lag; d = 0; ea = 0; eb = 0;
+  loop(w2, v = a[0] - b[0]; d += v * v; ea += a[0] * a[0]; eb += b[0] * b[0]; a += 1; b += 1; );
+  st_ea = ea; st_eb = eb;
+  d;
+);
+// refine the period with a lag of about k periods: search the minimum near k * per, interpolate it.
+// Returns the new period, or 0 when the waveform no longer matches itself that far back.
+function st_refine(k, per, w2) local(c, dm, dp, d0, n, den, off) (
+  c = floor(k * per + 0.5);
+  d0 = st_dl(c, w2); dm = st_dl(c - 1, w2); dp = st_dl(c + 1, w2);
+  n = 0;
+  while (n < 6 && dm < d0) ( c -= 1; dp = d0; d0 = dm; dm = st_dl(c - 1, w2); n += 1; );
+  while (n < 6 && dp < d0) ( c += 1; dm = d0; d0 = dp; dp = st_dl(c + 1, w2); n += 1; );
+  st_dl(c, w2);
+  den = dm - 2 * d0 + dp;
+  off = den > 0 ? 0.5 * (dm - dp) / den : 0;
+  off = min(max(off, -0.5), 0.5);
+  // the match quality is judged at the interpolated minimum (integer lags are coarse on high notes)
+  (d0 - 0.25 * (dm - dp) * off) / max(st_ea + st_eb, 0.0000000001) > 0.06 || dm < d0 || dp < d0 ? 0 : (c + off) / k;
+);
+// the YIN difference function at one lag (used to walk to the true minimum of d)
+function st_dy(t) local(p, q, v, d) (
+  d = 0; p = st_X + st_s0; q = p + t;
+  loop(st_W, v = p[0] - q[0]; d += v * v; p += 1; q += 1; );
+  d;
+);
+
+// one reading: gate, YIN, refinement, smoothing, note decision
+function st_detect() local(i, p, q, t, d, v, sum, cm, best, gmin, gt, go, a, b, c, den, off, per, k, w2, lt, np, e, f, lf, m, n, nr) (
+  // the newest st_L samples, in order
+  p = (st_w - st_L) & st_MASK; i = 0;
+  loop(st_L, st_X[i] = st_RB[p]; p = (p + 1) & st_MASK; i += 1; );
+  // level of the newest 40 ms and the gate (SENSITIVITY), with 6 dB of hysteresis
+  e = 0; p = st_X + st_L - st_W; loop(st_W, e += p[0] * p[0]; p += 1; );
+  st_lvl = 10 * log10(e / st_W + 0.00000000001);
+  st_open ? ( st_lvl < st_thr - 6 ? st_open = 0; ) : ( st_lvl > st_thr ? st_open = 1; );
+  st_open ? (
+    // YIN: difference function and its cumulative mean normalised form; first dip below 0.15, then its minimum
+    st_s0 = st_L - st_W - st_tmax - 41;                     // (room to walk 40 lags past st_tmax)
+    sum = 0; best = -1; gmin = 10; gt = -1; t = 1; go = 1;
+    while (go) (
+      d = 0; p = st_X + st_s0; q = p + t;
+      loop(st_W, v = p[0] - q[0]; d += v * v; p += 1; q += 1; );
+      st_DF[t] = d; sum += d;
+      cm = sum > 0 ? d * t / sum : 1; st_CM[t] = cm;
+      t >= st_tmin && t < st_tmax && cm < gmin ? ( gmin = cm; gt = t; );
+      best >= 0 ? ( cm < st_CM[best] ? best = t : go = 0; ) : ( t >= st_tmin && cm < 0.15 ? best = t; );
+      t += 1; t > st_tmax ? go = 0;
+    );
+    best < 0 && gt > 0 && gmin < 0.3 ? best = gt;          // no clear dip: accept the deepest one if it is good enough
+    best >= st_tmax || best < 2 ? best = -1;
+    best > 0 ? (
+      // d' picks the dip; its exact place is the minimum of d itself (d' is tilted by its t / sum factor)
+      b = st_DF[best]; c = best + 1 <= t - 1 ? st_DF[best + 1] : st_dy(best + 1); a = st_DF[best - 1];
+      n = 0;
+      while (n < 12 && c < b && best + 1 < st_tmax + 40) ( best += 1; a = b; b = c; c = st_dy(best + 1); n += 1; );
+      while (n < 12 && a < b && best > 2) ( best -= 1; c = b; b = a; a = st_dy(best - 1); n += 1; );
+      den = a - 2 * b + c; off = den > 0 ? 0.5 * (a - c) / den : 0;
+      per = best + min(max(off, -0.5), 0.5);
+      // refinement: double the lag while the waveform still matches itself, then the longest whole multiple
+      w2 = floor(ceil(st_W2min / per) * per + 0.5);
+      lt = min(st_Lref, st_L - w2 - 6);
+      k = 1; go = 1;
+      while (go && k * 2 * per <= lt) (
+        np = st_refine(k * 2, per, w2);
+        np > 0 ? ( per = np; k *= 2; ) : go = 0;
+      );
+      go ? ( m = floor(lt / per); m > k ? ( np = st_refine(m, per, w2); np > 0 ? per = np; ); );
+      st_kdbg = k; st_pc = best + off; f = st_fs / per;
+      f >= 23 && f <= 1450 ? (
+        lf = log(f) / log(2);
+        st_age > 0.3 ? ( st_h1 = lf; st_h2 = lf; );       // a new note: no history
+        m = max(min(lf, st_h1), min(max(lf, st_h1), st_h2));   // median of the last three
+        st_h2 = st_h1; st_h1 = lf;
+        st_age > 0.3 || abs(m - st_lf) > 0.04 ? st_lf = m : st_lf += (m - st_lf) * 0.45;
+        // note decision with hysteresis: stay on the note until clearly past the half-way point
+        n = 69 + 12 * (st_lf - log(st_ref) / log(2)); nr = floor(n + 0.5);
+        st_age > 0.3 || st_note < 0 || abs(n - st_note) > 0.62 ? ( st_note = nr; st_cc = 0; ) :
+        abs(n - st_note) > 0.5 ? (
+          nr == st_cand ? st_cc += 1 : ( st_cand = nr; st_cc = 1; );
+          st_cc >= 3 ? ( st_note = nr; st_cc = 0; );
+        ) : st_cc = 0;
+        st_cents = (n - st_note) * 100;
+        st_freq = 2 ^ st_lf;
+        st_age = 0; st_seq += 1;
+      );
+    );
+  );
+);
+
+function st_update() (
+  st_ref = slider3;
+  st_thr = -24 - 0.56 * slider4;                        // SENS 0 % = -24 dBFS .. 100 % = -80 dBFS
+  st_mute = slider5;
+);
+
+st_w = 0; st_cnt = 0; st_new = 0; st_open = 0; st_age = 100; st_note = -1; st_cand = -1; st_cc = 0;
+st_lf = 0; st_h1 = st_h2 = 0; st_cents = 0; st_freq = 0; st_lvl = -120; st_seq = 0;
+st_hx = st_hy = 0;
+memset(st_RB, 0, 8192);
+st_update();
+st_mr = st_mute ? 0 : 1;
+
+// ---------- presets ----------
+// mode, theme, A4, sensitivity, note names
+function pp(md, th, rf, sn, nm) (
+  slider1 = md; slider2 = th; slider3 = rf; slider4 = sn; slider6 = nm;
+);
+function load_preset(p) (
+  p == 1  ? ( pp(1, 0, 440, 60, 0); slider5 = 0; ) :     // Init (the defaults)
+  p == 2  ? pp(2, 1, 440, 60, 0) :                       // Guitar Strobe
+  p == 3  ? pp(1, 2, 440, 72, 0) :                       // Bass Needle
+  p == 4  ? pp(0, 1, 440, 42, 0) :                       // Stage Ladder (VFD)
+  p == 5  ? pp(0, 2, 440, 62, 0) :                       // Studio Matrix
+  p == 6  ? pp(2, 0, 440, 60, 0) :                       // Lab Strobe
+  p == 7  ? pp(1, 0, 440, 88, 0) :                       // Quiet Room
+  p == 8  ? pp(0, 0, 440, 60, 1) :                       // Horn Section (flats)
+  p == 9  ? pp(2, 0, 415, 60, 1) :                       // Baroque 415
+  p == 10 ? pp(1, 0, 442, 60, 0) :                       // Concert 442
+  p == 11 ? pp(1, 1, 443, 60, 0) :                       // Orchestra 443
+  p == 12 ? pp(0, 2, 432, 60, 0);                        // Verdi 432
+  p >= 1 && p <= 12 ? slider_automate(63);               // sliders 1-6
+);
+
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; ui_hw = 0; ui_thm = 5; );   // a new instance opens Large, on Init
+ui_dflt = 1;   // defaults apply once: @init re-runs (playback start, device reset) must not undo the saved state
+
+@slider
+st_update();
+
+@block
+st_update();                                            // keys on the panel do not run @slider
+st_age += samplesblock / srate;
+st_new >= st_hop ? ( st_new = 0; st_detect(); );
+
+@serialize
+file_var(0, ui_sz);
+file_avail(0) != 0 ? file_var(0, pr_cur) : pr_cur = 0;    // the preset in use
+
+@sample
+// analysis: mono sum, anti-alias low-pass, decimate, DC block, into the ring buffer
+st_y = st_lpB.st_lp(st_lpA.st_lp((spl0 + spl1) * 0.5));
+st_cnt += 1;
+st_cnt >= st_D ? (
+  st_cnt = 0;
+  st_hy = st_y - st_hx + st_hpR * st_hy; st_hx = st_y;
+  abs(st_hy) < 0.000000000001 ? st_hy = 0;
+  st_RB[st_w] = st_hy; st_w = (st_w + 1) & st_MASK; st_new += 1;
+);
+// MUTE: a smooth 20 ms fade; at rest (unmuted) the audio is not touched at all
+st_mute ? ( st_mr > 0 ? st_mr = max(st_mr - st_mstep, 0); ) : ( st_mr < 1 ? st_mr = min(st_mr + st_mstep, 1); );
+st_mr < 1 ? (
+  st_g = st_mr * st_mr * (3 - 2 * st_mr);
+  spl0 *= st_g; spl1 *= st_g;
+);
+
+@gfx 560 250
+ui_begin(560, 250);
+
+// ---------- palettes (GUI thread: sg_ names) ----------
+// 0 ENAMEL: bone-grey baked enamel, charcoal print, safety orange / brick red
+// 1 VFD:    dark slate, cold turquoise and neon amber glow, dark unlit ghost segments
+// 2 MATRIX: battleship grey, chunky stacked LED squares, forest green -> amber -> red, olive-drab ghost cells
+sg_t = slider2;
+sg_t == 1 ? (
+  sg_bg = 0x181A1B; sg_bg2 = 0x131516; sg_ink = 0xA9B8B7; sg_ink2 = 0x6A7877; sg_line = 0x3A4243;
+  sg_win = 0x0D0E0F; sg_wink = 0x4EE1DC; sg_ghost = 0x152021; sg_ok = 0x4EE1DC; sg_mid = 0xFF8C00; sg_hot = 0xFF5A1F;
+  sg_acc = 0x4EE1DC; sg_ndl = 0xFF8C00; sg_key = 0x202425; sg_keyon = 0x0D0E0F; sg_keyt = 0xA9B8B7; sg_keyont = 0x4EE1DC;
+  sg_knb = 0x2A3032; sg_kptr = 0x4EE1DC; sg_glow = 1;
+) : sg_t == 2 ? (
+  sg_bg = 0x222528; sg_bg2 = 0x1C1F21; sg_ink = 0xC9CCC2; sg_ink2 = 0x868B82; sg_line = 0x3D4245;
+  sg_win = 0x141618; sg_wink = 0xB9BDB0; sg_ghost = 0x2C302E; sg_ok = 0x1E5631; sg_mid = 0xD4A373; sg_hot = 0xBC3908;
+  sg_acc = 0xD4A373; sg_ndl = 0xD4A373; sg_key = 0x2D3135; sg_keyon = 0x141618; sg_keyt = 0xC9CCC2; sg_keyont = 0xD4A373;
+  sg_knb = 0x3A3F44; sg_kptr = 0xD4A373; sg_glow = 0;
+) : (
+  sg_bg = 0xD6D2C4; sg_bg2 = 0xCBC7B8; sg_ink = 0x1C1C1C; sg_ink2 = 0x5A574F; sg_line = 0x1C1C1C;
+  sg_win = 0xEEEAD8; sg_wink = 0x1C1C1C; sg_ghost = 0xD8D3C1; sg_ok = 0x2E7D32; sg_mid = 0xE8641C; sg_hot = 0xA8321E;
+  sg_acc = 0xE8641C; sg_ndl = 0x1C1C1C; sg_key = 0xC4C0B1; sg_keyon = 0x1C1C1C; sg_keyt = 0x1C1C1C; sg_keyont = 0xEEEFEA;
+  sg_knb = 0x1C1C1C; sg_kptr = 0xEEEFEA; sg_glow = 0;
+);
+// the house widgets (preset bar, size picker) in this panel's colours
+C_BTN = sg_key; C_BTNT = sg_keyt; C_KA = sg_t == 0 ? sg_ink : sg_acc; C_BG = sg_bg;
+
+// ---------- drawing helpers (base units; crisp pixel edges) ----------
+function sg_rect(x, y, w, h) local(x0, y0) (
+  x0 = floor(x * sc + 0.5); y0 = floor(y * sc + 0.5);
+  gfx_rect(x0, y0, floor((x + w) * sc + 0.5) - x0, floor((y + h) * sc + 0.5) - y0);
+);
+function sg_frame(x, y, w, h) local(x0, y0, x1, y1) (       // a thin framing line
+  x0 = floor(x * sc + 0.5); y0 = floor(y * sc + 0.5); x1 = floor((x + w) * sc + 0.5) - 1; y1 = floor((y + h) * sc + 0.5) - 1;
+  gfx_line(x0, y0, x1, y0, 0); gfx_line(x0, y1, x1, y1, 0); gfx_line(x0, y0, x0, y1, 0); gfx_line(x1, y0, x1, y1, 0);
+);
+function sg_font(idx, mono, size) ( gfx_setfont(idx, mono ? "Courier New" : "Trebuchet MS", size * sc, 'b'); );
+function sg_txt(x, y, s, al) local(tw, th) (            // al: 0 left, 1 centre, 2 right (x), y = top
+  gfx_measurestr(s, tw, th);
+  gfx_x = x * sc - (al == 1 ? tw * 0.5 : al == 2 ? tw : 0); gfx_y = y * sc; gfx_drawstr(s);
+);
+function sg_txtm(x, y, s, al) local(tw, th) (            // y = vertical centre
+  gfx_measurestr(s, tw, th);
+  gfx_x = x * sc - (al == 1 ? tw * 0.5 : al == 2 ? tw : 0); gfx_y = y * sc - th * 0.5; gfx_drawstr(s);
+);
+function sg_in(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
+// engineering caption: name, then a thin rule to the end of the group
+function sg_cap(x, y, w, s) local(tw, th) (
+  sg_font(8, 0, 11); gfx_measurestr(s, tw, th);
+  ui_col(sg_ink2); sg_txtm(x, y, s, 0);
+  ui_cola(sg_ink2, 0.6); gfx_line(x * sc + tw + 6 * sc, floor(y * sc + 0.5), (x + w) * sc, floor(y * sc + 0.5), 0);
+);
+// a flat key with a lamp bar along its top edge; returns 1 when clicked
+function sg_keyb(x, y, w, h, label, on, lampc) local(hit, hov) (
+  hov = sg_in(x, y, w, h);
+  hit = pressed && drag_id == 0 && hov; hit ? drag_id = -1;
+  ui_col(on ? sg_keyon : sg_key); sg_rect(x, y, w, h);
+  hov && !on ? ( ui_cola(sg_t == 0 ? 0x000000 : 0xFFFFFF, 0.06); sg_rect(x, y, w, h); );
+  ui_col(on ? lampc : ui_mix(lampc, sg_key, 0.75)); sg_rect(x + 3, y + 3, w - 6, 3);
+  on && sg_glow ? ( ui_cola(lampc, 0.25); sg_rect(x + 2, y + 2, w - 4, 5); );
+  ui_col(sg_t == 0 ? sg_ink : sg_line); sg_frame(x, y, w, h);
+  sg_font(7, 0, 12); ui_col(on ? sg_keyont : sg_keyt); sg_txtm(x + w * 0.5, y + h * 0.5 + 2, label, 1);
+  hit;
+);
+// small key with a drawn triangle (dir -1 down, 1 up); repeats while held
+function sg_arrow(x, y, w, h, dir, id) local(hov, hit, cx, cy, s) (
+  hov = sg_in(x, y, w, h); hit = 0;
+  pressed && drag_id == 0 && hov ? ( drag_id = id; hit = 1; sg_rpt = time_precise() + 0.45; );
+  drag_id == id && mdown && hov && time_precise() > sg_rpt ? ( hit = 1; sg_rpt = time_precise() + 0.08; );
+  ui_col(drag_id == id && mdown ? sg_keyon : sg_key); sg_rect(x, y, w, h);
+  ui_col(sg_t == 0 ? sg_ink : sg_line); sg_frame(x, y, w, h);
+  cx = (x + w * 0.5) * sc; cy = (y + h * 0.5) * sc; s = 5 * sc;
+  ui_col(drag_id == id && mdown ? sg_keyont : sg_keyt);
+  dir > 0 ? gfx_triangle(cx - s, cy + s * 0.6, cx + s, cy + s * 0.6, cx, cy - s * 0.7)
+          : gfx_triangle(cx - s, cy - s * 0.6, cx + s, cy - s * 0.6, cx, cy + s * 0.7);
+  hit;
+);
+// one LED cell in the theme's style (lit: colour c at brightness k 0..1)
+function sg_cell(x, y, w, h, c, k) local(i, j, nx, ny, cw, chh, cc) (
+  sg_t == 2 ? (
+    // MATRIX: a stack of chunky square LEDs
+    nx = max(1, floor((w + 2) / 9)); ny = max(1, floor((h + 2) / 9));
+    cw = (w - (nx - 1) * 2) / nx; chh = (h - (ny - 1) * 2) / ny;
+    cc = k > 0 ? ui_mix(sg_ghost, ui_mix(c, 0xFFFFFF, 0.22), k) : sg_ghost;
+    j = 0;
+    loop(ny, i = 0;
+      loop(nx,
+        ui_col(cc); sg_rect(x + i * (cw + 2), y + j * (chh + 2), cw, chh);
+        k > 0 ? ( ui_cola(0xFFFFFF, 0.22 * k); sg_rect(x + i * (cw + 2) + 1, y + j * (chh + 2) + 1, cw * 0.45, chh * 0.35); );
+        i += 1; );
+      j += 1; );
+  ) : sg_t == 1 ? (
+    // VFD: a glowing segment with a soft halo, dark ghost when unlit
+    ui_col(sg_ghost); sg_rect(x, y, w, h);
+    k > 0 ? (
+      ui_cola(c, 0.16 * k); sg_rect(x - 2, y - 2, w + 4, h + 4);
+      ui_cola(c, 0.9 * k + 0.1); sg_rect(x, y, w, h);
+      ui_cola(0xFFFFFF, 0.18 * k); sg_rect(x + 1, y + 1, w - 2, h * 0.3);
+    );
+  ) : (
+    // ENAMEL: printed lamp windows
+    ui_col(k > 0 ? ui_mix(sg_ghost, c, k) : sg_ghost); sg_rect(x, y, w, h);
+    ui_cola(sg_ink, 0.35); sg_frame(x, y, w, h);
+  );
+);
+// colour for an error of c cents: in tune -> amber -> red
+function sg_ccol(c) ( c = abs(c); c < 3 ? sg_ok : c < 15 ? sg_mid : sg_hot; );
+
+// ---------- the reading (from the audio thread) ----------
+sg_now = time_precise();
+sg_dt = min(max(sg_now - sg_lt, 0), 0.1); sg_lt = sg_now;
+sg_live = st_age < 0.35;                                // a fresh reading
+sg_show = st_age < 1.6 && st_freq > 0;                  // keep the last reading a moment, then rest
+sg_k = sg_live ? 1 : sg_show ? max(0.35, 1 - (st_age - 0.35) / 1.25) : 0;   // display brightness
+sg_c = st_cents;
+sg_tune = sg_show && abs(sg_c) < 2;
+
+// needle: a damped mass on a spring (slight overshoot), integrated in small steps (frame-rate independent)
+sg_tgt = sg_live ? min(max(sg_c / 50, -1.08), 1.08) : -1.14;       // rests on the left stop
+sg_n = 0;
+while (sg_n < 40 && sg_dt > 0) (
+  sg_h = min(sg_dt, 0.004); sg_dt -= sg_h; sg_n += 1;
+  sg_nv += (105 * (sg_tgt - sg_np) - 2 * 0.58 * 10.25 * sg_nv) * sg_h;   // w = 10.25 rad/s (1.6 Hz), damping 0.58
+  sg_np += sg_nv * sg_h;
+  sg_np < -1.16 ? ( sg_np = -1.16; sg_nv = abs(sg_nv) * 0.2; );
+  sg_np > 1.16 ? ( sg_np = 1.16; sg_nv = -abs(sg_nv) * 0.2; );
+);
+// strobe: phase from the measured error, accumulated here (1 cent = 0.05 band-1 cycles per second)
+sg_dtx = min(max(sg_now - sg_slt, 0), 0.1); sg_slt = sg_now;
+sg_live ? sg_ph += min(max(sg_c * 0.05, -3), 3) * sg_dtx;
+sg_ph -= floor(sg_ph);
+
+// ---------- panel ----------
+ui_col(sg_bg); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(sg_line); sg_frame(3, 3, 554, 244);
+
+// header: badge, name, preset bar, size picker
+ui_col(sg_ink); gfx_circle(26 * sc, 24 * sc, 13 * sc, 1, 1);
+gfx_setfont(4); ui_col(sg_bg); ui_text(26 * sc, 19 * sc, "GFX");
+sg_font(6, 0, 23); ui_col(sg_ink); sg_txt(46, 8, "STIMM 45", 0);
+sg_font(8, 0, 11); ui_col(sg_t == 0 ? sg_hot : sg_acc); sg_txt(47, 32, "CHROMATIC TUNER", 0);
+k_ = pk_preset(206 * sc, 9 * sc, 270 * sc, 30 * sc, pr_cur,
+  "Init|Guitar Strobe|Bass Needle|Stage Ladder (VFD)|Studio Matrix|Lab Strobe|Quiet Room|Horn Section (flats)|Baroque 415|Concert 442|Orchestra 443|Verdi 432");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_; );
+ui_size_picker(488 * sc, 15 * sc);
+ui_col(sg_t == 0 ? sg_acc : sg_line); sg_rect(10, 45, 540, 2);
+
+pk_end();
+ui_end();
