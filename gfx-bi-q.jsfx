@@ -1,11 +1,11 @@
-desc:GFX Baxendale [bass/treble EQ]
+desc:GFX Bi-Q [bass/treble EQ]
 //tags: equaliser eq tone control baxandall bass treble hifi
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-headsmooth (.jsfx-inc)
 // in the same folder.
 //
-// Baxendale - a simple two-knob tone control for single tracks (personal use; designed from scratch).
+// Bi-Q - a simple two-knob tone control for single tracks (personal use; designed from scratch).
 //   BASS / TREBLE - +/-12 dB in 0.5 dB detents (Shift = free). Baxandall-style curves: broad 6 dB / octave
 //                   shelves that keep rising gently towards the extremes rather than flattening off, so a
 //                   little goes a long way and the middle is left alone.
@@ -50,7 +50,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-baxendale";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-bi-q";                                       // the ? pop-up links to this manual
 
 // ---------- first-order shelves (bilinear, prewarped): the broad Baxandall slopes ----------
 // low shelf  H(s) = (s + w*sqrt(G)) / (s + w/sqrt(G))        DC gain G, HF 1, half-way (in dB) at w
@@ -132,8 +132,8 @@ gi = 0; loop(floor((TH - 6) / 2), ui_cola(gi % 3 ? 0xFFFFFF : 0x000000, gi % 3 ?
   gfx_line(10 * sc, (T + 3 + gi * 2) * sc, 769 * sc, (T + 3 + gi * 2) * sc); gi += 1; );        // brushed grain
 // engraved name
 gfx_setfont(6, "Trebuchet MS", 18 * sc, 'b');
-ui_cola(0xFFFFFF, 0.5); gfx_x = 41 * sc; gfx_y = (T + 13) * sc; gfx_drawstr("BAXENDALE");
-ui_col(BX_INK); gfx_x = 40 * sc; gfx_y = (T + 12) * sc; gfx_drawstr("BAXENDALE");
+ui_cola(0xFFFFFF, 0.5); gfx_x = 41 * sc; gfx_y = (T + 13) * sc; gfx_drawstr("BI-Q");
+ui_col(BX_INK); gfx_x = 40 * sc; gfx_y = (T + 12) * sc; gfx_drawstr("BI-Q");
 gfx_setfont(4); ui_col(BX_DIM); gfx_x += 10 * sc; gfx_y = (T + 18) * sc; gfx_drawstr("TONE CONTROL");
 gfx_x += 10 * sc; gfx_drawstr("·  GFX");
 ui_size_picker(560 * sc, (T + 11) * sc);

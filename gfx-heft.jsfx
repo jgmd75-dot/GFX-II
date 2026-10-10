@@ -1,4 +1,4 @@
-desc:GFX Thrust [bus comp]
+desc:GFX Heft [bus comp]
 //tags: compressor bus vca feedforward feedback stereo-link thrust
 //author: JGWizrad / Garden FX (GFX)
 //
@@ -56,7 +56,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-thrust";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-heft";                                    // the ? pop-up links to this manual
 
 function att_ms(i) ( i == 0 ? 0.03 : i == 1 ? 0.1 : i == 2 ? 0.3 : i == 3 ? 1 : i == 4 ? 3 : i == 5 ? 10 : 30 );
 function rat_v(i)  ( i == 0 ? 1.5 : i == 1 ? 2 : i == 2 ? 3 : i == 3 ? 4 : i == 4 ? 6 : i == 5 ? 10 : 1000 );
@@ -178,7 +178,7 @@ ui_col(0x050506); gfx_rect(0, 0, gfx_w, gfx_h);
 pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
 ui_col(INKW); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
-gfx_setfont(6, "Trebuchet MS", 26 * sc, 'b'); ui_col(INKW); gfx_x = 62 * sc; gfx_y = 18 * sc; gfx_drawstr("THRUST");
+gfx_setfont(6, "Trebuchet MS", 26 * sc, 'b'); ui_col(INKW); gfx_x = 62 * sc; gfx_y = 18 * sc; gfx_drawstr("HEFT");
 gfx_setfont(4); ui_col(YEL); gfx_x = 200 * sc; gfx_y = 30 * sc; gfx_drawstr("STEREO BUS COMPRESSOR");
 pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
 k_ = pk_preset(470 * sc, 14 * sc, 346 * sc, 36 * sc, pr_cur, "Mix Bus Glue|Big Mix (loud thrust)|Drum Bus Punch|Drum Smash (parallel)|Vintage Feedback|Vocal Bus|Wide Stereo (independent)|Bus Limiter|Bass Control|Room Pump");

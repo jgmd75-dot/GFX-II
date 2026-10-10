@@ -1,8 +1,8 @@
-desc:GFX Console Q [dynamics + EQ]
+desc:GFX OB Q [dynamics + EQ]
 //tags: compressor limiter gate expander vca broadcast console transformer
 //author: JGWizrad / Garden FX (GFX)
 //
-// Console Q: GFX Console with a four-band console channel EQ (the Board EQ engine) added below.
+// OB Q: broadcast-desk dynamics with a four-band console channel EQ (the Board EQ engine) added below.
 // ORDER puts the EQ after the dynamics or in front of them. EQ: HPF / LPF, LF and HF (shelf or BELL), LMF and HMF with Q,
 // BROWN / BLACK voicing, IN.
 //
@@ -80,7 +80,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-console-q";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-ob-q";                                       // the ? pop-up links to this manual
 
 // one channel's detectors + gains (dB domain)
 function ch_det(x) instance(ms, gms) (
@@ -173,7 +173,7 @@ mix_s = mix_t;
 // ================= EQ (the Board EQ engine, names q_..., sliders 24 - 41) =================
 // a preset mask of the EQ unit, one slider at a time
 function cb_auto(m, off) local(k) ( k = 1; loop(63, m - 2 * floor(m / 2) ? ui_auto(k + off); m = floor(m / 2); k += 1; ); );
-#ui_man = "gfx-console-q";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-ob-q";                                       // the ? pop-up links to this manual
 
 function th(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
 // one-pole high-pass (the third pole of the 18 dB HPF)
@@ -331,7 +331,7 @@ ui_col(0x0B0B0C); gfx_rect(0, 0, gfx_w, gfx_h);
 pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
 ui_col(ORG); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
-gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKC); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("CONSOLE Q");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKC); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("OB Q");
 gfx_setfont(4); ui_col(YEL); gfx_x = 238 * sc; gfx_y = 30 * sc; gfx_drawstr("BROADCAST DESK DYNAMICS");
 pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
 k_ = pk_preset(540 * sc, 15 * sc, 276 * sc, 34 * sc, pr_cur, "Desk Glue|Presenter Voice|Tight Drums (gated)|Kick / Snare Gate|Parallel Squash|Transmitter Limit|Acoustic Clean-up|Bass DI|Transformer Only|Gentle Programme Bus");
@@ -386,7 +386,7 @@ sprintf(#v, "GR %.1f", grd); dy_lbl(858, 278, #v, 0.8);
 
 // ================= the EQ strip =================
 ui_swu(slider42 ? 72 - 348 : 0);
-// (Console's colours) a section box with a brown title strip, the four bands and filters of the Board EQ
+// (OB Q's colours) a section box with a brown title strip, the four bands and filters of the Board EQ
 ui_col(0x232325); gfx_rect(18 * sc, 348 * sc, 864 * sc, 132 * sc);
 ui_col(BRN); gfx_rect(18 * sc, 348 * sc, 864 * sc, 24 * sc);
 ui_col(YEL); gfx_rect(18 * sc, 372 * sc, 864 * sc, 2 * sc);

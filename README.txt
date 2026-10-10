@@ -4,7 +4,7 @@ GFX - free JSFX plug-ins for REAPER
 Designed by JGWizrad.
 Website: https://www.gardenfx.uk/
 
-121 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
+116 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
 space, mastering and summing - plus the CC-80 chord script. Every sound is
 synthesised: there are no samples. All plug-ins share one look, resizable
 S / M / L panels and the same output stage.
@@ -117,31 +117,27 @@ AMPS & DRIVE
   Fullerton 65    gfx-fullerton-65.jsfx
   Grunt           gfx-grunt.jsfx
   Guitar Head     gfx-guitar-head.jsfx
-  Head            gfx-head.jsfx
   Mali 120        gfx-mali-120.jsfx
   Model 15        gfx-model-15.jsfx
   Model 44        gfx-model-44.jsfx
   PenguinDrive    gfx-penguindrive.jsfx
-  Preamp          gfx-preamp.jsfx
   Preamp Q        gfx-preamp-q.jsfx
   Ten Rack        gfx-ten-rack.jsfx
   TS-7            gfx-ts7.jsfx
   Tuner 45        gfx-tuner-45.jsfx
 
 DYNAMICS
-  Compressor      gfx-compressor.jsfx
   Compressor Q    gfx-compressor-q.jsfx
-  Console         gfx-console.jsfx
-  Console Q       gfx-console-q.jsfx
   De-Ess          gfx-de-ess.jsfx
-  Duplex          gfx-duplex.jsfx
   Duplex Q        gfx-duplex-q.jsfx
   Fet 45          gfx-fet-45.jsfx
   Field 42        gfx-field-42.jsfx
   Gate            gfx-gate.jsfx
   Headsmoother    gfx-headsmoother.jsfx
+  Heft            gfx-heft.jsfx
   MK3             gfx-mk3.jsfx
   MUTO            gfx-muto.jsfx
+  OB Q            gfx-ob-q.jsfx
   Quad11          gfx-quad11.jsfx
   RND             gfx-rnd.jsfx
   Smooth          gfx-smooth.jsfx
@@ -149,15 +145,14 @@ DYNAMICS
   Strip 102       gfx-strip-102.jsfx
   Tandem          gfx-tandem.jsfx
   Tandem Q        gfx-tandem-q.jsfx
-  Thrust          gfx-thrust.jsfx
   Transient       gfx-transient.jsfx
   Twin Comp       gfx-twin-comp.jsfx
   VB30            gfx-vb30.jsfx
   Wingspan        gfx-wingspan.jsfx
 
 EQ & FILTERS
-  Baxendale       gfx-baxendale.jsfx
   Bern EQ         gfx-bern-eq.jsfx
+  Bi-Q            gfx-bi-q.jsfx
   Board EQ        gfx-board-q.jsfx
   Contour         gfx-contour.jsfx
   Equaliser       gfx-equaliser.jsfx
