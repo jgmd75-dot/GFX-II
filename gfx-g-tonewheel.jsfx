@@ -45,8 +45,8 @@ slider24:0<0,100,1>-Band sat (%)
 slider25:30<0,100,1>-Bias (%)
 slider26:120<40,400,1>-Sat low band (Hz)
 slider27:6000<2000,16000,10>-Sat high band (Hz)
-slider28:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider29:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider28:-0.3<-24,0,0.1>-Ceiling (dB)
+slider29:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider30:40<0,100,1>-Room size (%)
 slider31:0<0,100,1>-Room mix (%)
 
@@ -133,7 +133,7 @@ function update() local(d, v) (
   chan = slider20;
   drift = slider21 / 100;
   out_t = 10 ^ (slider23 / 20);
-  ins_output_setup(24);
+  ins_output_setup(24);   // output stage: CLIP, always on
   // ROOM: lengths in samples for the early reflections, tails and diffusers
   rm_sz = 0.4 + 1.2 * slider30 / 100; rm_mix = slider31 / 100;
   rm_fb = 0.3 + 0.35 * slider30 / 100; rm_dc = 1 - exp(-2 * $pi * (7000 - 3500 * slider30 / 100) / srate);

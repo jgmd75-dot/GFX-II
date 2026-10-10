@@ -19,7 +19,7 @@ desc:GFX Flanger [flanger]
 //            the ringing, metallic jet; negative for the hollow, nasal tone. SPREAD - the right side's sweep
 //            offset from the left (0 = classic mono flange, 90 - 180 = wide stereo motion).
 //   DRIFT  - slow random wander of the rate, width and manual (a hand on the tape, an old clock).
-// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIM) sit on the panel.
+// IN / OUT: TRIM (with the GUARD key) and SAT sit on the panel.
 // LOW CUT (MASTER) - a high-pass on the effected signal only (20 = off): the bass stays dry, clean and centred.
 
 import gfx-drift.jsfx-inc
@@ -53,8 +53,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider24:0<-24,12,0.1>-Input trim (dB)
 slider25:1<0,1,1{Off,On}>-Input guard
 slider26:20<20,500,1>-Wet low cut (Hz, 20 = off)
@@ -129,7 +129,7 @@ function update() (
   dspd = slider16 * dm_s;
   out_t = 10 ^ (slider17 / 20);
   in_setup(slider24, slider25);
-  ost_setup(slider18 / 100, slider19 / 100, slider20, slider21, slider22, slider23);
+  ost_setup(slider18 / 100, slider19 / 100, slider20, slider21, slider22, 0);   // output stage: straight through
   lfoL.lfo_setup(shape, 0.2);
   lfoR.lfo_setup(shape, 0.2);
   lpc = 1 - exp(-2 * $pi * min(mode == 0 ? 6500 : 15000, srate * 0.45) / srate);   // PEDAL: the BBD's darker loop
@@ -268,7 +268,7 @@ oL = wl_on ? xL + mix_s * (WLL.wlc(lpL * fbc) - WDL.wlc(xL)) : (1 - mix_s) * xL 
 oR = wl_on ? xR + mix_s * (WLR.wlc(lpR * fbc) - WDR.wlc(xR)) : (1 - mix_s) * xR + mix_s * lpR * fbc;   // LOW CUT: the lows stay dry at full level
 wp = (wp + 1) & tmask;
 
-// output stage: band saturation -> output gain -> clipper / limiter
+// output stage: band saturation -> output gain (no clip: straight through)
 oL = ostL.ost_band(oL) * in_comp * out_s;
 oR = ostR.ost_band(oR) * in_comp * out_s;
 ost_out(oL, oR);

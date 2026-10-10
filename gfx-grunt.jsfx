@@ -9,7 +9,7 @@ desc:GFX Grunt [drive]
 //
 // Signal path: input (trim + guard) -> 140Hz low-shelf bypass splits off the sub-140Hz band ->
 // boost / gain drive -> soft pre-clip -> grunt waveshaping (cubic warmth) -> low band rejoins ->
-// band saturation / tone -> dynamic 330Hz dip -> stereo-linked clipper / limiter -> master.
+// band saturation / tone -> dynamic 330Hz dip -> stereo-linked clipper -> master.
 //   GAIN   - drive into the stage. The higher it goes, the more of the
 //            sub-140Hz content is routed around the gain/grunt stage untouched (tighter low end).
 //   BOOST  - smaller amp knob (gold pointer): extra drive on top of GAIN, plus an asymmetric warmth bias
@@ -18,7 +18,7 @@ desc:GFX Grunt [drive]
 //   SAG    - output-stage saturation bias
 //   SQUASH - output-stage band saturation amount
 //   MASTER - output level
-//   Out stage: Off, Clip (soft, zero latency) or Limit (lookahead, PDC reported)
+//   Out stage: a soft clip, always on (zero latency)
 
 import gfx-input.jsfx-inc
 import gfx-output.jsfx-inc
@@ -32,7 +32,7 @@ slider3:0.5<0,1,0.01>-Grunt
 slider4:0.2<0,1,0.01>-Sag
 slider5:0.5<0,1,0.01>-Squash
 slider6:0<-24,12,0.1>-Master (dB)
-slider7:1<0,2,1{Off,Clip,Limit}>-Out stage
+slider7:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -75,11 +75,15 @@ function svf_bp(x) instance(ic1eq, ic2eq, g, k, a1, a2, a3) local(v1, v2, v3) (
 
 function update() (
   in_setup(slider1, 1);
-  ost_setup(slider5, slider4, 90, 7500, 0, slider7);
+  ost_setup(gk_qb, gk_sb, 90, 7500, 0, 1);   // SQUASH / SAG glide per block; output stage: CLIP, always on
   lpL140.lp140_set(140); lpR140.lp140_set(140);
   nL.svf_set(330, 0.9); nR.svf_set(330, 0.9);
 );
 
+// knob glides (30 ms), so presets and jumps don't step
+gk_sm = 1 - exp(-1 / (0.03 * srate));
+gk_g = slider1; gk_b = slider2; gk_t = slider3; gk_s = slider4; gk_m = 10 ^ (slider6 / 20);
+gk_qb = slider5; gk_sb = slider4;
 update();
 
 // amp knob + a big label underneath that shows the value while touched (house style)
@@ -104,6 +108,8 @@ function gx_box(x, title) local(tw, th) (
 update();
 
 @block
+gk_bk = 1 - exp(-samplesblock / (0.03 * srate));
+gk_qb += (slider5 - gk_qb) * gk_bk; gk_sb += (slider4 - gk_sb) * gk_bk;
 update();
 
 @serialize
@@ -113,6 +119,8 @@ file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older project
 
 @sample
 in_process(spl0, spl1);
+gk_g += (slider1 - gk_g) * gk_sm; gk_b += (slider2 - gk_b) * gk_sm; gk_t += (slider3 - gk_t) * gk_sm;
+gk_s += (slider4 - gk_s) * gk_sm; gk_m += (10 ^ (slider6 / 20) - gk_m) * gk_sm;
 
 // --- Core Grunt Amp Sim DSP Engine (true stereo) ---
 // Low-shelf pass-through at 140Hz: as GAIN is pushed up, an increasing fraction of the sub-140Hz
@@ -120,7 +128,7 @@ in_process(spl0, spl1);
 // so the low end stays tight and un-fuzzed under heavy drive instead of turning to mush.
 low_l = lpL140.lp140_run(in_l); low_r = lpR140.lp140_run(in_r);
 high_l = in_l - low_l; high_r = in_r - low_r;
-gain_n = (slider1 + 24) / 36;                    // 0 at -24dB .. 1 at +12dB
+gain_n = (gk_g + 24) / 36;                    // 0 at -24dB .. 1 at +12dB
 lowshelf_bypass = gain_n * gain_n * 0.85;        // up to 85% of the low band skips the gain module at max GAIN
 dry_low_l = low_l * lowshelf_bypass; dry_low_r = low_r * lowshelf_bypass;
 
@@ -128,26 +136,26 @@ sig_l = high_l + low_l * (1 - lowshelf_bypass);
 sig_r = high_r + low_r * (1 - lowshelf_bypass);
 
 // Boost & Gain stage - BOOST (0-100%) adds extra drive on top of GAIN
-boost_amt = slider2 / 100;
-drive = 1 + (slider1 + 24) / 36 * 3 + boost_amt * 4;
+boost_amt = gk_b / 100;
+drive = 1 + (gk_g + 24) / 36 * 3 + boost_amt * 4;
 sig_l *= drive;
 sig_r *= drive;
 
 // Soft pre-clip: with GAIN and BOOST both driven hard, "drive" above can reach 8x (+18 dB).
 // Taming it here with a tanh soft-knee keeps the cubic/even-harmonic terms below from
 // exploding into huge, DC-shifted peaks that blow straight past the output stage (even in
-// Clip/Limit mode) and can trigger a DAW's protective mute on the master bus.
+// with CLIP always on) and can trigger a DAW's protective mute on the master bus.
 sig_l = ost_tanh(sig_l);
 sig_r = ost_tanh(sig_r);
 
 // Grunt character waveshaping, with BOOST also adding an asymmetric (even-harmonic) warmth bias
-grunt_amt = slider3;
+grunt_amt = gk_t;
 grunt_bias = boost_amt * 0.15;
 sig_l = sig_l + grunt_amt * 0.4 * (sig_l * sig_l * sig_l) + grunt_bias * (sig_l * sig_l);
 sig_r = sig_r + grunt_amt * 0.4 * (sig_r * sig_r * sig_r) + grunt_bias * (sig_r * sig_r);
 
 // Re-introduce the untouched low end that skipped the gain/grunt stage above; it still goes
-// through the output stage (squash/sag + clipper/limiter) and master gain like everything else.
+// through the output stage (squash/sag + clipper) and master gain like everything else.
 sig_l += dry_low_l;
 sig_r += dry_low_r;
 
@@ -157,15 +165,15 @@ sig_r = ostR.ost_band(sig_r);
 
 // Dynamic 330Hz dip: Grunt and Sag both pile up midrange harmonic energy, so the more they're
 // driven the more gain is pulled out at 330Hz to stop the amp sounding boxy/congested.
-notch_amt = min((slider3 + slider4) * 0.5, 1);     // 0-1, from Grunt + Sag
+notch_amt = min((gk_t + gk_s) * 0.5, 1);     // 0-1, from Grunt + Sag
 notch_coeff = notch_amt * 0.5;                     // ~ -6 dB max cut at 330Hz when both are maxed
 sig_l -= notch_coeff * nL.svf_bp(sig_l);
 sig_r -= notch_coeff * nR.svf_bp(sig_r);
 
-// Stereo-linked output limiter / clipper stage
+// Output clipper stage
 ost_out(sig_l, sig_r);
 
-master_g = 10 ^ (slider6 / 20);
+master_g = gk_m;
 spl0 = ost_l * master_g;
 spl1 = ost_r * master_g;
 

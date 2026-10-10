@@ -57,8 +57,8 @@ slider21:0<0,100,1>-Band sat (%)
 slider22:30<0,100,1>-Bias (%)
 slider23:120<40,400,1>-Sat low band (Hz)
 slider24:6000<2000,16000,10>-Sat high band (Hz)
-slider25:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider26:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider25:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider26:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -122,7 +122,7 @@ function update() (
   hp_on ? ( hpL.bq_set(1, slider16, 0.707, 0); hpR.bq_set(1, slider16, 0.707, 0); );
   lnk = slider17; mix_t = slider18 / 100;
   in_setup(0, slider20);
-  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------

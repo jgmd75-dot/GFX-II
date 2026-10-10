@@ -1,8 +1,8 @@
-desc:GFX Console Q [dynamics + EQ]
+desc:GFX OB Q [dynamics + EQ]
 //tags: compressor limiter gate expander vca broadcast console transformer
 //author: JGWizrad / Garden FX (GFX)
 //
-// Console Q: GFX Console with a four-band console channel EQ (the Board EQ engine) added below.
+// OB Q: broadcast-desk dynamics with a four-band console channel EQ (the Board EQ engine) added below.
 // ORDER puts the EQ after the dynamics or in front of them. EQ: HPF / LPF, LF and HF (shelf or BELL), LMF and HMF with Q,
 // BROWN / BLACK voicing, IN.
 //
@@ -52,8 +52,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider24:20<20,400,1>-EQ: HPF (Hz, 20 = off)
 slider25:22000<3000,22000,10>-EQ: LPF (Hz, 22000 = off)
 slider26:0<-15,15,0.1>-EQ: LF gain (dB)
@@ -80,7 +80,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-console-q";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-ob-q";                                       // the ? pop-up links to this manual
 
 // one channel's detectors + gains (dB domain)
 function ch_det(x) instance(ms, gms) (
@@ -125,7 +125,7 @@ function update() (
   g_on = slider8; gthr = slider9; grange = slider10; grel_c = dy_ms(slider11); gmode = slider12;
   xfm = slider13; lnk = slider14; mix_t = slider15 / 100;
   in_setup(0, slider17);
-  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------
@@ -173,7 +173,7 @@ mix_s = mix_t;
 // ================= EQ (the Board EQ engine, names q_..., sliders 24 - 41) =================
 // a preset mask of the EQ unit, one slider at a time
 function cb_auto(m, off) local(k) ( k = 1; loop(63, m - 2 * floor(m / 2) ? ui_auto(k + off); m = floor(m / 2); k += 1; ); );
-#ui_man = "gfx-console-q";                                  // the ? pop-up links to this manual
+#ui_man = "gfx-ob-q";                                       // the ? pop-up links to this manual
 
 function th(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
 // one-pole high-pass (the third pole of the 18 dB HPF)
@@ -182,20 +182,21 @@ function q_hp1set(f) local(k) ( k = tan($pi * min(f, srate * 0.45) / srate); q_h
 function q_hp1db(f) local(w, q_wc) ( q_wc = slider24; w = f / q_wc; 10 * log10(w * w / (1 + w * w)); );
 
 // one channel's chain
-function q_chain(x) instance() (
+function q_chain(x) instance() local(y) (
   q_hp_on ? x = this.h1.q_hp1(this.h2.bq_run(x));
   q_eq_on ? (
     x = this.lf.bq_run(x); q_lfx ? x = this.lx.bq_run(x);
     x = this.lm.bq_run(x); x = this.hm.bq_run(x);
     x = this.hf.bq_run(x); q_hfx ? x = this.hx.bq_run(x);
   );
-  q_lp_on ? x = this.lp.bq_run(x);
+  y = this.lp.bq_run(x);                     // the LPF always runs (primed) and is faded in / out, never switched
+  q_bd_lpw >= 1 ? x = y : q_bd_lpw > 0 ? x += (y - x) * q_bd_lpw;
   x;
 );
 
 function q_setch() instance() local(q) (
   q_hp_on ? this.h2.bq_set(1, slider24, 1, 0);
-  q_lp_on ? this.lp.bq_set(0, slider25, 0.707, 0);
+  this.lp.bq_set(0, q_bd_lpf, 0.707, 0);     // q_bd_lpf: the LPF frequency, glided in q_proc
   // proportional Q on the black card
   this.lf.bq_set(slider28 ? 2 : 4, slider27, slider28 ? (q_blk ? 0.6 + abs(slider26) / 15 * 0.9 : 0.55) : (q_blk ? 1.15 : 0.6), slider26);
   this.lm.bq_set(2, slider30, slider31 * (q_blk ? 0.6 + abs(slider29) / 15 * 1.2 : 0.7), slider29);
@@ -247,10 +248,16 @@ function q_load_preset(p) (
   
  q_RSP = 30000;
 q_PNL = 0xB4B8BA; q_PRT = 0x1C1E21; q_SCR = 0x121517; q_CRED = 0xC8322A; q_CGRN = 0x2E8A4A; q_CBLU = 0x2C5FA8; q_CBRN = 0x6A4A32; q_CGRY = 0xE4E4E0; q_CBLK = 0x26272A; q_SLB = 0x3BA9E0; SDB = 0x34349A; q_SRD = 0xE0262B;
+q_bd_lpf = min(slider25, srate * 0.45); q_bd_lpk = 1 - exp(-16 / (0.02 * srate)); q_bd_lpn = 0;   // LPF glide (~20 ms)
 q_update();
+q_bd_lpw = q_lp_on; q_bd_lpxs = 1 / (0.02 * srate);   // LPF on / off fade: 20 ms
 
 
 function q_proc(cb_inl, cb_inr) (
+  q_bd_lpw = q_lp_on ? min(q_bd_lpw + q_bd_lpxs, 1) : max(q_bd_lpw - q_bd_lpxs, 0);
+  q_bd_lpt = min(slider25, srate * 0.45);
+  q_bd_lpf != q_bd_lpt ? ( (q_bd_lpn += 1) >= 16 ? ( q_bd_lpn = 0; q_bd_lpf *= (q_bd_lpt / q_bd_lpf) ^ q_bd_lpk; abs(q_bd_lpf - q_bd_lpt) < 0.0005 * q_bd_lpt ? q_bd_lpf = q_bd_lpt;
+    q_CL.lp.bq_set(0, q_bd_lpf, 0.707, 0); q_CR.lp.bq_set(0, q_bd_lpf, 0.707, 0); ); );
   q_xl = q_CL.q_chain(cb_inl); q_xr = q_CR.q_chain(cb_inr);
   q_drv > 0.001 ? (
     q_xl = (th(q_dk * q_xl + q_dbias) - q_dtb) / (q_dk * (1 - q_dtb * q_dtb));
@@ -331,7 +338,7 @@ ui_col(0x0B0B0C); gfx_rect(0, 0, gfx_w, gfx_h);
 pk_chassis(8 * sc, 4 * sc, 884 * sc, fh * sc, PNL);
 ui_col(ORG); gfx_circle(40 * sc, 34 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
-gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKC); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("CONSOLE Q");
+gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(INKC); gfx_x = 62 * sc; gfx_y = 20 * sc; gfx_drawstr("OB Q");
 gfx_setfont(4); ui_col(YEL); gfx_x = 238 * sc; gfx_y = 30 * sc; gfx_drawstr("BROADCAST DESK DYNAMICS");
 pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
 k_ = pk_preset(540 * sc, 15 * sc, 276 * sc, 34 * sc, pr_cur, "Desk Glue|Presenter Voice|Tight Drums (gated)|Kick / Snare Gate|Parallel Squash|Transmitter Limit|Acoustic Clean-up|Bass DI|Transformer Only|Gentle Programme Bus");
@@ -386,7 +393,7 @@ sprintf(#v, "GR %.1f", grd); dy_lbl(858, 278, #v, 0.8);
 
 // ================= the EQ strip =================
 ui_swu(slider42 ? 72 - 348 : 0);
-// (Console's colours) a section box with a brown title strip, the four bands and filters of the Board EQ
+// (OB Q's colours) a section box with a brown title strip, the four bands and filters of the Board EQ
 ui_col(0x232325); gfx_rect(18 * sc, 348 * sc, 864 * sc, 132 * sc);
 ui_col(BRN); gfx_rect(18 * sc, 348 * sc, 864 * sc, 24 * sc);
 ui_col(YEL); gfx_rect(18 * sc, 372 * sc, 864 * sc, 2 * sc);

@@ -69,8 +69,8 @@ slider32:0<0,100,1>-Band sat (%)
 slider33:30<0,100,1>-Bias (%)
 slider34:120<40,400,1>-Sat low band (Hz)
 slider35:6000<2000,16000,10>-Sat high band (Hz)
-slider36:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider37:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider36:-0.3<-24,0,0.1>-Ceiling (dB)
+slider37:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:track 1 L
 in_pin:track 1 R
@@ -167,13 +167,14 @@ function update() local(i, a, any) (
     PL[i] = min(1, 2 * (1 - a)); PR[i] = min(1, 2 * a);
     i += 1;
   );
-  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, 1);   // output stage: CLIP, always on
 );
 
 // ---------- presets (track levels, pans, mutes and solos are left alone) ----------
 // model, nr, drive, wow, hiss, age
 function pp(m, n, d, w, h, a) ( slider1 = m; slider2 = n; slider3 = d; slider4 = w; slider5 = h; slider6 = a; );
 function load_preset(p) (
+  c4_dst = 1;                                // duck the output, swap the settings at silence, fade back in
   p == 1 ? pp(0, 1, 0, 30, 50, 10) :       // Bedroom Demo (15)
   p == 2 ? pp(0, 1, 6, 45, 60, 30) :       // Hot and Woolly (15)
   p == 3 ? pp(0, 0, 3, 60, 100, 50) :      // No NR, Old Tape (15)
@@ -200,13 +201,14 @@ wpos = 0; drop_g = 1; drop_t = 1;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
 update();
 i = 0; loop(4, TG[i] = TGT[i]; i += 1; );
+c4_dkr = 1 / (0.012 * srate); c4_dk = 1; c4_dst = 0;   // preset duck: 12 ms out, hold through the tape delay, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+c4_dst != 1 ? update();                      // during a preset duck the swap applies the new settings
 
 @block
-update();
+c4_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
@@ -214,6 +216,10 @@ gn = 0; loop(4, file_avail(0) != 0 ? file_string(0, UI_NM + gn); gn += 1; );   /
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+// preset duck-and-swap: model, noise reduction, drive and wow change in silence; stay silent while the tape
+// delay and the NR envelopes catch up with the new settings
+c4_dst == 1 ? ( c4_dk -= c4_dkr; c4_dk <= 0 ? ( c4_dk = 0; update(); c4_hc = floor(0.008 * srate); c4_dst = 2; ); ) :
+c4_dst == 2 ? ( c4_hc > 0 ? c4_hc -= 1 : ( c4_dk += c4_dkr; c4_dk >= 1 ? ( c4_dk = 1; c4_dst = 0; ); ); );
 // ---------- transport: wow (0.6 Hz + a slow wander) and flutter (6 Hz), one for all tracks ----------
 wph += 0.6 / srate; wph -= floor(wph);
 fph += 6.2 / srate; fph -= floor(fph);
@@ -237,6 +243,7 @@ wpos = (wpos + 1) & BMSK;
 ml = e0l.eq(t0l) * TG[0] * PL[0] + e1l.eq(t1l) * TG[1] * PL[1] + e2l.eq(t2l) * TG[2] * PL[2] + e3l.eq(t3l) * TG[3] * PL[3];
 mr = e0r.eq(t0r) * TG[0] * PR[0] + e1r.eq(t1r) * TG[1] * PR[1] + e2r.eq(t2r) * TG[2] * PR[2] + e3r.eq(t3r) * TG[3] * PR[3];
 ml *= mst; mr *= mst;
+c4_dst ? ( c4_dkg = c4_dk * c4_dk * (3 - 2 * c4_dk); ml *= c4_dkg; mr *= c4_dkg; );
 ml = ostL.ost_band(ml); mr = ostR.ost_band(mr);
 ost_out(ml, mr);
 spl0 = ost_l; spl1 = ost_r;

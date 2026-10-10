@@ -17,7 +17,7 @@ desc:GFX Desert Ten [practice amp]
 // The amp runs in mono (as a real amp) at twice the sample rate; both outputs carry it.
 // DRIFT: the clipping diodes' balance wanders slightly. The DRIFT dial scales it (50% = the drift amount / speed
 // settings, 100% = twice, 0 = none).
-// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIM) along the bottom of the combo.
+// IN / OUT: TRIM (with the GUARD key), SAT (the output soft clip is always on) along the bottom of the combo.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -49,8 +49,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-Ceiling (dB)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 // DRIFT dial: scales how far the clipping diodes' balance and the power amp's bias wander, and how fast
 slider22:50<0,100,1>-Drift (%)
 
@@ -101,7 +101,7 @@ function update() local(fs2) (
   drift_macro(slider22);
   drift = slider14 / 100 * dm_a; dspd = slider15 * dm_s;
   in_setup(slider12, slider13);
-  ins_output_setup(16);
+  ins_output_setup(16);   // output stage: CLIP, always on
 );
 
 up.am_aa(); dn.am_aa();

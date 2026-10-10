@@ -14,8 +14,8 @@ desc:GFX Strip 102 [channel strip]
 //   PAN        - constant-power pan (a balance on stereo tracks: the centre stays at unity).
 //   LEVEL      - channel level, -40 dB (off) to +10 dB.
 //   PEAK       - lights 3 dB below clipping, after the EQ.
-// Chain: GAIN -> preamp -> HPF -> COMP -> EQ -> LEVEL -> GFX output stage (band sat) -> PAN -> clip / limit.
-// The GFX output stage (band saturation, ceiling, OFF / CLIP / LIMIT) has no panel controls: set it from the parameter list.
+// Chain: GAIN -> preamp -> HPF -> COMP -> EQ -> LEVEL -> GFX output stage (band sat) -> PAN.
+// The GFX band saturation has no panel controls: set it from the parameter list.
 //
 // DRIFT (50% = standard): the supply voltage wanders, so the preamp's headroom and gain move slowly, and
 // the preamp's saturation (its amount and its evenness) wanders too. 0% = steady, 100% = twice the standard amount.
@@ -43,8 +43,8 @@ slider11:0<0,100,1>-Band sat (%)
 slider12:30<0,100,1>-Bias (%)
 slider13:120<40,400,1>-Sat low band (Hz)
 slider14:6000<2000,16000,10>-Sat high band (Hz)
-slider15:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider15:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider16:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -162,7 +162,7 @@ vS = drS.drift_tick(0.10 * dm_s * samplesblock / srate);
 s2_hv = 1.3 * (1 + 0.05 * dm_a * vV);
 s2_gv = 1 + 0.035 * dm_a * vV;
 s2_kp = 2.6 - 0.35 * dm_a * vS; s2_kn = 3.0 + 0.35 * dm_a * vS;
-ost_setup(slider11 / 100, slider12 / 100, slider13, slider14, slider15, floor(slider16 + 0.5));
+ost_setup(slider11 / 100, slider12 / 100, slider13, slider14, slider15, 0);   // output stage: straight through
 
 @sample
 // GAIN and the preamp (DRIFT moves its headroom, gain and saturation)
@@ -189,7 +189,7 @@ s2_l = hiL.bq_run(miL.bq_run(loL.bq_run(s2_l)));
 s2_r = hiR.bq_run(miR.bq_run(loR.bq_run(s2_r)));
 s2_pk = max(s2_pk, max(abs(s2_l), abs(s2_r)));
 
-// LEVEL, the output stage's band saturation, PAN, then clip / limit
+// LEVEL, the output stage's band saturation, PAN
 s2_l = ostL.ost_band(s2_l * s2_lev); s2_r = ostR.ost_band(s2_r * s2_lev);
 ost_out(s2_l * s2_pl, s2_r * s2_pr);
 spl0 = ost_l; spl1 = ost_r;

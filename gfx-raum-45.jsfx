@@ -25,7 +25,7 @@ desc:GFX Raum 45 [chorus]
 //      k = 0.9 x WIDTH (100 % = the hardware's matrix); WIDTH 0 = no cross-feed (each side its own chorus line).
 //      The wet part of each side then passes a 2-pole 110 Hz low cut, so each side's low end stays dry and steady.
 //   -> MIX (100 % = the hardware's fixed blend, 0 = dry) -> level trim -> OUTPUT -> the house output stage
-//      (band SAT, OFF / CLIP / LIMIT). MONO SUM (the SUM key) folds the output to mono to check the collapse.
+//      (band SAT, soft clip always on). MONO SUM (the SUM key) folds the output to mono to check the collapse.
 //
 // THE FOUR BUTTONS (each a fixed rate / depth pairing, 1 subtlest ... 4 strongest; approximations of the hardware):
 //   1  0.25 Hz  +/-0.35 ms      2  0.25 Hz  +/-0.65 ms      3  0.25 Hz  +/-1.00 ms      4  0.50 Hz  +/-1.35 ms
@@ -64,8 +64,8 @@ slider10:0<0,100,1>-Band sat (%)
 slider11:30<0,100,1>-Bias (%)
 slider12:120<40,400,1>-Sat low band (Hz)
 slider13:6000<2000,16000,10>-Sat high band (Hz)
-slider14:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider15:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider14:-0.3<-24,0,0.1>-Ceiling (dB)
+slider15:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider16:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
@@ -161,7 +161,7 @@ function update() (
   rz_ot = 10 ^ (slider7 / 20);
   rz_sumt = slider8 > 0.5;
   rz_hs = slider6 / 100 * 0.00007;                      // BBD hiss (uniform noise, filtered: about -103 dBFS rms at 50 %)
-  ost_setup(slider10 / 100, slider11 / 100, slider12, slider13, slider14, slider15);
+  ost_setup(slider10 / 100, slider11 / 100, slider12, slider13, slider14, 1);   // output stage: CLIP, always on
 );
 
 // ---------- presets (the theme and the output stage are left alone) ----------
@@ -281,7 +281,7 @@ rz_or = (rz_r0 + rz_g * hwR.rz_hp(rz_b - rz_k * rz_a)) * rz_cmp;
 rz_mm = 0.5 * (rz_ol + rz_or);
 rz_ol += (rz_mm - rz_ol) * rz_sum; rz_or += (rz_mm - rz_or) * rz_sum;
 
-// ---------- output stage: band saturation -> OUTPUT -> clipper / limiter ----------
+// ---------- output stage: band saturation -> OUTPUT -> clipper ----------
 rz_ol = ostL.ost_band(rz_ol) * rz_o;
 rz_or = ostR.ost_band(rz_or) * rz_o;
 ost_out(rz_ol, rz_or);
@@ -602,24 +602,13 @@ gfx_setfont(11); ui_col(RQI2);
 rq_ctxt(547, 182, "L = D + A - kB"); rq_ctxt(547, 197, "R = D + B - kA");
 
 // =====================================================================
-// OUTPUT section: OUTPUT, SAT, OFF / CLIP / LIMIT, MONO SUM
+// OUTPUT section: OUTPUT, SAT, MONO SUM
 // =====================================================================
 rq_sect(620, 64, 130, 144, RQF, rq_de ? "AUSGANG" : "OUTPUT");
 sprintf(#rqv, "%+.1f dB", slider7); rq_kn(656, 108, 13, 7, -24, 12, 0, 1, 0x9DA2A8, rq_de ? "AUSGANG" : "OUTPUT", #rqv);
 sprintf(#rqv, "%.0f%%", slider10); rq_kn(656, 168, 11, 10, 0, 100, 0, 1, 0xD8B040, rq_de ? "SÄTT." : "SAT", #rqv);
-// the house output stage keys (OFF / CLIP / LIMIT), captions in the panel's language
-ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-gfx_setfont(8, "Trebuchet MS", ui_fs4 * ui_okfs, 'b');
-rq_i = 0;
-loop(3,
-  rq_c = rq_i == 0 ? 0x3A9CFF : rq_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  ui_okey(688, 84 + rq_i * 19, 54, 15, (slider15 | 0) == rq_i || (rq_i == 1 && ui_okclp > 0.1), rq_c) ? ( slider15 = rq_i; ui_auto(15); );
-  gfx_setfont(8); ui_col(0x141414);
-  ui_keytext(715 * sc, (91.5 + rq_i * 19) * sc, rq_i == 0 ? (rq_de ? "AUS" : "OFF") : rq_i == 1 ? "CLIP" : (rq_de ? "BEGR." : "LIMIT"));
-  rq_i += 1;
-);
-rq_key(688, 152, 54, 22, rq_de ? "SUMME" : "SUM", slider8 >= 0.5) ? ( slider8 = slider8 >= 0.5 ? 0 : 1; ui_auto(8); );
-gfx_setfont(11); ui_col(RQI2); rq_ctxt(715, 186, "MONO");
+rq_key(688, 120, 54, 22, rq_de ? "SUMME" : "SUM", slider8 >= 0.5) ? ( slider8 = slider8 >= 0.5 ? 0 : 1; ui_auto(8); );
+gfx_setfont(11); ui_col(RQI2); rq_ctxt(715, 154, "MONO");
 dy_kst = 7; dy_nov = 0;
 
 // =====================================================================

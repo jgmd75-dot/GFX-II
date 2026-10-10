@@ -16,7 +16,7 @@ desc:GFX Smooth [opto comp]
 // The detector ignores the deep lows (no bass pumping) and the gain is applied evenly across the spectrum,
 // so the top end - the "air" - stays intact. A gentle valve-style colour stage follows the compressor.
 // DRIFT: the colour stage's drive and asymmetry wander slowly, independently on each side.
-// The oxblood strip below holds DRIFT (one dial: 50% = the drift settings) and IN / OUT (TRIM + GUARD, SAT, OUT stage).
+// The oxblood strip below holds DRIFT (one dial: 50% = the drift settings) and IN / OUT (TRIM + GUARD, SAT).
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -42,8 +42,8 @@ slider11:0<0,100,1>-Band sat (%)
 slider12:30<0,100,1>-Bias (%)
 slider13:120<40,400,1>-Sat low band (Hz)
 slider14:6000<2000,16000,10>-Sat high band (Hz)
-slider15:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider15:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider16:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider17:50<0,100,1>-Drift (%)
 
 in_pin:left input
@@ -91,7 +91,7 @@ function update() (
   drift_macro(slider17);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
   drift = slider9 / 100 * dm_a; dspd = slider10 * dm_s;
   in_setup(slider7, slider8);
-  ins_output_setup(11);
+  ins_output_straight(11);   // output stage: straight through
 );
 
 scL.hp_set(80); scR.hp_set(80);
@@ -202,7 +202,7 @@ function sm_face(T, i_comp, i_out, i_att, i_rel, i_lim, i_blend, grdb, lvl, on)
 );
 
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
-// ---------- one blue unit: DRIFT + INPUT TRIM | COMPRESS + BLEND | GR meter, ATTACK / LIMIT / RELEASE | OUTPUT | SAT + OUT ----------
+// ---------- one blue unit: DRIFT + INPUT TRIM | COMPRESS + BLEND | GR meter, ATTACK / LIMIT / RELEASE | OUTPUT | SAT ----------
 T = 8;
 sm_face(T, 1, 2, 3, 4, 5, 6, grdisp, mpk, 1); grdisp = 0; mpk = 0;
 ui_size_picker(600 * sc, (T + 11) * sc);
@@ -210,8 +210,7 @@ dy_ink = HS_INK; dy_bg = HS_BLU; dy_kst = 20; dy_nov = 1;
 sprintf(#dv, "%.0f%%", slider17); dy_knob(60, T + 74, 13, 17, 0, 100, 50, 0, HS_SLV, "DRIFT", #dv);
 sprintf(#dv, "%+.1f dB", slider7); dy_knob(60, T + 138, 13, 7, -24, 12, 0, 0, 0x2A2A2E, "IN TRIM", #dv);
 ui_guardclick(1600 + 7, 8, 60, T + 138, 22);   // click IN TRIM for GUARD
-sprintf(#dv, "%.0f%%", slider11); dy_knob(706, T + 74, 13, 11, 0, 100, 0, 0, 0xD8B040, "SAT", #dv);
-ui_outkeys(682, T + 116, 48, 12, 3, 16);
+sprintf(#dv, "%.0f%%", slider11); dy_knob(706, T + 106, 13, 11, 0, 100, 0, 0, 0xD8B040, "SAT", #dv);
 dy_nov = 0; dy_kst = 7;
 
 pk_end();

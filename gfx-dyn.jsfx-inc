@@ -1,7 +1,7 @@
 desc:GFX dynamics parts (include)
 //author: JGWizrad / Garden FX (GFX)
 //
-// Shared by the GFX hardware-style compressors and EQs (Duplex, Thrust, Console, VB30, Board EQ, Graphic EQ, Tilt EQ). Import after gfx-ui and gfx-panel.
+// Shared by the GFX hardware-style compressors and EQs (Duplex Q, Heft, OB Q, VB30, Board EQ, Graphic EQ, Tilt EQ). Import after gfx-ui and gfx-panel.
 //
 // DSP
 //   bq_set(type, f, q, gdb) / bq_run(x)     biquad (0 low-pass, 1 high-pass, 2 peak, 3 high shelf, 4 low shelf, 5 band-pass)

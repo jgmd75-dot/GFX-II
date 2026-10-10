@@ -22,7 +22,7 @@ desc:GFX Compressor Q [comp + EQ]
 // MIX in MASTER = parallel compression.
 // DRIFT: threshold and timing breathe slightly, the EQ bands wander. The DRIFT dial scales the compressor and EQ
 // drift amounts (50% = the settings below, 100% = twice, 0 = none) and speeds the wander up with them.
-// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIMIT) on the panel.
+// IN / OUT: TRIM (with the GUARD key) and SAT on the panel.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -53,8 +53,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:0<-24,12,0.1>-Input trim (dB)
 slider23:1<0,1,1{Off,On}>-Input guard
 slider24:1<0,1,1{Split,SC HPF}>-Frequency mode
@@ -172,7 +172,7 @@ function update() (
   voice == 2 ? ( att_auto = 15; rel_span = 1400; kn = max(knee, 10); ) :
                ( att_auto = 10; rel_span = 1500; kn = max(knee, 12); );
   in_setup(slider22, slider23);
-  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, slider21);
+  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, 0);   // output stage: straight through
 );
 
 // ---------- presets (leave Drift speed, Output and the I/O rows alone) ----------
@@ -284,6 +284,12 @@ function q_gain_text(q_gs) local(q_ge) (
   #gt;
 );
 
+// high cut sections at the glided frequency q_hc_f (follows slider45 in @sample)
+function q_hc_coef() (
+  lp1.q_svf_set(q_hc_f, 0, q_bw_q(q_lpn, 0), 4); lp2.q_svf_set(q_hc_f, 0, q_bw_q(q_lpn, 1), 4);
+  q_lp3.q_svf_set(q_hc_f, 0, q_bw_q(q_lpn, 2), 4); q_lp4.q_svf_set(q_hc_f, 0, q_bw_q(q_lpn, 3), 4);
+);
+
 // ---------- parameters ----------
 function q_update() (
   ms = slider25;
@@ -293,8 +299,7 @@ function q_update() (
   q_hpn = slider50 + 1; q_lpn = slider51 + 1;
   q_hp1.q_svf_set(slider44, 0, q_bw_q(q_hpn, 0), 3); q_hp2.q_svf_set(slider44, 0, q_bw_q(q_hpn, 1), 3);
   q_hp3.q_svf_set(slider44, 0, q_bw_q(q_hpn, 2), 3); q_hp4.q_svf_set(slider44, 0, q_bw_q(q_hpn, 3), 3);
-  lp1.q_svf_set(slider45, 0, q_bw_q(q_lpn, 0), 4); lp2.q_svf_set(slider45, 0, q_bw_q(q_lpn, 1), 4);
-  q_lp3.q_svf_set(slider45, 0, q_bw_q(q_lpn, 2), 4); q_lp4.q_svf_set(slider45, 0, q_bw_q(q_lpn, 3), 4);
+  q_hc_coef();
   drift_macro(slider53);
   q_fdr = slider46 / 100 * dm_a; q_gdr = q_fdr; q_dspd = slider48 * dm_s;      // one AMOUNT moves frequencies and gains together
   q_out_t = 10 ^ (slider49 / 20);
@@ -302,14 +307,17 @@ function q_update() (
   
 );
 
+// hi-mid band from its smoothed gain (q_hm_s glides to slider36 in q_proc)
+function q_hm_coef() local(g) ( g = q_eff_gain(q_hm_s) * q_hm_gm; c2.q_svf_set(q_hm_f, g, q_bell_q(slider37, g), 0); );
+
 // band coefficients with drift (called once per block)
 function q_band_coefs(q_dinc) local(v, f, g) (
   v = q_dF0.drift_tick(q_dinc); f = slider26  * 2 ^ (q_fdr * 0.5 * v); v = q_dG0.drift_tick(q_dinc); g = q_eff_gain(slider27)  * (1 + q_gdr * 0.3 * v);
   q_c0.q_svf_set(f, g, q_sh0 ? q_shelf_q(slider28) : q_bell_q(slider28, g), q_sh0);
   v = q_dF1.drift_tick(q_dinc); f = slider31  * 2 ^ (q_fdr * 0.5 * v); v = q_dG1.drift_tick(q_dinc); g = q_eff_gain(slider32)  * (1 + q_gdr * 0.3 * v);
   c1.q_svf_set(f, g, q_bell_q(slider33, g), 0);
-  v = q_dF2.drift_tick(q_dinc); f = slider35 * 2 ^ (q_fdr * 0.5 * v); v = q_dG2.drift_tick(q_dinc); g = q_eff_gain(slider36) * (1 + q_gdr * 0.3 * v);
-  c2.q_svf_set(f, g, q_bell_q(slider37, g), 0);
+  v = q_dF2.drift_tick(q_dinc); q_hm_f = slider35 * 2 ^ (q_fdr * 0.5 * v); v = q_dG2.drift_tick(q_dinc); q_hm_gm = 1 + q_gdr * 0.3 * v;
+  q_hm_coef();
   v = q_dF3.drift_tick(q_dinc); f = slider39 * 2 ^ (q_fdr * 0.5 * v); v = q_dG3.drift_tick(q_dinc); g = q_eff_gain(slider40) * (1 + q_gdr * 0.3 * v);
   c3.q_svf_set(f, g, q_sh3 ? q_shelf_q(slider41) : q_bell_q(slider41, g), q_sh3);
 );
@@ -404,7 +412,10 @@ q_dF3.drift_init(0.8 + rand(0.5)); q_dG3.drift_init(0.8 + rand(0.5));
 q_pkL = 0; q_pkR = 0; q_vu_ms = 0;
    // defaults for new instances: Petrol, hardware (saved projects keep their own)
 
+q_hc_f = min(slider45, srate * 0.45); q_hc_n = 0;   // high cut frequency glide (~20 ms)
 q_update();
+q_hm_s = slider36; q_hm_k = 1 - exp(-16 / (0.02 * srate)); q_hm_n = 0;   // hi-mid gain glide (~20 ms, coefficients every 16 samples)
+q_hcw = q_lp_on; q_hcxs = 1 / (0.02 * srate);                              // high cut fades in / out over 20 ms
 q_band_coefs(0);
 q_out_s = q_out_t;
 
@@ -423,12 +434,19 @@ function q_proc(cb_inl, cb_inr) (
     q_hpn > 2 ? ( a = q_hsA3.q_svf_run(a, q_hp3.a1, q_hp3.a2, q_hp3.a3, q_hp3.q_m0, q_hp3.q_m1, q_hp3.q_m2); b = q_hsB3.q_svf_run(b, q_hp3.a1, q_hp3.a2, q_hp3.a3, q_hp3.q_m0, q_hp3.q_m1, q_hp3.q_m2); );
     q_hpn > 3 ? ( a = q_hsA4.q_svf_run(a, q_hp4.a1, q_hp4.a2, q_hp4.a3, q_hp4.q_m0, q_hp4.q_m1, q_hp4.q_m2); b = q_hsB4.q_svf_run(b, q_hp4.a1, q_hp4.a2, q_hp4.a3, q_hp4.q_m0, q_hp4.q_m1, q_hp4.q_m2); );
   );
-  q_lp_on ? (
+  q_hm_s != slider36 ? ( (q_hm_n += 1) >= 16 ? ( q_hm_n = 0; q_hm_s += (slider36 - q_hm_s) * q_hm_k; abs(slider36 - q_hm_s) < 0.001 ? q_hm_s = slider36; q_hm_coef(); ); );
+  // high cut: always running (its state stays primed), faded in / out rather than switched; its frequency glides
+  q_hc_t = min(slider45, srate * 0.45);
+  q_hc_f != q_hc_t ? ( (q_hc_n += 1) >= 16 ? ( q_hc_n = 0; q_hc_f *= (q_hc_t / q_hc_f) ^ q_hm_k; abs(q_hc_f - q_hc_t) < 0.0005 * q_hc_t ? q_hc_f = q_hc_t; q_hc_coef(); ); );
+  q_hcw = q_lp_on ? min(q_hcw + q_hcxs, 1) : max(q_hcw - q_hcxs, 0);
+  q_hca = a; q_hcb = b;
+  (
     ( a = q_lsA1.q_svf_run(a, lp1.a1, lp1.a2, lp1.a3, lp1.q_m0, lp1.q_m1, lp1.q_m2); b = q_lsB1.q_svf_run(b, lp1.a1, lp1.a2, lp1.a3, lp1.q_m0, lp1.q_m1, lp1.q_m2); );
     q_lpn > 1 ? ( a = q_lsA2.q_svf_run(a, lp2.a1, lp2.a2, lp2.a3, lp2.q_m0, lp2.q_m1, lp2.q_m2); b = q_lsB2.q_svf_run(b, lp2.a1, lp2.a2, lp2.a3, lp2.q_m0, lp2.q_m1, lp2.q_m2); );
     q_lpn > 2 ? ( a = q_lsA3.q_svf_run(a, q_lp3.a1, q_lp3.a2, q_lp3.a3, q_lp3.q_m0, q_lp3.q_m1, q_lp3.q_m2); b = q_lsB3.q_svf_run(b, q_lp3.a1, q_lp3.a2, q_lp3.a3, q_lp3.q_m0, q_lp3.q_m1, q_lp3.q_m2); );
     q_lpn > 3 ? ( a = q_lsA4.q_svf_run(a, q_lp4.a1, q_lp4.a2, q_lp4.a3, q_lp4.q_m0, q_lp4.q_m1, q_lp4.q_m2); b = q_lsB4.q_svf_run(b, q_lp4.a1, q_lp4.a2, q_lp4.a3, q_lp4.q_m0, q_lp4.q_m1, q_lp4.q_m2); );
   );
+  q_hcw < 1 ? ( a = q_hca + (a - q_hca) * q_hcw; b = q_hcb + (b - q_hcb) * q_hcw; );
   
   (!ms || q_tg0 != 2) ? a = q_sA0.q_svf_run(a, q_c0.a1, q_c0.a2, q_c0.a3, q_c0.q_m0, q_c0.q_m1, q_c0.q_m2);
   (!ms || q_tg0 != 1) ? b = q_sB0.q_svf_run(b, q_c0.a1, q_c0.a2, q_c0.a3, q_c0.q_m0, q_c0.q_m1, q_c0.q_m2);
@@ -632,11 +650,10 @@ lz_small(588, 318, slider24 ? "HIGH-PASS" : "COMPRESSED", 0.6);
 // ---------- IN / OUT ----------
 lz_sect(642, 256, 250, 114);
 lz_head(767, 270, "IN / OUT", 220);
-lz_small(694, 286, "TRIM", 0.9); lz_small(767, 286, "SAT", 0.9); lz_small(844, 286, "OUT", 0.9);
-sprintf(#v, "%+.1f dB", slider22); lz_lw = 56; lz_knob(694, 318, 13, 22, -24, 12, 0, 0, "", #v);
-ui_guardclick(1700 + 22, 23, 694, 318, 16);   // click TRIM for GUARD
-sprintf(#v, "%.0f%%", slider16); lz_lw = 52; lz_cap = 0xD8B040; lz_knob(767, 318, 13, 16, 0, 100, 0, 0, "", #v);
-ui_outkeys(817, 300, 54, 14, 3, 21);
+lz_small(720, 286, "TRIM", 0.9); lz_small(814, 286, "SAT", 0.9);
+sprintf(#v, "%+.1f dB", slider22); lz_lw = 56; lz_knob(720, 318, 13, 22, -24, 12, 0, 0, "", #v);
+ui_guardclick(1700 + 22, 23, 720, 318, 16);   // click TRIM for GUARD
+sprintf(#v, "%.0f%%", slider16); lz_lw = 52; lz_cap = 0xD8B040; lz_knob(814, 318, 13, 16, 0, 100, 0, 0, "", #v);
 
 // ---------- OUTPUT: the DRIFT dial, the meter, the level ----------
 lz_sect(896, 12, 62, 358);

@@ -61,8 +61,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider24:2<0,4,1{20 Hz,30 Hz,60 Hz,100 Hz,150 Hz}>-EQ: Low frequency
 slider25:0<0,10,0.1>-EQ: Low boost
 slider26:0<0,10,0.1>-EQ: Low atten
@@ -186,7 +186,7 @@ function update() (
   key = slider7;
   mix_t = slider15 / 100;
   in_setup(0, slider17);
-  ost_setup(0, 0, 120, 6000, -0.3, slider23 == 1);   // no GFX output stage on this unit, only CLIP: a soft clip at -0.3 dBFS
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 in_init();
@@ -528,12 +528,8 @@ tick(722 * sc, 238 * sc, 17 * sc, 0, "OFF", INK); tick(722 * sc, 238 * sc, 17 * 
 cknob(784, 238, 14, 47, 0, 100, 50, CAP_M, 1, 0, 0, 0, "DRIFT", "%.0f%%");
 cknob(846, 238, 17, 15, 0, 100, 100, CAP_M, 1, 0, 0, 0, "MIX", "%.0f%%");
 tick(846 * sc, 238 * sc, 17 * sc, 0, "0", INK); tick(846 * sc, 238 * sc, 17 * sc, 1, "100", INK);
-mI.ui_ledm(712 * sc, 304 * sc, 88 * sc, 9 * sc, pkI);
-mO.ui_ledm(712 * sc, 318 * sc, 88 * sc, 9 * sc, pkO);
-// CLIP: soft-clips the output at -0.3 dBFS (the label turns red while it is clipping)
-pk_ledbtn(808 * sc, 303 * sc, 30 * sc, 18 * sc, slider23 == 1, 0xFF3A2A) ? ( slider23 = slider23 == 1 ? 0 : 1; ui_auto(23); );
-clpd = ost_clipped ? 1 : clpd * 0.9; ost_clipped = 0;
-lbl(823, 325, "CLIP", clpd > 0.1 ? 0xFF3A2A : INK, clpd > 0.1 ? 1 : 0.7);
+mI.ui_ledm(712 * sc, 304 * sc, 128 * sc, 9 * sc, pkI);
+mO.ui_ledm(712 * sc, 318 * sc, 128 * sc, 9 * sc, pkO);
 lbl(700, 303, "IN", INK, 0.7); lbl(700, 317, "OUT", INK, 0.7);
 pkI *= 0.85; pkO *= 0.85;
 sprintf(#gt, "%.1f", min(s1.eL + s2.eL, 0)); lbl(856, 303, "GR", INK, 0.7); lbl(856, 317, #gt, INK, 0.9);

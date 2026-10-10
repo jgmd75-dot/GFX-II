@@ -17,7 +17,7 @@ desc:GFX Surgical EQ [dynamic EQ]
 //   DYNAMICS  - bells only: when the band's own level goes over THRESH the band moves by up to RANGE
 //               (negative = cut a resonance only when it rings, positive = lift only when busy).
 //               ATTACK / RELEASE are shared by all bands. The curve shows where each band is right now.
-// IN / OUT: TRIM with the GUARD key, SAT and the OUT stage (OFF / CLIP / LIM).
+// IN / OUT: TRIM with the GUARD key and SAT.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -86,8 +86,8 @@ slider54:0<0,100,1>-Band sat (%)
 slider55:30<0,100,1>-Bias (%)
 slider56:120<40,400,1>-Sat low band (Hz)
 slider57:6000<2000,16000,10>-Sat high band (Hz)
-slider58:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider59:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider58:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider59:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider60:20<20,1000,1>-HPF (Hz, 20 = off)
 slider61:20000<1000,20000,10>-LPF (Hz, 20000 = off)
 slider62:1<0,3,1{x1 12 dB/oct,x2 24 dB/oct,x3 36 dB/oct,x4 48 dB/oct}>-HPF slope
@@ -209,7 +209,7 @@ function update() (
   dy_rel = 1 - exp(-1 / (slider50 * 0.001 * srate));
   out_t = 10 ^ (slider51 / 20);
   in_setup(slider52, slider53);
-  ins_output_setup(54);
+  ins_output_straight(54);   // output stage: straight through
 );
 
 // spectrum: a 4096-sample ring of the output, analysed in @gfx

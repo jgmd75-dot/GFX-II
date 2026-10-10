@@ -20,7 +20,7 @@ desc:GFX TransEQ [program EQ]
 //             low-order harmonics while the mids and highs stay clean. Below saturation they are transparent.
 //   EQ IN   - switches the EQ curves out (the transformers stay in).
 // DRIFT: the band frequencies and gains wander very slightly, like component tolerances warming up.
-// The oxblood strip below holds DRIFT (one dial) and IN / OUT (TRIM + GUARD, SAT, OUT stage); formerly the fold-out with INPUT, DRIFT and the GFX output stage on an oxblood panel below.
+// The oxblood strip below holds DRIFT (one dial) and IN / OUT (TRIM + GUARD, SAT); formerly the fold-out with INPUT, DRIFT and the GFX output stage on an oxblood panel below.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -60,8 +60,8 @@ slider25:0<0,100,1>-Band sat (%)
 slider26:30<0,100,1>-Bias (%)
 slider27:120<40,400,1>-Sat low band (Hz)
 slider28:6000<2000,16000,10>-Sat high band (Hz)
-slider29:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider30:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider29:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider30:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider31:50<0,100,1>-Drift (%)
 
 in_pin:left input
@@ -156,7 +156,7 @@ function update() (
   drift_macro(slider31);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
   drift = slider23 / 100 * dm_a; dspd = slider24 * dm_s;
   in_setup(slider21, slider22);
-  ins_output_setup(25);
+  ins_output_straight(25);   // output stage: straight through
 );
 
 xf_c = 2 * $pi * 40 / srate; xf_lk = 1 - 2 * $pi * 5 / srate;

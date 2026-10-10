@@ -43,7 +43,7 @@ desc:GFX DRP-45 [reverb/delay]
 //   -> the return: BERLIN 9.5 kHz reconstruction filter and companding noise (follows the signal, set by GRAIN);
 //      TOKYO 16-bit word length; LOW CUT (yellow cap, 2-pole, 20 - 600 Hz); DC blocker
 //   -> MIX (default 30 % for an insert: dry stays full up to 50 %, wet full from 50 %; 100 % on a send)
-//   -> OUTPUT -> the house output stage (band SAT, OFF / CLIP / LIMIT).
+//   -> OUTPUT -> the house output stage (band SAT, soft clip always on).
 //   A version or algorithm change fades the return out, swaps the machine, clears it and fades back in (25 ms).
 //
 // HF DAMPING (0 - 100 %): how much sooner the highs die than the mids (0 = as long, 100 = about a seventh).
@@ -87,8 +87,8 @@ slider19:0<0,100,1>-Band sat (%)
 slider20:30<0,100,1>-Bias (%)
 slider21:120<40,400,1>-Sat low band (Hz)
 slider22:6000<2000,16000,10>-Sat high band (Hz)
-slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider23:-0.3<-24,0,0.1>-Ceiling (dB)
+slider24:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider25:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
@@ -363,7 +363,7 @@ function update() local(b) (
   dp_mxt = slider15 / 100;
   drift_macro(slider16);
   dp_ot = 10 ^ (slider18 / 20);
-  ost_setup(slider19 / 100, slider20 / 100, slider21, slider22, slider23, slider24);
+  ost_setup(slider19 / 100, slider20 / 100, slider21, slider22, slider23, 1);   // output stage: CLIP, always on
   // drive staging and diffusion per machine
   dp_ber ? (
     dp_dgt = 10 ^ (dp_drv * 24 / 20);
@@ -1005,8 +1005,7 @@ dq_ox = 794; dq_ow = 116;
 pk_inset((dq_ox + 5) * sc, 69 * sc, (dq_ow - 10) * sc, 256 * sc, DQS);
 gfx_setfont(13); ui_col(DQI2); dq_txt(dq_ox + 14, 74, dq_de ? "AUSGANG" : "OUTPUT");
 dq_sknob(dq_ox + 58, 124, 20, 15, 0, 100, 30, 0, 0, 0, 0, 10, dq_de ? "MISCHUNG" : "MIX", 0);
-dq_sknob(dq_ox + 32, 200, 14, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 12, dq_de ? "PEGEL" : "LEVEL", 0);
-ui_outkeys(dq_ox + 60, 176, 46, 17, 4, 24);
+dq_sknob(dq_ox + 58, 200, 14, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 12, dq_de ? "PEGEL" : "LEVEL", 0);
 dq_sknob(dq_ox + 32, 264, 11, 19, 0, 100, 0, 0, 0, 2, 0xD8B040, 0, dq_de ? "SÄTT." : "SAT", 0);
 dq_sknob(dq_ox + 84, 264, 11, 16, 0, 100, 50, 0, 0, 2, 0x9DA2A8, 11, "DRIFT", 0);
 mtL.ui_ledm((dq_ox + 14) * sc, 300 * sc, 88 * sc, 7 * sc, dp_opkL); mtR.ui_ledm((dq_ox + 14) * sc, 311 * sc, 88 * sc, 7 * sc, dp_opkR);
@@ -1213,8 +1212,7 @@ dq_i = 0; loop(strlen(#dqw), strcpy_substr(#dqs, #dqw, dq_i, 1); dq_ctxt(790, 82
 // ---------- AUSGANG ----------
 dq_sect(808, 64, 102, 222, DQS, dq_de ? "AUSGANG" : "OUTPUT");
 dq_sknob(859, 120, 18, 15, 0, 100, 30, 0, 0, 0, 0, 0, dq_de ? "MISCHUNG" : "MIX", 0);
-dq_sknob(834, 194, 13, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 0, dq_de ? "PEGEL" : "LEVEL", 0);
-ui_outkeys(856, 172, 46, 17, 4, 24);
+dq_sknob(859, 194, 13, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 0, dq_de ? "PEGEL" : "LEVEL", 0);
 dq_sknob(834, 248, 10, 19, 0, 100, 0, 0, 0, 2, 0xD8B040, 0, dq_de ? "SÄTT." : "SAT", 0);
 dq_sknob(884, 248, 10, 16, 0, 100, 50, 0, 0, 2, dq_sk == 0 ? 0x6F8794 : DQI2, 0, "DRIFT", 0);
 

@@ -34,7 +34,7 @@ desc:GFX MUTO [vari-mu comp]
 //   MODE STEREO / DUAL MONO / M-S, LINK amount (STEREO and M-S), IRON (output transformer weight: low-end
 //   saturation and a gentle low shelf), MIX (parallel), OUTPUT. Cleaner valve stage, heavier low end.
 // BOTH: DRIFT (valve ageing: slow wander of bias / threshold and recovery, a small L / R mismatch; the vintage
-//   unit's mains hum), 0 - 100 % (50 % = standard). The GFX output stage OFF / CLIP / LIMIT.
+//   unit's mains hum), 0 - 100 % (50 % = standard).
 //   Two needle meters: GR (the needle rests at 0 and swings left by the gain reduction in dB) or OUT
 //   (VU ballistics, Meter 45 calibration: a sine peaking at -18 dBFS reads 0 VU).
 //
@@ -69,7 +69,7 @@ slider18:30<0,100,1>-M Iron (%)
 slider19:100<0,100,1>-M Mix (%)
 slider20:0<-20,20,0.1>-M Output (dB)
 slider21:50<0,100,1>-Drift (%)
-slider22:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider23:0<0,1,1{GR,Output}>-Meter
 
 in_pin:left input
@@ -161,7 +161,7 @@ function mu_setup() local(tf, ts, tcs, rm, ta) (
   mA.ka = mB.ka = mu_tc(ta);
   mA.kf = exp(-1 / (tf * mu_rmA * srate)); mB.kf = exp(-1 / (tf * mu_rmB * srate));
   mA.ks = mB.ks = exp(-1 / (ts * srate)); mu_kcs = mu_tc(tcs);
-  ost_setup(0, 0, 120, 6000, -0.3, slider22 | 0);
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 // ---------- presets ----------
@@ -190,7 +190,7 @@ function load_preset(p) (
 );
 
 // ---------- state ----------
-ost_init(0);                                                     // 0 .. 4095: the output stage's lookahead
+ost_init(0);                                                     // the house output stage
 mu_rmA = mu_rmB = 1;
 mu_thc = 1 - exp(-2 * $pi * 15 / srate);
 mu_dcr = exp(-2 * $pi * 4 / srate);
@@ -481,8 +481,7 @@ function mg_header(face, ink, sub) (
   mg_k > 0 ? ( load_preset(mg_k); pr_cur = mg_k; );
   ui_size_picker(834 * sc, 21 * sc);
 );
-// the output stage keys (house OFF / CLIP / LIMIT) with a caption
-function mg_outst(x, y) ( ui_okfs = 1; ui_outkeys(x, y, 58, 17, 3, 22); mg_lbl(x + 29, y + 62, "OUT", 12); );
+
 
 // a section plate: a groove (edge colour), a light lip below, the plate
 function mg_plate(x, y, w, h, c, edge, ea, la) ( ui_cola(edge, ea); mg_RR(x - 1, y - 1, w + 2, h + 2, 6); ui_cola(0xFFFFFF, la); mg_RR(x, y, w + 1, h + 1, 6); ui_col(c); mg_RR(x, y, w, h, 6); );
@@ -541,15 +540,14 @@ mg_u == 0 ? (
   mg_knob(834, 148, 36, 6, -20, 20, 0, 0, 0, 0, 0);
   mg_lbl(834, 202, "OUTPUT", 15); mg_act ? mg_val(834, 222, mg_db(slider6));
 
-  // lower row: STEREO, METER | MIX, DRIFT, OUT | HOLD, pilot
+  // lower row: STEREO, METER | MIX, DRIFT | HOLD, pilot
   mg_tog(82, 274, 7, "LINK", "DUAL", "STEREO", mg_acc);
   mg_tog(220, 274, 23, "GR", "OUT", "METER", mg_acc);
-  mg_ticks(352, 270, 22, 11, 5);
-  mg_knob(352, 270, 22, 8, 0, 100, 100, 0, 0, 0, 0);
-  mg_lbl(352, 304, "MIX", 14); mg_act ? mg_val(352, 214, mg_pc(slider8));
-  mg_knob(430, 270, 15, 21, 0, 100, 50, 0, 0, 20, 0x9DA2A8);
-  mg_lbl(430, 304, "DRIFT", 14); mg_act ? mg_val(430, 214, mg_pc(slider21));
-  mg_outst(512, 236);
+  mg_ticks(405, 270, 22, 11, 5);
+  mg_knob(405, 270, 22, 8, 0, 100, 100, 0, 0, 0, 0);
+  mg_lbl(405, 304, "MIX", 14); mg_act ? mg_val(405, 214, mg_pc(slider8));
+  mg_knob(495, 270, 15, 21, 0, 100, 50, 0, 0, 20, 0x9DA2A8);
+  mg_lbl(495, 304, "DRIFT", 14); mg_act ? mg_val(495, 214, mg_pc(slider21));
   mg_tog(714, 274, 5, "NORMAL", "HOLD", "RECOVERY MODE", 0xFF4A20);
   mg_lbl(834, 248, "POWER", 11);
   rd_lamp(834, 286, 13, 0.85 + 0.1 * sin(time_precise() * 0.7), 0xFF6A1A);
@@ -598,7 +596,7 @@ mg_u == 0 ? (
   mg_lbl(834, 202, "RELEASE", 15); slider12 >= 1000 ? sprintf(#mg_v, "%.2f s", slider12 / 1000) : sprintf(#mg_v, "%.0f ms", slider12);
   mg_act ? mg_val(834, 222, slider13 > 0.5 ? "AUTO" : #mg_v);
 
-  // lower row: SC HPF x2, MODE | LINK, IRON, MIX, METER | AUTO, DRIFT, OUTPUT, OUT stage
+  // lower row: SC HPF x2, MODE | LINK, IRON, MIX, METER | AUTO, DRIFT, OUTPUT
   mg_i = 0; loop(2,
     mg_x = 44 + mg_i * 72; mg_ix = 14 + mg_i;
     mg_ticks(mg_x, 274, 17, 5, 1);
@@ -611,16 +609,15 @@ mg_u == 0 ? (
   mg_key(180, 266, 92, 22, slider16 == 1, mg_acc, "DUAL MONO", 12) ? ( slider16 = 1; ui_auto(16); );
   mg_key(180, 290, 92, 22, slider16 == 2, mg_acc, "M-S", 12) ? ( slider16 = 2; ui_auto(16); );
   mg_lbl(226, 314, "MODE", 11);
-  mg_ticks(334, 266, 20, 11, 5);
-  mg_knob(334, 266, 20, 17, 0, 100, 100, 0, 0, 1, 0);
-  mg_lbl(334, 298, "LINK", 13); mg_act ? mg_val(334, 214, slider16 == 1 ? "DUAL MONO" : mg_pc(slider17));
-  mg_ticks(400, 266, 20, 11, 5);
-  mg_knob(400, 266, 20, 18, 0, 100, 30, 0, 0, 1, 0);
-  mg_lbl(400, 298, "IRON", 13); mg_act ? mg_val(400, 214, mg_pc(slider18));
-  mg_ticks(466, 266, 20, 11, 5);
-  mg_knob(466, 266, 20, 19, 0, 100, 100, 0, 0, 1, 0);
-  mg_lbl(466, 298, "MIX", 13); mg_act ? mg_val(466, 214, mg_pc(slider19));
-  mg_outst(512, 236);
+  mg_ticks(370, 266, 20, 11, 5);
+  mg_knob(370, 266, 20, 17, 0, 100, 100, 0, 0, 1, 0);
+  mg_lbl(370, 298, "LINK", 13); mg_act ? mg_val(370, 214, slider16 == 1 ? "DUAL MONO" : mg_pc(slider17));
+  mg_ticks(450, 266, 20, 11, 5);
+  mg_knob(450, 266, 20, 18, 0, 100, 30, 0, 0, 1, 0);
+  mg_lbl(450, 298, "IRON", 13); mg_act ? mg_val(450, 214, mg_pc(slider18));
+  mg_ticks(530, 266, 20, 11, 5);
+  mg_knob(530, 266, 20, 19, 0, 100, 100, 0, 0, 1, 0);
+  mg_lbl(530, 298, "MIX", 13); mg_act ? mg_val(530, 214, mg_pc(slider19));
   mg_key(628, 244, 64, 24, slider13 > 0.5, mg_acc, "AUTO", 12) ? ( slider13 = slider13 > 0.5 ? 0 : 1; ui_auto(13); );
   mg_lbl(660, 270, "RELEASE", 11);
   mg_key(628, 288, 64, 24, slider23 > 0.5, mg_acc, slider23 > 0.5 ? "OUT" : "GR", 12) ? ( slider23 = slider23 > 0.5 ? 0 : 1; ui_auto(23); );

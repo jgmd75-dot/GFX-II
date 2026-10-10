@@ -33,7 +33,7 @@ desc:GFX G Glow [additive synth]
 //   parameter and both partial sets. RANDOM (on each screen) makes a new musical partial set.
 // Draw on a screen to set partials (right-drag to erase). The partial sets are saved with the project.
 // MIDI: pitch bend, CC1 adds to LFO 1's amount, CC64 sustain, CC120/123 all notes off.
-// IN / OUT: the strip along the bottom holds SAT, the OUT stage (OFF / CLIP / LIM) and STEREO (MONO, WIDTH).
+// IN / OUT: the strip along the bottom holds SAT and STEREO (MONO, WIDTH).
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -111,8 +111,8 @@ slider67:0<0,100,1>-Band sat (%)
 slider68:30<0,100,1>-Bias (%)
 slider69:120<40,400,1>-Sat low band (Hz)
 slider70:6000<2000,16000,10>-Sat high band (Hz)
-slider71:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider72:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider71:-0.3<-24,0,0.1>-Ceiling (dB)
+slider72:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider73:20<20,500,1>-Mono below (Hz, 20 = off)
 slider74:0<0,100,1>-Stereo width (%)
 slider75:0<0,14,1{1981 Micro Chime,Lo-Fi Bit Bass,Spectral Ambient Pad,E.Piano Tine,Digital Sci-Fi Drone,8-Bit Arcade Percussion,Dual-Timbral Poly,8-Bit Arcade Snare,Glass Organ,Vintage Strings,Hollow Flute,Bell Tower,Choir Formant,Square Sync Lead,Init}>-Patch
@@ -462,7 +462,7 @@ function update() local(t) (
   dl_lpc = 1 - exp(-2 * $pi * min(slider64, srate * 0.45) / srate);
   dl_hpc = 1 - exp(-2 * $pi * slider65 / srate);
   dl_mix = slider66 / 100;
-  ins_output_setup(67); ins_stereo_setup(73);
+  ins_output_setup(67); ins_stereo_setup(73);   // output stage: CLIP, always on
   // partial count or mode changed: rebuild that oscillator
   slider9 != last_n9 ? ( last_n9 = slider9; dirtyA = 1; );
   slider19 != last_n19 ? ( last_n19 = slider19; dirtyB = 1; );

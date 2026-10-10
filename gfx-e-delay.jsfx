@@ -16,7 +16,7 @@ desc:GFX E-Delay [digital delay]
 // VINTAGE runs the line through the converters of the era.
 // DRIFT: the clock is not quite steady. The DRIFT display is the one drift dial: it scales the clock wander
 // (50% = the Drift / Drift speed settings, 100% = twice, 0 = none) and speeds it up with it.
-// IN / OUT: TRIM (with the GUARD key), LEVEL, SAT and the OUT stage (OFF / CLIP / LIMIT) on the panel.
+// IN / OUT: TRIM (with the GUARD key), LEVEL and SAT on the panel.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -55,8 +55,8 @@ slider25:0<0,100,1>-Band sat (%)
 slider26:30<0,100,1>-Bias (%)
 slider27:120<40,400,1>-Sat low band (Hz)
 slider28:6000<2000,16000,10>-Sat high band (Hz)
-slider29:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider30:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider29:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider30:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider31:0<-24,12,0.1>-Input trim (dB)
 slider32:0<0,1,1{Off,On}>-Input guard
 // DRIFT dial: scales the delay-clock wander (sliders 21-22, read in @block); 50 % = as set.
@@ -99,7 +99,7 @@ function update() local(bt) (
   drift_macro(slider33);
   wid = slider20 / 100; dft = slider21 / 100 * dm_a; dspd = slider22 * dm_s;
   mix_t = slider23 / 100; out_t = 10 ^ (slider24 / 20);
-  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, slider30);
+  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, 0);   // output stage: straight through
   in_setup(slider31, slider32);
 );
 
@@ -380,19 +380,13 @@ group(316, 178, 410, 116, "MODULATION");   disp(7, 324, 198, "MOD DEPTH", "ms", 
 group(734, 178, 450, 116, "CHARACTER");    disp(6, 748, 198, "DRIVE", "%", 1); disp(13, 856, 198, "WIDTH", "%", 1);
                                            disp(14, 964, 198, "DRIFT", "%", 1); disp(15, 1076, 198, "MIX", "%", 1);
 
-// ---------- IN / OUT: trim (+ guard), saturation, the output stage ----------
+// ---------- IN / OUT: trim (+ guard), level, saturation ----------
 group(1192, 50, 232, 244, "IN / OUT");     disp(16, 1206, 70, "TRIM", "dB", 1);
 disp(17, 1312, 70, "LEVEL", "dB", 1);
-lbtn(1312, 166, 98, 24, "GUARD", slider32) ? ( slider32 = 1 - slider32; ui_auto(32); update(); );
+lbtn(1312, 225, 98, 24, "GUARD", slider32) ? ( slider32 = 1 - slider32; ui_auto(32); update(); );
 io_grd = in_grd > 0.05 ? 1 : io_grd * 0.85; in_grd = 0;
-ctxt(1259, 176, io_grd > 0.1 && slider32 ? "GUARD CATCHING" : "", 9, 0.7);
+ctxt(1361, 262, io_grd > 0.1 && slider32 ? "GUARD CATCHING" : "", 9, 0.7);
 disp(19, 1206, 198, "SAT", "%", 1);
-io_clp = ost_clipped ? 1 : io_clp * 0.9; ost_clipped = 0;
-io_clp > 0.1 ? ( gfx_setfont(6, "Arial", 10 * sc, 'b'); gfx_measurestr("CLIP", tw_, th_); ui_col(0xC8321E);
-                 gfx_x = 1361 * sc - tw_ * 0.5; gfx_y = 198 * sc; gfx_drawstr("CLIP"); ) : ctxt(1361, 198, "OUT", 10, 0.95);
-lbtn(1312, 212, 98, 24, "OFF", slider30 == 0) ? ( slider30 = 0; ui_auto(30); update(); );
-lbtn(1312, 238, 98, 24, "CLIP", slider30 == 1) ? ( slider30 = 1; ui_auto(30); update(); );
-lbtn(1312, 264, 98, 24, "LIMIT", slider30 == 2) ? ( slider30 = 2; ui_auto(30); update(); );
 
 pk_end();
 ui_end();

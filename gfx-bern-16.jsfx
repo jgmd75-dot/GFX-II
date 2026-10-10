@@ -22,7 +22,7 @@ desc:GFX Bern 16 [summing mixer]
 //             roll-off and the TONE tilt. Off = flat (the amp and transformer still work).
 //   IRON      a whisper of input-transformer saturation on every channel.
 //   MONO      folds the mix to mono (to check the balance).
-//   VOLUME    master output, then the house OUT stage (SAT, OFF / CLIP / LIMIT).
+//   VOLUME    master output (band SAT).
 //   DRIFT     an uneven power supply: each channel's gain (up to +/-0.25 dB at 100 %) and the summing amp's bias
 //             (each side its own) wander very slightly and independently.
 //   METERS    master PEAK (segments, with a hold: click to clear) and RMS (the bar beside), in dBFS.
@@ -111,8 +111,8 @@ slider72:0<0,100,1>-Band sat (%)
 slider73:30<0,100,1>-Bias (%)
 slider74:120<40,400,1>-Sat low band (Hz)
 slider75:6000<2000,16000,10>-Sat high band (Hz)
-slider76:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider77:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider76:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider77:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:ch 1
 in_pin:ch 2
@@ -184,7 +184,7 @@ function update() local(i, any, a, heard) (
   bz_bl = 0.08 + 0.05 * bz_dra * bz_svl; bz_br = 0.08 + 0.05 * bz_dra * bz_svr;
   bz_tbl = ost_tanh(bz_bl); bz_tbr = ost_tanh(bz_br);
   bz_nl = 1 / (1 - bz_tbl * bz_tbl); bz_nr = 1 / (1 - bz_tbr * bz_tbr);
-  ins_output_setup(72);
+  ins_output_straight(72);   // output stage: straight through
 );
 
 // ---------- presets ----------
@@ -224,7 +224,7 @@ function bz_srinit() (
   // their states start clean: old-rate states under new coefficients thump
   bzHPl.bz_bqclr(); bzHPr.bz_bqclr(); bzBMl.bz_bqclr(); bzBMr.bz_bqclr(); bzLSl.bz_bqclr();
   bzLSr.bz_bqclr(); bzHSl.bz_bqclr(); bzHSr.bz_bqclr(); bzTPl.bz_bqclr(); bzTPr.bz_bqclr();
-  ost_init(ost_buf);                                  // the output stage again, on its own buffer
+  ost_init(0);                                     // the output stage again (resets it)
 );
 bz_dcc = 0.9993;                                      // DC blocker after the amp (~5 Hz)
 bz_svl = 0; bz_svr = 0;
@@ -423,7 +423,7 @@ gfl = bz_solo && (time_precise() * 2.5) % 1 < 0.6;
 rd_led(1040, 224, 6, gfl, 0xFFB030); gz_lbl(1040, 240, "SOLO", 0.9);
 // VOLUME
 sprintf(#gv, "%+.1f dB", slider69); dy_knob(964, 316, 32, 69, -24, 12, 0, 0, CVOL, "VOLUME", #gv);
-// DRIFT (small cap) and the house IN / OUT pair (SAT, OFF / CLIP / LIMIT)
+// DRIFT (small cap) and the house IN / OUT pair (SAT)
 dy_kst = 20; sprintf(#gv, "%.0f%%", slider71); dy_knob(898, 398, 12, 71, 0, 100, 20, 0, CDRF, "DRIFT", #gv); dy_kst = 7;
 ins_io(952, 386, 72, INK);
 // meters

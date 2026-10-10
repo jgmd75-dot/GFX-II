@@ -53,8 +53,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-Ceiling (dB)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -115,7 +115,7 @@ function update() local(th) (
   tone_on = slider10 > 0.5; tone_f = slider11 < 0.5 ? 1000 : slider11 < 1.5 ? 400 : 100; tone_a = 10 ^ ((slider12 - 20) / 20) * sqrt(2);
   drift_macro(slider13);
   l_at = 1 - exp(-1 / (max(slider16, 0.05) * 0.001 * srate)); l_rl = 1 - exp(-1 / (slider17 * 0.001 * srate));
-  ost_setup(slider18 / 100, slider19 / 100, slider20, slider21, slider22, floor(slider23 + 0.5));
+  ost_setup(slider18 / 100, slider19 / 100, slider20, slider21, slider22, 1);   // output stage: CLIP, always on
 );
 
 f4_ia = 1 - exp(-2 * $pi * 110 / srate);           // the core's flux (low-frequency) band
@@ -126,6 +126,7 @@ sag_c = 1 - exp(-1 / (0.6 * srate));
 lastp = slider14;                                   // adopt the saved preset without re-applying it
 !ui_dflt ? ( ui_thm = 0; );
 update();
+f4_trs = trim; f4_trc = 1 - exp(-1 / (0.02 * srate));   // TRIM glide (~20 ms)
 ui_dflt = 1;
 
 @slider
@@ -144,7 +145,8 @@ ol_t = ol_thr + 20 * log10(sup);
 // HPF (before the preamp), TRIM, input transformer, rail
 xL = spl0; xR = spl1;
 hp_on ? ( xL = hpL.f4_bq(xL); xR = hpR.f4_bq(xR); );
-xL *= trim; xR *= trim;
+f4_trs != trim ? ( f4_trs += (trim - f4_trs) * f4_trc; abs(trim - f4_trs) < 0.000001 * trim ? f4_trs = trim; );
+xL *= f4_trs; xR *= f4_trs;
 xL = iiL.f4_iron(xL, iron_i, sup); xR = iiR.f4_iron(xR, iron_i, sup);
 hv = 1.58 * sup;                                   // the rail: about +24 dBu
 xL = f4_rail(xL, hv); xR = f4_rail(xR, hv);

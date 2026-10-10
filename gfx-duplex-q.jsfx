@@ -65,8 +65,8 @@ slider28:0<0,100,1>-Band sat (%)
 slider29:30<0,100,1>-Bias (%)
 slider30:120<40,400,1>-Sat low band (Hz)
 slider31:6000<2000,16000,10>-Sat high band (Hz)
-slider32:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider33:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider32:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider33:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider34:0<-6,6,0.1>-EQ: Tilt (dB at each end)
 slider35:800<100,5000,1>-EQ: Pivot (Hz)
 slider36:0<0,1,1{Gentle,Steep}>-EQ: Shape
@@ -147,7 +147,7 @@ function update() (
   linked = mode == 0 || slider24;
   mix_t = slider25 / 100;
   in_setup(0, slider27);
-  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------
@@ -248,7 +248,7 @@ function q_update() local(b, q_cs) (
   q_TLL.q_tl_set(); q_TLR.q_tl_set();
   q_hp_on = slider37 > 10.5; q_lp_on = slider39 < 21990;
   q_hp_on ? ( q_HPL.q_bw_set(1, slider37, q_ordr(slider38)); q_HPR.q_bw_set(1, slider37, q_ordr(slider38)); );
-  q_lp_on ? ( q_LPL.q_bw_set(0, slider39, q_ordr(slider40)); q_LPR.q_bw_set(0, slider39, q_ordr(slider40)); );
+  q_LPL.q_bw_set(0, q_te_lpf, q_ordr(slider40)); q_LPR.q_bw_set(0, q_te_lpf, q_ordr(slider40));   // q_te_lpf: glided in q_proc
   q_tmode = slider41; q_og = 10 ^ (slider42 / 20); q_eq_on = slider43;
   
   
@@ -281,14 +281,21 @@ function q_load_preset(p) (
   
  q_tlook = 1; q_last_cs = -1;   // new instances: HORIZON look, hardware panel
 q_WIN = 0x161412; q_GOLD = 0xE2B24A; q_SKY = 0x7EA6CB; q_HAZE = 0xCFD9DD; q_SEA = 0x617487; q_SAND = 0xA48D70; q_WBAND = 0xFAF7EF;
+q_te_lpf = min(slider39, srate * 0.45); q_te_lpk = 1 - exp(-16 / (0.02 * srate)); q_te_lpn = 0;   // low-pass glide (~20 ms)
 q_update();
+q_te_lpw = q_lp_on; q_te_lpxs = 1 / (0.02 * srate);   // low-pass on / off fade: 20 ms
 
 
 function q_proc(cb_inl, cb_inr) (
   q_xl = cb_inl; q_xr = cb_inr;
+  q_te_lpw = q_lp_on ? min(q_te_lpw + q_te_lpxs, 1) : max(q_te_lpw - q_te_lpxs, 0);
+  q_te_lpt = min(slider39, srate * 0.45);
+  q_te_lpf != q_te_lpt ? ( (q_te_lpn += 1) >= 16 ? ( q_te_lpn = 0; q_te_lpf *= (q_te_lpt / q_te_lpf) ^ q_te_lpk; abs(q_te_lpf - q_te_lpt) < 0.0005 * q_te_lpt ? q_te_lpf = q_te_lpt;
+    q_LPL.q_bw_set(0, q_te_lpf, q_ordr(slider40)); q_LPR.q_bw_set(0, q_te_lpf, q_ordr(slider40)); ); );
   q_eq_on ? (
     q_hp_on ? ( q_xl = q_HPL.q_bw_run(q_xl); q_xr = q_HPR.q_bw_run(q_xr); );
-    q_lp_on ? ( q_xl = q_LPL.q_bw_run(q_xl); q_xr = q_LPR.q_bw_run(q_xr); );
+    q_te_al = q_LPL.q_bw_run(q_xl); q_te_ar = q_LPR.q_bw_run(q_xr);   // the low-pass always runs (primed) and is faded in / out, never switched
+    q_te_lpw >= 1 ? ( q_xl = q_te_al; q_xr = q_te_ar; ) : q_te_lpw > 0 ? ( q_xl += (q_te_al - q_xl) * q_te_lpw; q_xr += (q_te_ar - q_xr) * q_te_lpw; );
     q_tl_on ? (
       q_tmode == 0 ? ( q_xl = q_TLL.q_tl_run(q_xl); q_xr = q_TLR.q_tl_run(q_xr); ) : (
         q_tm_ = (q_xl + q_xr) * 0.5; q_ts_ = (q_xl - q_xr) * 0.5;

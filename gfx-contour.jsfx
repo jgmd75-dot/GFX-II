@@ -19,7 +19,7 @@ desc:GFX Contour [filter]
 //               note, FREE runs at the project tempo even when stopped. LOOP or ONE-SHOT; TRIGGER restarts it.
 //   FILTER    - 4x oversampled state-variable filter: LP 6 / 12 / 18 / 24 dB, HP 12, BP 12, NOTCH. A diode-style
 //               soft clipper sits in the feedback loop: DRIVE pushes the input into it for analogue-style grit.
-// IN / OUT also holds SAT and the OUT stage (OFF / CLIP / LIM; click its name to step it).
+// IN / OUT also holds SAT.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -47,8 +47,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:0<-24,12,0.1>-Input trim (dB)
 slider23:0<0,1,1{Off,On}>-Input guard
 
@@ -104,6 +104,7 @@ function ct_set(md, ct, rs, dv, rt, st, ca, ra, va, pa) (
   cv_default(0); cv_default(1); cv_default(2); cv_default(3);
 );
 function load_preset(p) (
+  cn_dst = 1;                                      // duck the output, swap the settings at silence, fade back in
   p == 1 ? ct_set(1, 400, 25, 0, 5, 0, 4, 0, 0, 0) :                          // Init
   p == 2 ? ct_set(3, 120, 78, 10, 1, 0, 5.5, 0, 0, 0) :                        // Acid Pluck 1/16 (the pluck curve)
   p == 3 ? ( ct_set(0, 20000, 0, 0, 1, 0, 0, 0, 100, 0);                       // Trance Gate 1/16
@@ -185,7 +186,7 @@ function update() (
   a_cut = slider10 * dep; a_res = slider11 / 100 * dep; a_vol = slider12 / 100 * dep; a_pan = slider13 / 100 * dep;
   mix_t = slider14 / 100; out_t = 10 ^ (slider15 / 20);
   in_setup(slider22, slider23);
-  ins_output_setup(16);
+  ins_output_straight(16);   // output stage: straight through
 );
 
 // everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
@@ -196,6 +197,7 @@ function cn_srinit() (
   ost_init(20000);
   sm = 1 - exp(-1 / (0.03 * srate));
   msm = 1 - exp(-1 / (0.0015 * srate));          // 1.5 ms smoothing on the modulation (no zipper, no clicks)
+  cn_dkr = 1 / (0.012 * srate);                  // preset duck: 12 ms out, 12 ms in
 );
 cn_srinit(); ostL.ost_ch_init(); ostR.ost_ch_init();
 osL.os_init(); osR.os_init();
@@ -212,15 +214,16 @@ function cgroup(x, y, w, h, title, shade) (
 );
 update();
 mix_s = mix_t; out_s = out_t;
+cn_dk = 1; cn_dst = 0;
 !ui_dflt ? pr_cur = 1;                            // a new instance opens on Init
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+cn_dst != 1 ? update();                            // during a preset duck the swap applies the new settings
 
 @block
 srate != cn_sr ? ( cn_sr = srate; cn_srinit(); );
-update();                                          // knobs moved on the panel do not run @slider, so read them here
+cn_dst != 1 ? update();                            // knobs moved on the panel do not run @slider, so read them here
 lut_req ? ( lut_req = 0; build_lut(0); build_lut(1); build_lut(2); build_lut(3); );
 // MIDI: every note-on restarts the curve (in MIDI mode); everything passes through
 evn = 0;
@@ -246,6 +249,9 @@ file_avail(0) >= 0 ? lut_req = 1;
 file_avail(0) != 0 ? file_var(0, pr_cur) : pr_cur = 0;    // the preset in use (older projects end before it)
 
 @sample
+// preset duck-and-swap: filter mode, drive, cutoff and rate change in silence
+cn_dst == 1 ? ( cn_dk -= cn_dkr; cn_dk <= 0 ? ( cn_dk = 0; update(); cn_dst = 2; ); ) :
+cn_dst == 2 ? ( cn_dk += cn_dkr; cn_dk >= 1 ? ( cn_dk = 1; cn_dst = 0; ); );
 // where we are in the curve
 trig == 1 ? ( while (evi < evn && EVQ[evi] <= spos) ( iph = 0; ended = 0; evi += 1; ); );
 sync ? ( ph = bph + spos * pinc; ph -= floor(ph); ) : (
@@ -277,6 +283,7 @@ yL = (dL + (wL - dL) * mix_s) * mvL;
 yR = (dR + (wR - dR) * mix_s) * mvR;
 pa = (mp + 1) * $pi * 0.25;
 yL *= min(1.4142 * cos(pa), 1); yR *= min(1.4142 * sin(pa), 1);
+cn_dst ? ( cn_dkg = cn_dk * cn_dk * (3 - 2 * cn_dk); yL *= cn_dkg; yR *= cn_dkg; );
 yL = ostL.ost_band(yL) * out_s; yR = ostR.ost_band(yR) * out_s;
 ost_out(yL, yR);
 spl0 = ost_l; spl1 = ost_r;
@@ -469,7 +476,7 @@ knob_push = 0;
 ui_section(2); C_INK = INKL;
 ui_knob(520 * sc, 498 * sc, 14, 0, 100, 100, 0, "MIX", "%.0f%%");
 ui_knob(600 * sc, 498 * sc, 15, -24, 12, 0, 0, "OUTPUT", "%+.1f dB");
-ins_io(652, 480, 16, INKL);                         // SAT and the OUT stage (OFF / CLIP / LIM)
+ins_io(652, 480, 16, INKL);                         // SAT
 mI.ui_ledm(780 * sc, 466 * sc, 12 * sc, 70 * sc, pkI);
 mO.ui_ledm(840 * sc, 466 * sc, 12 * sc, 70 * sc, pkO);
 gfx_setfont(4); ui_col(INKL); ui_text(786 * sc, 540 * sc, "IN"); ui_text(846 * sc, 540 * sc, "OUT");

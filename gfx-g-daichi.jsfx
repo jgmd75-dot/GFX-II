@@ -23,7 +23,7 @@ desc:GFX G Daichi [VA poly synth]
 //             voices come out of the VOICES pool), PORTAMENTO, BEND range, mod WHEEL destination
 //   ARP       the GFX arpeggiator: MODE, RANGE (1-4 octaves), RATE (1/4 - 1/32, triplets), GATE; tempo-locked
 //   EFFECTS   DIST (drive or bit crush), PHASER, CHORUS / FLANGER, stereo tempo-synced DELAY (ping-pong)
-//   MASTER    DRIFT, VOLUME, SAT and the OUT stage (OFF / CLIP / LIMIT)
+//   MASTER    DRIFT, VOLUME, SAT (the output soft clip is always on)
 // DRIFT (GFX instrument standard, 0-100 %): the tuning wanders, OSC 2 wanders against OSC 1, the filter
 //   cutoff wanders, the chorus / phaser speed breathes, and every note lands slightly differently in tune.
 // MIDI: pitch bend (BEND range), CC1 mod wheel (WHEEL destination), CC64 sustain, CC120 / CC123 all notes off.
@@ -132,8 +132,8 @@ slider79:0<0,100,1>-Band sat (%)
 slider80:30<0,100,1>-Bias (%)
 slider81:120<40,400,1>-Sat low band (Hz)
 slider82:6000<2000,16000,10>-Sat high band (Hz)
-slider83:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider84:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider83:-0.3<-24,0,0.1>-Ceiling (dB)
+slider84:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:none
 out_pin:left output
@@ -231,6 +231,7 @@ function dh_pstr(p) (
   "";
 );
 function load_preset(p) local(n, i) (
+  dh_panic = 1;                                     // (first: the audio thread holds the old sound until it has faded)
   i = 0; loop(75, slider(i + 1) = DEFM[i]; i += 1; );
   n = dh_nums(dh_pstr(p), DTMP);
   i = 0; loop(floor(n / 2), DTMP[i * 2] >= 1 && DTMP[i * 2] <= 75 ? slider(DTMP[i * 2]) = DTMP[i * 2 + 1]; i += 1; );
@@ -386,7 +387,7 @@ function update() local(r, g) (
   dh_dlt = min(dh_dlb * 60 / dh_tmp * srate, DDLM - 4);
   dh_drift = slider76 / 100; dh_volt = 10 ^ (slider77 / 20); dh_chan = slider78;
   dh_fmax = srate * 0.45; dh_pis = $pi / srate; dh_440s = 440 / srate;
-  ins_output_setup(79);
+  ins_output_setup(79);   // output stage: CLIP, always on
 );
 
 ins_drift_init();
@@ -400,16 +401,36 @@ function dh_srinit() ( dh_sr = srate; dh_sm = 1 - exp(-1 / (0.03 * srate)); ost_
 dh_srinit();
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );            // a new instance opens Large, on Init
 update();
+dh_lastmode = dh_mode; dh_wasarp = slider56;     // (so the first block does not queue an all-off over its own notes)
+dh_pcf = 0; dh_pck = dh_pcg = 1;
+// a preset loaded while voices sound: the old sound fades out (12 ms), the new preset applies at the silent
+// point (where the released notes end) and the output fades back in (12 ms): no click
+// notes played during the fade wait for its silent point (they start with the new sound)
+DPCP = 43300; dh_pcn = 0;                                    // (32 pairs: note, velocity)
+function dh_pchold(n, v) ( dh_pcn < 32 ? ( DPCP[dh_pcn * 2] = n; DPCP[dh_pcn * 2 + 1] = v; dh_pcn += 1; ); );
+function dh_pcunhold(n) local(i, j) (
+  i = j = 0; loop(dh_pcn, DPCP[i * 2] != n ? ( DPCP[j * 2] = DPCP[i * 2]; DPCP[j * 2 + 1] = DPCP[i * 2 + 1]; j += 1; ); i += 1; ); dh_pcn = j;
+);
+function dh_pcapply() local(i, p) (
+  i = 0; loop(16, p = DV + i * 64; p[13] == 3 ? ( p[13] = 0; p[15] = 0; p[14] = 0; p[17] = 0; p[0] = -1; p[19] = p[20] = p[21] = p[22] = 0; ); i += 1; );   // the released notes end here
+  update(); dh_lastmode = dh_mode; dh_pcf = 0;
+  i = 0; loop(dh_pcn, dh_note_on(DPCP[i * 2], DPCP[i * 2 + 1]); i += 1; ); dh_pcn = 0;
+  dh_dly && !dh_wasdly ? ( memset(DDLL, 0, 524288 * 2); dh_dts = -1; ); dh_wasdly = dh_dly;
+  dh_cho && !dh_wascho ? memset(DCHL, 0, 8192 * 2); dh_wascho = dh_cho;
+  dh_dts = dh_dlt;                                  // (the echo time moves here, while it is silent, instead of gliding)
+);
 dh_vol = dh_volt;
 ui_dflt = 1;
 
 @slider
-update();
+!dh_panic && !dh_pcf ? update();
 
 @block
 srate != dh_sr ? dh_srinit();
 dh_treq > 0 ? ( load_preset(dh_treq); dh_treq = 0; );     // a preset asked for from outside the panel (test hook)
-update();
+dh_pcr = 1 / (0.012 * srate);
+dh_panic && !dh_pcf ? ( dh_i = 0; loop(16, DV[dh_i * 64 + 13] > 0 ? dh_pcf = 1; dh_i += 1; ); );   // sounding: fade first
+!dh_pcf ? update();
 arp_params(slider57, dh_arp_beats(slider59), slider58, slider60 / 100, 0, 16, 0, 1, 0, 0, 0, 100, 0);
 
 // MIDI in: notes go to the arp when it is on, otherwise into the queue (sample-accurate)
@@ -468,10 +489,12 @@ file_var(0, pr_cur);
 @sample
 while (dh_eqi < dh_qc && DQO[dh_eqi] <= dh_spos) (
   dh_et = DQT[dh_eqi];
-  dh_et == 1 ? dh_note_on(DQN[dh_eqi], DQV[dh_eqi]) : dh_et == 0 ? dh_note_off(DQN[dh_eqi]) : dh_et == 2 ? dh_pedal_up() : dh_all_off();
+  dh_et == 1 ? ( dh_pcf ? dh_pchold(DQN[dh_eqi], DQV[dh_eqi]) : dh_note_on(DQN[dh_eqi], DQV[dh_eqi]); ) : dh_et == 0 ? ( dh_pcunhold(DQN[dh_eqi]); dh_note_off(DQN[dh_eqi]); ) : dh_et == 2 ? dh_pedal_up() : ( dh_pcn = 0; dh_all_off(); );
   dh_eqi += 1;
 );
 dh_spos += 1;
+dh_pcf ? ( dh_pck -= dh_pcr; dh_pck <= 0 ? ( dh_pck = 0; dh_pcapply(); ); dh_pcg = 0.5 - 0.5 * cos($pi * dh_pck); ) :
+dh_pck < 1 ? ( dh_pck = min(dh_pck + dh_pcr, 1); dh_pcg = 0.5 - 0.5 * cos($pi * dh_pck); );
 
 // ---------- control rate (every 4 samples): LFOs and the modulation sums ----------
 dh_ct += 1;
@@ -605,7 +628,7 @@ loop(16,
   );
   dh_p += 64;
 );
-dh_L *= dh_trem; dh_R *= dh_trem;
+dh_L *= dh_trem * dh_pcg; dh_R *= dh_trem * dh_pcg;          // (a preset fade reaches the effects' inputs too)
 
 // ---------- EFFECTS ----------
 dh_dist ? (
@@ -677,7 +700,7 @@ dh_dcyr = dh_R - dh_dcxr + 0.9996 * dh_dcyr; dh_dcxr = dh_R; dh_R = dh_dcyr;
 
 // ---------- MASTER ----------
 dh_vol += (dh_volt - dh_vol) * dh_sm;
-dh_L = ostL.ost_band(dh_L * dh_vol); dh_R = ostR.ost_band(dh_R * dh_vol);
+dh_L = ostL.ost_band(dh_L * dh_vol * dh_pcg); dh_R = ostR.ost_band(dh_R * dh_vol * dh_pcg);
 ost_out(dh_L, dh_R);
 spl0 = ost_l; spl1 = ost_r;
 dh_pk = max(dh_pk, max(abs(spl0), abs(spl1)));
@@ -992,15 +1015,13 @@ g_kn(1042, 504, 16, 74, 0, 100, 25, 0, "MIX", "%.0f%%", 0);
 
 // MASTER
 g_box(1076, 314, 152, 232, SHA, "MASTER");
-g_kn(1114, 392, 21, 77, -24, 6, 0, 0, "VOLUME", "%+.1f dB", 0);
+g_kn(1128, 400, 21, 77, -24, 6, 0, 0, "VOLUME", "%+.1f dB", 0);
 dh_mtr.ui_ledm(1206 * sc, 344 * sc, 10 * sc, 188 * sc, dh_pk); dh_pk *= 0.85;
 dy_kst = 20;
 sprintf(#gv, "%.0f%%", slider76); dy_knob(1104, 492, 13, 76, 0, 100, 25, 0, CAPG, "DRIFT", #gv);
 dy_kst = 20;
 sprintf(#gv, "%.0f%%", slider79); dy_knob(1152, 492, 13, 79, 0, 100, 0, 0, 0xD8B040, "SAT", #gv);
 dy_kst = 0;
-g_capc(1176, 346, "OUT");
-ui_outkeys(1150, 360, 46, 16, 4, 84);
 
 pk_end();
 ui_end();

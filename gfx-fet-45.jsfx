@@ -13,7 +13,7 @@ desc:GFX Fet 45 [FET comp]
 //   input -> INPUT (gain into the FET, -24 .. +24 dB; 0 dB = unity) -> 2x oversampled (47-tap Kaiser half-band)
 //   -> the FET gain element -> FET colour -> OUTPUT (-24 .. +24 dB) -> class-A line amp colour -> back to 1x
 //   -> output transformer (low-frequency saturation) -> DC blocker -> MIX with the dry input (latency matched)
-//   -> the house output stage (OFF / CLIP / LIMIT). Latency 23 samples (reported to the host; LIMIT adds 3 ms).
+//   -> the house output stage (soft clip, always on). Latency 23 samples (reported to the host).
 //
 // THE DETECTOR (feedback style, as on the original: it hears the FET's output, not its input)
 //   THRESHOLD fixed at +6 VU = -12 dBFS peak (a sine peaking at -12 dBFS sits exactly on it), so a mix at about
@@ -68,7 +68,7 @@ slider7:1<0,1,1{Off,On}>-Stereo link
 slider8:100<0,100,1>-Mix (%)
 slider9:50<0,100,1>-Drift (%)
 slider10:0<0,2,1{Enamel,VFD,Matrix}>-Theme
-slider11:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider11:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider12:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
@@ -191,9 +191,9 @@ function fd_update() local(rt, rs) (
   fd_link = slider7 >= 0.5;
   fd_tmix = slider8 / 100;
   drift_macro(slider9);
-  ost_setup(0, 0, 120, 6000, -0.3, slider11 | 0);
+  ost_setup(0, 0, 120, 6000, -0.3, 1);   // output stage: CLIP, always on
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = fd_LAT + ((slider11 | 0) == 2 ? ost_N : 0);
+  pdc_delay = fd_LAT;
   rs = (7 - min(max(slider5, 1), 7)) / 6;               // 0 = fastest release .. 1 = slowest
   fd_smul = 2.5 - 0.9 * rs;                             // the slow stage: 2.5x the set time (fast) .. 1.6x (slow)
   fd_cF  = 0.07 * (1 + 2.6 * fd_twA);
@@ -240,7 +240,7 @@ function fd_srinit() (
   fd_cxf = 1 - exp(-2 * $pi * 90 / srate);              // transformer low band, 90 Hz
   fd_dcr = 1 - 2 * $pi * 2 / srate;                     // DC blocker, 2 Hz
   fd_vdt = 1 / srate;
-  ost_init(ost_buf);                                    // the output stage again, on its own buffer
+  ost_init(0);                                       // the output stage again (resets it)
 );
 fd_srinit();
 fd_kap = 0.7;                                           // how much of the slow stage's memory holds the fast stage
@@ -813,23 +813,13 @@ fd_txt(360, 302, fdv_de ? "0 VU = -18 dBFS" : "0 VU = -18 dBFS SINE");
 fd_rtxt(590, 309, fdv_de ? "SCHW. = +6 VU" : "THR = +6 VU");
 
 // =====================================================================
-// THEME, LINK, output stage (x 608..810)
+// THEME, LINK (x 608..810)
 // =====================================================================
 fd_sect(608, 238, 202, 92, FDF, fdv_de ? "OPTIK" : "THEME");
 fd_key(616, 262, 64, 24, fdv_de ? "EMAILLE" : "ENAMEL", fdv_th == 0) ? ( slider10 = 0; ui_auto(10); );
 fd_key(684, 262, 46, 24, "VFD",    fdv_th == 1) ? ( slider10 = 1; ui_auto(10); );
 fd_key(734, 262, 66, 24, "MATRIX", fdv_th == 2) ? ( slider10 = 2; ui_auto(10); );
-fd_key(616, 296, 48, 24, fdv_de ? "KOPPL." : "LINK", slider7 >= 0.5) ? ( slider7 = slider7 >= 0.5 ? 0 : 1; ui_auto(7); );
-// the house output stage keys, side by side
-ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-fdv_i = 0;
-loop(3,
-  fdv_c = fdv_i == 0 ? 0x3A9CFF : fdv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  fdv_kx = fdv_i == 0 ? 670 : fdv_i == 1 ? 710 : 754; fdv_kw = fdv_i == 0 ? 36 : fdv_i == 1 ? 40 : 46;
-  ui_okey(fdv_kx, 296, fdv_kw, 24, (slider11 | 0) == fdv_i || (fdv_i == 1 && ui_okclp > 0.1), fdv_c) ? ( slider11 = fdv_i; ui_auto(11); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext((fdv_kx + fdv_kw * 0.5) * sc, (296 + 12) * sc, fdv_i == 0 ? (fdv_de ? "AUS" : "OFF") : fdv_i == 1 ? "CLIP" : (fdv_de ? "BEGR." : "LIMIT"));
-  fdv_i += 1;
-);
+fd_key(664, 296, 88, 24, fdv_de ? "KOPPL." : "LINK", slider7 >= 0.5) ? ( slider7 = slider7 >= 0.5 ? 0 : 1; ui_auto(7); );
 
 pk_end();
 ui_end();

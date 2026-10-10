@@ -13,7 +13,7 @@ desc:GFX Headsmoother [tape sat + opto]
 //            As DRIVE goes up, more of the low end skips the tape curve and rejoins clean ("tight" drive).
 //   SMOOTH - COMPRESS, ATTACK, RELEASE, LIMIT, BLEND, OUTPUT: as GFX Smooth. COLOUR switches its
 //            valve-style colour stage (off: clean compression).
-// One shared strip below holds DRIFT (one dial: 50% = the drift settings) and IN / OUT (TRIM + GUARD, SAT, OUT stage).
+// One shared strip below holds DRIFT (one dial: 50% = the drift settings) and IN / OUT (TRIM + GUARD, SAT).
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -46,8 +46,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:0<0,100,1>-Head boost (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-Ceiling (dB)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider24:50<0,100,1>-Drift (%)
 
 in_pin:left input
@@ -185,7 +185,7 @@ function update() (
   drift_macro(slider24);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
   drift = slider16 / 100 * dm_a; dspd = slider17 * dm_s;
   in_setup(slider14, slider15);
-  ins_output_setup(18);
+  ins_output_setup(18);   // output stage: CLIP, always on
 );
 
 sm = tc(30);

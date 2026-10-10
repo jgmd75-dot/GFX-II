@@ -15,7 +15,7 @@ desc:GFX G Lead 8 [poly lead synth]
 // DRIFT (GFX): the tuning wanders (whole instrument), each voice's oscillators drift apart in fine pitch on
 //   their own, and each voice's pulse width wanders; every note also lands slightly differently in tune.
 // MIDI: pitch bend +/-2, CC1 vibrato, CC64 sustain, CC123 all notes off. Voices are spread a little in stereo.
-// IN / OUT: the strip along the bottom holds SAT, the OUT stage (OFF / CLIP / LIM) and STEREO (MONO, WIDTH).
+// IN / OUT: the strip along the bottom holds SAT and STEREO (MONO, WIDTH).
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -65,8 +65,8 @@ slider37:0<0,100,1>-Band sat (%)
 slider38:30<0,100,1>-Bias (%)
 slider39:120<40,400,1>-Sat low band (Hz)
 slider40:6000<2000,16000,10>-Sat high band (Hz)
-slider41:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider42:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider41:-0.3<-24,0,0.1>-Ceiling (dB)
+slider42:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider43:20<20,500,1>-Mono below (Hz, 20 = off)
 slider44:0<0,100,1>-Stereo width (%)
 slider45:0<0,11,1{Classic Lead,Poly Brass,Fat Mono,Square Lead,PWM Strings,Hollow Pipe,Fifths,Soft Poly,Resonant Sweep,Vintage Detune,Wobble Lead,Init}>-Patch
@@ -202,7 +202,7 @@ function update() (
   glide_c = slider24 > 0 ? vo_coef(slider24) : 1;
   vmode = slider25; velsens = slider26 / 100; drift = slider27 / 100; chan = slider28;
   vol_t = 10 ^ (slider29 / 20);
-  ins_output_setup(37); ins_stereo_setup(43);
+  ins_output_setup(37); ins_stereo_setup(43);   // output stage: CLIP, always on
 );
 function env_update() (
   v0.fe.vo_adsr_set(slider11, slider12, slider13 / 100, slider14); v0.ae.vo_adsr_set(slider15, slider16, slider17 / 100, slider18);
@@ -272,6 +272,7 @@ function mgroup(x, y, w, h, sec, title, shade) (
   ui_section(sec == 0 ? 2 : sec); C_INK = INKL;
 );
 update(); env_update();
+last_vm = vmode; was_arp = was_arp_on = slider30;   // (so the first block does not queue an all-off over its own notes)
 vol_s = vol_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 

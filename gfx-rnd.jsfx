@@ -19,7 +19,7 @@ desc:GFX RND [transparent/character comp]
 // THRESHOLD is in dBu (0 dBu = -18 dBFS). Both channels are linked to the louder side.
 // MIX blends in the dry signal; in LEVEL it is sent through the same oversampling filters as the saturated
 // path, so the two stay in phase (no comb filtering at partial mix).
-// IN / OUT (row 2): TRIM with the GUARD key, SAT and the OUT stage (OFF / CLIP / LIM). DRIFT: one dial, 50% = the drift settings.
+// IN / OUT (row 2): TRIM with the GUARD key and SAT. DRIFT: one dial, 50% = the drift settings.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -46,8 +46,8 @@ slider13:0<0,100,1>-Band sat (%)
 slider14:30<0,100,1>-Bias (%)
 slider15:120<40,400,1>-Sat low band (Hz)
 slider16:6000<2000,16000,10>-Sat high band (Hz)
-slider17:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider17:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider18:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider19:100<0,100,1>-Mix (%)
 slider20:50<0,100,1>-Drift (%)
 
@@ -109,7 +109,7 @@ function update() (
   drift_macro(slider20);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
   drift = slider11 / 100 * dm_a; dspd = slider12 * dm_s;
   in_setup(slider9, slider10);
-  ins_output_setup(13);
+  ins_output_straight(13);   // output stage: straight through
 );
 
 crms = tc(8);                                       // true RMS window

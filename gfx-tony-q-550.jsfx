@@ -19,12 +19,12 @@ desc:GFX Tony Q 550 [stepped console EQ]
 //   400 Hz / 5 kHz all-pass rotation), so the crossfade never combs.
 //
 // SIGNAL FLOW (per channel; the whole engine runs at 2x, 95-tap Kaiser half-band up / down, latency 47 samples,
-// reported to the host; LIMIT adds 3 ms)
+// reported to the host)
 //   input -> INPUT DRIVE (0 .. +24 dB of gain into the engine, taken off again at its end, so DRIVE changes the
 //   character, not the loudness: like turning the mic amp up and the fader down) -> the discrete preamp
 //   (asymmetric biased curve: mostly 2nd harmonic, peaks tightened; switched out at 0 dB, faded in over the
 //   first 2 dB) -> HPF -> LOW / MID / HIGH -> LPF -> the output stage (TOKYO: the mid-focused transformer;
-//   NEW YORK: op-amp + transformer) -> OUTPUT trim -> back to 1x -> the house output stage (OFF / CLIP / LIMIT).
+//   NEW YORK: op-amp + transformer) -> OUTPUT trim -> back to 1x (no output clip).
 //
 // TOKYO EQ (constant Q: the bandwidth never changes with the gain)
 //   LOW  50 / 80 / 120 / 180 / 250 / 400 Hz, BELL (Q 1.0) or SHELF (Q 0.71, no overshoot)
@@ -71,7 +71,7 @@ import gfx-faceplate.jsfx-inc
 slider1:0<0,1,1{Tokyo,New York}>-City
 slider2:1<0,1,1{Out,In}>-EQ in
 slider3:50<0,100,1>-Drift (%)
-slider4:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider4:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider5:0<0,24,0.1>-Tokyo drive (dB)
 slider6:2<0,5,1{50 Hz,80 Hz,120 Hz,180 Hz,250 Hz,400 Hz}>-Tokyo low freq
 slider7:0<-15,15,1>-Tokyo low level (dB)
@@ -477,7 +477,7 @@ function tq_srinit() local(c, i) (
     i += 1;
   );
   eT.init = eN.init = 1; eT.mv = eN.mv = 1;
-  ost_init(ost_buf);
+  ost_init(0);
 );
 tq_srinit();
 tq_vw = 13.6; tq_vz = 0.81;                             // VU needle: natural frequency, damping
@@ -487,9 +487,9 @@ tq_vref = 1.5707963 / 0.125892541;                      // rectified x pi/2: 0 V
 function tq_update() (
   drift_macro(slider3);
   tq_om = slider4 | 0;
-  ost_setup(0, 0, 120, 6000, -0.3, tq_om);
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = tq_LAT + (tq_om == 2 ? ost_N : 0);
+  pdc_delay = tq_LAT;
   tq_tgt = slider1 >= 0.5;
 );
 
@@ -977,7 +977,7 @@ tg_band(444, 1, "MID");
 tg_band(592, 2, "HIGH");
 
 // =====================================================================
-// OUTPUT (x 740..890): the LED ladder (output peaks), the house output stage, TRIM
+// OUTPUT (x 740..890): the LED ladder (output peaks), TRIM
 // =====================================================================
 tg_sect(740, 64, 150, 266, TGF, "OUTPUT");
 tgv_l = 20 * log10(max(tqa_ol, 0.0000001)); tgv_r = 20 * log10(max(tqa_or, 0.0000001));
@@ -1005,20 +1005,10 @@ loop(5,
   sprintf(#tgv_tl, "%d", tgv_d); ui_col(0xC9CDD2); tg_ctxt(tgv_xx - (tgv_i == 4 ? 3 : 0), 149, #tgv_tl);
   tgv_i += 1;
 );
-// the house output stage keys
-ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-tgv_i = 0;
-loop(3,
-  tgv_c = tgv_i == 0 ? 0x3A9CFF : tgv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  tgv_kx = tgv_i == 0 ? 750 : tgv_i == 1 ? 792 : 838; tgv_kw = tgv_i == 0 ? 38 : tgv_i == 1 ? 42 : 44;
-  ui_okey(tgv_kx, 174, tgv_kw, 26, (slider4 | 0) == tgv_i || (tgv_i == 1 && ui_okclp > 0.1), tgv_c) ? ( slider4 = tgv_i; ui_auto(4); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext((tgv_kx + tgv_kw * 0.5) * sc, (174 + 13) * sc, tgv_i == 0 ? "OFF" : tgv_i == 1 ? "CLIP" : "LIMIT");
-  tgv_i += 1;
-);
 // TRIM
-tg_scale(815, 266, 26, 5, "-12|-6|0|+6|+12", 26);
-tgv_bip = 1; tgv_q = 0.1; tgv_a = tg_kn(815, 266, 26, tgv_b + 13, -12, 12, 0, 0, 0);
-sprintf(#tgv_v, "%+.1f dB", slider(tgv_b + 13)); tg_name(815, 312, tgv_a, "TRIM", #tgv_v);
+tg_scale(815, 252, 26, 5, "-12|-6|0|+6|+12", 26);
+tgv_bip = 1; tgv_q = 0.1; tgv_a = tg_kn(815, 252, 26, tgv_b + 13, -12, 12, 0, 0, 0);
+sprintf(#tgv_v, "%+.1f dB", slider(tgv_b + 13)); tg_name(815, 298, tgv_a, "TRIM", #tgv_v);
 
 pk_end();
 ui_end();
