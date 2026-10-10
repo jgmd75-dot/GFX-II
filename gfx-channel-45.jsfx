@@ -1,0 +1,1444 @@
+desc:GFX Channel 45 [modular channel strip]
+//tags: channel strip eq compressor gate saturation console modular
+//author: JGWizrad / Garden FX (GFX)
+//
+// A full channel strip built from the GFX range: pick an engine for each slot and mix and match.
+//   INPUT   LOW CUT (12 dB/oct, fully left = off), HIGH CUT (12 dB/oct, fully right = off), GAIN.
+//           Click GAIN for GUARD (the house input guard: eases hot sources down, catches fast peaks).
+//   GATE    GATE / EXPANDER / DRUM GATE.
+//   COMP    FET 45 / OB Q / SMOOTH.
+//   EQ      TONY Q / BOARD / SKYE: the Tony Q 550, Board EQ and Skye engines, each with its own settings
+//           (switch between them and each keeps what you set).
+//   SAT     IRON / TRANS (the output iron or a transistor line stage) / HEAD / TS-7.
+//   ORDER   EQ > COMP or COMP > EQ.
+//   OUTPUT  LEVEL, the two VU meters, DRIFT and the house output stage (CLIP always on).
+//   IN keys switch each slot in or out (a short crossfade, latency kept). Changing an engine or the ORDER fades the
+//   strip out and back in (about 30 ms) so nothing clicks.
+//   DRIFT   the supply voltage: it wanders slowly and sags under load, and every stage's headroom follows it -
+//           each engine's own drift is off, the whole strip breathes from the one supply.
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn, gfx-faceplate and gfx-instrument
+// (.jsfx-inc) in the same folder.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-instrument.jsfx-inc
+
+slider1:20<20,500,1>-Low cut (Hz, 20 = off)
+slider2:22000<2000,22000,10>-High cut (Hz, 22000 = off)
+slider3:0<-24,24,0.1>-Input gain (dB)
+slider4:1<0,1,1{Off,On}>-Input guard
+slider5:0<0,2,1{Tony Q,Board,Skye}>-EQ engine
+slider6:1<0,1,1{Out,In}>-EQ in
+slider7:0<0,2,1{Fet 45,OB Q,Smooth}>-Comp engine
+slider8:1<0,1,1{Out,In}>-Comp in
+slider9:0<0,2,1{Gate,Expander,Drum Gate}>-Gate engine
+slider10:0<0,1,1{Out,In}>-Gate in
+slider11:0<0,3,1{Iron,Transistor,Head,TS-7}>-Sat engine
+slider12:1<0,1,1{Out,In}>-Sat in
+slider13:0<0,1,1{EQ > Comp,Comp > EQ}>-Order
+slider14:0<-24,12,0.1>-Output level (dB)
+slider15:50<0,100,1>-Drift (%)
+slider16:0<0,100,1>-Band sat (%)
+slider17:30<0,100,1>-Bias (%)
+slider18:120<40,400,1>-Sat low band (Hz)
+slider19:6000<2000,16000,10>-Sat high band (Hz)
+slider20:-0.3<-24,0,0.1>-Ceiling (dB)
+slider25:0<0,1,1{Tokyo,New York}>-EQ Tony Q: City
+slider26:1<0,1,1{Out,In}>-EQ Tony Q: EQ in
+slider27:50<0,100,1>-EQ Tony Q: Drift (%)
+slider28:1<0,1,1{Off,Clip}>-EQ Tony Q: (unused, was output stage)
+slider29:0<0,24,0.1>-EQ Tony Q: Tokyo drive (dB)
+slider30:2<0,5,1{50 Hz,80 Hz,120 Hz,180 Hz,250 Hz,400 Hz}>-EQ Tony Q: Tokyo low freq
+slider31:0<-15,15,1>-EQ Tony Q: Tokyo low level (dB)
+slider32:1<0,1,1{Bell,Shelf}>-EQ Tony Q: Tokyo low shape
+slider33:4<0,11,1{500 Hz,600 Hz,700 Hz,800 Hz,1 kHz,1.2 kHz,1.5 kHz,1.8 kHz,2.2 kHz,2.7 kHz,3.3 kHz,4 kHz}>-EQ Tony Q: Tokyo mid freq
+slider34:0<-15,15,1>-EQ Tony Q: Tokyo mid level (dB)
+slider35:3<0,6,1{2.5 kHz,4 kHz,6 kHz,8 kHz,10 kHz,12.5 kHz,16 kHz}>-EQ Tony Q: Tokyo high freq
+slider36:0<-15,15,1>-EQ Tony Q: Tokyo high level (dB)
+slider37:1<0,1,1{Bell,Shelf}>-EQ Tony Q: Tokyo high shape
+slider38:20<20,400,1>-EQ Tony Q: Tokyo HPF (Hz, 20 = off)
+slider39:0<0,1,1{12 dB/oct,18 dB/oct}>-EQ Tony Q: Tokyo HPF slope
+slider40:22000<3000,22000,10>-EQ Tony Q: Tokyo LPF (Hz, 22000 = off)
+slider41:0<0,1,1{12 dB/oct,18 dB/oct}>-EQ Tony Q: Tokyo LPF slope
+slider42:0<-12,12,0.1>-EQ Tony Q: Tokyo output (dB)
+slider43:0<0,24,0.1>-EQ Tony Q: New York drive (dB)
+slider44:1<0,4,1{50 Hz,100 Hz,200 Hz,300 Hz,400 Hz}>-EQ Tony Q: New York low freq
+slider45:5<0,10,1{-12 dB,-9 dB,-6 dB,-4 dB,-2 dB,0 dB,+2 dB,+4 dB,+6 dB,+9 dB,+12 dB}>-EQ Tony Q: New York low gain
+slider46:1<0,1,1{Peak,Shelf}>-EQ Tony Q: New York low shape
+slider47:2<0,4,1{400 Hz,800 Hz,1.5 kHz,3 kHz,5 kHz}>-EQ Tony Q: New York mid freq
+slider48:5<0,10,1{-12 dB,-9 dB,-6 dB,-4 dB,-2 dB,0 dB,+2 dB,+4 dB,+6 dB,+9 dB,+12 dB}>-EQ Tony Q: New York mid gain
+slider49:2<0,4,1{5 kHz,7 kHz,10 kHz,12.5 kHz,15 kHz}>-EQ Tony Q: New York high freq
+slider50:5<0,10,1{-12 dB,-9 dB,-6 dB,-4 dB,-2 dB,0 dB,+2 dB,+4 dB,+6 dB,+9 dB,+12 dB}>-EQ Tony Q: New York high gain
+slider51:1<0,1,1{Peak,Shelf}>-EQ Tony Q: New York high shape
+slider52:20<20,400,1>-EQ Tony Q: New York HPF (Hz, 20 = off)
+slider53:0<0,1,1{12 dB/oct,18 dB/oct}>-EQ Tony Q: New York HPF slope
+slider54:22000<3000,22000,10>-EQ Tony Q: New York LPF (Hz, 22000 = off)
+slider55:0<0,1,1{12 dB/oct,18 dB/oct}>-EQ Tony Q: New York LPF slope
+slider56:0<-12,12,0.1>-EQ Tony Q: New York output (dB)
+slider57:20<20,400,1>-EQ Board: HPF (Hz, 20 = off)
+slider58:22000<3000,22000,10>-EQ Board: LPF (Hz, 22000 = off)
+slider59:0<-15,15,0.1>-EQ Board: LF gain (dB)
+slider60:100<30,450,1>-EQ Board: LF freq (Hz)
+slider61:0<0,1,1{Shelf,Bell}>-EQ Board: LF bell
+slider62:0<-15,15,0.1>-EQ Board: LMF gain (dB)
+slider63:600<200,2500,1>-EQ Board: LMF freq (Hz)
+slider64:1<0.4,3,0.01>-EQ Board: LMF Q
+slider65:0<-15,15,0.1>-EQ Board: HMF gain (dB)
+slider66:2500<600,7000,1>-EQ Board: HMF freq (Hz)
+slider67:1<0.4,3,0.01>-EQ Board: HMF Q
+slider68:0<-15,15,0.1>-EQ Board: HF gain (dB)
+slider69:8000<1500,16000,10>-EQ Board: HF freq (Hz)
+slider70:0<0,1,1{Shelf,Bell}>-EQ Board: HF bell
+slider71:1<0,1,1{Out,In}>-EQ Board: EQ in
+slider72:1<0,1,1{Brown,Black}>-EQ Board: Voicing
+slider73:0<0,100,1>-EQ Board: Line amp drive (%)
+slider74:0<-12,12,0.1>-EQ Board: Output (dB)
+slider75:100<20,800,1>-EQ Skye: Band 1 Freq (Hz)
+slider76:1<0.1,4,0.01>-EQ Skye: Band 1 BW (oct)
+slider77:0<-16,16,0.1>-EQ Skye: Band 1 Gain (dB)
+slider78:1<0,1,1{Out,In}>-EQ Skye: Band 1 In
+slider79:500<80,3000,1>-EQ Skye: Band 2 Freq (Hz)
+slider80:1<0.1,4,0.01>-EQ Skye: Band 2 BW (oct)
+slider81:0<-16,16,0.1>-EQ Skye: Band 2 Gain (dB)
+slider82:1<0,1,1{Out,In}>-EQ Skye: Band 2 In
+slider83:2500<300,10000,1>-EQ Skye: Band 3 Freq (Hz)
+slider84:1<0.1,4,0.01>-EQ Skye: Band 3 BW (oct)
+slider85:0<-16,16,0.1>-EQ Skye: Band 3 Gain (dB)
+slider86:1<0,1,1{Out,In}>-EQ Skye: Band 3 In
+slider87:8000<1000,20000,1>-EQ Skye: Band 4 Freq (Hz)
+slider88:1<0.1,4,0.01>-EQ Skye: Band 4 BW (oct)
+slider89:0<-16,16,0.1>-EQ Skye: Band 4 Gain (dB)
+slider90:1<0,1,1{Out,In}>-EQ Skye: Band 4 In
+slider91:0<-12,12,0.1>-EQ Skye: Output (dB)
+slider92:1<0,1,1{Out,In}>-EQ Skye: EQ In
+slider93:20<0,100,1>-EQ Skye: Drift (%)
+slider94:1<0,1,1{Off,Clip}>-EQ Skye: (unused, was output stage)
+slider95:30<10,1000,1>-EQ Skye: HPF Freq (Hz)
+slider96:0<0,2,1{x1 (12 dB/oct),x2 (24 dB/oct),x4 (48 dB/oct)}>-EQ Skye: HPF Slope
+slider97:0<0,1,1{Out,In}>-EQ Skye: HPF In
+slider98:18000<1000,22000,1>-EQ Skye: LPF Freq (Hz)
+slider99:0<0,2,1{x1 (12 dB/oct),x2 (24 dB/oct),x4 (48 dB/oct)}>-EQ Skye: LPF Slope
+slider100:0<0,1,1{Out,In}>-EQ Skye: LPF In
+slider101:0<0,1,1{Bell,Shelf}>-EQ Skye: Band 1 Shape
+slider102:0<0,1,1{Bell,Shelf}>-EQ Skye: Band 4 Shape
+slider171:20<0,100,1>-Sat Iron / Transistor: drive (%)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_noinit = 1;
+#ui_man = "gfx-channel-45";
+
+// ---------- memory: the dry delay lines here; each engine has its own region (its nextmem starts there) ----------
+CH_DQ = 0;                                                // 4 slots x 2 channels x a 512 ring: the dry signal, latency matched
+CH_DN = 512;
+
+// ======================== the engines ========================
+// ======================== gfx-tony-q-550.jsfx (prefix eqt_; its sliders 1-32 at 25-56) ========================
+function eqt_defaults() (
+  slider(25) = 0;
+  slider(26) = 1;
+  slider(27) = 0;
+  slider(28) = 0;
+  slider(29) = 0;
+  slider(30) = 2;
+  slider(31) = 0;
+  slider(32) = 1;
+  slider(33) = 4;
+  slider(34) = 0;
+  slider(35) = 3;
+  slider(36) = 0;
+  slider(37) = 1;
+  slider(38) = 20;
+  slider(39) = 0;
+  slider(40) = 22000;
+  slider(41) = 0;
+  slider(42) = 0;
+  slider(43) = 0;
+  slider(44) = 1;
+  slider(45) = 5;
+  slider(46) = 1;
+  slider(47) = 2;
+  slider(48) = 5;
+  slider(49) = 2;
+  slider(50) = 5;
+  slider(51) = 1;
+  slider(52) = 20;
+  slider(53) = 0;
+  slider(54) = 22000;
+  slider(55) = 0;
+  slider(56) = 0;
+  0;
+);
+function eqt_consts() (
+  eqt_s33 = 0;
+  slider(26) = 1;
+  slider(27) = 0;
+  slider(28) = 0;
+  0;
+);
+function eqt_alloc(n) local(p) ( p = eqt_nextmem; eqt_nextmem += n; memset(p, 0, n); p; );
+function eqt_tq_i0(eqt_x) local(s, t, eqt_k) ( s = 1; t = 1; eqt_k = 1; loop(40, t *= sqr(eqt_x / (2 * eqt_k)); s += t; eqt_k += 1; ); s; );
+function eqt_tq_conv(b) local(s, i, j) (
+  s = 0; i = 0; j = 47;
+  loop(24, s += eqt_tq_H[i] * (b[i] + b[j]); i += 1; j -= 1; );
+  s;
+);
+function eqt_tq_sv(eqt_v0, eqt_c) instance(eqt_ic1, eqt_ic2) local(eqt_v1, eqt_v2, eqt_v3) (
+  eqt_v3 = eqt_v0 - eqt_ic2;
+  eqt_v1 = eqt_c[0] * eqt_ic1 + eqt_c[1] * eqt_v3;
+  eqt_v2 = eqt_ic2 + eqt_c[1] * eqt_ic1 + eqt_c[2] * eqt_v3;
+  eqt_ic1 = 2 * eqt_v1 - eqt_ic1; eqt_ic2 = 2 * eqt_v2 - eqt_ic2;
+  eqt_tq_bpo = eqt_v1; eqt_tq_hpo = eqt_v0 - eqt_c[3] * eqt_v1 - eqt_v2;
+  eqt_v2;
+);
+function eqt_tq_eq(eqt_v0, eqt_c) instance(eqt_ic1, eqt_ic2) local(eqt_v1, eqt_v2, eqt_v3) (
+  eqt_v3 = eqt_v0 - eqt_ic2;
+  eqt_v1 = eqt_c[0] * eqt_ic1 + eqt_c[1] * eqt_v3;
+  eqt_v2 = eqt_ic2 + eqt_c[1] * eqt_ic1 + eqt_c[2] * eqt_v3;
+  eqt_ic1 = 2 * eqt_v1 - eqt_ic1; eqt_ic2 = 2 * eqt_v2 - eqt_ic2;
+  eqt_c[4] * eqt_v0 + eqt_c[5] * eqt_v1 + eqt_c[6] * eqt_v2;
+);
+function eqt_tq_op(eqt_x, eqt_c) instance(s) local(v, eqt_lp) ( v = (eqt_x - s) * eqt_c[0]; eqt_lp = v + s; s = eqt_lp + v; eqt_lp; );
+function eqt_tq_z() instance(eqt_ic1, eqt_ic2, s) ( eqt_ic1 = eqt_ic2 = s = 0; );
+function eqt_tq_zl(eqt_x) instance(eqt_ic1, eqt_ic2, s) ( eqt_ic1 = 0; eqt_ic2 = eqt_x; s = eqt_x; );
+function eqt_tq_fl() instance(eqt_ic1, eqt_ic2, s) (
+  abs(eqt_ic1) < 0.000000000001 ? eqt_ic1 = 0; abs(eqt_ic2) < 0.000000000001 ? eqt_ic2 = 0; abs(s) < 0.000000000001 ? s = 0;
+);
+function eqt_tq_cg(eqt_c, g, eqt_k) ( eqt_c[0] = 1 / (1 + g * (g + eqt_k)); eqt_c[1] = g * eqt_c[0]; eqt_c[2] = g * eqt_c[1]; eqt_c[3] = eqt_k; );
+function eqt_tq_tn(f) ( tan($pi * min(max(f, 2), 0.47 * eqt_tq_fs2) / eqt_tq_fs2); );
+function eqt_tq_cset(eqt_c, f, eqt_k) ( eqt_tq_cg(eqt_c, eqt_tq_tn(f), eqt_k); );
+function eqt_tq_band(eqt_c, eqt_type, f, eqt_gdb, eqt_q) local(A, t, eqt_k) (
+  A = exp(eqt_gdb * 0.0575646273); t = eqt_tq_tn(f);            // A = 10 ^ (dB / 40)
+  eqt_type == 0 ? ( eqt_k = 1 / (eqt_q * A); eqt_tq_cg(eqt_c, t, eqt_k); eqt_c[4] = 1; eqt_c[5] = eqt_k * (A * A - 1); eqt_c[6] = 0; ) :
+  eqt_type == 1 ? ( eqt_k = 1 / eqt_q; eqt_tq_cg(eqt_c, t / sqrt(A), eqt_k); eqt_c[4] = 1; eqt_c[5] = eqt_k * (A - 1); eqt_c[6] = A * A - 1; ) :
+              ( eqt_k = 1 / eqt_q; eqt_tq_cg(eqt_c, t * sqrt(A), eqt_k); eqt_c[4] = A * A; eqt_c[5] = eqt_k * (1 - A) * A; eqt_c[6] = 1 - A * A; );
+);
+function eqt_tq_opset(eqt_c, f) local(g) ( g = eqt_tq_tn(f); eqt_c[0] = g / (1 + g); );
+function eqt_tq_pre(eqt_x, eqt_c) instance(eqt_dx, eqt_dy) local(u, t, d) (
+  eqt_c[105] > 0.00001 ? (
+    u = eqt_tq_pd * (eqt_x * eqt_tq_pk + eqt_c[106]);
+    t = exp(2 * min(max(u, -20), 20)); t = (t - 1) / (t + 1);
+    t = (t - eqt_c[111]) * eqt_c[112];
+    d = t - eqt_x;
+    eqt_dy = d - eqt_dx + eqt_tq_dcd * eqt_dy; eqt_dx = d;
+    eqt_x += eqt_c[105] * eqt_dy;
+  );
+  eqt_x;
+);
+function eqt_tq_lin(eqt_x, eqt_c) instance(eqt_h1, eqt_h2, eqt_h3, eqt_l1, eqt_l2, eqt_l3, b1, b2, eqt_b3) local(eqt_m, eqt_w, a, b, d) (
+  eqt_m = eqt_c[110];
+  eqt_m ? (
+    eqt_c[110] = 0;
+    eqt_m & 1 ? eqt_h1.eqt_tq_z(); eqt_m & 2 ? ( eqt_h2.eqt_tq_z(); eqt_h3.eqt_tq_z(); );
+    eqt_m & 16 ? b1.eqt_tq_z(); eqt_m & 32 ? b2.eqt_tq_z(); eqt_m & 64 ? eqt_b3.eqt_tq_z();
+  );
+  eqt_c[96] ? (
+    eqt_w = eqt_c[97]; d = eqt_x;
+    eqt_w < 0.9999 ? ( eqt_h1.eqt_tq_sv(eqt_x, eqt_c + 24); a = eqt_tq_hpo; );
+    eqt_w > 0.0001 ? ( eqt_h2.eqt_tq_sv(eqt_x, eqt_c + 32); b = eqt_tq_hpo; b -= eqt_h3.eqt_tq_op(b, eqt_c + 40); );
+    eqt_x = eqt_w <= 0.0001 ? a : eqt_w >= 0.9999 ? b : a + (b - a) * eqt_w;
+    eqt_c[116] < 0.9999 ? eqt_x = d + (eqt_x - d) * eqt_c[116];        // switching in / out: a 30 ms crossfade
+  );
+  eqt_c[100] ? eqt_x = b1.eqt_tq_eq(eqt_x, eqt_c);
+  eqt_c[101] ? eqt_x = b2.eqt_tq_eq(eqt_x, eqt_c + 8);
+  eqt_c[102] ? eqt_x = eqt_b3.eqt_tq_eq(eqt_x, eqt_c + 16);
+  eqt_m & 4 ? eqt_l1.eqt_tq_zl(eqt_x); eqt_m & 8 ? ( eqt_l2.eqt_tq_zl(eqt_x); eqt_l3.eqt_tq_zl(eqt_x); );
+  eqt_c[98] ? (
+    eqt_w = eqt_c[99]; d = eqt_x;
+    eqt_w < 0.9999 ? a = eqt_l1.eqt_tq_sv(eqt_x, eqt_c + 48);
+    eqt_w > 0.0001 ? b = eqt_l3.eqt_tq_op(eqt_l2.eqt_tq_sv(eqt_x, eqt_c + 56), eqt_c + 64);
+    eqt_x = eqt_w <= 0.0001 ? a : eqt_w >= 0.9999 ? b : a + (b - a) * eqt_w;
+    eqt_c[118] < 0.9999 ? eqt_x = d + (eqt_x - d) * eqt_c[118];
+  );
+  eqt_x;
+);
+function eqt_tq_linfl() instance(eqt_h1, eqt_h2, eqt_h3, eqt_l1, eqt_l2, eqt_l3, b1, b2, eqt_b3) (
+  eqt_h1.eqt_tq_fl(); eqt_h2.eqt_tq_fl(); eqt_h3.eqt_tq_fl(); eqt_l1.eqt_tq_fl(); eqt_l2.eqt_tq_fl(); eqt_l3.eqt_tq_fl(); b1.eqt_tq_fl(); b2.eqt_tq_fl(); eqt_b3.eqt_tq_fl();
+);
+function eqt_tq_iron(eqt_m, eqt_c) instance(env, eqt_z, eqt_e2, eqt_dx, eqt_dy) local(eqt_k, v, a, e, h, u, eqt_q, eqt_cc, y, d) (
+  eqt_k = eqt_c[107]; v = eqt_m * eqt_k; a = abs(v);
+  env = a > env ? env + (a - env) * eqt_tq_iat : env * eqt_tq_irl;
+  // the backlash memory: z follows v with a soft dead band of +/- tq_iw
+  e = v - eqt_z; e /= eqt_tq_iw; eqt_z += (e - e / sqrt(1 + e * e)) * eqt_tq_iw;
+  h = env * env; h = eqt_tq_ihy * h / (1 + h);              // the loop opens up with level, nothing at low level
+  u = v - h * (v - eqt_z);
+  // the core: a soft knee, linear below it
+  eqt_q = abs(u); eqt_cc = u / (1 + eqt_q * eqt_q * eqt_q) ^ 0.33333333;
+  eqt_e2 += (eqt_cc * eqt_cc - eqt_e2) * eqt_tq_ce;
+  eqt_cc += eqt_tq_iev * env / (1 + env) * (eqt_cc * eqt_cc - eqt_e2);
+  y = eqt_cc / ((1 + eqt_tq_ibl * env * env) * eqt_k);
+  d = y - eqt_m;
+  eqt_dy = d - eqt_dx + eqt_tq_dcd * eqt_dy; eqt_dx = d;
+  eqt_m + eqt_dy;
+);
+function eqt_tq_tout(eqt_x, eqt_c) instance(eqt_s1a, eqt_s1b, eqt_s1c, eqt_sap, eqt_s2a, eqt_s2b, eqt_s2c, eqt_ir) local(eqt_lp, t, eqt_lo, eqt_hi1, eqt_mid, eqt_hi) (
+  eqt_lp = eqt_s1a.eqt_tq_sv(eqt_x, eqt_c + 72); t = eqt_tq_hpo;
+  eqt_lo = eqt_s1b.eqt_tq_sv(eqt_lp, eqt_c + 72);                           // LO = LP . LP (400 Hz)
+  eqt_s1c.eqt_tq_sv(t, eqt_c + 72); eqt_hi1 = eqt_tq_hpo;                     // the rest = HP . HP
+  eqt_sap.eqt_tq_sv(eqt_lo, eqt_c + 80); eqt_lo -= 2 * eqt_c[83] * eqt_tq_bpo;        // LO gets the 5 kHz all-pass: the bands stay in phase
+  eqt_lp = eqt_s2a.eqt_tq_sv(eqt_hi1, eqt_c + 80); t = eqt_tq_hpo;
+  eqt_mid = eqt_s2b.eqt_tq_sv(eqt_lp, eqt_c + 80);
+  eqt_s2c.eqt_tq_sv(t, eqt_c + 80); eqt_hi = eqt_tq_hpo;
+  eqt_lo + eqt_ir.eqt_tq_iron(eqt_mid, eqt_c) + eqt_hi;
+);
+function eqt_tq_toutfl() instance(eqt_s1a, eqt_s1b, eqt_s1c, eqt_sap, eqt_s2a, eqt_s2b, eqt_s2c, eqt_ir) (
+  eqt_s1a.eqt_tq_fl(); eqt_s1b.eqt_tq_fl(); eqt_s1c.eqt_tq_fl(); eqt_sap.eqt_tq_fl(); eqt_s2a.eqt_tq_fl(); eqt_s2b.eqt_tq_fl(); eqt_s2c.eqt_tq_fl();
+  abs(eqt_ir.env) < 0.000000000001 ? eqt_ir.env = 0; abs(eqt_ir.eqt_e2) < 0.000000000001 ? eqt_ir.eqt_e2 = 0;
+  abs(eqt_ir.eqt_dx) < 0.000000000001 ? eqt_ir.eqt_dx = 0; abs(eqt_ir.eqt_dy) < 0.000000000001 ? eqt_ir.eqt_dy = 0;
+);
+function eqt_tq_nres(v) local(a) ( a = abs(v); a <= eqt_tq_ka ? 0 : a < eqt_tq_kb ? -sign(v) * sqr(a - eqt_tq_ka) / (2 * eqt_tq_kw) : sign(v) * (1 - a); );
+function eqt_tq_nR(v) local(a, eqt_k) ( a = abs(v); eqt_k = a - eqt_tq_ka;
+  a <= eqt_tq_ka ? 0 : a < eqt_tq_kb ? 0 - eqt_k * eqt_k * eqt_k / (6 * eqt_tq_kw) : (a - eqt_tq_kb) - 0.5 * (a * a - eqt_tq_kb * eqt_tq_kb) - eqt_tq_kw * eqt_tq_kw / 6; );
+function eqt_tq_nout(eqt_x, eqt_c) instance(eqt_v0, eqt_m2, eqt_ys, ph, eqt_sp, eqt_bm, eqt_ap1, eqt_ap2) local(v, eqt_q, y, d, s, eqt_k) (
+  // op-amp: linear until it nears the rails, then the hard knee (ADAA on the residue), bias drift on the even term
+  v = eqt_x / eqt_tq_nrl; d = v - eqt_v0;
+  eqt_q = abs(v) <= eqt_tq_ka && abs(eqt_v0) <= eqt_tq_ka ? 0 : abs(d) > 0.00001 ? (eqt_tq_nR(v) - eqt_tq_nR(eqt_v0)) / d : eqt_tq_nres(0.5 * (v + eqt_v0));
+  eqt_v0 = v; v += eqt_q;
+  eqt_m2 += (v * v - eqt_m2) * eqt_tq_ce;
+  y = eqt_tq_nrl * (v + eqt_tq_na2 * eqt_c[113] * (v * v - eqt_m2));
+  // slew: the steepest edges of hot peaks are rounded
+  d = (y - eqt_ys) / eqt_tq_slw; eqt_q = d * d; eqt_ys += eqt_tq_slw * d / sqrt(sqrt(1 + eqt_q * eqt_q)); y = eqt_ys;
+  // the low-frequency bump (comes in with DRIVE)
+  y = eqt_bm.eqt_tq_eq(y, eqt_c + 88);
+  // output transformer: the core saturates on flux, so the low end goes first
+  eqt_k = eqt_c[107];
+  ph = ph * eqt_tq_xlk + y * eqt_tq_xc; ph = min(max(ph, -8), 8);
+  s = exp(2 * min(max(ph * eqt_k, -20), 20)); s = (s - 1) / (s + 1);
+  s = ph + eqt_tq_xw * (s / eqt_k - ph);
+  y = (s - eqt_sp * eqt_tq_xlk) / eqt_tq_xc; eqt_sp = s;
+  // the 400 Hz / 5 kHz all-pass pair: phase-matched to TOKYO
+  eqt_ap1.eqt_tq_sv(y, eqt_c + 72); y -= 2 * eqt_c[75] * eqt_tq_bpo;
+  eqt_ap2.eqt_tq_sv(y, eqt_c + 80); y -= 2 * eqt_c[83] * eqt_tq_bpo;
+  y;
+);
+function eqt_tq_noutfl() instance(eqt_v0, eqt_m2, eqt_ys, ph, eqt_sp, eqt_bm, eqt_ap1, eqt_ap2) (
+  eqt_bm.eqt_tq_fl(); eqt_ap1.eqt_tq_fl(); eqt_ap2.eqt_tq_fl();
+  abs(eqt_m2) < 0.000000000001 ? eqt_m2 = 0; abs(eqt_ys) < 0.000000000001 ? eqt_ys = 0;
+  abs(ph) < 0.000000000001 ? ph = 0; abs(eqt_sp) < 0.000000000001 ? eqt_sp = 0;
+);
+function eqt_tq_tch(eqt_x, eqt_c) instance(eqt_pre, eqt_lin, eqt_tro) local(g, i) (
+  eqt_c[103] += eqt_c[108]; eqt_c[104] += eqt_c[109]; eqt_c[97] += eqt_c[114]; eqt_c[99] += eqt_c[115]; eqt_c[116] += eqt_c[119]; eqt_c[118] += eqt_c[120];
+  eqt_c[117] ? ( i = 0; loop(23, eqt_c[i] += eqt_c[152 + i]; i += 1; ); );
+  g = eqt_c[103];
+  eqt_x = eqt_pre.eqt_tq_pre(eqt_x * g, eqt_c);
+  eqt_x = eqt_lin.eqt_tq_lin(eqt_x, eqt_c);
+  eqt_tro.eqt_tq_tout(eqt_x, eqt_c) * eqt_c[104] / g;
+);
+function eqt_tq_nch(eqt_x, eqt_c) instance(eqt_pre, eqt_lin, eqt_nyo) local(g, i) (
+  eqt_c[103] += eqt_c[108]; eqt_c[104] += eqt_c[109]; eqt_c[97] += eqt_c[114]; eqt_c[99] += eqt_c[115]; eqt_c[116] += eqt_c[119]; eqt_c[118] += eqt_c[120];
+  eqt_c[117] ? ( i = 0; loop(23, eqt_c[i] += eqt_c[152 + i]; i += 1; ); );
+  g = eqt_c[103];
+  eqt_x = eqt_pre.eqt_tq_pre(eqt_x * g, eqt_c);
+  eqt_x = eqt_lin.eqt_tq_lin(eqt_x, eqt_c);
+  eqt_nyo.eqt_tq_nout(eqt_x, eqt_c) * eqt_c[104] / g;
+);
+function eqt_tq_tfl() instance(eqt_pre, eqt_lin, eqt_tro) (
+  eqt_lin.eqt_tq_linfl(); eqt_tro.eqt_tq_toutfl(); abs(eqt_pre.eqt_dx) < 0.000000000001 ? eqt_pre.eqt_dx = 0; abs(eqt_pre.eqt_dy) < 0.000000000001 ? eqt_pre.eqt_dy = 0;
+);
+function eqt_tq_nfl() instance(eqt_pre, eqt_lin, eqt_nyo) (
+  eqt_lin.eqt_tq_linfl(); eqt_nyo.eqt_tq_noutfl(); abs(eqt_pre.eqt_dx) < 0.000000000001 ? eqt_pre.eqt_dx = 0; abs(eqt_pre.eqt_dy) < 0.000000000001 ? eqt_pre.eqt_dy = 0;
+);
+function eqt_tq_ftl(i) ( i = min(max(i | 0, 0), 5);  i == 0 ? 50 : i == 1 ? 80 : i == 2 ? 120 : i == 3 ? 180 : i == 4 ? 250 : 400; );
+function eqt_tq_ftm(i) ( i = min(max(i | 0, 0), 11); i == 0 ? 500 : i == 1 ? 600 : i == 2 ? 700 : i == 3 ? 800 : i == 4 ? 1000 :
+  i == 5 ? 1200 : i == 6 ? 1500 : i == 7 ? 1800 : i == 8 ? 2200 : i == 9 ? 2700 : i == 10 ? 3300 : 4000; );
+function eqt_tq_fth(i) ( i = min(max(i | 0, 0), 6);  i == 0 ? 2500 : i == 1 ? 4000 : i == 2 ? 6000 : i == 3 ? 8000 : i == 4 ? 10000 : i == 5 ? 12500 : 16000; );
+function eqt_tq_fnl(i) ( i = min(max(i | 0, 0), 4);  i == 0 ? 50 : i == 1 ? 100 : i == 2 ? 200 : i == 3 ? 300 : 400; );
+function eqt_tq_fnm(i) ( i = min(max(i | 0, 0), 4);  i == 0 ? 400 : i == 1 ? 800 : i == 2 ? 1500 : i == 3 ? 3000 : 5000; );
+function eqt_tq_fnh(i) ( i = min(max(i | 0, 0), 4);  i == 0 ? 5000 : i == 1 ? 7000 : i == 2 ? 10000 : i == 3 ? 12500 : 15000; );
+function eqt_tq_gny(i) ( i = min(max(i | 0, 0), 10); i == 0 ? -12 : i == 1 ? -9 : i == 2 ? -6 : i == 3 ? -4 : i == 4 ? -2 : i == 5 ? 0 :
+  i == 6 ? 2 : i == 7 ? 4 : i == 8 ? 6 : i == 9 ? 9 : 12; );
+function eqt_tq_gtk(v) ( min(max(floor(v + 0.5), -15), 15); );
+function eqt_tq_ech(eqt_c, eqt_d0, eqt_gm, eqt_bias, eqt_ks, eqt_sn) instance(eqt_lf, eqt_lg, eqt_mf, eqt_mg, eqt_hf, eqt_hg, eqt_ls, eqt_lw, eqt_hs, eqt_hw, eqt_hp, eqt_lp, eqt_h18, eqt_l18, eqt_dr, eqt_ny)
+  local(eqt_q, e, t) (
+  // the three bands (drift: d0 = the band frequency factors, gm = the gain factor)
+  e = eqt_lg * eqt_lw * eqt_lw * (3 - 2 * eqt_lw) * eqt_gm;
+  eqt_q = eqt_ny ? (eqt_ls ? 1.0 : 0.22 + 0.19 * abs(e)) : (eqt_ls ? 0.70710678 : 1.0);
+  eqt_c[100] ? eqt_tq_band(eqt_c + 128, eqt_ls ? 1 : 0, eqt_lf * eqt_d0[0], e, eqt_q);
+  e = eqt_mg * eqt_gm;
+  eqt_q = eqt_ny ? 0.22 + 0.19 * abs(e) : 1.2;
+  eqt_c[101] ? eqt_tq_band(eqt_c + 136, 0, eqt_mf * eqt_d0[1], e, eqt_q);
+  e = eqt_hg * eqt_hw * eqt_hw * (3 - 2 * eqt_hw) * eqt_gm;
+  eqt_q = eqt_ny ? (eqt_hs ? 1.0 : 0.22 + 0.19 * abs(e)) : (eqt_hs ? 0.70710678 : 1.0);
+  eqt_c[102] ? eqt_tq_band(eqt_c + 144, eqt_hs ? 2 : 0, eqt_hf * eqt_d0[2], e, eqt_q);
+  // the bands glide to their new coefficients sample by sample (a band starting from rest snaps)
+  t = 0;
+  loop(23,
+    (eqt_sn & (t < 8 ? 16 : t < 16 ? 32 : 64)) ? ( eqt_c[t] = eqt_c[128 + t]; eqt_c[152 + t] = 0; ) : eqt_c[152 + t] = (eqt_c[128 + t] - eqt_c[t]) / (2 * eqt_tq_N);
+    t += 1;
+  );
+  eqt_c[117] = 1;
+  // filters (they drift with the LOW / HIGH band factors)
+  eqt_c[96] ? ( t = eqt_hp * eqt_d0[0]; eqt_tq_cset(eqt_c + 24, t, 1.41421356); eqt_tq_cset(eqt_c + 32, t, 1); eqt_tq_opset(eqt_c + 40, t); );
+  eqt_c[98] ? ( t = min(eqt_lp * eqt_d0[2], 0.47 * eqt_tq_fs2); eqt_tq_cset(eqt_c + 48, t, 1.41421356); eqt_tq_cset(eqt_c + 56, t, 1); eqt_tq_opset(eqt_c + 64, t); );
+  // NEW YORK: the transformer's bump comes in with DRIVE
+  eqt_ny ? eqt_tq_band(eqt_c + 88, 0, 45, eqt_dr / 24, 0.8);
+  // preamp: fade-in, bias (drift), curve offset and normaliser; NEW YORK op-amp even term; the iron's saturation point
+  eqt_c[105] = min(eqt_dr / 2, 1);
+  eqt_c[106] = 0.30 + eqt_bias;
+  t = exp(2 * eqt_tq_pd * eqt_c[106]); t = (t - 1) / (t + 1);
+  eqt_c[111] = t; eqt_c[112] = 1 / (eqt_tq_pd * eqt_tq_pk * (1 - t * t));
+  eqt_c[113] = 1 + eqt_bias * 10;
+  eqt_c[107] = (eqt_ny ? 0.45 : 0.42) * eqt_ks;
+);
+function eqt_tq_gl(t) instance(v, eqt_w) ( v != t || eqt_w != t ? ( eqt_w += (t - eqt_w) * eqt_tq_kG; v += (eqt_w - v) * eqt_tq_kG;
+  abs(v - t) < 0.0005 && abs(eqt_w - t) < 0.0005 ? v = eqt_w = t; eqt_tq_mv = 1; ); v; );
+function eqt_tq_glf(t) instance(v, eqt_w) ( v != t || eqt_w != t ? ( eqt_w *= (t / eqt_w) ^ eqt_tq_kF; v *= (eqt_w / v) ^ eqt_tq_kF;
+  abs(v / t - 1) < 0.0002 && abs(eqt_w / t - 1) < 0.0002 ? v = eqt_w = t; eqt_tq_mv = 1; ); v; );
+function eqt_tq_gli(t) instance(v, eqt_w) ( v = eqt_w = t; );
+function eqt_tq_eng(b, eqt_ny, eqt_cl, eqt_cr) instance(eqt_lf, eqt_lg, eqt_mf, eqt_mg, eqt_hf, eqt_hg, eqt_ls, eqt_lw, eqt_hs, eqt_hw, eqt_hp, eqt_lp, eqt_h18, eqt_l18, eqt_dr, eqt_tr, init, eqt_mv, eqt_df, eqt_hwt, eqt_lwt, eqt_sn,
+  eqt_glf, eqt_glg, eqt_gmf, eqt_gmg, eqt_ghf, eqt_ghg, eqt_ghp, eqt_glp, eqt_gdr, eqt_gtr)
+  local(eqt_eq, eqt_tlf, eqt_tlg, eqt_tmf, eqt_tmg, eqt_thf, eqt_thg, eqt_tls, eqt_ths, eqt_thp, eqt_tlp, eqt_hon, eqt_lon, eqt_t18h, eqt_t18l, eqt_tdr, eqt_ttr, eqt_on, g, t, eqt_x) (
+  this.eqt_ny = eqt_ny;
+  eqt_eq = slider(26) >= 0.5;
+  eqt_ny ? (
+    eqt_tlf = eqt_tq_fnl(slider(24 + b + 1)); eqt_tlg = eqt_tq_gny(slider(24 + b + 2)); eqt_tmf = eqt_tq_fnm(slider(24 + b + 4)); eqt_tmg = eqt_tq_gny(slider(24 + b + 5));
+    eqt_thf = eqt_tq_fnh(slider(24 + b + 6)); eqt_thg = eqt_tq_gny(slider(24 + b + 7));
+  ) : (
+    eqt_tlf = eqt_tq_ftl(slider(24 + b + 1)); eqt_tlg = eqt_tq_gtk(slider(24 + b + 2)); eqt_tmf = eqt_tq_ftm(slider(24 + b + 4)); eqt_tmg = eqt_tq_gtk(slider(24 + b + 5));
+    eqt_thf = eqt_tq_fth(slider(24 + b + 6)); eqt_thg = eqt_tq_gtk(slider(24 + b + 7));
+  );
+  eqt_tlg *= eqt_eq; eqt_tmg *= eqt_eq; eqt_thg *= eqt_eq;
+  eqt_tls = slider(24 + b + 3) >= 0.5; eqt_ths = slider(24 + b + 8) >= 0.5;
+  t = slider(24 + b + 9);  eqt_hon = t > 20.5;  eqt_thp = eqt_hon ? min(t, 400) : 10;
+  t = slider(24 + b + 11); eqt_lon = t < 21990; eqt_tlp = eqt_lon ? max(t, 3000) : eqt_tq_lpoff;
+  eqt_t18h = slider(24 + b + 10) >= 0.5; eqt_t18l = slider(24 + b + 12) >= 0.5;
+  eqt_tdr = min(max(slider(24 + b), 0), 24); eqt_ttr = exp(min(max(slider(24 + b + 13), -12), 12) * 0.115129255);
+  init ? (
+    eqt_glf.eqt_tq_gli(eqt_tlf); eqt_glg.eqt_tq_gli(eqt_tlg); eqt_gmf.eqt_tq_gli(eqt_tmf); eqt_gmg.eqt_tq_gli(eqt_tmg); eqt_ghf.eqt_tq_gli(eqt_thf); eqt_ghg.eqt_tq_gli(eqt_thg);
+    eqt_ghp.eqt_tq_gli(eqt_thp); eqt_glp.eqt_tq_gli(eqt_tlp); eqt_gdr.eqt_tq_gli(eqt_tdr); eqt_gtr.eqt_tq_gli(eqt_ttr);
+    eqt_ls = eqt_tls; eqt_hs = eqt_ths; eqt_lw = eqt_hw = 1; eqt_h18 = eqt_t18h; eqt_l18 = eqt_t18l;
+    eqt_cl[96] = eqt_cr[96] = eqt_hon; eqt_cl[98] = eqt_cr[98] = eqt_lon; eqt_cl[97] = eqt_cr[97] = eqt_h18; eqt_cl[99] = eqt_cr[99] = eqt_l18;
+    eqt_hwt = eqt_cl[116] = eqt_cr[116] = eqt_hon; eqt_lwt = eqt_cl[118] = eqt_cr[118] = eqt_lon; eqt_sn = 112;
+    eqt_cl[103] = eqt_cr[103] = exp(eqt_tdr * 0.115129255); eqt_cl[104] = eqt_cr[104] = eqt_ttr;
+    init = 0; eqt_mv = 1;
+  );
+  eqt_tq_mv = 0;
+  // ---- glides: frequencies (log, about 30 ms), gains (about 20 ms), drive, trim
+  eqt_lf = eqt_glf.eqt_tq_glf(eqt_tlf); eqt_mf = eqt_gmf.eqt_tq_glf(eqt_tmf); eqt_hf = eqt_ghf.eqt_tq_glf(eqt_thf);
+  eqt_lg = eqt_glg.eqt_tq_gl(eqt_tlg);  eqt_mg = eqt_gmg.eqt_tq_gl(eqt_tmg);  eqt_hg = eqt_ghg.eqt_tq_gl(eqt_thg);
+  eqt_hp = eqt_ghp.eqt_tq_glf(eqt_thp); eqt_lp = eqt_glp.eqt_tq_glf(eqt_tlp);
+  eqt_dr = eqt_gdr.eqt_tq_gl(eqt_tdr);  eqt_x = eqt_tq_mv; eqt_tr = eqt_gtr.eqt_tq_gl(eqt_ttr); eqt_tq_mv = eqt_x;
+  // ---- BELL / SHELF: the band dips out (8 ms), changes shape and comes back (8 ms), on a smooth S-curve
+  eqt_ls != eqt_tls ? ( eqt_lw = max(eqt_lw - eqt_tq_kS, 0); eqt_lw <= 0 ? eqt_ls = eqt_tls; eqt_tq_mv = 1; ) : eqt_lw < 1 ? ( eqt_lw = min(eqt_lw + eqt_tq_kS, 1); eqt_tq_mv = 1; );
+  eqt_hs != eqt_ths ? ( eqt_hw = max(eqt_hw - eqt_tq_kS, 0); eqt_hw <= 0 ? eqt_hs = eqt_ths; eqt_tq_mv = 1; ) : eqt_hw < 1 ? ( eqt_hw = min(eqt_hw + eqt_tq_kS, 1); eqt_tq_mv = 1; );
+  // ---- slope crossfades (20 ms, ramped per sample); a section starting up again starts from rest
+  eqt_h18 != eqt_t18h ? ( (eqt_h18 <= 0 || eqt_h18 >= 1) ? ( eqt_cl[110] = eqt_cr[110] = eqt_cl[110] | (eqt_h18 <= 0 ? 2 : 1); );
+                  eqt_h18 = eqt_t18h ? min(eqt_h18 + eqt_tq_kX, 1) : max(eqt_h18 - eqt_tq_kX, 0); );
+  eqt_l18 != eqt_t18l ? ( (eqt_l18 <= 0 || eqt_l18 >= 1) ? ( eqt_cl[110] = eqt_cr[110] = eqt_cl[110] | (eqt_l18 <= 0 ? 8 : 4); );
+                  eqt_l18 = eqt_t18l ? min(eqt_l18 + eqt_tq_kX, 1) : max(eqt_l18 - eqt_tq_kX, 0); );
+  eqt_cl[114] = eqt_cr[114] = (eqt_h18 - eqt_cl[97]) / (2 * eqt_tq_N); eqt_cl[115] = eqt_cr[115] = (eqt_l18 - eqt_cl[99]) / (2 * eqt_tq_N);
+  // ---- filters on / off (off = glide to the end of the range, then out of circuit)
+  // ---- filters in / out of circuit: a 30 ms crossfade (switching in, the corner glides up from 10 Hz / down
+  //      from the top of the range)
+  eqt_hon && !eqt_cl[96] ? ( eqt_cl[96] = eqt_cr[96] = 1; eqt_cl[110] = eqt_cr[110] = eqt_cl[110] | 3; eqt_cl[116] = eqt_cr[116] = eqt_hwt = 0;
+                     eqt_ghp.eqt_tq_gli(10); eqt_hp = 10; eqt_tq_mv = 1; );
+  eqt_lon && !eqt_cl[98] ? ( eqt_cl[98] = eqt_cr[98] = 1; eqt_cl[110] = eqt_cr[110] = eqt_cl[110] | 12; eqt_cl[118] = eqt_cr[118] = eqt_lwt = 0;
+                     eqt_glp.eqt_tq_gli(eqt_tq_lpoff); eqt_lp = eqt_tq_lpoff; eqt_tq_mv = 1; );
+  eqt_hwt = eqt_hon ? min(eqt_hwt + eqt_tq_kfw, 1) : max(eqt_hwt - eqt_tq_kfw, 0);
+  eqt_lwt = eqt_lon ? min(eqt_lwt + eqt_tq_kfw, 1) : max(eqt_lwt - eqt_tq_kfw, 0);
+  eqt_cl[119] = eqt_cr[119] = (eqt_hwt - eqt_cl[116]) / (2 * eqt_tq_N); eqt_cl[120] = eqt_cr[120] = (eqt_lwt - eqt_cl[118]) / (2 * eqt_tq_N);
+  !eqt_hon && eqt_cl[96] && eqt_hwt <= 0 && eqt_cl[116] <= 0.00001 ? ( eqt_cl[96] = eqt_cr[96] = 0; );
+  !eqt_lon && eqt_cl[98] && eqt_lwt <= 0 && eqt_cl[118] <= 0.00001 ? ( eqt_cl[98] = eqt_cr[98] = 0; );
+  // ---- bands on / off: a band at 0 dB is exactly out, so it is skipped (and starts from rest when it comes back)
+  eqt_on = abs(eqt_lg * eqt_lw) > 0.0001 || eqt_tlg != 0; eqt_on && !eqt_cl[100] ? ( eqt_cl[110] = eqt_cr[110] = eqt_cl[110] | 16; ); eqt_cl[100] = eqt_cr[100] = eqt_on;
+  eqt_on = abs(eqt_mg) > 0.0001 || eqt_tmg != 0;      eqt_on && !eqt_cl[101] ? ( eqt_cl[110] = eqt_cr[110] = eqt_cl[110] | 32; ); eqt_cl[101] = eqt_cr[101] = eqt_on;
+  eqt_on = abs(eqt_hg * eqt_hw) > 0.0001 || eqt_thg != 0; eqt_on && !eqt_cl[102] ? ( eqt_cl[110] = eqt_cr[110] = eqt_cl[110] | 64; ); eqt_cl[102] = eqt_cr[102] = eqt_on;
+  // ---- drive and trim: per-sample ramps to the new values over the next tick
+  g = exp(eqt_dr * 0.115129255);
+  eqt_cl[108] = (g - eqt_cl[103]) / (2 * eqt_tq_N); eqt_cr[108] = (g - eqt_cr[103]) / (2 * eqt_tq_N);
+  eqt_cl[109] = (eqt_tr - eqt_cl[104]) / (2 * eqt_tq_N); eqt_cr[109] = (eqt_tr - eqt_cr[104]) / (2 * eqt_tq_N);
+  // ---- coefficients, per channel with its drift (while something moves; drift alone: once per block)
+  eqt_sn |= eqt_cl[110] & 112;
+  eqt_tq_mv || eqt_mv || (eqt_df && eqt_own_dm_a > 0) ? (
+    this.eqt_tq_ech(eqt_cl, eqt_tq_D,     eqt_tq_D[6], eqt_tq_D[8], eqt_tq_D[10], eqt_sn);
+    this.eqt_tq_ech(eqt_cr, eqt_tq_D + 3, eqt_tq_D[7], eqt_tq_D[9], eqt_tq_D[11], eqt_sn);
+    eqt_df = 0;
+  ) : eqt_cl[117] ? (                                       // nothing moved: land exactly on the targets
+    t = 0; loop(23, eqt_cl[t] = eqt_cl[128 + t]; eqt_cr[t] = eqt_cr[128 + t]; t += 1; );
+    eqt_cl[117] = eqt_cr[117] = 0;
+  );
+  eqt_sn = 0;
+  eqt_mv = eqt_tq_mv;
+);
+function eqt_tq_srinit() local(eqt_c, i) (
+  eqt_tq_sr = srate; eqt_tq_fs2 = 2 * srate;
+  eqt_tq_dcd = 1 - 2 * $pi * 5 / eqt_tq_fs2;                    // DC blockers on the added parts, 5 Hz
+  eqt_tq_iat = 1 - exp(-1 / (0.002 * eqt_tq_fs2)); eqt_tq_irl = exp(-1 / (0.150 * eqt_tq_fs2));   // the core's level follower
+  eqt_tq_ce  = 1 - exp(-1 / (0.010 * eqt_tq_fs2));              // mean-square trackers (even terms DC-free), 10 ms
+  eqt_tq_xc  = 2 * $pi * 40 / eqt_tq_fs2; eqt_tq_xlk = 1 - 2 * $pi * 5 / eqt_tq_fs2;   // flux: a 40 Hz sine's flux = its amplitude
+  eqt_tq_slw = 2.2 * 1.8 * 96000 / eqt_tq_fs2;                  // op-amp slew (per 2x sample)
+  eqt_tq_lpoff = min(0.45 * eqt_tq_fs2, 40000);                 // LPF 'off' end of its glide
+  eqt_tq_N = 8;                                             // control rate: every 8 samples
+  eqt_tq_kF = 1 - exp(-eqt_tq_N / (0.012 * srate)); eqt_tq_kG = 1 - exp(-eqt_tq_N / (0.008 * srate));   // two poles each
+  eqt_tq_kS = eqt_tq_N / (0.008 * srate); eqt_tq_kX = eqt_tq_N / (0.020 * srate); eqt_tq_kfw = eqt_tq_N / (0.030 * srate);
+  eqt_tq_xs = 1 / (0.030 * srate); eqt_tq_nwarm = floor(0.040 * srate);   // CITY: 40 ms settle, 30 ms crossfade
+  eqt_tq_vdt = 1 / srate;
+  eqt_tq_kI = 1 - exp(-1 / (0.005 * srate));                // INPUT TRIM glide: two 5 ms poles (about 20 ms)
+  i = 0;
+  loop(4,
+    eqt_c = i == 0 ? eqt_tq_CTL : i == 1 ? eqt_tq_CTR : i == 2 ? eqt_tq_CNL : eqt_tq_CNR;
+    eqt_tq_cset(eqt_c + 72, 400, 1.41421356); eqt_tq_cset(eqt_c + 80, 5000, 1.41421356);
+    eqt_c[106] = 0.3; eqt_c[107] = 1; eqt_c[113] = 1;
+    i += 1;
+  );
+  eqt_eT.init = eqt_eN.init = 1; eqt_eT.eqt_mv = eqt_eN.eqt_mv = 1;
+  0;
+);
+function eqt_tq_update() (
+  drift_macro(0);
+  eqt_tq_om = slider(28) | 0;
+  0;   // output stage: straight through
+  eqt_own_pdc_bot = 0; eqt_own_pdc_top = 2;
+  eqt_own_pdc_delay = eqt_tq_LAT;
+  eqt_tq_tgt = slider(25) >= 0.5;
+  eqt_tq_itt = exp(min(max(eqt_eqt_s33, -18), 18) * 0.115129255);   // INPUT TRIM target gain (exactly 1 at 0 dB)
+);
+function eqt_tq_pt(eqt_dr, eqt_lf, eqt_lg, eqt_lsh, eqt_mf, eqt_mg, eqt_hf, eqt_hg, eqt_hsh, eqt_hp, eqt_h18, eqt_lp, eqt_l18, o) (
+  slider(29) = eqt_dr; slider(30) = eqt_lf; slider(31) = eqt_lg; slider(32) = eqt_lsh; slider(33) = eqt_mf; slider(34) = eqt_mg; slider(35) = eqt_hf; slider(36) = eqt_hg;
+  slider(37) = eqt_hsh; slider(38) = eqt_hp; slider(39) = eqt_h18; slider(40) = eqt_lp; slider(41) = eqt_l18; slider(42) = o;
+  slider(25) = 0; slider(26) = 1;
+);
+function eqt_tq_pn(eqt_dr, eqt_lf, eqt_lg, eqt_lsh, eqt_mf, eqt_mg, eqt_hf, eqt_hg, eqt_hsh, eqt_hp, eqt_h18, eqt_lp, eqt_l18, o) (
+  slider(43) = eqt_dr; slider(44) = eqt_lf; slider(45) = eqt_lg; slider(46) = eqt_lsh; slider(47) = eqt_mf; slider(48) = eqt_mg; slider(49) = eqt_hf; slider(50) = eqt_hg;
+  slider(51) = eqt_hsh; slider(52) = eqt_hp; slider(53) = eqt_h18; slider(54) = eqt_lp; slider(55) = eqt_l18; slider(56) = o;
+  slider(25) = 1; slider(26) = 1;
+);
+function eqt_tq_pinit() (                                  // Init: TOKYO flat (and NEW YORK flat too)
+  eqt_tq_pt(0, 2, 0, 1, 4, 0, 3, 0, 1, 20, 0, 22000, 0, 0);
+  eqt_tq_pn(0, 1, 5, 1, 2, 5, 2, 5, 1, 20, 0, 22000, 0, 0); slider(25) = 0;
+);
+function eqt_load_preset(p) (
+  p == 1  ? eqt_tq_pinit() :                                                        // Init
+  p == 2  ? eqt_tq_pt(4,  3, -2, 1,  9,  5, 5,  3, 1,  90, 0, 22000, 0, -0.5) :     // Tokyo Vocal Bite
+  p == 3  ? eqt_tq_pt(8,  4,  3, 0,  6, -3, 1,  6, 0, 100, 1, 22000, 0, -1.0) :     // Tokyo Snare Crack
+  p == 4  ? eqt_tq_pt(10, 3, -3, 0,  4,  6, 3,  2, 1,  80, 0, 12000, 0, -1.5) :     // Tokyo Guitar Bloom
+  p == 5  ? eqt_tq_pt(3,  2, -2, 1,  8,  3, 4,  4, 1,  60, 0, 22000, 0, -0.5) :     // Tokyo Keys Presence
+  p == 6  ? eqt_tq_pt(5,  0,  2, 1,  3, -1, 5,  3, 1,  25, 0, 22000, 0, -0.5) :     // Tokyo Bus Gloss
+  p == 7  ? eqt_tq_pt(12, 2,  0, 1,  7,  9, 3,  0, 1,  40, 0, 22000, 0, -2.5) :     // Tokyo Mid Push
+  p == 8  ? eqt_tq_pn(6,  1,  8, 0,  0,  2, 0,  7, 0,  25, 0, 22000, 0, -1.0) :     // New York Kick
+  p == 9  ? eqt_tq_pn(10, 2,  7, 0,  3,  8, 2,  7, 1,  80, 1, 22000, 0, -1.5) :     // New York Snare Snap
+  p == 10 ? eqt_tq_pn(8,  1,  8, 1,  1,  6, 0,  4, 0,  30, 0, 10000, 0, -1.5) :     // New York Bass Punch
+  p == 11 ? eqt_tq_pn(5,  2,  4, 1,  3,  7, 2,  7, 1,  80, 0, 22000, 0, -0.5) :     // New York Vocal
+  p == 12 ? eqt_tq_pn(9,  1,  7, 1,  1,  4, 3,  7, 1,  30, 0, 22000, 0, -1.5) :     // New York Drum Bus
+  p == 13 ? eqt_tq_pn(12, 2,  4, 0,  3,  7, 1,  6, 0, 100, 1, 14000, 0, -2.0) :     // New York Guitar
+  p == 14 ? eqt_tq_pn(2,  1,  5, 1,  2,  5, 4,  8, 1,  20, 0, 22000, 0,  0.0) :     // New York Air
+  p == 15 ? (                                                                   // Reset all to defaults
+    eqt_tq_pinit(); slider(27) = 50; slider(28) = 1; eqt_eqt_s33 = 0; ui_auto(24 + 33);   // (INPUT TRIM: only here, not in presets)
+  );
+  p >= 1 ? 0;                 // sliders 1-32
+);
+function eqt_init() (
+#eqt_own_ui_man = "gfx-tony-q-550";                             // the ? pop-up links to this manual
+eqt_own_ext_noinit = 1;
+
+// ---------- memory ----------
+eqt_nextmem = 1000000;
+
+eqt_tq_H   = eqt_alloc(48);                                     // half-band odd taps
+eqt_tq_ubL = eqt_alloc(128); eqt_tq_ubR = eqt_alloc(128);               // 1x input history (mirrored rings of 64)
+eqt_tq_aL  = eqt_alloc(128); eqt_tq_aR  = eqt_alloc(128);               // 2x output, first phase
+eqt_tq_bL  = eqt_alloc(128); eqt_tq_bR  = eqt_alloc(128);               // 2x output, second phase
+// per engine and channel: filter coefficients (12 sets of 8) and flags; TL / TR Tokyo, NL / NR New York
+eqt_tq_CTL = eqt_alloc(192); eqt_tq_CTR = eqt_alloc(192); eqt_tq_CNL = eqt_alloc(192); eqt_tq_CNR = eqt_alloc(192);
+eqt_tq_D   = eqt_alloc(16);                                     // drift factors
+0;                                  // the house output stage
+eqt_tq_wp = 0;
+eqt_tq_LAT = 47;                                            // latency of the 2x engine (samples)
+//   coefficient block layout: 0 LOW, 8 MID, 16 HIGH, 24 HPF 12, 32 HPF 18 (2-pole), 40 HPF 18 (1-pole),
+//   48 LPF 12, 56 LPF 18 (2-pole), 64 LPF 18 (1-pole), 72 split 400 Hz, 80 split 5 kHz, 88 NY bump.
+//   flags: 96 HPF on, 97 HPF 18 weight, 98 LPF on, 99 LPF 18 weight, 100 / 101 / 102 band on, 103 drive gain,
+//   104 trim, 105 preamp fade, 106 preamp bias, 107 iron saturation point, 108 / 109 per-sample ramps,
+//   110 reset mask, 111 / 112 preamp curve offset / normaliser, 113 op-amp even term, 114 / 115 slope ramps,
+//   116 / 118 HPF / LPF in-circuit weight, 119 / 120 their ramps, 117 band coefficients gliding,
+//   128..151 the bands' target coefficients, 152..175 their per-sample increments.
+
+// ---------- the half-band (95 taps, Kaiser beta 8): the 48 non-zero odd taps h[2i - 47], i = 0..47 ----------
+
+eqt_tq_i = 0; eqt_tq_s = 0; eqt_tq_bk = 8; eqt_tq_ib = eqt_tq_i0(eqt_tq_bk);
+loop(48,
+  eqt_tq_k = 2 * eqt_tq_i - 47;
+  eqt_tq_H[eqt_tq_i] = sin($pi * eqt_tq_k * 0.5) / ($pi * eqt_tq_k) * eqt_tq_i0(eqt_tq_bk * sqrt(max(1 - sqr(eqt_tq_k / 48), 0))) / eqt_tq_ib;
+  eqt_tq_s += eqt_tq_H[eqt_tq_i]; eqt_tq_i += 1;
+);
+eqt_tq_i = 0; loop(48, eqt_tq_H[eqt_tq_i] *= 0.5 / eqt_tq_s; eqt_tq_i += 1; );   // the odd taps sum to exactly 0.5 (unity at DC)
+
+
+// ---------- filters: the TPT state-variable filter (stable under modulation) and a TPT one-pole ----------
+// c[0..3] = a1, a2, a3, k; an EQ set adds the output mix c[4..6] = m0, m1, m2
+
+
+
+
+   // a low-pass already settled on x
+
+// coefficient sets (fs2 = the 2x rate)
+
+
+
+// an EQ band: type 0 bell, 1 low shelf, 2 high shelf; gdb in dB
+
+
+
+// ---------- the discrete preamp (drive domain): biased curve, level-matched; only its added part is DC-blocked ----------
+eqt_tq_pk = 0.03; eqt_tq_pd = 1.0;                              // headroom scale, curve drive
+
+
+// ---------- HPF -> LOW / MID / HIGH -> LPF (shared by both engines; the flags and sets live in c) ----------
+
+
+
+// ---------- TOKYO: the mid-focused output transformer ----------
+eqt_tq_iw = 0.12;                                           // the core's backlash width (memory)
+eqt_tq_ihy = 0.35;                                          // how far the core lags at the turning points (full level)
+eqt_tq_iev = 0.05;                                          // even (2nd) harmonic as the core is worked
+eqt_tq_ibl = 0.08;                                          // bloom: the band eases down as the core fills
+
+
+
+
+// ---------- NEW YORK: discrete op-amp + output transformer ----------
+eqt_tq_nrl = 2.2;                                           // the op-amp's rails (drive domain): +4 dBFS
+eqt_tq_na2 = 0.008;                                         // a trace of 2nd harmonic below the rails
+eqt_tq_xw  = 0.7;                                           // how far the core curve bends
+// the op-amp's curve: linear to 0.6 of the rail, a quadratic knee, flat at the rail from 1.4 (a hard knee near the
+// rails). Only the residue (curve - input) is computed, with first-order antiderivative anti-aliasing (ADAA).
+eqt_tq_ka = 0.6; eqt_tq_kb = 1.4; eqt_tq_kw = eqt_tq_kb - eqt_tq_ka;
+
+
+
+
+
+// ---------- one engine, one channel (2x rate): drive gain in, preamp, filters, output stage, gain out, trim ----------
+
+
+
+
+
+// ---------- the stepped tables ----------
+
+
+
+
+
+
+
+
+
+// ---------- one engine's controls: glides (control rate, every 32 samples), flags and coefficients ----------
+// b = its first slider, ny = 1 for NEW YORK, cl / cr = its two coefficient blocks
+
+// two-pole glides (critically damped: they start and land gently, so a stepped switch never zippers)
+
+
+
+
+
+// ---------- settings ----------
+
+eqt_tq_srinit();
+eqt_tq_vw = 13.6; eqt_tq_vz = 0.81;                             // VU needle: natural frequency, damping
+eqt_tq_vw2 = eqt_tq_vw * eqt_tq_vw; eqt_tq_vzw = 2 * eqt_tq_vz * eqt_tq_vw;
+eqt_tq_vref = 1.5707963 / 0.125892541;                      // rectified x pi/2: 0 VU = a sine peaking at -18 dBFS
+
+
+
+// ---------- presets ----------
+// Tokyo: drive, low f / lvl / shelf, mid f / lvl, high f / lvl / shelf, hpf, hpf 18, lpf, lpf 18, output
+
+// New York: the same, gains as switch positions (5 = 0 dB, 6 / 7 / 8 / 9 / 10 = +2 / 4 / 6 / 9 / 12)
+
+
+
+
+// ---------- state ----------
+eqt_dB1L.drift_init(0.8 + rand(0.4)); eqt_dB1R.drift_init(0.8 + rand(0.4));
+eqt_dB2L.drift_init(0.8 + rand(0.4)); eqt_dB2R.drift_init(0.8 + rand(0.4));
+eqt_dB3L.drift_init(0.8 + rand(0.4)); eqt_dB3R.drift_init(0.8 + rand(0.4));
+eqt_dGL.drift_init(0.9 + rand(0.5));  eqt_dGR.drift_init(0.9 + rand(0.5));
+eqt_dBiL.drift_init(0.7 + rand(0.5)); eqt_dBiR.drift_init(0.7 + rand(0.5));
+eqt_dKL.drift_init(0.6 + rand(0.4));  eqt_dKR.drift_init(0.6 + rand(0.4));
+eqt_tq_mm1 = rand(2) - 1; eqt_tq_mm2 = rand(2) - 1; eqt_tq_mm3 = rand(2) - 1; eqt_tq_mm4 = rand(2) - 1;   // fixed L / R mismatch
+eqt_tq_i = 0; loop(12, eqt_tq_D[eqt_tq_i] = 1; eqt_tq_i += 1; ); eqt_tq_D[8] = eqt_tq_D[9] = 0;
+eqt_tq_update();
+eqt_tq_it1 = eqt_tq_it2 = eqt_tq_itt;                               // INPUT TRIM glide starts on its value
+eqt_tq_tg = eqt_tq_tgt; eqt_tq_w = eqt_tq_tgt; eqt_tq_wc = 0; eqt_tq_cc = 0;
+eqt_tq_vy = eqt_tq_vv = 0; eqt_tqa_pl = eqt_tqa_pr = 0;
+
+eqt_own_ui_thm = 5; eqt_own_ui_hw = 1;                                  // house keycaps for the preset bar and size picker
+!eqt_ui_dflt ? ( eqt_own_ui_sz = 2; eqt_pr_cur = 1; );                  // new instances open in Large, on Init
+eqt_ui_dflt = 1;
+0;
+);
+
+function eqt_slider() (
+eqt_tq_update();
+0;
+);
+
+function eqt_block() (
+srate != eqt_tq_sr ? eqt_tq_srinit();
+eqt_tq_update();                                            // keys and knobs moved on the panel do not run @slider
+// ---- DRIFT: component tolerance wander (band frequencies and gains, bias, the iron), each channel on its own
+eqt_tq_di = 0.12 * eqt_own_dm_s * samplesblock / srate;
+eqt_tq_D[0] = 1 + eqt_own_dm_a * (0.012 * eqt_dB1L.drift_tick(eqt_tq_di) + 0.004 * eqt_tq_mm1);
+eqt_tq_D[3] = 1 + eqt_own_dm_a * (0.012 * eqt_dB1R.drift_tick(eqt_tq_di) - 0.004 * eqt_tq_mm1);
+eqt_tq_D[1] = 1 + eqt_own_dm_a * (0.012 * eqt_dB2L.drift_tick(eqt_tq_di) + 0.004 * eqt_tq_mm2);
+eqt_tq_D[4] = 1 + eqt_own_dm_a * (0.012 * eqt_dB2R.drift_tick(eqt_tq_di) - 0.004 * eqt_tq_mm2);
+eqt_tq_D[2] = 1 + eqt_own_dm_a * (0.012 * eqt_dB3L.drift_tick(eqt_tq_di) + 0.004 * eqt_tq_mm3);
+eqt_tq_D[5] = 1 + eqt_own_dm_a * (0.012 * eqt_dB3R.drift_tick(eqt_tq_di) - 0.004 * eqt_tq_mm3);
+eqt_tq_D[6] = 1 + eqt_own_dm_a * (0.02 * eqt_dGL.drift_tick(eqt_tq_di) + 0.01 * eqt_tq_mm4);
+eqt_tq_D[7] = 1 + eqt_own_dm_a * (0.02 * eqt_dGR.drift_tick(eqt_tq_di) - 0.01 * eqt_tq_mm4);
+eqt_tq_D[8] = eqt_own_dm_a * 0.03 * eqt_dBiL.drift_tick(eqt_tq_di);  eqt_tq_D[9] = eqt_own_dm_a * 0.03 * eqt_dBiR.drift_tick(eqt_tq_di);
+eqt_tq_D[10] = 1 + eqt_own_dm_a * 0.04 * eqt_dKL.drift_tick(eqt_tq_di); eqt_tq_D[11] = 1 + eqt_own_dm_a * 0.04 * eqt_dKR.drift_tick(eqt_tq_di);
+eqt_eT.eqt_df = eqt_eN.eqt_df = 1;                                      // the drift moved: coefficients once per block
+// ---- denormal housekeeping
+eqt_tq_rT || eqt_tq_w < 1 ? ( eqt_TL.eqt_tq_tfl(); eqt_TR.eqt_tq_tfl(); );
+eqt_tq_rN || eqt_tq_w > 0 ? ( eqt_NL.eqt_tq_nfl(); eqt_NR.eqt_tq_nfl(); );
+abs(eqt_tq_vy) + abs(eqt_tq_vv) < 0.000000001 ? eqt_tq_vy = eqt_tq_vv = 0;
+// ---- the meters' block values for the panel
+eqt_tqa_v = eqt_tq_vy;
+eqt_tqa_ol = eqt_tqa_pl; eqt_tqa_or = eqt_tqa_pr; eqt_tqa_pl = eqt_tqa_pr = 0;
+eqt_tqa_blk += 1;
+0;
+);
+
+function eqt_sample() (
+// ---------- INPUT TRIM (-18 .. +18 dB, gliding): first in the path, so the VU and DRIVE see the trimmed level ----------
+eqt_tq_it2 !== eqt_tq_itt ? (                                  // (!== : exact; EEL != has a 0.00001 tolerance)
+  eqt_tq_it1 += (eqt_tq_itt - eqt_tq_it1) * eqt_tq_kI; eqt_tq_it2 += (eqt_tq_it1 - eqt_tq_it2) * eqt_tq_kI;
+  abs(eqt_tq_it2 - eqt_tq_itt) < 0.000001 * eqt_tq_itt && abs(eqt_tq_it1 - eqt_tq_itt) < 0.000001 * eqt_tq_itt ? eqt_tq_it1 = eqt_tq_it2 = eqt_tq_itt;
+);
+eqt_tq_il = spl0 * eqt_tq_it2; eqt_tq_ir = spl1 * eqt_tq_it2;
+// ---------- control rate (every 8 samples): glides, flags, coefficients ----------
+(eqt_tq_cc -= 1) <= 0 ? (
+  eqt_tq_cc = eqt_tq_N;
+  // CITY: the incoming engine starts, settles 40 ms, then a 30 ms crossfade
+  eqt_tq_tgt != eqt_tq_tg ? ( eqt_tq_tg = eqt_tq_tgt; eqt_tq_wc = eqt_tq_nwarm; );
+  eqt_tq_rT = eqt_tq_w < 1 || !eqt_tq_tg; eqt_tq_rN = eqt_tq_w > 0 || eqt_tq_tg;
+  eqt_tq_rT ? eqt_eT.eqt_tq_eng(5,  0, eqt_tq_CTL, eqt_tq_CTR) : eqt_eT.eqt_mv = 1;
+  eqt_tq_rN ? eqt_eN.eqt_tq_eng(19, 1, eqt_tq_CNL, eqt_tq_CNR) : eqt_eN.eqt_mv = 1;
+);
+eqt_tq_wc > 0 ? eqt_tq_wc -= 1 : eqt_tq_w = eqt_tq_tg ? min(eqt_tq_w + eqt_tq_xs, 1) : max(eqt_tq_w - eqt_tq_xs, 0);
+eqt_tq_xw2 = eqt_tq_w * eqt_tq_w * (3 - 2 * eqt_tq_w);
+// ---------- 2x: up-sample, the engine(s), down-sample ----------
+eqt_tq_wp = (eqt_tq_wp + 63) & 63;
+eqt_tq_ubL[eqt_tq_wp] = eqt_tq_ubL[eqt_tq_wp + 64] = eqt_tq_il; eqt_tq_ubR[eqt_tq_wp] = eqt_tq_ubR[eqt_tq_wp + 64] = eqt_tq_ir;
+eqt_tq_u0 = 2 * eqt_tq_conv(eqt_tq_ubL + eqt_tq_wp); eqt_tq_u1 = eqt_tq_ubL[eqt_tq_wp + 23];
+eqt_tq_v0 = 2 * eqt_tq_conv(eqt_tq_ubR + eqt_tq_wp); eqt_tq_v1 = eqt_tq_ubR[eqt_tq_wp + 23];
+eqt_tq_rT && eqt_tq_rN ? (
+  eqt_tq_y0 = eqt_TL.eqt_tq_tch(eqt_tq_u0, eqt_tq_CTL); eqt_tq_y0 += (eqt_NL.eqt_tq_nch(eqt_tq_u0, eqt_tq_CNL) - eqt_tq_y0) * eqt_tq_xw2;
+  eqt_tq_y1 = eqt_TL.eqt_tq_tch(eqt_tq_u1, eqt_tq_CTL); eqt_tq_y1 += (eqt_NL.eqt_tq_nch(eqt_tq_u1, eqt_tq_CNL) - eqt_tq_y1) * eqt_tq_xw2;
+  eqt_tq_y2 = eqt_TR.eqt_tq_tch(eqt_tq_v0, eqt_tq_CTR); eqt_tq_y2 += (eqt_NR.eqt_tq_nch(eqt_tq_v0, eqt_tq_CNR) - eqt_tq_y2) * eqt_tq_xw2;
+  eqt_tq_y3 = eqt_TR.eqt_tq_tch(eqt_tq_v1, eqt_tq_CTR); eqt_tq_y3 += (eqt_NR.eqt_tq_nch(eqt_tq_v1, eqt_tq_CNR) - eqt_tq_y3) * eqt_tq_xw2;
+) : eqt_tq_rT ? (
+  eqt_tq_y0 = eqt_TL.eqt_tq_tch(eqt_tq_u0, eqt_tq_CTL); eqt_tq_y1 = eqt_TL.eqt_tq_tch(eqt_tq_u1, eqt_tq_CTL);
+  eqt_tq_y2 = eqt_TR.eqt_tq_tch(eqt_tq_v0, eqt_tq_CTR); eqt_tq_y3 = eqt_TR.eqt_tq_tch(eqt_tq_v1, eqt_tq_CTR);
+) : (
+  eqt_tq_y0 = eqt_NL.eqt_tq_nch(eqt_tq_u0, eqt_tq_CNL); eqt_tq_y1 = eqt_NL.eqt_tq_nch(eqt_tq_u1, eqt_tq_CNL);
+  eqt_tq_y2 = eqt_NR.eqt_tq_nch(eqt_tq_v0, eqt_tq_CNR); eqt_tq_y3 = eqt_NR.eqt_tq_nch(eqt_tq_v1, eqt_tq_CNR);
+);
+eqt_tq_aL[eqt_tq_wp] = eqt_tq_aL[eqt_tq_wp + 64] = eqt_tq_y0;  eqt_tq_bL[eqt_tq_wp] = eqt_tq_bL[eqt_tq_wp + 64] = eqt_tq_y1;
+eqt_tq_aR[eqt_tq_wp] = eqt_tq_aR[eqt_tq_wp + 64] = eqt_tq_y2;  eqt_tq_bR[eqt_tq_wp] = eqt_tq_bR[eqt_tq_wp + 64] = eqt_tq_y3;
+eqt_tq_ol = 0.5 * eqt_tq_bL[eqt_tq_wp + 24] + eqt_tq_conv(eqt_tq_aL + eqt_tq_wp);
+eqt_tq_or = 0.5 * eqt_tq_bR[eqt_tq_wp + 24] + eqt_tq_conv(eqt_tq_aR + eqt_tq_wp);
+// ---------- the house output stage ----------
+(ost_l = (eqt_tq_ol); ost_r = (eqt_tq_or));
+spl0 = ost_l; spl1 = ost_r;
+// ---------- meters: the input VU needle (mass + spring + damping), the output peaks ----------
+eqt_tq_md = max(abs(eqt_tq_il), abs(eqt_tq_ir)) * eqt_tq_vref;
+eqt_tq_vv += (eqt_tq_vw2 * (eqt_tq_md - eqt_tq_vy) - eqt_tq_vzw * eqt_tq_vv) * eqt_tq_vdt; eqt_tq_vy += eqt_tq_vv * eqt_tq_vdt;
+eqt_tqa_pl = max(eqt_tqa_pl, abs(spl0)); eqt_tqa_pr = max(eqt_tqa_pr, abs(spl1));
+0;
+);
+
+// ======================== gfx-board-q.jsfx (prefix eqb_; its sliders 1-18 at 57-74) ========================
+function eqb_defaults() (
+  slider(57) = 20;
+  slider(58) = 22000;
+  slider(59) = 0;
+  slider(60) = 100;
+  slider(61) = 0;
+  slider(62) = 0;
+  slider(63) = 600;
+  slider(64) = 1;
+  slider(65) = 0;
+  slider(66) = 2500;
+  slider(67) = 1;
+  slider(68) = 0;
+  slider(69) = 8000;
+  slider(70) = 0;
+  slider(71) = 1;
+  slider(72) = 1;
+  slider(73) = 0;
+  slider(74) = 0;
+  0;
+);
+function eqb_consts() (
+  eqb_s19 = 0;
+  eqb_s20 = 1;
+  eqb_s21 = 0;
+  eqb_s22 = 30;
+  eqb_s23 = 120;
+  eqb_s24 = 6000;
+  eqb_s25 = -0.3;
+  eqb_s26 = 1;
+  slider(71) = 1;
+  0;
+);
+function eqb_th(eqb_x) ( eqb_x = min(max(eqb_x, -3), 3); eqb_x * (27 + eqb_x * eqb_x) / (27 + 9 * eqb_x * eqb_x); );
+function eqb_hp1(eqb_x) instance(x1, y1) ( y1 = eqb_hp1_a * (eqb_x - x1) + eqb_hp1_b * y1; x1 = eqb_x; y1; );
+function eqb_hp1set(eqb_f) local(eqb_k) ( eqb_k = tan($pi * min(eqb_f, srate * 0.45) / srate); eqb_hp1_a = 1 / (1 + eqb_k); eqb_hp1_b = (1 - eqb_k) / (1 + eqb_k); );
+function eqb_hp1db(eqb_f) local(eqb_w, eqb_wc) ( eqb_wc = slider(57); eqb_w = eqb_f / eqb_wc; 10 * log10(eqb_w * eqb_w / (1 + eqb_w * eqb_w)); );
+function eqb_chain(eqb_x) instance() local(eqb_y) (
+  eqb_hp_on ? eqb_x = this.eqb_h1.eqb_hp1(this.eqb_h2.bq_run(eqb_x));
+  eqb_eq_on ? (
+    eqb_x = this.eqb_lf.bq_run(eqb_x); eqb_lfx ? eqb_x = this.eqb_lx.bq_run(eqb_x);
+    eqb_x = this.eqb_lm.bq_run(eqb_x); eqb_x = this.eqb_hm.bq_run(eqb_x);
+    eqb_x = this.eqb_hf.bq_run(eqb_x); eqb_hfx ? eqb_x = this.eqb_hx.bq_run(eqb_x);
+  );
+  eqb_y = this.eqb_lp.bq_run(eqb_x);                     // the LPF always runs (primed) and is faded in / out, never switched
+  eqb_bd_lpw >= 1 ? eqb_x = eqb_y : eqb_bd_lpw > 0 ? eqb_x += (eqb_y - eqb_x) * eqb_bd_lpw;
+  eqb_x;
+);
+function eqb_setch() instance() local(eqb_q) (
+  eqb_hp_on ? this.eqb_h2.bq_set(1, slider(57), 1, 0);
+  this.eqb_lp.bq_set(0, eqb_bd_lpf, 0.707, 0);       // bd_lpf: the LPF frequency, glided in @sample
+  // proportional Q on the black card
+  this.eqb_lf.bq_set(slider(61) ? 2 : 4, slider(60), slider(61) ? (eqb_blk ? 0.6 + abs(slider(59)) / 15 * 0.9 : 0.55) : (eqb_blk ? 1.15 : 0.6), slider(59));
+  this.eqb_lm.bq_set(2, slider(63), slider(64) * (eqb_blk ? 0.6 + abs(slider(62)) / 15 * 1.2 : 0.7), slider(62));
+  this.eqb_hm.bq_set(2, slider(66), slider(67) * (eqb_blk ? 0.6 + abs(slider(65)) / 15 * 1.2 : 0.7), slider(65));
+  this.eqb_hf.bq_set(slider(70) ? 2 : 3, slider(69), slider(70) ? (eqb_blk ? 0.6 + abs(slider(68)) / 15 * 0.9 : 0.55) : (eqb_blk ? 1.15 : 0.6), slider(68));
+  // the black card's shelves: a small opposite dip just inside the corner
+  eqb_lfx ? this.eqb_lx.bq_set(2, slider(60) * 2.2, 1.2, -slider(59) * 0.12);
+  eqb_hfx ? this.eqb_hx.bq_set(2, slider(69) * 0.45, 1.2, -slider(68) * 0.12);
+);
+function eqb_update() local(b, eqb_cs) (
+  eqb_cs = 0; b = 1; loop(18, eqb_cs += slider(56 + b) * (b * 7.31 + 1); b += 1; );
+  eqb_cs != eqb_last_cs ? ( eqb_redraw = 1; eqb_last_cs = eqb_cs; );
+  eqb_hp_on = slider(57) > 20.5; eqb_lp_on = slider(58) < 21990; eqb_eq_on = slider(71); eqb_blk = slider(72);
+  eqb_lfx = eqb_blk && !slider(61); eqb_hfx = eqb_blk && !slider(70);
+  eqb_hp1set(slider(57));
+  eqb_CL.eqb_setch(); eqb_CR.eqb_setch();
+  eqb_drv = slider(73) / 100; eqb_dk = 1 + eqb_drv * 3; eqb_dbias = eqb_drv * 0.15; eqb_dtb = eqb_th(eqb_dbias);
+  eqb_og = 10 ^ (slider(74) / 20);
+  0;
+  0;   // output stage: straight through
+);
+function eqb_pq(eqb_hp, eqb_lp, eqb_lg, eqb_lf, eqb_lb, eqb_mg, eqb_mf, eqb_mq, eqb_hg, eqb_hf_, eqb_hq, eqb_fg, eqb_ff, eqb_fb, eqb_vo, eqb_dr) (
+  slider(57) = eqb_hp; slider(58) = eqb_lp; slider(59) = eqb_lg; slider(60) = eqb_lf; slider(61) = eqb_lb; slider(62) = eqb_mg; slider(63) = eqb_mf; slider(64) = eqb_mq;
+  slider(65) = eqb_hg; slider(66) = eqb_hf_; slider(67) = eqb_hq; slider(68) = eqb_fg; slider(69) = eqb_ff; slider(70) = eqb_fb; slider(71) = 1; slider(72) = eqb_vo; slider(73) = eqb_dr; slider(74) = 0;
+);
+function eqb_load_preset(eqb_p) (
+  eqb_p == 1  ? eqb_pq(90, 22000, -2, 200, 1, -3, 350, 1.2, 4, 3500, 1.2, 3, 12000, 0, 1, 10) :      // Vocal Presence
+  eqb_p == 2  ? eqb_pq(30, 22000, 5, 60, 1, -5, 380, 1.5, 3, 3000, 1.5, 0, 8000, 0, 1, 15) :         // Kick Punch
+  eqb_p == 3  ? eqb_pq(80, 22000, 2, 200, 1, -2, 500, 1.2, 4, 5000, 1.4, 3, 10000, 0, 1, 20) :       // Snare Crack
+  eqb_p == 4  ? eqb_pq(30, 9000, 4, 80, 0, -3, 250, 1.2, 2, 1200, 1.0, 0, 8000, 0, 0, 25) :          // Bass Weight
+  eqb_p == 5  ? eqb_pq(70, 22000, -2, 150, 0, -2, 300, 1.0, 2, 4000, 0.8, 4, 12000, 0, 0, 0) :       // Acoustic Sparkle
+  eqb_p == 6  ? eqb_pq(25, 22000, 1.5, 60, 0, 0, 600, 1, -1, 3000, 0.8, 2, 14000, 0, 0, 10) :        // Mix Bus Air
+  eqb_p == 7  ? eqb_pq(400, 3500, 0, 100, 0, 6, 1500, 1.5, 0, 2500, 1, 0, 8000, 0, 1, 60) :          // Telephone
+  eqb_p == 8  ? eqb_pq(60, 22000, 0, 100, 0, -5, 300, 1.0, 0, 2500, 1, 1, 10000, 0, 1, 0) :          // De-mud
+  eqb_p == 9  ? eqb_pq(40, 16000, 3, 120, 0, 1, 800, 0.7, 1, 3000, 0.7, 2, 9000, 0, 0, 40) :         // Brown Warmth
+  eqb_p == 10 ? eqb_pq(100, 22000, 0, 100, 0, 0, 600, 1, -4, 6500, 2.5, 2, 15000, 0, 1, 0);          // De-harsh
+  eqb_p >= 1 && eqb_p <= 10 ? 0;     // sliders 1-18
+  eqb_p == 11 ? (                                       // Reset all to defaults
+    eqb_pq(20, 22000, 0, 100, 0, 0, 600, 1, 0, 2500, 1, 0, 8000, 0, 1, 0);
+    eqb_eqb_s19 = 0; eqb_eqb_s20 = 1; eqb_eqb_s21 = 0; eqb_eqb_s22 = 30; eqb_eqb_s23 = 120; eqb_eqb_s24 = 6000; eqb_eqb_s25 = -0.3; eqb_eqb_s26 = 1;
+    0;
+  );
+);
+function eqb_init() (
+#eqb_own_ui_man = "gfx-board-q";                                  // the ? pop-up links to this manual
+
+
+// one-pole high-pass (the third pole of the 18 dB HPF)
+
+
+
+
+// one channel's chain
+
+
+
+
+
+
+// ---------- presets (leave INPUT and OUTPUT alone) ----------
+
+
+
+0;
+0; 0; 0;
+!eqb_ui_dflt ? eqb_own_ui_thm = 5; !eqb_ui_dflt ? eqb_own_ui_hw = 1; eqb_RSP = 30000;
+eqb_PNL = 0xB4B8BA; eqb_PRT = 0x1C1E21; eqb_SCR = 0x121517; eqb_CRED = 0xC8322A; eqb_CGRN = 0x2E8A4A; eqb_CBLU = 0x2C5FA8; eqb_CBRN = 0x6A4A32; eqb_CGRY = 0xE4E4E0; eqb_CBLK = 0x26272A; eqb_SLB = 0x3BA9E0; eqb_SDB = 0x34349A; eqb_SRD = 0xE0262B;
+eqb_bd_lpf = min(slider(58), srate * 0.45); eqb_bd_lpk = 1 - exp(-16 / (0.02 * srate)); eqb_bd_lpn = 0;   // LPF glide (~20 ms)
+eqb_update();
+eqb_bd_lpw = eqb_lp_on; eqb_bd_lpxs = 1 / (0.02 * srate);   // LPF on / off fade: 20 ms
+eqb_ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+0;
+);
+
+function eqb_slider() (
+eqb_update();
+0;
+);
+
+function eqb_block() (
+eqb_update();
+0;
+);
+
+function eqb_sample() (
+(in_l = (spl0); in_r = (spl1); in_comp = 1);
+eqb_bd_lpw = eqb_lp_on ? min(eqb_bd_lpw + eqb_bd_lpxs, 1) : max(eqb_bd_lpw - eqb_bd_lpxs, 0);
+eqb_bd_lpt = min(slider(58), srate * 0.45);
+eqb_bd_lpf != eqb_bd_lpt ? ( (eqb_bd_lpn += 1) >= 16 ? ( eqb_bd_lpn = 0; eqb_bd_lpf *= (eqb_bd_lpt / eqb_bd_lpf) ^ eqb_bd_lpk; abs(eqb_bd_lpf - eqb_bd_lpt) < 0.0005 * eqb_bd_lpt ? eqb_bd_lpf = eqb_bd_lpt;
+  eqb_CL.eqb_lp.bq_set(0, eqb_bd_lpf, 0.707, 0); eqb_CR.eqb_lp.bq_set(0, eqb_bd_lpf, 0.707, 0); ); );
+eqb_xl = eqb_CL.eqb_chain(in_l); eqb_xr = eqb_CR.eqb_chain(in_r);
+eqb_drv > 0.001 ? (
+  eqb_xl = (eqb_th(eqb_dk * eqb_xl + eqb_dbias) - eqb_dtb) / (eqb_dk * (1 - eqb_dtb * eqb_dtb));
+  eqb_xr = (eqb_th(eqb_dk * eqb_xr + eqb_dbias) - eqb_dtb) / (eqb_dk * (1 - eqb_dtb * eqb_dtb));
+);
+eqb_xl *= eqb_og; eqb_xr *= eqb_og;
+eqb_oL = (eqb_xl * in_comp); eqb_oR = (eqb_xr * in_comp);
+(ost_l = (eqb_oL); ost_r = (eqb_oR));
+spl0 = ost_l; spl1 = ost_r;
+eqb_pkO = max(eqb_pkO, max(abs(spl0), abs(spl1)));
+0;
+);
+
+// ======================== gfx-skye.jsfx (prefix eqs_; its sliders 2-29 at 75-102) ========================
+function eqs_defaults() (
+  slider(75) = 100;
+  slider(76) = 1;
+  slider(77) = 0;
+  slider(78) = 1;
+  slider(79) = 500;
+  slider(80) = 1;
+  slider(81) = 0;
+  slider(82) = 1;
+  slider(83) = 2500;
+  slider(84) = 1;
+  slider(85) = 0;
+  slider(86) = 1;
+  slider(87) = 8000;
+  slider(88) = 1;
+  slider(89) = 0;
+  slider(90) = 1;
+  slider(91) = 0;
+  slider(92) = 1;
+  slider(93) = 0;
+  slider(94) = 0;
+  slider(95) = 30;
+  slider(96) = 0;
+  slider(97) = 0;
+  slider(98) = 18000;
+  slider(99) = 0;
+  slider(100) = 0;
+  slider(101) = 0;
+  slider(102) = 0;
+  0;
+);
+function eqs_consts() (
+  eqs_s1 = 0;
+  slider(92) = 1;
+  slider(93) = 0;
+  slider(94) = 0;
+  0;
+);
+function eqs_alloc(n) local(p) ( p = eqs_nextmem; eqs_nextmem += n; memset(p, 0, n); p; );
+function eqs_db2g(d) ( exp(d*0.11512925465); );
+function eqs_bwq(eqs_bw) local(p) ( p = 2^max(eqs_bw, 0.05); sqrt(p)/(p - 1); );
+function eqs_shq(eqs_bw) ( min(max(0.7071*2^((1 - eqs_bw)*0.5), 0.4), 1.2); );
+function eqs_nsec(s) ( s < 0.5 ? 1 : s < 1.5 ? 2 : 4; );
+function eqs_hpf_set(f) local(n) (
+  n = eqs_nsec(slider(96));
+  n == 1 ? ( eqs_skHaL.bq_set(1, f, 0.70711, 0); eqs_skHaR.bq_set(1, f, 0.70711, 0); ) :
+  n == 2 ? ( eqs_skHaL.bq_set(1, f, 0.54120, 0); eqs_skHaR.bq_set(1, f, 0.54120, 0);
+             eqs_skHbL.bq_set(1, f, 1.30656, 0); eqs_skHbR.bq_set(1, f, 1.30656, 0); ) :
+           ( eqs_skHaL.bq_set(1, f, 0.50980, 0); eqs_skHaR.bq_set(1, f, 0.50980, 0);
+             eqs_skHbL.bq_set(1, f, 0.60134, 0); eqs_skHbR.bq_set(1, f, 0.60134, 0);
+             eqs_skHcL.bq_set(1, f, 0.89998, 0); eqs_skHcR.bq_set(1, f, 0.89998, 0);
+             eqs_skHdL.bq_set(1, f, 2.56292, 0); eqs_skHdR.bq_set(1, f, 2.56292, 0); );
+  eqs_skHn = n;
+);
+function eqs_lpf_set(f) local(n) (
+  n = eqs_nsec(slider(99));
+  n == 1 ? ( eqs_skLaL.bq_set(0, f, 0.70711, 0); eqs_skLaR.bq_set(0, f, 0.70711, 0); ) :
+  n == 2 ? ( eqs_skLaL.bq_set(0, f, 0.54120, 0); eqs_skLaR.bq_set(0, f, 0.54120, 0);
+             eqs_skLbL.bq_set(0, f, 1.30656, 0); eqs_skLbR.bq_set(0, f, 1.30656, 0); ) :
+           ( eqs_skLaL.bq_set(0, f, 0.50980, 0); eqs_skLaR.bq_set(0, f, 0.50980, 0);
+             eqs_skLbL.bq_set(0, f, 0.60134, 0); eqs_skLbR.bq_set(0, f, 0.60134, 0);
+             eqs_skLcL.bq_set(0, f, 0.89998, 0); eqs_skLcR.bq_set(0, f, 0.89998, 0);
+             eqs_skLdL.bq_set(0, f, 2.56292, 0); eqs_skLdR.bq_set(0, f, 2.56292, 0); );
+  eqs_skLn = n;
+);
+function eqs_setup() (
+  eqs_eqin = slider(92) > 0.5; eqs_drA = slider(93)/100;
+  eqs_outg = eqs_db2g(slider(91));
+  0;   // output stage: straight through
+);
+function eqs_bands() local(eqs_v, eqs_fk, eqs_gk, eqs_q, t) (
+  eqs_v = eqs_dV*eqs_drA;                                   // -1 .. +1 at 100%: the rail wandering about its nominal
+  eqs_gk = 1 + 0.025*eqs_v; eqs_fk = 1 + 0.006*eqs_v;           // gains ease by up to 2.5 %, centres by up to 0.6 %
+  eqs_on1 = slider(78) > 0.5;  eqs_on1 ? ( t = slider(101) > 0.5 ? 4 : 2; eqs_q = t == 4 ? eqs_shq(slider(76)) : eqs_bwq(slider(76));
+                                eqs_b1L.bq_set(t, slider(75)*eqs_fk, eqs_q, slider(77)*eqs_gk);  eqs_b1R.bq_set(t, slider(75)*eqs_fk, eqs_q, slider(77)*eqs_gk); );
+  eqs_on2 = slider(82) > 0.5;  eqs_on2 ? ( eqs_q = eqs_bwq(slider(80));  eqs_b2L.bq_set(2, slider(79)*eqs_fk, eqs_q, slider(81)*eqs_gk);  eqs_b2R.bq_set(2, slider(79)*eqs_fk, eqs_q, slider(81)*eqs_gk); );
+  eqs_on3 = slider(86) > 0.5; eqs_on3 ? ( eqs_q = eqs_bwq(slider(84)); eqs_b3L.bq_set(2, slider(83)*eqs_fk, eqs_q, slider(85)*eqs_gk); eqs_b3R.bq_set(2, slider(83)*eqs_fk, eqs_q, slider(85)*eqs_gk); );
+  eqs_on4 = slider(90) > 0.5; eqs_on4 ? ( t = slider(102) > 0.5 ? 3 : 2; eqs_q = t == 3 ? eqs_shq(slider(88)) : eqs_bwq(slider(88));
+                                eqs_b4L.bq_set(t, slider(87)*eqs_fk, eqs_q, slider(89)*eqs_gk); eqs_b4R.bq_set(t, slider(87)*eqs_fk, eqs_q, slider(89)*eqs_gk); );
+  eqs_skHon = slider(97) > 0.5; eqs_skHon ? eqs_hpf_set(slider(95)*eqs_fk);
+  eqs_skLon = slider(100) > 0.5; eqs_skLon ? eqs_lpf_set(slider(98)*eqs_fk);
+  eqs_hr = eqs_db2g(20 - 2.5*eqs_v);                         // op-amp headroom above 0 dBFS: about +20 dB, less when the rail sags
+  eqs_ihr = 1/eqs_hr;
+);
+function eqs_pb(eqs_k, f, b, g) ( slider(73 + 2 + eqs_k*4) = f; slider(73 + 3 + eqs_k*4) = b; slider(73 + 4 + eqs_k*4) = g; slider(73 + 5 + eqs_k*4) = 1; );
+function eqs_apply_preset(n) (
+  slider(97) = 0; slider(100) = 0; slider(101) = 0; slider(102) = 0;   // every preset: filters out, BAND 1 and 4 as bells
+  n == 0 ? ( eqs_pb(0, 100, 1, 0);    eqs_pb(1, 500, 1, 0);    eqs_pb(2, 2500, 1, 0);   eqs_pb(3, 8000, 1, 0);    slider(91) = 0; ) :   // Flat
+  n == 1 ? ( eqs_pb(0, 120, 1.5, -2); eqs_pb(1, 350, 1.2, -2); eqs_pb(2, 3200, 1.2, 3); eqs_pb(3, 10000, 1.5, 2); slider(91) = 0; ) :   // Vocal Presence
+  n == 2 ? ( eqs_pb(0, 60, 1, 4);     eqs_pb(1, 300, 1, -4);   eqs_pb(2, 2800, 1.5, 3); eqs_pb(3, 8000, 1, 0);    slider(91) = -1; ) :  // Kick and Bass
+  n == 3 ? ( eqs_pb(0, 100, 1, 0);    eqs_pb(1, 500, 1, 0);    eqs_pb(2, 5000, 2, 1);   eqs_pb(3, 14000, 2, 4);   slider(91) = -1; ) :  // Air Lift
+  n == 4 ? ( eqs_pb(0, 200, 2, -16);  eqs_pb(1, 1200, 1, 6);   eqs_pb(2, 2400, 1, 4);   eqs_pb(3, 6000, 2, -16);  slider(91) = -2; ) :  // Telephone
+  n == 5 ? ( eqs_pb(0, 50, 0.1, -16); eqs_pb(1, 100, 0.1, -12); eqs_pb(2, 2500, 1, 0);  eqs_pb(3, 8000, 1, 0);    slider(91) = 0; ) :   // Hum Notch 50 Hz
+  n == 6 ? ( eqs_pb(0, 50, 2, 2);     eqs_pb(1, 400, 2, -1);   eqs_pb(2, 3000, 2, -0.5); eqs_pb(3, 12000, 2, 2);  slider(91) = -1; ) :  // Mastering Smile
+           ( eqs_pb(0, 90, 1, -3);    eqs_pb(1, 250, 1.5, 1.5); eqs_pb(2, 2500, 1, 2.5); eqs_pb(3, 7000, 1, -1.5); slider(91) = 0; );  // Broadcast Voice
+);
+function eqs_init() (
+#eqs_own_ui_man = "gfx-skye";
+eqs_nextmem = 1100000;
+
+
+     // bandwidth (octaves) -> Q
+       // SHELF mode: BW -> shelf slope Q (BW 1 = 0.707)
+0;
+
+// HPF / LPF: Butterworth chains of up to four biquads (x1 = 1 section, x2 = 2, x4 = 4)
+
+
+
+
+
+// the band filters, re-set each block with the supply drift folded in
+
+eqs_dV = 0; eqs_dT = 0; eqs_dW = 0; eqs_mOut = 0;
+
+// ---------- presets: four bands (freq, bw, gain), output ----------
+
+
+!eqs_ui_dflt ? ( eqs_own_ui_sz = 2; eqs_lastPreset = eqs_eqs_s1; );
+eqs_ui_dflt = 1;
+eqs_setup(); eqs_bands();
+0;
+);
+
+function eqs_slider() (
+eqs_eqs_s1 != eqs_lastPreset ? ( eqs_apply_preset(eqs_eqs_s1); eqs_lastPreset = eqs_eqs_s1; );
+eqs_setup();
+0;
+);
+
+function eqs_block() (
+eqs_setup();
+// DRIFT: the supply voltage - a slow random walk, eased so it never steps
+eqs_dW -= samplesblock; eqs_dW <= 0 ? ( eqs_dW = srate*(0.7 + rand(2.3)); eqs_dT = rand(2) - 1; );
+eqs_dV += (eqs_dT - eqs_dV)*min(1, samplesblock/(1.2*srate));
+eqs_bands();
+0;
+);
+
+function eqs_sample() (
+eqs_xL = spl0; eqs_xR = spl1;
+eqs_eqin ? (
+  eqs_skHon ? (
+    eqs_xL = eqs_skHaL.bq_run(eqs_xL); eqs_xR = eqs_skHaR.bq_run(eqs_xR);
+    eqs_skHn > 1 ? ( eqs_xL = eqs_skHbL.bq_run(eqs_xL); eqs_xR = eqs_skHbR.bq_run(eqs_xR); );
+    eqs_skHn > 2 ? ( eqs_xL = eqs_skHcL.bq_run(eqs_xL); eqs_xR = eqs_skHcR.bq_run(eqs_xR); eqs_xL = eqs_skHdL.bq_run(eqs_xL); eqs_xR = eqs_skHdR.bq_run(eqs_xR); );
+  );
+  eqs_on1 ? ( eqs_xL = eqs_b1L.bq_run(eqs_xL); eqs_xR = eqs_b1R.bq_run(eqs_xR); );
+  eqs_on2 ? ( eqs_xL = eqs_b2L.bq_run(eqs_xL); eqs_xR = eqs_b2R.bq_run(eqs_xR); );
+  eqs_on3 ? ( eqs_xL = eqs_b3L.bq_run(eqs_xL); eqs_xR = eqs_b3R.bq_run(eqs_xR); );
+  eqs_on4 ? ( eqs_xL = eqs_b4L.bq_run(eqs_xL); eqs_xR = eqs_b4R.bq_run(eqs_xR); );
+  eqs_skLon ? (
+    eqs_xL = eqs_skLaL.bq_run(eqs_xL); eqs_xR = eqs_skLaR.bq_run(eqs_xR);
+    eqs_skLn > 1 ? ( eqs_xL = eqs_skLbL.bq_run(eqs_xL); eqs_xR = eqs_skLbR.bq_run(eqs_xR); );
+    eqs_skLn > 2 ? ( eqs_xL = eqs_skLcL.bq_run(eqs_xL); eqs_xR = eqs_skLcR.bq_run(eqs_xR); eqs_xL = eqs_skLdL.bq_run(eqs_xL); eqs_xR = eqs_skLdR.bq_run(eqs_xR); );
+  );
+  // op-amp headroom: transparent until a hot signal nears the rail
+  eqs_xL = eqs_hr*eqs_xL*eqs_ihr/(1 + abs(eqs_xL*eqs_ihr)^4)^0.25; eqs_xR = eqs_hr*eqs_xR*eqs_ihr/(1 + abs(eqs_xR*eqs_ihr)^4)^0.25;
+);
+(ost_l = (eqs_xL*eqs_outg); ost_r = (eqs_xR*eqs_outg));
+spl0 = ost_l; spl1 = ost_r;
+eqs_a_ = max(abs(spl0), abs(spl1)); eqs_mOut = eqs_a_ > eqs_mOut ? eqs_a_ : eqs_mOut*0.9997;
+0;
+);
+
+
+// ======================== the strip ========================
+function ch_ms(ms) ( 1 - exp(-1 / (max(ms, 0.01) * 0.001 * srate)); );
+function ch_shp(x, p) ( x / (1 + abs(x) ^ p) ^ (1 / p); );
+function ch_tanh(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
+
+// the engines a slot runs: start one clean (its constants, its @init, its @slider)
+function ch_eq_start(m) (
+  m == 0 ? ( eqt_consts(); eqt_init(); eqt_consts(); eqt_slider(); ch_eqlat = eqt_own_pdc_delay; ) :
+  m == 1 ? ( eqb_consts(); eqb_init(); eqb_consts(); eqb_slider(); ch_eqlat = 0; ) :
+           ( eqs_consts(); eqs_init(); eqs_consts(); eqs_slider(); ch_eqlat = 0; );
+);
+function ch_eq_slider() (
+  ch_eqm == 0 ? ( eqt_consts(); eqt_slider(); ) : ch_eqm == 1 ? ( eqb_consts(); eqb_slider(); ) : ( eqs_consts(); eqs_slider(); );
+);
+function ch_cmp_start(m) ( ch_cmplat = 0; );
+function ch_gate_start(m) ( ch_gatelat = 0; );
+function ch_sat_start(m) ( ch_satlat = 0; );
+
+function ch_latency() (
+  ch_lat = ch_eqlat + ch_cmplat + ch_gatelat + ch_satlat;
+  pdc_bot_ch = 0; pdc_top_ch = 2; pdc_delay = ch_lat;
+);
+
+function ch_update() local(q, tr) (
+  in_setup(slider3, slider4 >= 0.5);
+  ch_hpon = slider1 > 20.5; ch_lpon = slider2 < 21990;
+  ch_eqt = slider6 >= 0.5; ch_cmpt = slider8 >= 0.5; ch_gatet = slider10 >= 0.5; ch_satt = slider12 >= 0.5;
+  ch_lev = 10 ^ (slider14 / 20);
+  drift_macro(slider15);
+  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, 1);   // character unit: CLIP always on
+  // SAT: IRON / TRANSISTOR (the output iron, or a transistor line stage)
+  tr = ch_satm == 1;
+  ch_od = slider171 / 100; ch_odr = 10 ^ (ch_od * 15 / 20); ch_oco = 1 / ch_odr ^ 0.85;
+  ch_bl.bq_set(4, 70, 0.7, tr ? 0 : 0.6 + 0.8 * ch_od); ch_br.bq_set(4, 70, 0.7, tr ? 0 : 0.6 + 0.8 * ch_od);
+  ch_pl.bq_set(3, min(7000, srate * 0.45), 0.7, tr ? 0.8 + 0.8 * ch_od : 0); ch_pr.bq_set(3, min(7000, srate * 0.45), 0.7, tr ? 0.8 + 0.8 * ch_od : 0);
+  ch_isc = 1 - exp(-2 * $pi * min(19000 - 7000 * ch_od, srate * 0.45) / srate);
+);
+
+// a slot's switch-over: the engine (and the ORDER) change at the silent point of the fade
+function ch_apply() (
+  (slider5 | 0) != ch_eqm ? ( ch_eqm = slider5 | 0; ch_eq_start(ch_eqm); );
+  (slider7 | 0) != ch_cmpm ? ( ch_cmpm = slider7 | 0; ch_cmp_start(ch_cmpm); );
+  (slider9 | 0) != ch_gatem ? ( ch_gatem = slider9 | 0; ch_gate_start(ch_gatem); );
+  (slider11 | 0) != ch_satm ? ( ch_satm = slider11 | 0; ch_sat_start(ch_satm); );
+  ch_ord = slider13 >= 0.5;
+  memset(CH_DQ, 0, 8 * CH_DN);
+  ch_latency();
+  ch_update();
+);
+function ch_pending() (
+  (slider5 | 0) != ch_eqm || (slider7 | 0) != ch_cmpm || (slider9 | 0) != ch_gatem || (slider11 | 0) != ch_satm ||
+  (slider13 >= 0.5) != ch_ord;
+);
+
+// the dry path of slot k, delayed by lat samples (the ring is written every sample)
+function ch_dry(k, x, lat) local(b) (
+  b = CH_DQ + k * CH_DN;
+  b[ch_dw] = x;
+  lat > 0 ? b[(ch_dw - lat) & (CH_DN - 1)] : x;
+);
+// IN / OUT: a 10 ms crossfade between the slot's engine and its (latency matched) dry path
+function ch_mix(g, w, d) ( g >= 1 ? w : g <= 0 ? d : d + (w - d) * g; );
+
+// ---------- EQ ----------
+function ch_eq() local(wl, wr) (
+  spl0 = ch_l * ch_ihd; spl1 = ch_r * ch_ihd;
+  ch_eqm == 0 ? eqt_sample() : ch_eqm == 1 ? eqb_sample() : eqs_sample();
+  wl = spl0 * ch_hd; wr = spl1 * ch_hd;
+  ch_eqg = ch_eqt ? min(ch_eqg + ch_xs, 1) : max(ch_eqg - ch_xs, 0);
+  ch_l = ch_mix(ch_eqg, wl, ch_dry(0, ch_l, ch_eqlat));
+  ch_r = ch_mix(ch_eqg, wr, ch_dry(1, ch_r, ch_eqlat));
+);
+// ---------- COMP, GATE (next) ----------
+function ch_comp() ( 0; );
+function ch_gate() ( 0; );
+// ---------- SAT ----------
+function ch_sat() local(wl, wr, t, k) (
+  ch_satg = ch_satt ? min(ch_satg + ch_xs, 1) : max(ch_satg - ch_xs, 0);
+  ch_satg > 0 ? (
+    t = ch_hd * 1.1;
+    ch_satm == 1 ? (
+      // TRANSISTOR: a harder knee, a touch of asymmetry, a little brighter
+      wl = ch_pl.bq_run(ch_l); wr = ch_pr.bq_run(ch_r);
+      wl = (ch_shp(wl * ch_odr / t + 0.04, 5) - ch_shp(0.04, 5)) * t * ch_oco;
+      wr = (ch_shp(wr * ch_odr / t + 0.04, 5) - ch_shp(0.04, 5)) * t * ch_oco;
+      k = wl - ch_d3xl + ch_dcc * ch_d3yl; ch_d3xl = wl; ch_d3yl = k; wl = k;
+      k = wr - ch_d3xr + ch_dcc * ch_d3yr; ch_d3xr = wr; ch_d3yr = k; wr = k;
+    ) : (
+      // IRON: the low band saturates first (the core), the whole wave rounds softly, the top softens with DRIVE
+      wl = ch_bl.bq_run(ch_l); wr = ch_br.bq_run(ch_r);
+      ch_lol += (wl - ch_lol) * ch_ilc; ch_lor += (wr - ch_lor) * ch_ilc;
+      k = 1 + 3 * ch_od;
+      wl += (ch_tanh(ch_lol * k / t) * t / k - ch_lol) * ch_od;
+      wr += (ch_tanh(ch_lor * k / t) * t / k - ch_lor) * ch_od;
+      wl = ch_shp(wl * ch_odr / t, 2.2) * t * ch_oco;
+      wr = ch_shp(wr * ch_odr / t, 2.2) * t * ch_oco;
+      ch_isl += (wl - ch_isl) * ch_isc; ch_isr += (wr - ch_isr) * ch_isc; wl = ch_isl; wr = ch_isr;
+    );
+    ch_l = ch_mix(ch_satg, wl, ch_l); ch_r = ch_mix(ch_satg, wr, ch_r);
+  );
+);
+
+drV.drift_init(0.8 + rand(0.5));
+function ch_srinit() (
+  ch_sr = srate;
+  in_init();
+  ost_init(0); ostL.ost_ch_init(); ostR.ost_ch_init();
+  ch_xs = 1 / (0.010 * srate);                            // IN / OUT crossfade: 10 ms
+  ch_pdn = 1 / (0.012 * srate); ch_pup = 1 / (0.020 * srate);   // engine / ORDER / preset change: 12 ms out, 20 ms in
+  ch_dcc = 1 - 2 * $pi * 8 / srate;                       // DC block after the transistor's asymmetry (8 Hz)
+  ch_sga = ch_ms(80); ch_sgr = ch_ms(400);                // the supply's sag follower
+  ch_ilc = 1 - exp(-2 * $pi * 150 / srate);               // IRON: the low band that saturates first
+  ch_vuk = 1 - exp(-1 / (0.3 * srate));                   // VU ballistics (the needle has its own mass as well)
+  ch_eqm = slider5 | 0; ch_cmpm = slider7 | 0; ch_gatem = slider9 | 0; ch_satm = slider11 | 0; ch_ord = slider13 >= 0.5;
+  // every engine starts once (each keeps its own settings); the strip runs the chosen one per slot
+  ch_eq_start(1); ch_eq_start(2); ch_eq_start(0); ch_eq_start(ch_eqm);
+  ch_cmp_start(ch_cmpm); ch_gate_start(ch_gatem); ch_sat_start(ch_satm);
+  memset(CH_DQ, 0, 8 * CH_DN); ch_dw = 0;
+  ch_latency();
+  ch_update();
+);
+ch_srinit();
+ch_eqg = ch_eqt; ch_cmpg = ch_cmpt; ch_gateg = ch_gatet; ch_satg = ch_satt;
+ch_pcf = 0; ch_pcg = 1; ch_sag = 0; ch_hpw = ch_hpon; ch_lpw = ch_lpon; ch_hf = log(slider1); ch_lf = log(min(slider2, srate * 0.45));
+ch_hl.bq_set(1, slider1, 0.7071, 0); ch_hr.bq_set(1, slider1, 0.7071, 0); ch_ll.bq_set(0, min(slider2, srate * 0.45), 0.7071, 0); ch_lr.bq_set(0, min(slider2, srate * 0.45), 0.7071, 0); ch_volt = 1; ch_hd = 1; ch_ihd = 1;
+!ch_dflt ? pr_cur = 1;
+ch_dflt = 1;
+
+@slider
+!ch_pcf && !ch_pcq ? ( ch_update(); ch_eq_slider(); );
+
+@block
+srate != ch_sr ? ch_srinit();
+// an engine, ORDER or preset change: fade out (12 ms), switch at the silent point, fade back in (20 ms)
+(ch_pending() || ch_pcq) && !ch_pcf ? ( ch_pcf = 1; ch_pcq = 0; );
+ch_pcf == 2 ? ( ch_apply(); ch_eq_slider(); ch_pcf = 3; ch_pch = ch_lat + 32; );
+ch_pcf != 1 ? ( ch_update(); ch_eq_slider(); );
+ch_eqm == 0 ? eqt_block() : ch_eqm == 1 ? eqb_block() : eqs_block();
+// DRIFT: the supply voltage wanders slowly (its sag under load is followed per sample)
+// LOW CUT / HIGH CUT: the corners glide (about 20 ms), the filters always run and fade in and out (10 ms)
+ch_k = 1 - exp(-samplesblock / (0.02 * srate));
+ch_hf += (log(slider1) - ch_hf) * ch_k; ch_lf += (log(min(slider2, srate * 0.45)) - ch_lf) * ch_k;
+ch_hl.bq_set(1, exp(ch_hf), 0.7071, 0); ch_hr.bq_set(1, exp(ch_hf), 0.7071, 0);
+ch_ll.bq_set(0, exp(ch_lf), 0.7071, 0); ch_lr.bq_set(0, exp(ch_lf), 0.7071, 0);
+ch_vv = drV.drift_tick(0.12 * dm_s * samplesblock / srate);
+ch_volt = 1 + 0.06 * dm_a * ch_vv;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+// ---------- INPUT: GAIN / GUARD ----------
+in_process(spl0, spl1); ch_l = in_l; ch_r = in_r;
+ch_ipl = max(ch_ipl, abs(ch_l)); ch_ipr = max(ch_ipr, abs(ch_r));
+// the supply sags under load: a slow follower of the level pulls every stage's headroom down a little
+ch_t = max(abs(ch_l), abs(ch_r));
+ch_sag += (ch_t - ch_sag) * (ch_t > ch_sag ? ch_sga : ch_sgr);
+ch_hd = ch_volt * (1 - 0.12 * dm_a * min(ch_sag, 1.5)); ch_ihd = 1 / ch_hd;
+// ---------- LOW CUT / HIGH CUT ----------
+ch_hpw = ch_hpon ? min(ch_hpw + ch_xs, 1) : max(ch_hpw - ch_xs, 0);
+ch_lpw = ch_lpon ? min(ch_lpw + ch_xs, 1) : max(ch_lpw - ch_xs, 0);
+ch_l = ch_mix(ch_hpw, ch_hl.bq_run(ch_l), ch_l); ch_r = ch_mix(ch_hpw, ch_hr.bq_run(ch_r), ch_r);
+ch_l = ch_mix(ch_lpw, ch_ll.bq_run(ch_l), ch_l); ch_r = ch_mix(ch_lpw, ch_lr.bq_run(ch_r), ch_r);
+// ---------- GATE, then EQ and COMP in ORDER, then SAT ----------
+ch_gate();
+ch_ord ? ( ch_comp(); ch_eq(); ) : ( ch_eq(); ch_comp(); );
+ch_sat();
+ch_dw = (ch_dw + 1) & (CH_DN - 1);
+// ---------- OUTPUT ----------
+ch_l *= ch_lev; ch_r *= ch_lev;
+ch_pcf == 1 ? ( ch_pcg -= ch_pdn; ch_pcg <= 0 ? ( ch_pcg = 0; ch_pcf = 2; ); ) :
+ch_pcf == 3 ? ( ch_pch > 0 ? ch_pch -= 1 : ch_pcg += ch_pup; ch_pcg >= 1 ? ( ch_pcg = 1; ch_pcf = 0; ); );
+ch_pcf ? ( ch_l *= ch_pcg; ch_r *= ch_pcg; );
+ch_l = ostL.ost_band(ch_l); ch_r = ostR.ost_band(ch_r);
+ost_out(ch_l, ch_r);
+spl0 = ost_l; spl1 = ost_r;
+ch_vul += (spl0 * spl0 - ch_vul) * ch_vuk; ch_vur += (spl1 * spl1 - ch_vur) * ch_vuk;
+
+@gfx 960 500
+ui_begin(960, 500);
+
+// ---------- the 45 family's enamel: bone-grey baked enamel modules on a charcoal frame, safety orange ----------
+FRAME = 0x232426; FACE = 0xD6D2C4; FACE2 = 0xCBC6B7; INK = 0x1C1C1C; DIM = 0x4A4842; RULE = 0xA9A497;
+ACC = 0xFF7900; GRN = 0x4CD06A; C_HPF = 0xF2C83E; C_LPF = 0x2A2A2E;
+C_GAIN = 0xFF7900; C_FREQ = 0x4A4842; C_Q = 0x5E7182; C_DRV = 0xC8402A;
+dy_ink = INK; dy_bg = FACE; dy_nov = 1; dy_kst = 35;
+
+function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+// a module: the bone face, its title on a charcoal band, an optional IN key at the band's right end
+function md(x, y, w, h, s) (
+  ui_cola(0x000000, 0.35); gfx_rect((x + 1) * sc, (y + 2) * sc, w * sc, h * sc);
+  ui_col(FACE); gfx_rect(x * sc, y * sc, w * sc, h * sc);
+  ui_cola(0xFFFFFF, 0.35); gfx_rect(x * sc, y * sc, w * sc, 1 * sc);
+  ui_col(INK); gfx_rect(x * sc, y * sc, w * sc, 18 * sc);
+  rd_sub(x + 8, y + 2, s, FACE, 1);
+);
+function md_in(x, y, idx) ( rd_sq(x, y + 1, 30, 16, slider(idx) >= 0.5, GRN, "IN") ? setv(idx, slider(idx) >= 0.5 ? 0 : 1); );
+// an engine key: lit when it is the slot's engine
+function ek(x, y, w, idx, v, s) ( rd_sq(x, y, w, 20, (slider(idx) | 0) == v, ACC, s) ? setv(idx, v); );
+function key(x, y, w, h, on, s) ( rd_sq(x, y, w, h, on, ACC, s); );
+function rowlbl(x, y, s) ( rd_lbl(x, y - 6, s, DIM, 0.95); );
+function hz(f) ( f >= 1000 ? sprintf(#v, "%.2f kHz", f / 1000) : sprintf(#v, "%.0f Hz", f); #v; );
+// a stepped knob (n positions, ticks only); val is its printed value
+function sk(cx, cy, r, idx, n, def, col, lab, val) (
+  dy_step = n; strcpy(#sk_t, ""); loop(n - 1, strcat(#sk_t, "|"); ); dy_steps = #sk_t;
+  dy_knob(cx, cy, r, idx, 0, n - 1, def, 0, col, lab, val);
+);
+// a knob that holds whole numbers (dB in 1 dB steps)
+function wk(cx, cy, r, idx, lo, hi, def, col, lab, val) (
+  dy_knob(cx, cy, r, idx, lo, hi, def, 0, col, lab, val);
+  slider(idx) != floor(slider(idx) + 0.5) ? slider(idx) = floor(slider(idx) + 0.5);
+);
+
+// ---------- the frame ----------
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(FRAME); gfx_rect(0, 0, 960 * sc, 500 * sc);
+ui_cola(0xFFFFFF, 0.05); gfx_rect(0, 0, 960 * sc, 1 * sc);
+
+// ---------- header: badge, name, the 45 plate, presets, size ----------
+rd_badge(26, 26, 15, FACE, FRAME);
+rd_title(50, 9, "CHANNEL 45", 24, FACE);
+rd_sub(52, 36, "MODULAR CHANNEL STRIP", RULE, 1);
+ui_col(ACC); gfx_rect(232 * sc, 12 * sc, 46 * sc, 28 * sc);
+rd_title(240, 13, "45", 20, INK);
+pk_pextra = "Reset all to defaults";
+k_ = pk_preset(300 * sc, 9 * sc, 440 * sc, 34 * sc, pr_cur, "Init");
+k_ > 0 ? ( pr_cur = 1; );
+ui_size_picker(862 * sc, 16 * sc);
+
+// ======================== INPUT ========================
+md(8, 58, 312, 112, "INPUT");
+slider1 <= 20.5 ? strcpy(#v, "OFF") : hz(slider1);
+dy_kf = 1; dy_knob(48, 114, 18, 1, 20, 500, 20, 1, C_HPF, "LOW CUT", #v);
+slider2 >= 21990 ? strcpy(#v, "OFF") : hz(slider2);
+dy_kf = 2; dy_knob(122, 114, 18, 2, 2000, 22000, 22000, 1, C_LPF, "HIGH CUT", #v);
+sprintf(#v, "%+.1f dB", slider3); dy_knob(204, 114, 20, 3, -24, 24, 0, 0, C_GAIN, "GAIN", #v);
+ui_guardclick(1600 + 3, 4, 204, 114, 29);
+ch_im1.ui_ledm(272 * sc, 82 * sc, 10 * sc, 70 * sc, ch_ipl); ch_im2.ui_ledm(286 * sc, 82 * sc, 10 * sc, 70 * sc, ch_ipr);
+ch_ipl *= 0.85; ch_ipr *= 0.85;
+rd_lbl(284, 158, "IN", DIM, 0.8);
+
+// ======================== GATE ========================
+md(8, 176, 312, 152, "GATE"); md_in(282, 176, 10);
+ek(16, 200, 94, 9, 0, "GATE"); ek(114, 200, 94, 9, 1, "EXPANDER"); ek(212, 200, 100, 9, 2, "DRUM GATE");
+rd_lbl(164, 270, "(the gate engines come next)", DIM, 0.6);
+
+// ======================== COMP ========================
+md(8, 334, 312, 158, "COMP"); md_in(282, 334, 8);
+ek(16, 358, 94, 7, 0, "FET 45"); ek(114, 358, 94, 7, 1, "OB Q"); ek(212, 358, 100, 7, 2, "SMOOTH");
+rd_lbl(164, 430, "(the comp engines come next)", DIM, 0.6);
+
+// ======================== EQ ========================
+md(326, 58, 308, 434, "EQ"); md_in(596, 58, 6);
+ek(334, 82, 94, 5, 0, "TONY Q"); ek(432, 82, 94, 5, 1, "BOARD"); ek(530, 82, 96, 5, 2, "SKYE");
+eq_ = slider5 | 0;
+// four rows (FREQ, GAIN, and a Q / BW where the engine has one), keys on the right, extras at the foot
+R1 = 146; R2 = 224; R3 = 302; R4 = 380; RX = 448;
+X1 = 392; X2 = 460; X3 = 528; XK = 568;
+ui_cola(RULE, 0.8); gi = 0; loop(4, gfx_rect(334 * sc, (R1 + 36 + gi * 78) * sc, 292 * sc, 1 * sc); gi += 1; );
+eq_ == 0 ? (
+  // ---- TONY Q: the city's three bands, its DRIVE and OUTPUT; TOKYO / NEW YORK
+  ny_ = slider25 >= 0.5; b_ = ny_ ? 43 : 29;
+  rowlbl(350, R1, "HIGH"); rowlbl(350, R2, "MID"); rowlbl(350, R3, "LOW");
+  ny_ ? (
+    #tf_h = "5 kHz|7 kHz|10 kHz|12.5 kHz|15 kHz"; #tf_m = "400 Hz|800 Hz|1.5 kHz|3 kHz|5 kHz"; #tf_l = "50 Hz|100 Hz|200 Hz|300 Hz|400 Hz";
+    #tg = "-12 dB|-9 dB|-6 dB|-4 dB|-2 dB|0 dB|+2 dB|+4 dB|+6 dB|+9 dB|+12 dB";
+    sk(X1, R1, 16, b_ + 6, 5, 2, C_FREQ, "FREQ", pk_pitem(#tf_h, (slider(b_ + 6) | 0) + 1, #k));
+    sk(X2, R1, 18, b_ + 7, 11, 5, C_GAIN, "GAIN", pk_pitem(#tg, (slider(b_ + 7) | 0) + 1, #k2));
+    sk(X1, R2, 16, b_ + 4, 5, 2, C_FREQ, "FREQ", pk_pitem(#tf_m, (slider(b_ + 4) | 0) + 1, #k));
+    sk(X2, R2, 18, b_ + 5, 11, 5, C_GAIN, "GAIN", pk_pitem(#tg, (slider(b_ + 5) | 0) + 1, #k2));
+    sk(X1, R3, 16, b_ + 1, 5, 1, C_FREQ, "FREQ", pk_pitem(#tf_l, (slider(b_ + 1) | 0) + 1, #k));
+    sk(X2, R3, 18, b_ + 2, 11, 5, C_GAIN, "GAIN", pk_pitem(#tg, (slider(b_ + 2) | 0) + 1, #k2));
+  ) : (
+    #tf_h = "2.5 kHz|4 kHz|6 kHz|8 kHz|10 kHz|12.5 kHz|16 kHz";
+    #tf_m = "500 Hz|600 Hz|700 Hz|800 Hz|1 kHz|1.2 kHz|1.5 kHz|1.8 kHz|2.2 kHz|2.7 kHz|3.3 kHz|4 kHz";
+    #tf_l = "50 Hz|80 Hz|120 Hz|180 Hz|250 Hz|400 Hz";
+    sk(X1, R1, 16, b_ + 6, 7, 3, C_FREQ, "FREQ", pk_pitem(#tf_h, (slider(b_ + 6) | 0) + 1, #k));
+    sprintf(#v, "%+d dB", slider(b_ + 7)); wk(X2, R1, 18, b_ + 7, -15, 15, 0, C_GAIN, "LEVEL", #v);
+    sk(X1, R2, 16, b_ + 4, 12, 4, C_FREQ, "FREQ", pk_pitem(#tf_m, (slider(b_ + 4) | 0) + 1, #k));
+    sprintf(#v, "%+d dB", slider(b_ + 5)); wk(X2, R2, 18, b_ + 5, -15, 15, 0, C_GAIN, "LEVEL", #v);
+    sk(X1, R3, 16, b_ + 1, 6, 2, C_FREQ, "FREQ", pk_pitem(#tf_l, (slider(b_ + 1) | 0) + 1, #k));
+    sprintf(#v, "%+d dB", slider(b_ + 2)); wk(X2, R3, 18, b_ + 2, -15, 15, 0, C_GAIN, "LEVEL", #v);
+  );
+  key(XK, R1 - 9, 58, 18, slider(b_ + 8) >= 0.5, "SHELF") ? setv(b_ + 8, slider(b_ + 8) >= 0.5 ? 0 : 1);
+  key(XK, R3 - 9, 58, 18, slider(b_ + 3) >= 0.5, "SHELF") ? setv(b_ + 3, slider(b_ + 3) >= 0.5 ? 0 : 1);
+  rowlbl(350, R4, ny_ ? "N.Y." : "TOKYO");
+  sprintf(#v, "+%.1f dB", slider(b_)); dy_knob(X1, R4, 16, b_, 0, 24, 0, 0, C_DRV, "DRIVE", #v);
+  sprintf(#v, "%+.1f dB", slider(b_ + 13)); dy_knob(X2, R4, 16, b_ + 13, -12, 12, 0, 0, C_FREQ, "OUTPUT", #v);
+  key(XK, R4 - 21, 58, 18, !ny_, "TOKYO") ? setv(25, 0);
+  key(XK, R4 + 1, 58, 18, ny_, "N.YORK") ? setv(25, 1);
+  rd_lbl(480, RX, ny_ ? "NEW YORK: the discrete console channel" : "TOKYO: the broadcast channel", DIM, 0.7);
+) : eq_ == 1 ? (
+  // ---- BOARD: four bands, BELL keys on LF / HF, VOICING, LINE AMP DRIVE, OUTPUT
+  rowlbl(350, R1, "HF"); rowlbl(350, R2, "HMF"); rowlbl(350, R3, "LMF"); rowlbl(350, R4, "LF");
+  dy_knob(X1, R1, 16, 69, 1500, 16000, 8000, 1, C_FREQ, "FREQ", hz(slider69));
+  sprintf(#v, "%+.1f dB", slider68); dy_knob(X2, R1, 18, 68, -15, 15, 0, 0, C_GAIN, "GAIN", #v);
+  dy_knob(X1, R2, 16, 66, 600, 7000, 2500, 1, C_FREQ, "FREQ", hz(slider66));
+  sprintf(#v, "%+.1f dB", slider65); dy_knob(X2, R2, 18, 65, -15, 15, 0, 0, C_GAIN, "GAIN", #v);
+  sprintf(#v, "%.2f", slider67); dy_knob(X3, R2, 14, 67, 0.4, 3, 1, 1, C_Q, "Q", #v);
+  dy_knob(X1, R3, 16, 63, 200, 2500, 600, 1, C_FREQ, "FREQ", hz(slider63));
+  sprintf(#v, "%+.1f dB", slider62); dy_knob(X2, R3, 18, 62, -15, 15, 0, 0, C_GAIN, "GAIN", #v);
+  sprintf(#v, "%.2f", slider64); dy_knob(X3, R3, 14, 64, 0.4, 3, 1, 1, C_Q, "Q", #v);
+  dy_knob(X1, R4, 16, 60, 30, 450, 100, 1, C_FREQ, "FREQ", hz(slider60));
+  sprintf(#v, "%+.1f dB", slider59); dy_knob(X2, R4, 18, 59, -15, 15, 0, 0, C_GAIN, "GAIN", #v);
+  key(XK, R1 - 9, 58, 18, slider70 >= 0.5, "BELL") ? setv(70, slider70 >= 0.5 ? 0 : 1);
+  key(XK, R4 - 9, 58, 18, slider61 >= 0.5, "BELL") ? setv(61, slider61 >= 0.5 ? 0 : 1);
+  key(344, RX - 18, 52, 18, slider72 < 0.5, "BROWN") ? setv(72, 0);
+  key(344, RX + 2, 52, 18, slider72 >= 0.5, "BLACK") ? setv(72, 1);
+  sprintf(#v, "%.0f%%", slider73); dy_knob(X2, RX, 13, 73, 0, 100, 0, 0, C_DRV, "DRIVE", #v);
+  sprintf(#v, "%+.1f dB", slider74); dy_knob(X3, RX, 13, 74, -12, 12, 0, 0, C_FREQ, "OUTPUT", #v);
+) : (
+  // ---- SKYE: four parametric bands (FREQ, GAIN, BW), each with its IN key; SHELF on bands 1 and 4
+  gi = 0; loop(4, rd_lbl(350, R1 + gi * 78 - 14, "BAND", DIM, 0.95); sprintf(#v, "%d", 4 - gi); rd_lbl(350, R1 + gi * 78 + 2, #v, DIM, 0.95); gi += 1; );
+  gi = 0;
+  loop(4,
+    k_ = 75 + (3 - gi) * 4; y_ = R1 + gi * 78;
+    lo_ = gi == 0 ? 1000 : gi == 1 ? 300 : gi == 2 ? 80 : 20; hi_ = gi == 0 ? 20000 : gi == 1 ? 10000 : gi == 2 ? 3000 : 800;
+    df_ = gi == 0 ? 8000 : gi == 1 ? 2500 : gi == 2 ? 500 : 100;
+    dy_knob(X1, y_, 16, k_, lo_, hi_, df_, 1, C_FREQ, "FREQ", hz(slider(k_)));
+    sprintf(#v, "%+.1f dB", slider(k_ + 2)); dy_knob(X2, y_, 18, k_ + 2, -16, 16, 0, 0, C_GAIN, "GAIN", #v);
+    sprintf(#v, "%.2f oct", slider(k_ + 1)); dy_knob(X3, y_, 14, k_ + 1, 0.1, 4, 1, 1, C_Q, "BW", #v);
+    rd_sq(XK, y_ - 21, 58, 18, slider(k_ + 3) >= 0.5, GRN, "IN") ? setv(k_ + 3, slider(k_ + 3) >= 0.5 ? 0 : 1);
+    gi == 0 ? ( key(XK, y_ + 1, 58, 18, slider102 >= 0.5, "SHELF") ? setv(102, slider102 >= 0.5 ? 0 : 1); );
+    gi == 3 ? ( key(XK, y_ + 1, 58, 18, slider101 >= 0.5, "SHELF") ? setv(101, slider101 >= 0.5 ? 0 : 1); );
+    gi += 1;
+  );
+  sprintf(#v, "%+.1f dB", slider91); dy_knob(X3, RX, 13, 91, -12, 12, 0, 0, C_FREQ, "OUTPUT", #v);
+);
+
+// ======================== SAT ========================
+md(640, 58, 312, 152, "SAT"); md_in(914, 58, 12);
+ek(648, 82, 72, 11, 0, "IRON"); ek(724, 82, 72, 11, 1, "TRANS"); ek(800, 82, 72, 11, 2, "HEAD"); ek(876, 82, 68, 11, 3, "TS-7");
+sat_ = slider11 | 0;
+sat_ <= 1 ? (
+  sprintf(#v, "%.0f%%", slider171); dy_knob(700, 150, 20, 171, 0, 100, 20, 0, C_DRV, "DRIVE", #v);
+  rd_lbl(840, 132, sat_ ? "TRANSISTOR LINE STAGE" : "OUTPUT IRON", INK, 0.9);
+  rd_lbl(840, 150, sat_ ? "harder knee, a little brighter" : "the low end saturates first,", DIM, 0.75);
+  rd_lbl(840, 164, sat_ ? "a touch of asymmetry" : "the top softens as it is driven", DIM, 0.75);
+) : rd_lbl(796, 150, "(HEAD and TS-7 come next)", DIM, 0.6);
+
+// ======================== OUTPUT ========================
+md(640, 216, 312, 276, "OUTPUT");
+ch_vu1.ui_vu(650 * sc, 242 * sc, 144 * sc, 86 * sc, 10 * log10(ch_vul + 0.0000000001) + 18 + 10 * log10(2), "L");
+ch_vu2.ui_vu(798 * sc, 242 * sc, 144 * sc, 86 * sc, 10 * log10(ch_vur + 0.0000000001) + 18 + 10 * log10(2), "R");
+// ORDER
+rd_lbl(700, 344, "ORDER", DIM, 0.9);
+key(652, 356, 94, 22, slider13 < 0.5, "EQ > COMP") ? setv(13, 0);
+key(652, 382, 94, 22, slider13 >= 0.5, "COMP > EQ") ? setv(13, 1);
+// LEVEL, DRIFT, the house output stage's band SAT; the CLIP lamp
+sprintf(#v, "%+.1f dB", slider14); dy_knob(820, 386, 24, 14, -24, 12, 0, 0, C_GAIN, "LEVEL", #v);
+sprintf(#v, "%.0f%%", slider15); dy_knob(700, 450, 13, 15, 0, 100, 50, 0, C_FREQ, "DRIFT", #v);
+sprintf(#v, "%.0f%%", slider16); dy_knob(908, 450, 13, 16, 0, 100, 0, 0, C_Q, "BAND SAT", #v);
+ch_clip_ = ost_clipped; ost_clipped = 0;
+rd_led(908, 360, 5, ch_clip_, 0xFF3A22); rd_lbl(908, 372, "CLIP", DIM, 0.8);
+ch_lat > 0 ? ( sprintf(#v, "latency %d", ch_lat); rd_lbl(820, 470, #v, DIM, 0.5); );
+
+pk_end();
+ui_end();
