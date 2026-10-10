@@ -123,9 +123,6 @@ slider72:4<0,7,1{1/2,1/4D,1/4,1/4T,1/8D,1/8,1/8T,1/16}>-Delay time
 slider73:35<0,90,1>-Delay feedback (%)
 slider74:25<0,100,1>-Delay mix (%)
 slider75:1<0,1,1{Off,On}>-Delay ping-pong
-// DC block (ring modulation, full resonance and asymmetric drive can leave an offset)
-dh_dcyl = dh_L - dh_dcxl + 0.9996 * dh_dcyl; dh_dcxl = dh_L; dh_L = dh_dcyl;
-dh_dcyr = dh_R - dh_dcxr + 0.9996 * dh_dcyr; dh_dcxr = dh_R; dh_R = dh_dcyr;
 
 // ---------- MASTER ----------
 slider76:25<0,100,1>-Drift (%)

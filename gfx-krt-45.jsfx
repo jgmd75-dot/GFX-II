@@ -176,7 +176,7 @@ function kr_flush() instance(sal, s1a, s1b, s1c, sap, s2a, s2b, s2c, ssub, dx, d
 function kr_mdb(v) ( 8.68588963807 * log(max(v, 0.00001)) );
 
 // ---------- settings ----------
-kr_sd = 0.55; kr_sb = 0.14;                             // transistor curve: drive, bias (2nd + 3rd harmonic)
+kr_sd = 0.22; kr_sb = 0.30;                             // transistor curve: drive, bias (2nd + 3rd harmonic)
 kr_stb = ost_tanh(kr_sd * kr_sb); kr_snorm = 1 / (kr_sd * (1 - kr_stb * kr_stb));
 kr_dcd = 1 - 2 * $pi * 5 / srate;                       // DC blocker on the drive's added part, 5 Hz
 kr_dco = 1 - 2 * $pi * 2 / srate;                       // output DC blocker, 2 Hz
