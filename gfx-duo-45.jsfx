@@ -297,7 +297,7 @@ function kx_update() local(b, rt, fq, sp, bl) (
   kx_tog = 10 ^ (slider21 / 20);
   ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, slider27 | 0);
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = kx_L - 1 + ost_N;
+  pdc_delay = kx_L - 1 + ((slider27 | 0) == 2 ? ost_N : 0);
 );
 
 // ---------- presets ----------

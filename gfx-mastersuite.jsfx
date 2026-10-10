@@ -357,7 +357,7 @@ function update() (
   // latency: the oversampler (more stages add their own later)
   os_lat = os_n == 0 ? 0 : os_n == 1 ? 2 * K1 : 2 * K1 + K2;
   ins_output_setup(32);                    // (it writes pdc_delay: put ours back straight away)
-  lat_t = 2 * os_lat + LDEL + ost_N;                   // oversamplers, limiters
+  lat_t = 2 * os_lat + LDEL + (slider37 == 2 ? ost_N : 0);                   // oversamplers, limiters
   pdc_delay = lat_t; pdc_bot_ch = 0; pdc_top_ch = 2;
   // (kept constant whatever is bypassed, so switching a stage never shifts the timing)
 );

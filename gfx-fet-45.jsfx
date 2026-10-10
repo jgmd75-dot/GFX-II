@@ -193,7 +193,7 @@ function fd_update() local(rt, rs) (
   drift_macro(slider9);
   ost_setup(0, 0, 120, 6000, -0.3, slider11 | 0);
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = fd_LAT + ost_N;
+  pdc_delay = fd_LAT + ((slider11 | 0) == 2 ? ost_N : 0);
   rs = (7 - min(max(slider5, 1), 7)) / 6;               // 0 = fastest release .. 1 = slowest
   fd_smul = 2.5 - 0.9 * rs;                             // the slow stage: 2.5x the set time (fast) .. 1.6x (slow)
   fd_cF  = 0.07 * (1 + 2.6 * fd_twA);

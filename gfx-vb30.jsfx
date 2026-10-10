@@ -122,7 +122,7 @@ function update() (
   hp_on ? ( hpL.bq_set(1, slider16, 0.707, 0); hpR.bq_set(1, slider16, 0.707, 0); );
   lnk = slider17; mix_t = slider18 / 100;
   in_setup(0, slider20);
-  ost_setup(0, 0, 120, 6000, -0.3, -1);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------
