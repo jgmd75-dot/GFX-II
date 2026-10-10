@@ -42,10 +42,12 @@ desc:GFX Amp Head [guitar / bass amp]
 //   parameter list, as on the originals).
 // MODEL SWITCH: only the selected model runs (CPU = that model). A change crossfades the outgoing model (frozen at
 //   its settings) into the incoming one over 20 ms; the incoming model starts from a clean, reset state.
-// PRESETS: the house preset bar. "Init" = GUITAR at its defaults, "BASS: Init" = BASS at its defaults; choosing one
-//   also selects its model. "Reset all to defaults" (in the list) resets both models, the MODEL and the shared
-//   settings. A preset for the model in use changes without a click (the output ducks for a moment while the new
-//   settings go in); one for the other model crossfades.
+// PRESETS: the house preset bar. "Init" = GUITAR at its defaults, "BASS: Init" = BASS at its defaults, and factory
+//   sounds for each model ("GUITAR: ..." / "BASS: ...", level-matched with the model's OUTPUT); choosing one also
+//   selects its model. They set the model's tone only (MONO IN and the shared settings stay as they are).
+//   "Reset all to defaults" (in the list) resets both models, the MODEL and the shared settings. A preset for the model in
+//   use changes without a click (the output ducks for a moment while the new settings go in); one for the other
+//   model crossfades.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -514,10 +516,39 @@ function ba_defaults() (
   slider29 = 0;
   slider30 = 0;
 );
+// a GUITAR / BASS factory preset: the model and its tone (MONO IN is left as it is; the tuner goes off)
+function ga_pp(g, br, ch, b, m, t, pr, ms, rv, gt, cab, mic, out) (
+  slider1 = 0; slider2 = g; slider3 = br; slider4 = ch; slider5 = b; slider6 = m; slider7 = t; slider8 = pr;
+  slider9 = ms; slider10 = rv; slider11 = gt; slider12 = cab; slider13 = mic; slider14 = out; slider15 = 0;
+  ah_autor(1, 15);
+);
+function ba_pp(g, ul, uh, b, m, mf, t, ms, gt, cab, mic, di, out) (
+  slider1 = 1; slider17 = g; slider18 = ul; slider19 = uh; slider20 = b; slider21 = m; slider22 = mf; slider23 = t;
+  slider24 = ms; slider25 = gt; slider26 = cab; slider27 = mic; slider28 = di; slider29 = out; slider30 = 0;
+  ui_auto(1); ah_autor(17, 30);
+);
 function ah_load(p) (
   p == 1 ? ( slider1 = 0; ga_defaults(); ah_autor(1, 16); ) :          // Init = GUITAR at its defaults
-  p == 2 ? ( slider1 = 1; ba_defaults(); ui_auto(1); ah_autor(17, 30); ) :   // BASS: Init
-  p == 3 ? (                                                            // Reset all to defaults
+  p == 2 ? ga_pp(2.5, 0, 0, 6.5, 5, 3.5, 3, 3, 1.5, -80, 1, 6, 3.5) :   // GUITAR: Clean Jazz
+  p == 3 ? ga_pp(3, 1, 0, 5, 4, 6.5, 6, 3.5, 4.5, -80, 1, 2, -3) :   // GUITAR: Sparkle Clean
+  p == 4 ? ga_pp(6, 1, 0, 5, 6, 6, 5, 5.5, 2, -80, 1, 3, -5) :   // GUITAR: Edge of Breakup
+  p == 5 ? ga_pp(6, 0, 1, 5.5, 7, 6, 5.5, 6, 1.5, -70, 2, 3, -7) :   // GUITAR: Classic Crunch
+  p == 6 ? ga_pp(7, 0, 1, 6.5, 6, 6.5, 6, 6.5, 0.5, -64, 2, 2.5, -7.5) :   // GUITAR: Rhythm Crunch 4x12
+  p == 7 ? ga_pp(8, 0, 1, 5.5, 7.5, 6, 6, 6, 2.5, -66, 2, 4, -7.5) :   // GUITAR: Hot Lead
+  p == 8 ? ga_pp(10, 0, 1, 6, 6.5, 5.5, 5, 7, 3, -60, 2, 5, -6) :   // GUITAR: Saturated Lead
+  p == 9 ? ga_pp(7, 1, 0, 5, 7, 5.5, 5, 6.5, 2.5, -80, 1, 4, -5) :   // GUITAR: Blues
+  p == 10 ? ga_pp(4, 1, 0, 4, 4.5, 7, 6.5, 4, 8, -80, 1, 2, -5.5) :   // GUITAR: Spring Surf
+  p == 11 ? ga_pp(2.5, 0, 0, 5.5, 4, 5.5, 4.5, 3, 7, -80, 1, 5, 2) :   // GUITAR: Ambient Clean
+  p == 12 ? ( slider1 = 1; ba_defaults(); ui_auto(1); ah_autor(17, 30); ) :   // BASS: Init
+  p == 13 ? ba_pp(2.5, 0, 0, 0, 0, 1, 1, 3, -80, 0, 3, 60, 3) :   // BASS: DI Clean
+  p == 14 ? ba_pp(4.5, 0, 0, 3, 1, 1, -2, 5, -80, 1, 5, 0, -1.5) :   // BASS: Warm Valve
+  p == 15 ? ba_pp(3.5, 0, 0, 4, -1, 0, -6, 4.5, -80, 1, 8, 10, 2) :   // BASS: Vintage Round
+  p == 16 ? ba_pp(7, 0, 0, 2, 5, 2, 2, 6, -80, 1, 3, 25, -1.5) :   // BASS: Growl
+  p == 17 ? ba_pp(6, 0, 1, 2, 3, 3, 4, 6.5, -80, 1, 2, 20, -3.5) :   // BASS: Pick Rock
+  p == 18 ? ba_pp(4, 1, 0, 6, -3, 2, -9, 4.5, -80, 1, 9, 0, 2.5) :   // BASS: Fat Dub
+  p == 19 ? ba_pp(3, 1, 1, 3, -4, 1, 5, 4, -80, 1, 1, 35, 3.5) :   // BASS: Bright Slap
+  p == 20 ? ba_pp(9.5, 0, 0, 2, 4, 2, 3, 7.5, -66, 1, 3, 30, 0) :   // BASS: Overdriven
+  p == 21 ? (                                                            // Reset all to defaults
     slider1 = 0;
     slider2 = 5;
     slider3 = 0;
@@ -563,7 +594,7 @@ function ah_load(p) (
   // a preset for the model in use changes without a click: the output ducks (12 ms out, the new settings at
   // silence, 8 ms hold, 12 ms back); a preset for the other model crossfades instead
   floor(slider1 + 0.5) == ah_cur ? ah_dst = 1;
-  ah_pr = p > 2 ? 1 : p;
+  ah_pr = p > 20 ? 1 : p;
 );
 
 ah_srinit();
@@ -655,7 +686,8 @@ ui_keycap(226 * sc, (T + 13) * sc, 62 * sc, 22 * sc, "GUITAR", ah_cur == 0, 1) ?
 ui_keycap(292 * sc, (T + 13) * sc, 56 * sc, 22 * sc, "BASS", ah_cur == 1, 1) ? ( slider1 = 1; ui_auto(1); );
 // the house preset bar
 pk_pextra = "Reset all to defaults";
-ah_k = pk_preset(360 * sc, (T + 11) * sc, 236 * sc, 26 * sc, ah_pr, "Init|BASS: Init");
+ah_k = pk_preset(360 * sc, (T + 11) * sc, 236 * sc, 26 * sc, ah_pr,
+  "Init|GUITAR: Clean Jazz|GUITAR: Sparkle Clean|GUITAR: Edge of Breakup|GUITAR: Classic Crunch|GUITAR: Rhythm Crunch 4x12|GUITAR: Hot Lead|GUITAR: Saturated Lead|GUITAR: Blues|GUITAR: Spring Surf|GUITAR: Ambient Clean|BASS: Init|BASS: DI Clean|BASS: Warm Valve|BASS: Vintage Round|BASS: Growl|BASS: Pick Rock|BASS: Fat Dub|BASS: Bright Slap|BASS: Overdriven");
 ah_k > 0 ? ah_load(ah_k);
 pk_led(610 * sc, (T + 24) * sc, 5 * sc, 1, BH_ACC);
 ui_theme_picker(624 * sc, (T + 15) * sc);
