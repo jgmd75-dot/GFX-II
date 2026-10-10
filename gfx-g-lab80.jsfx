@@ -56,8 +56,8 @@ slider11:0<0,100,1>-Band sat (%)
 slider12:30<0,100,1>-Bias (%)
 slider13:120<40,400,1>-Sat low band (Hz)
 slider14:6000<2000,16000,10>-Sat high band (Hz)
-slider15:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider16:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider15:-0.3<-24,0,0.1>-Ceiling (dB)
+slider16:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider17:0<-6,3,0.01>-Filter (octaves)
 slider18:0<0,100,1>-Resonance (%)
 slider19:1<0,2,1{Room,Hall,Plate}>-Reverb type
