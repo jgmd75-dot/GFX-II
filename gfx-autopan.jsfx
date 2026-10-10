@@ -122,6 +122,7 @@ pkL = 0; pkR = 0;
 ost_init(1000); ostL.ost_ch_init(); ostR.ost_ch_init();
 in_init();
 vuc = 1 - exp(-1 / (0.01 * srate)); vu_ms = 0;
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 !ui_dflt ? ui_thm = 0; !ui_dflt ? ui_hw = 0;   // defaults for new instances: Amber, flat (saved projects keep their own)
 update();
 depth_s = depth_t; cent_s = cent_t; mix_s = mix_t; out_s = out_t;
@@ -275,7 +276,7 @@ slider2 < 3 ? (
 );
 
 // ---------- input VU ----------
-vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18;   // 0 VU = -18 dBFS RMS
+vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18 + vu_sine;   // 0 VU = sine peaking at -18 dBFS
 vuIn.ui_vu(478 * sc, 52 * sc, 146 * sc, 80 * sc, vdb, "INPUT");
 
 // ---------- AUTOPAN group ----------

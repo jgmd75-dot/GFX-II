@@ -152,6 +152,7 @@ ost_init(40000); ostL.ost_ch_init(); ostR.ost_ch_init();
 in_init();
 sm = 1 - exp(-1 / (0.02 * srate));
 vuc = 1 - exp(-1 / (0.3 * srate));
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 cur_preset = 1;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
 update();
@@ -236,8 +237,8 @@ dy_btn(238, 244, slider18, dy_grn, "GUARD") ? ( slider18 = 1 - slider18; ui_auto
 sprintf(#v, "%.0f%%", slider9); dy_knob(330, 260, 16, 9, 0, 100, 100, 0, 0xF2F2EE, "MIX", #v);
 
 // ---------- meters ----------
-vuL.ui_vu(400 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmL + 0.0000000001) + 18, "L");
-vuR.ui_vu(576 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmR + 0.0000000001) + 18, "R");
+vuL.ui_vu(400 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmL + 0.0000000001) + 18 + vu_sine, "L");
+vuR.ui_vu(576 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmR + 0.0000000001) + 18 + vu_sine, "R");
 
 // ---------- tape + output ----------
 ui_cola(INK, 0.06); gfx_rect(400 * sc, 188 * sc, 346 * sc, 200 * sc);
