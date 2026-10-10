@@ -7,13 +7,8 @@
 lz_face = 0x38B456; lz_ink = 0xFFFFFF; lz_dk = 0x1E6A30; lz_lt = 0x6CD888;
 
 // a clean rounded oblong (design units): straight sides, four even quarter-circle corners
-function lz_rr(x, y, w, h, r) local(x0, y0, x1, y1, rr) (
-  x0 = floor(x * sc + 0.5); y0 = floor(y * sc + 0.5); x1 = floor((x + w) * sc + 0.5); y1 = floor((y + h) * sc + 0.5);
-  rr = min(floor(r * sc + 0.5), floor(min(x1 - x0, y1 - y0) * 0.5));
-  gfx_rect(x0 + rr, y0, x1 - x0 - 2 * rr, y1 - y0);
-  gfx_rect(x0, y0 + rr, x1 - x0, y1 - y0 - 2 * rr);
-  gfx_circle(x0 + rr, y0 + rr, rr, 1, 1); gfx_circle(x1 - rr - 1, y0 + rr, rr, 1, 1);
-  gfx_circle(x0 + rr, y1 - rr - 1, rr, 1, 1); gfx_circle(x1 - rr - 1, y1 - rr - 1, rr, 1, 1);
+function lz_rr(x, y, w, h, r) (
+  ui_rrect(x * sc, y * sc, w * sc, h * sc, r * sc);   // pixel-snapped, one non-overlapping pass (gfx-ui)
 );
 // set the faceplate colour from ui_thm (call once per frame, before drawing)
 function lz_colours() (
