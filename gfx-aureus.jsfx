@@ -243,7 +243,7 @@ function pb(b, eqt, eqg, drt, dra, cmt, cma, gn) local(i) (
   slider(i + 4) = cmt; slider(i + 5) = cma; slider(i + 6) = gn; slider(i + 7) = 0; slider(i + 8) = 0;
 );
 // eq: 0 P 1 S 2 D | drive: 0 T 1 S 2 X | comp: 0 O 1 V 2 R
-function apply_preset(n) (
+function ax_apply_now(n) (
   slider2 = 25; slider3 = 0; slider4 = 0; slider5 = 100;
   pb(0, 0, 0, 1, 0, 0, 0, 0); pb(1, 0, 0, 1, 0, 0, 0, 0); pb(2, 0, 0, 1, 0, 0, 0, 0); pb(3, 0, 0, 1, 0, 0, 0, 0);
   n == 1 ? (       // Golden Glue
@@ -263,6 +263,15 @@ function apply_preset(n) (
   );
 );
 
+// a preset is staged: the old settings keep playing while the output ducks (12 ms), the new ones are
+// swapped in at silence, then it fades back in (band types, drive and comp switches can't glide)
+function apply_preset(n) local(i) (
+  i = 1; loop(48, ax_old[i] = slider(i); i += 1; );
+  ax_apply_now(n);
+  i = 1; loop(48, ax_new[i] = slider(i); i != 1 ? slider(i) = ax_old[i]; i += 1; );
+  ax_dst = 1;
+);
+
 // Meters / GUI state
 vuL = 0; vuR = 0; mOut = 0; mLim = 0; limEnv = 0;
 limRel = exp(-1/(0.15*srate));
@@ -270,6 +279,8 @@ vuC = cms(0.3);
 vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 xfLp = 1 - exp(-TWO_PI*F1*PHI/srate);          // transformer low split: F1 * PHI
 vnd = alloc(2); memset(vnd, 0, 2);            // VU needle positions (GUI)
+ax_old = alloc(64); ax_new = alloc(64);          // preset duck: the settings before / after a preset
+ax_dkr = 1 / (0.012*srate); ax_dk = 1; ax_dst = 0;
 drag_id = -1; pcap = 0; lastS = 0;
 gfx_ext_retina = 1;
 
@@ -339,6 +350,7 @@ loop(4,
   p[15] = 0.5*p[11]*max(0, -18 - p[28]);                     // half auto-makeup (all types)
   b += 1;
 );
+ax_dst == 3 ? ax_dst = 2;                    // the new settings are in: fade back in
 
 @sample
 spl0 != spl0 ? spl0 = 0;
@@ -410,6 +422,10 @@ bp[149] = rgen(rgs + 9, 3*PHI*PHI*PHI);
 // ---- master ----
 oL = (dryL*(1 - mixW) + outL*mixW)*outG;
 oR = (dryR*(1 - mixW) + outR*mixW)*outG;
+ax_dst == 1 ? ( ax_dk -= ax_dkr; ax_dk <= 0 ? (
+  ax_dk = 0; ax_i = 1; loop(48, slider(ax_i) = ax_new[ax_i]; ax_i += 1; ); ax_dst = 3; ax_note = 1; ); ) :
+ax_dst == 2 ? ( ax_dk += ax_dkr; ax_dk >= 1 ? ( ax_dk = 1; ax_dst = 0; ); );
+ax_dst ? ( ax_dkg = ax_dk*ax_dk*(3 - 2*ax_dk); oL *= ax_dkg; oR *= ax_dkg; );
 pk = max(abs(oL), abs(oR));
 limEnv = pk > limEnv ? pk : limEnv*limRel;
 lg = limEnv > 0.966 ? 0.966/limEnv : 1;
@@ -422,6 +438,7 @@ vuR += vuC*(spl1*spl1 - vuR);
 mLim = lg < 0.98 ? 1 : mLim*0.9995;
 
 @gfx 1680 504
+ax_note ? ( ax_note = 0; slider_automate(281474976710655); );   // tell the host about a swapped-in preset
 
 // =====================================================================
 // GUI - yellow rack faceplate, 1600 x 480 design space.

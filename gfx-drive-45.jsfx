@@ -396,7 +396,7 @@ function dq_update() local(t) (
   dq_tog = 10 ^ (slider24 / 20);
   ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, slider30 | 0);
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = dq_LAT + ((slider30 | 0) == 2 ? ost_N : 0);
+  pdc_delay = dq_LAT + ost_N;
 );
 
 // ---------- presets ----------

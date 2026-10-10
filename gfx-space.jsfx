@@ -100,6 +100,9 @@ function sp_chain(x) instance(z0, z1, z2, z3, z4, z5, z6, z7, z8, z9, z10, z11) 
   y = -0.62 * x + z11; z11 = x + 0.62 * y;
   y;
 );
+function sp_clr() instance(z0, z1, z2, z3, z4, z5, z6, z7, z8, z9, z10, z11) (
+  z0 = z1 = z2 = z3 = z4 = z5 = z6 = z7 = z8 = z9 = z10 = z11 = 0;
+);
 
 // ---------- vintage wet EQ: HPF 140 Hz, 500 Hz cut, LPF 5 kHz (the classic studio reverb-send trick) ----------
 // vt_set(m): m = 0 off, 1/2/3 = -3/-6/-9 dB at 500 Hz. Shared coefficients, per-channel state.
@@ -173,6 +176,7 @@ function setp(t, pd, dc, sz, dm, md, erp, df, lc, hc, dk, mx) (
   slider9 = lc; slider10 = hc; slider11 = dk; slider16 = mx; slider13 = 0;
 );
 function load_preset(p) (
+  sx_dst = 1;                                       // duck the reverb, swap the settings at silence, fade it back in
   p == 1 ? setp(0, 5,  0.6, 90,  45, 15, 70, 70, 150, 9000, 0,  25) :     // Small Room
   p == 2 ? setp(0, 10, 1.1, 120, 55, 20, 60, 75, 120, 7000, 0,  25) :     // Live Room
   p == 3 ? setp(1, 15, 1.6, 100, 50, 25, 55, 80, 120, 8000, 0,  25) :     // Vocal Chamber
@@ -206,13 +210,14 @@ vt_m = -1;
 !ui_dflt ? ui_thm = 18; !ui_dflt ? ui_hw = 1;  // defaults for new instances: Blossom, hardware (saved projects keep their own)
 update();
 mix_s = mix_t; out_s = out_t;
+sx_dkr = 1 / (0.012 * srate); sx_dk = 1; sx_dst = 0;   // preset duck (the wet only): 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+sx_dst != 1 ? update();                             // during a preset duck the swap applies the new settings
 
 @block
-update();
+sx_dst != 1 ? update();
 vW = drW.drift_tick(dspd * samplesblock / srate);
 
 @serialize
@@ -222,6 +227,13 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+// preset duck-and-swap on the wet: type, size, pre-delay and diffusion jump in silence, and the reverb starts
+// clean with its feed faded in (old audio at the new line lengths would come round again as a click)
+sx_dst == 1 ? ( sx_dk -= sx_dkr; sx_dk <= 0 ? (
+  sx_dk = 0; update(); sx_dst = 2;
+  memset(pre_b, 0, sp_b + 2 * BLK - pre_b); memset(lz, 0, 8); spyL = spyR = 0; spcL.sp_clr(); spcR.sp_clr();
+); ) :
+sx_dst == 2 ? ( sx_dk += sx_dkr; sx_dk >= 1 ? ( sx_dk = 1; sx_dst = 0; ); );
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
@@ -230,6 +242,7 @@ mix_s += (mix_t - mix_s) * sm;
 out_s += (out_t - out_s) * sm;
 
 xL = frz ? 0 : inL; xR = frz ? 0 : inR;
+sx_dst ? ( sx_dkg = sx_dk * sx_dk * (3 - 2 * sx_dk); xL *= sx_dkg; xR *= sx_dkg; );
 
 // pre-delay (stereo, interleaved)
 pre_b[pre_w * 2] = xL; pre_b[pre_w * 2 + 1] = xR;
@@ -314,6 +327,7 @@ rtype == 4 ? (
 hzL += (rL - hzL) * lo_c; rL -= hzL; hzR += (rR - hzR) * lo_c; rR -= hzR;
 lzL += (rL - lzL) * hi_c; rL = lzL; lzR += (rR - lzR) * hi_c; rR = lzR;
 vt_on ? ( rL = vtL.vt_proc(rL); rR = vtR.vt_proc(rR); );
+sx_dst ? ( rL *= sx_dkg; rR *= sx_dkg; );
 
 // ducking
 lvl = max(abs(inL), abs(inR));

@@ -489,7 +489,7 @@ function tq_update() (
   tq_om = slider4 | 0;
   ost_setup(0, 0, 120, 6000, -0.3, tq_om);
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = tq_LAT + (tq_om == 2 ? ost_N : 0);
+  pdc_delay = tq_LAT + ost_N;
   tq_tgt = slider1 >= 0.5;
 );
 
