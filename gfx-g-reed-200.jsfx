@@ -1,0 +1,780 @@
+desc:GFX G Reed 200 [reed e-piano]
+//tags: instrument electric piano reed electrostatic tremolo physical-modeling
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-instrument, gfx-voice, gfx-dyn and gfx-faceplate
+// (.jsfx-inc) in the same folder.
+//
+// G REED 200. A sample-free reed electric piano in the spirit of the 1970s electrostatic reed pianos (the slim
+// plastic-cased student / stage models with their own amplifier, tremolo and two small speakers), built from the
+// mechanism up:
+//
+// HAMMER   a felt-tipped hammer: its blow is a smooth raised-cosine force pulse (no click), as long as the felt's
+//          contact. A nonlinear felt stiffens as it is compressed, so a harder blow is shorter (contact time ~ speed^-0.43,
+//          the Hunt-Crossley law for a felt exponent of 2.5) and its spectrum reaches further up: it excites more of the
+//          reed's upper modes. HARDNESS sets the felt. The pulse is sized so the reed's swing follows the hammer speed.
+// REED     each key's steel reed is a clamped-free cantilever tuned by the solder mass at its tip: three modal
+//          resonators at its inharmonic ratios (1 : ~6.3 : ~17.6, the solder lifts them a little in the bass), the
+//          upper two short-lived (the attack 'blip'), the fundamental with a measured-style decay that is short in
+//          the top register. While the reed swings past the pickup's slot its air and edge losses rise, so a hard
+//          note's bark settles quickly into its sweeter sustain.
+// PICKUP   the reed tip vibrates in the slot of a comb-like pickup plate held at a high DC polarising voltage: the
+//          output current is U0 x dC/dt. The capacitance against the reed's position is a plateau (reed inside the
+//          slot) with soft edges and fringing tails, C(u) = 0.8 / (1 + u^4) + 0.2 / (1 + u^2) in slot half-widths.
+//          The reed rests partly out of the slot, on the edge: a small swing reads almost linearly (sweet, round,
+//          nearly flute-like), a large one runs over the plateau and out into the tail and is folded: the bark.
+//          VOICING sets where the reed rests on the edge: EVEN (further out: the curve bends, second-harmonic rich,
+//          warm) .. ODD (on the edge's inflection: hollow, reedy, odd harmonics). It runs at 2x and is decimated.
+// PREAMP   the onboard transistor preamp: a coupling capacitor, then an asymmetric soft clipper
+//          tanh(g x + b) - tanh(b) whose bias sags a little with the signal, so hard playing breaks up with even
+//          harmonics: BARK is its gain (level-compensated). It also runs at 2x, before the decimator.
+// TREMOLO  the built-in tremolo is amplitude modulation: an oscillator lights an LED and a light-dependent resistor
+//          shunts the signal (the cell responds faster than it recovers: a rounded, slightly pulsing swell). MONO is
+//          the original; STEREO runs two cells in anti-phase for an auto-pan.
+// OUTPUT   SPEAKERS: the power amp and the two small built-in speakers in the plastic lid (boxy, mid-forward, honky
+//          around 1 - 2 kHz, little low end); LINE: the direct output (fuller lows, wider top); AMP: through a small
+//          valve combo (its tone stack, a gentle valve stage, a 1 x 12 cabinet). Then TONE (a treble shelf).
+// RELEASE  the damper felt lands on the reed (soft and quick, a very quiet key-off knock); sustain pedal (CC64).
+// PLAYING  VELOCITY (0 % = one fixed hammer speed, 100 % = the widest soft-to-slammed range), POLYPHONY, FINE.
+// DRIFT    each reed sits a little off pitch, as the solder tuning of a real instrument does (a spread fixed for
+//          this instance and saved with the project, at most +/-3 cents at 100 %), and the preamp's bias wanders
+//          slowly, moving its asymmetry. 0 % = an ideal instrument.
+// FX       after the amp, as in G Mark 73: CHORUS (RATE, DEPTH), VIBE (lamp-driven photocell phaser: RATE, DEPTH),
+//          DELAY (ping-pong with warm saturating feedback: TIME in ms or synced, FEEDBACK, MIX), SPACE (ROOM /
+//          PLATE / GATED, AMOUNT); each has its own lit ON key.
+// KEYS     the 64-key strip on the panel shows the sounding notes (the original's A1 - C7); click a key to play it.
+// MIDI     note on / off, sustain (CC64), all notes off (CC120 / CC123). Every MIDI note plays, beyond the 64 keys.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-instrument.jsfx-inc
+import gfx-voice.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:50<0,100,1>-Decay (%)
+slider2:35<0,100,1>-Release (%)
+slider3:50<0,100,1>-Hardness (%)
+slider4:50<0,100,1>-Voicing (even - odd, %)
+slider5:30<0,100,1>-Bark (%)
+slider6:0<-12,12,0.1>-Tone (dB)
+slider7:0<0,100,1>-Tremolo depth (%)
+slider8:5.6<1,10,0.01>-Tremolo speed (Hz)
+slider9:60<0,100,1>-Velocity (%)
+slider10:0<0,1,1{Mono,Stereo}>-Tremolo mode
+slider11:16<4,32,1>-Polyphony
+slider12:0<-50,50,0.1>-Fine (cents)
+slider13:0<0,2,1{Speakers,Line,Amp}>-Output
+slider14:25<0,100,1>-Mechanism noise (%)
+slider17:18<0,100,1>-Drift (%)
+slider18:0<-24,6,0.1>-Volume (dB)
+slider19:0<0,100,1>-Band sat (%)
+slider20:30<0,100,1>-Bias (%)
+slider21:120<40,400,1>-Sat low band (Hz)
+slider22:6000<2000,16000,10>-Sat high band (Hz)
+slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider25:0<0,16,1>-MIDI channel (0 = omni)
+slider27:0<0,1,1{Off,On}>-Chorus
+slider28:0.6<0.05,8,0.01>-Chorus rate (Hz)
+slider29:50<0,100,1>-Chorus depth (%)
+slider30:0<0,1,1{Off,On}>-Vibe
+slider31:1.2<0.1,10,0.01>-Vibe rate (Hz)
+slider32:50<0,100,1>-Vibe depth (%)
+slider33:0<0,1,1{Off,On}>-Delay
+slider34:375<20,1500,1>-Delay time (ms)
+slider35:35<0,95,1>-Delay feedback (%)
+slider36:25<0,100,1>-Delay mix (%)
+slider37:0<0,4,1{ms,1/4,1/8 dotted,1/8,1/4 triplet}>-Delay sync
+slider38:0<0,1,1{Off,On}>-Space
+slider39:0<0,2,1{Room,Plate,Gated}>-Space type
+slider40:25<0,100,1>-Space amount (%)
+
+in_pin:none
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-g-reed-200";
+ext_noinit = 1;
+
+// ---------- memory ----------
+ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
+WRV = 30000; WRVS = 80; WRNV = 36;                          // 36 voice slots x 80 (32 playable + 4 for stolen fades)
+WRH = 33000;                                                // half-band decimator ring (64)
+WRDEF = 33200;                                              // the Init values of sliders 1-18
+WRTMP = 33300;                                              // preset parser scratch (400)
+WGK = 33800;                                                // (panel) key lamps, 128
+WRQO = 34000; WRQT = 34300; WRQN = 34600; WRQV = 34900;     // MIDI event queue (256 each)
+// FX: chorus lines, vibe states, space lines, ping-pong delay lines (as in G Mark 73)
+MFCA = 40000; MFCB = 44100; MFCN = 4096;
+MFVA = 48200; MFVB = 48240;
+MFR = 50000; MFRN = 8192; MFRM = MFRN - 1;
+MFDA = 90000; MFDB = 420000; MFDN = 330000;
+memset(MFCA, 0, 2 * 4100); memset(MFVA, 0, 80); memset(MFR, 0, 4 * MFRN);
+memset(WRV, 0, WRVS * WRNV); memset(WRH, 0, 64); memset(WGK, 0, 128);
+
+// voice slots (p = WRV + 80 * v):
+//   0 on   1 note   2 age   3 key held   4 held by the pedal   5 dampers down   6 velocity 0..1   7 felt pulse samples left
+//   8 felt pulse: samples done   9 its height   10 its length
+//   14 rest position in the slot (now)   15 stolen (fast fade)   16 output norm (now)   17 output norm (target)
+//   18 capacitance at the last 2x step   19 reed modes in use   20 thump gain   21 damper time scale (register)
+//   22 the key's own rest factor   24 full-speed swing   25 samples since the strike
+//   26 norm base   27 1 / sin(w) of the fundamental   28 frequency   29 when the 2nd mode has died (samples)
+//   30 cos(w) of the fundamental   31 modes still computed
+//   40 + 10 k   reed mode k (0..2): y1, y2, a1, a2, force gain, tip weight, half-step h1, h2, angle, r
+//   70 + k      mode shape at the strike point      73 + k   r while the dampers are up      77 rest capacitance (last)
+
+function wr_hash(n, k) local(v) ( v = sin(n * 12.9898 + k * 78.233 + 0.5) * 43758.5453; v - floor(v); );
+
+// ---------- the pickup: capacitance of the reed against its position in the slot, and its slope / curvature ----------
+function wr_C(u) local(u2) ( u2 = u * u; 0.8 / (1 + u2 * u2) + 0.2 / (1 + u2); );
+function wr_C1(u) local(u2, f, g) ( u2 = u * u; f = 1 / (1 + u2 * u2); g = 1 / (1 + u2); -3.2 * u * u2 * f * f - 0.4 * u * g * g; );
+function wr_C2(u) local(u2, f, g) (
+  u2 = u * u; f = 1 / (1 + u2 * u2); g = 1 / (1 + u2);
+  0.8 * (-12 * u2 * f * f + 32 * u2 * u2 * u2 * f * f * f) + 0.2 * (-2 * g * g + 8 * u2 * g * g * g);
+);
+// clamped-free beam mode shape k (0..2) at xi along the reed (0 = clamp)
+function wr_phi(k, xi) local(b, sg, z, ch, sh) (
+  b = k == 0 ? 1.8751 : k == 1 ? 4.6941 : 7.8548;
+  ch = 0.5 * (exp(b) + exp(-b)); sh = 0.5 * (exp(b) - exp(-b));
+  sg = (ch + cos(b)) / (sh + sin(b)); z = b * xi;
+  ch = 0.5 * (exp(z) + exp(-z)); sh = 0.5 * (exp(z) - exp(-z));
+  ch - cos(z) - sg * (sh - sin(z));
+);
+// fundamental decay (T60, s) against the key: a few seconds in the bass, well under a second at the top
+function wr_t60(n) local(a, b, x0, x1) (
+  n = min(max(n, 21), 108);
+  n < 45 ? ( x0 = 33; x1 = 45; a = 7.0; b = 5.0; ) :
+  n < 57 ? ( x0 = 45; x1 = 57; a = 5.0; b = 3.5; ) :
+  n < 69 ? ( x0 = 57; x1 = 69; a = 3.5; b = 2.2; ) :
+  n < 81 ? ( x0 = 69; x1 = 81; a = 2.2; b = 1.2; ) :
+  n < 93 ? ( x0 = 81; x1 = 93; a = 1.2; b = 0.6; ) :
+           ( x0 = 93; x1 = 108; a = 0.6; b = 0.3; );
+  exp(log(a) + (log(b) - log(a)) * (n - x0) / (x1 - x0));
+);
+
+// ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
+#wr_def = "50 35 50 50 30 0 0 5.6 60 0 16 0 0 25 0 0 18 0";
+function wr_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
+  n = 0; i = 0; inn = 0; len = strlen(s);
+  loop(len + 1,
+    c = i < len ? str_getchar(s, i) : 32;
+    c >= 48 && c <= 57 ? (
+      !inn ? ( inn = 1; acc = 0; fr = 0; scl = 1; neg = 0; );
+      fr ? ( scl *= 0.1; acc += (c - 48) * scl; ) : acc = acc * 10 + c - 48;
+    ) : c == 46 ? (
+      !inn ? ( inn = 1; acc = 0; scl = 1; neg = 0; ); fr = 1;
+    ) : c == 45 ? (
+      inn = 1; acc = 0; fr = 0; scl = 1; neg = 1;
+    ) : (
+      inn ? ( dst[n] = neg ? -acc : acc; n += 1; inn = 0; );
+    );
+    i += 1;
+  );
+  n;
+);
+wr_nums(#wr_def, WRDEF);
+#wr_fxd = "0 0.6 50 0 1.2 50 0 375 35 25 0 0 0 25";             // FX sliders 27-40 at Init (all off)
+wr_nums(#wr_fxd, WRDEF + 20);
+
+#wr_pm = "Init|Classic Ballad|Soul Bark|Mellow Jazz|Bright Pop Growl|Deep Tremolo|Stereo Pan|Line Clean|Combo Amp|Lo-Fi Tape|Funk Stabs|Vibe Ballad|Dream Pop|Dark Felt";
+function wr_pstr(p) (
+  p == 2  ? "" :
+  p == 3  ? "" :
+  p == 4  ? "" :
+  p == 5  ? "" :
+  p == 6  ? "" :
+  p == 7  ? "" :
+  p == 8  ? "" :
+  p == 9  ? "" :
+  p == 10 ? "" :
+  p == 11 ? "" :
+  p == 12 ? "" :
+  p == 13 ? "" :
+  p == 14 ? "" :
+  "";
+);
+function load_preset(p) local(n, i, k) (
+  i = 0; loop(18, i != 14 && i != 15 ? slider(i + 1) = WRDEF[i]; i += 1; );
+  i = 0; loop(14, slider(27 + i) = WRDEF[20 + i]; i += 1; );
+  n = wr_nums(wr_pstr(p), WRTMP);
+  i = 0; loop(floor(n / 2), k = WRTMP[i * 2];
+    ((k >= 1 && k <= 14) || k == 17 || k == 18 || (k >= 27 && k <= 40)) ? slider(k) = WRTMP[i * 2 + 1]; i += 1; );
+  i = 1; loop(18, i != 15 && i != 16 ? ui_auto(i); i += 1; ); i = 27; loop(14, ui_auto(i); i += 1; );
+  pr_cur = p;
+);
+
+// ---------- the velocity curve: key velocity -> hammer speed (0..1) ----------
+function wr_vcurve(vel) local(x, b) (
+  x = min(max(vel / 127, 0.01), 1);
+  b = min(wr_vsens * 4, 1);
+  0.62 * (1 - b) + b * x ^ (0.5 + 1.9 * wr_vsens ^ 1.3);
+);
+
+function wr_rr(t60) ( exp(-6.9078 / (max(t60, 0.002) * srate)); );
+
+// ---------- reed coefficients (and the swing-dependent loss of the fundamental) ----------
+// while the reed swings out past the slot's edge its losses rise steeply (air pumping through the slot, edge
+// damping): the bark of a hard note settles within a few hundred milliseconds; the pitch does not move
+function wr_drag(p) local(q, a, e, r, h) (
+  q = p + 40;
+  a = abs(q[5]) * sqrt(max(q[0] * q[0] + q[1] * q[1] - 2 * p[30] * q[0] * q[1], 0)) * p[27];
+  e = max(a - wr_dk, 0);
+  r = q[9] * exp(-wr_db * e * e);
+  q[2] = 2 * r * p[30]; q[3] = r * r;
+  h = q[5] / (2 * sqrt(r) * cos(0.5 * q[8])); q[6] = h; q[7] = h * r;
+  a;
+);
+function wr_coefs(p) local(k, q, h) (
+  k = 1; q = p + 50;
+  loop(p[19] - 1,
+    q[2] = 2 * q[9] * cos(q[8]); q[3] = q[9] * q[9];
+    h = q[5] / (2 * sqrt(q[9]) * cos(0.5 * q[8])); q[6] = h; q[7] = h * q[9];
+    q += 10; k += 1;
+  );
+  wr_drag(p);
+);
+// the output norm for the current rest position: the level of the fundamental and its octave at a medium swing,
+// so VOICING changes the colour, not the level
+function wr_norm(p) local(ur, xr) (
+  ur = wr_urs * p[22]; xr = 0.45 * p[24];
+  p[17] = p[26] / max(sqrt(sqr(wr_C1(ur) * xr) + sqr(wr_C2(ur) * xr * xr * 0.5)), 0.000000001);
+);
+
+// ---------- note on: the hammer flies at a (re)built reed ----------
+function wr_strike(p, n, vel, fresh) local(tr, kt, xi, h2, h3, h4, h5, v0, f, T, i, q, R, w, ph, pt, tc, L, A, s0) (
+  tr = min(max((n - 33) / 63, 0), 1);               // 0 = A1 .. 1 = C7 (the original's 64 keys)
+  kt = (n - 60) / 12;                               // octaves from middle C
+  xi = 0.62 - 0.12 * tr;                            // strike point (fraction of the reed's length)
+  h2 = wr_hash(n, 2); h3 = wr_hash(n, 3); h4 = wr_hash(n, 4); h5 = wr_hash(n, 5);
+  v0 = wr_vcurve(vel);
+  p[6] = vel / 127;
+  fresh ? (
+    // ----- the reed: pitch (with this instance's solder tuning spread, DRIFT), modes, decays -----
+    f = 440 * 2 ^ ((n - 69 + wr_drs * 0.03 * (2 * wr_hash(n, wr_seed) - 1)) / 12) * wr_fine;
+    p[1] = n; p[28] = f; p[19] = 0;
+    T = wr_dec * wr_t60(n) * (0.9 + 0.2 * h2);
+    T = min(max(T, 0.15), 30);
+    i = 0; q = p + 40;
+    loop(3,
+      // the bare cantilever's 6.27 / 17.55, lifted a little by the solder mass (more solder in the bass)
+      R = i == 0 ? 1 : i == 1 ? 6.3 * (1 + 0.10 * (1 - tr)) * (1 + (h3 - 0.5) * 0.03) : 17.6 * (1 + 0.12 * (1 - tr)) * (1 + (h4 - 0.5) * 0.03);
+      w = 2 * $pi * f * R / srate;
+      (i == 0 || (p[19] == i && w < 0.75 * $pi && f * R < 16000)) ? (
+        ph = i == 0 ? T : (i == 1 ? 0.2 : 0.06) * 2 ^ (-kt / 1.4) * (0.8 + 0.4 * wr_hash(n, 10 + i)) * sqrt(wr_dec);
+        ph = min(ph, T);
+        q[8] = w; q[9] = wr_rr(ph); p[73 + i] = q[9];
+        i == 1 ? p[29] = srate * min(2.5 * ph, 4);
+        p[70 + i] = wr_phi(i, xi);
+        q[4] = p[70 + i] * sin(w) / (2 * $pi * f * R * srate);          // force (one sample) -> modal displacement
+        pt = i == 0 ? 1 : (i == 1 ? wr_pt2 : wr_pt3) * (0.45 + 0.55 * tr);   // how much of each mode the tip shows (the solder mass pins the tip)
+        q[5] = (i == 1 ? -2 : 2) * pt;
+        q[0] = q[1] = 0;
+        p[19] += 1;
+      );
+      q += 10; i += 1;
+    );
+    p[19] < 2 ? p[29] = 0;
+    // ----- the swing at full speed (in slot half-widths): long bass reeds swing wide, the short top reeds less -----
+    A = wr_ka * (1.3 - 0.45 * tr) * (0.9 + 0.2 * h4) * (0.8 + 0.3 * wr_vsens);
+    p[22] = 1 + (h5 - 0.5) * 0.08;
+    p[24] = A;
+    p[26] = 0.2 * 0.45 * (1 - 0.25 * tr) * (0.94 + 0.12 * h3) / ($pi * f / srate);
+    p[14] = wr_urs * p[22];
+    wr_norm(p); p[16] = p[17];
+    p[18] = p[77] = wr_C(p[14]);
+    p[21] = 1 + 1.0 * (1 - tr);                                           // bass dampers are slower
+    p[30] = cos(p[48]); p[27] = 1 / sin(p[48]);
+  ) : (
+    // the same key struck again while it rings: the damper lifts, the hammer meets the moving reed
+    i = 0; q = p + 40; loop(p[19], q[9] = p[73 + i]; q += 10; i += 1; );
+  );
+  // ----- the blow: a raised-cosine force pulse as long as the felt's contact, sized for a swing of A x hammer speed -----
+  tc = (1.5 - 0.95 * wr_hard) * 2 ^ (-kt / 1.3) * 0.001 * max(v0, 0.05) ^ -0.43;
+  tc = min(max(tc, 0.00012), 0.006);
+  L = max(2, floor(tc * srate + 0.5));
+  q = p + 40; w = q[8]; s0 = 0; ph = 0; i = 0;
+  loop(L, R = 1 - cos(2 * $pi * (i + 0.5) / L); s0 += R * cos(w * i); ph += R * sin(w * i); i += 1; );
+  p[7] = L; p[8] = 0; p[10] = L; p[20] = wr_mech * 0.02 * v0;             // (p[20]: the hammer thump, from the felt pulse)
+  p[9] = p[24] * v0 * sin(w) / max(abs(q[5]) * abs(q[4]) * sqrt(s0 * s0 + ph * ph), 0.000000000001);
+  p[25] = 0; p[31] = p[19];
+  p[0] = 1; p[3] = 1; p[4] = 0; p[5] = 0; p[15] = 0;
+  wr_coefs(p);
+);
+
+function wr_alloc() local(i, p, best, ba, nact) (
+  nact = 0; i = 0; loop(WRNV, p = WRV + i * WRVS; p[0] && !p[15] ? nact += 1; i += 1; );
+  nact >= wr_poly ? (
+    best = -1; i = 0;
+    loop(WRNV, p = WRV + i * WRVS; p[0] && !p[15] && (best < 0 || p[2] - p[5] * 1000000 < ba) ? ( best = i; ba = p[2] - p[5] * 1000000; ); i += 1; );
+    best >= 0 ? ( p = WRV + best * WRVS; p[15] = 1; p[5] = 1; p[3] = 0; p[4] = 0; );
+  );
+  best = -1; i = 0; loop(WRNV, p = WRV + i * WRVS; best < 0 && !p[0] ? best = i; i += 1; );
+  best < 0 ? ( i = 0; loop(WRNV, p = WRV + i * WRVS; p[15] && (best < 0 || p[2] < ba) ? ( best = i; ba = p[2]; ); i += 1; ); );
+  best < 0 ? best = 0;
+  WRV + best * WRVS;
+);
+function wr_release(p) (
+  p[5] = 1; p[3] = 0; p[4] = 0;
+  wr_kn = max(wr_kn, wr_mech * 0.0012 * (0.4 + 0.6 * p[6]));               // the key returning: a very quiet felt knock
+);
+function wr_note_on(n, vel) local(i, p, found) (
+  found = -1; i = 0;
+  loop(WRNV, p = WRV + i * WRVS; p[0] && p[1] == n && !p[15] ? found = i; i += 1; );
+  found >= 0 ? (
+    p = WRV + found * WRVS; wr_age += 1; p[2] = wr_age; wr_strike(p, n, vel, 0);
+  ) : (
+    p = wr_alloc(); memset(p, 0, WRVS); wr_age += 1; p[2] = wr_age;
+    wr_strike(p, n, vel, 1);
+  );
+);
+function wr_note_off(n) local(i, p) (
+  i = 0;
+  loop(WRNV, p = WRV + i * WRVS;
+    p[0] && p[1] == n && p[3] && !p[15] ? ( wr_pedal ? ( p[3] = 0; p[4] = 1; ) : wr_release(p); );
+    i += 1; );
+);
+function wr_pedal_up() local(i, p) ( i = 0; loop(WRNV, p = WRV + i * WRVS; p[0] && p[4] ? wr_release(p); i += 1; ); );
+function wr_all_off() local(i, p) ( i = 0; loop(WRNV, p = WRV + i * WRVS; p[0] ? ( p[15] = 1; p[5] = 1; p[3] = 0; p[4] = 0; ); i += 1; ); wr_pedal = 0; );
+
+// half-band decimator (39 taps, equiripple, > 63 dB stop band): ring[(w - j) & 63], newest 2x sample at j = 0
+function wr_hb(b, w) (
+  0.5003175242 * b[(w - 19) & 63]
+  + 0.3165830275 * (b[(w - 18) & 63] + b[(w - 20) & 63])
+  - 0.1004920620 * (b[(w - 16) & 63] + b[(w - 22) & 63])
+  + 0.0546158895 * (b[(w - 14) & 63] + b[(w - 24) & 63])
+  - 0.0335169601 * (b[(w - 12) & 63] + b[(w - 26) & 63])
+  + 0.0211574377 * (b[(w - 10) & 63] + b[(w - 28) & 63])
+  - 0.0131712778 * (b[(w - 8) & 63] + b[(w - 30) & 63])
+  + 0.0078701971 * (b[(w - 6) & 63] + b[(w - 32) & 63])
+  - 0.0043811777 * (b[(w - 4) & 63] + b[(w - 34) & 63])
+  + 0.0021893628 * (b[(w - 2) & 63] + b[(w - 36) & 63])
+  - 0.0010131992 * (b[(w - 0) & 63] + b[(w - 38) & 63]);
+);
+
+// ---------- the onboard preamp (at 2x): coupling capacitor, asymmetric soft clipper with a sagging bias ----------
+function wr_pre(x) local(b) (
+  wr_plp += wr_phc * (x - wr_plp); x -= wr_plp;
+  wr_penv += (abs(x) - wr_penv) * wr_pec;
+  b = wr_pbs + wr_psag * min(wr_penv, 1.5);
+  (vo_tanh(wr_pgs * x + b) - vo_tanh(b)) * wr_pdns;
+);
+
+// ---------- FX (as in G Mark 73) ----------
+function mf_read(buf, n, pos) local(ii, fr, xm1, x0, x1, x2, c1, c2, c3) (
+  pos < 0 ? pos += n; pos >= n ? pos -= n;
+  ii = floor(pos); fr = pos - ii;
+  xm1 = buf[(ii - 1 + n) % n]; x0 = buf[ii]; x1 = buf[(ii + 1) % n]; x2 = buf[(ii + 2) % n];
+  c1 = 0.5 * (x1 - xm1); c2 = xm1 - 2.5 * x0 + 2 * x1 - 0.5 * x2; c3 = 0.5 * (x2 - xm1) + 1.5 * (x0 - x1);
+  ((c3 * fr + c2) * fr + c1) * fr + x0;
+);
+function mf_vibe(x, phoff, vs, tick) local(ph, lf, k, y, f, t, a1, xi) (
+  tick ? (
+    ph = mf_vph + phoff; ph -= floor(ph); lf = 0.5 - 0.5 * cos(2 * $pi * ph);
+    vs[8] += (lf > vs[8] ? mf_vat : mf_vrl) * (lf - vs[8]);
+    k = 0; loop(4,
+      f = min(srate * 0.45, (k == 0 ? 60 : k == 1 ? 180 : k == 2 ? 480 : 1300) * 2 ^ (mf_vocs * vs[8]));
+      t = tan($pi * f / srate); vs[9 + k] = (t - 1) / (t + 1); k += 1; );
+  );
+  y = x; k = 0;
+  loop(4, a1 = vs[9 + k]; xi = y; y = a1 * xi + vs[k * 2] - a1 * vs[k * 2 + 1]; vs[k * 2] = xi; vs[k * 2 + 1] = y; k += 1; );
+  0.5 * (y - x);
+);
+function mf_dloop(y, st) (
+  st[0] += mf_dlc * (y - st[0]); st[1] += mf_dhc * (st[0] - st[1]);
+  vo_tanh((st[0] - st[1]) * mf_dfbs * 1.15) / 1.15;
+);
+function mf_sparams(ty) (
+  mf_sk = ty == 1 ? 0.6 : ty == 2 ? 0.85 : 1;
+  mf_st60 = ty == 1 ? 1.4 + 2.6 * mf_sam : ty == 2 ? 2.4 : 0.5 + 0.8 * mf_sam;
+  mf_slv = ty == 1 ? 0.8 : ty == 2 ? 1.4 : 1;
+  mf_rgt = 10 ^ (-3 * 0.015 * mf_sk / mf_st60);
+  mf_l0 = floor(0.0073 * srate * mf_sk); mf_l1 = floor(0.0119 * srate * mf_sk); mf_l2 = floor(0.0171 * srate * mf_sk); mf_l3 = floor(0.0217 * srate * mf_sk);
+  mf_slp = 1 - exp(-2 * $pi * (ty == 1 ? 10000 : ty == 2 ? 8000 : 6500) / srate);
+);
+
+// ---------- parameters ----------
+function update() (
+  wr_dec = 2 ^ ((slider1 - 50) / 50 * 1.4);                // 0.38x .. 2.6x
+  wr_relt = 0.035 * 2 ^ (slider2 / 100 * 5);               // damper T60: 35 ms .. 1.1 s
+  wr_hard = slider3 / 100;
+  wr_urt = 1.55 - 0.67 * (slider4 / 100);                   // rest on the slot's edge: EVEN (further out) .. ODD (inflection)
+  wr_bark = slider5 / 100;
+  wr_tone = slider6;
+  wr_tdep = slider7 / 100; wr_trate = slider8;
+  wr_vsens = slider9 / 100;
+  wr_tst = slider10 >= 0.5;
+  wr_poly = floor(slider11 + 0.5);
+  wr_fine = 2 ^ (slider12 / 1200);
+  wr_path = floor(slider13 + 0.5);
+  wr_mech = slider14 / 100;
+  wr_drift = slider17 / 100;
+  wr_volt = 10 ^ (slider18 / 20);
+  wr_chan = slider25;
+  wr_dk = 0.9; wr_db = 9 / srate;                            // swing loss: knee (half-widths) and strength
+  wr_ka = 1; wr_pt2 = 0.5; wr_pt3 = 0.18;                    // swing scale, tip share of the 2nd / 3rd mode
+  ins_output_setup(19);
+  // FX
+  mf_chon = slider27 >= 0.5; mf_chr = slider28; mf_chd = slider29 / 100 * 4;
+  mf_vbon = slider30 >= 0.5; mf_vbr = slider31; mf_voct = 3 * slider32 / 100; mf_vwet = min(1, 2 * slider32 / 100);
+  mf_dlon = slider33 >= 0.5; mf_dfb = 0.95 * slider35 / 95; mf_dmix = slider36 / 100; mf_dsync = floor(slider37 + 0.5);
+  mf_spon = slider38 >= 0.5; mf_sty = floor(slider39 + 0.5); mf_sam = slider40 / 100;
+  mf_stya < 0 ? mf_stya = mf_sty;
+  mf_sparams(mf_stya);
+);
+
+function wr_srinit() (
+  wr_sr = srate;
+  wr_sm = 1 - exp(-1 / (0.03 * srate));
+  ost_init(20000);
+  wr_tq.bq_set(5, 140, 1.1, 0);                             // hammer thump body (key bed)
+  wr_tc.bq_set(1, 2200, 0.7, 0);                            // hammer felt click
+  wr_kq.bq_set(5, 300, 0.9, 0);                             // key-off knock: a dull felt bump
+  wr_knd = exp(-1 / (0.010 * srate));
+  wr_phc = 1 - exp(-2 * $pi * 35 / (2 * srate));           // preamp coupling capacitor (at 2x)
+  wr_pec = 1 - exp(-1 / (0.06 * 2 * srate));                // preamp bias sag follower (at 2x)
+  wr_lat = 1 - exp(-1 / (0.006 * srate)); wr_lrl = 1 - exp(-1 / (0.03 * srate));   // LDR: responds ~6 ms, recovers ~30 ms
+  mf_cpc = 1 - exp(-2 * $pi * 9000 / srate);
+  mf_vat = 1 - exp(-8 / (0.008 * srate)); mf_vrl = 1 - exp(-8 / (0.04 * srate));
+  mf_dlc = 1 - exp(-2 * $pi * 3500 / srate); mf_dhc = 1 - exp(-2 * $pi * 70 / srate);
+  mf_dts = 1 - exp(-1 / (0.25 * srate)); mf_gsm = 1 - exp(-1 / (0.02 * srate));
+  mf_ghl = floor(0.3 * srate); mf_grl = 1 - exp(-1 / (0.025 * srate));
+  memset(MFDA, 0, MFDN); memset(MFDB, 0, MFDN); mf_dw = 0;
+  wr_tset = -1;
+  // de-zipper: VOICING 2 x 15 ms, the norm follows within 2 ms, BARK / depth 20 ms, TONE per 32-sample tick
+  wr_gk = 1 - exp(-1 / (0.015 * srate)); wr_nk = 1 - exp(-1 / (0.002 * srate)); wr_gk2 = 1 - exp(-1 / (0.02 * srate));
+  wr_k32 = 1 - exp(-32 / (0.03 * srate)); mf_gsm2 = 1 - exp(-1 / (0.05 * srate));
+  wr_bk2 = 1 - exp(-1 / (0.02 * 2 * srate));               // (BARK glide at 2x)
+  wr_swdn = 1 / (0.012 * srate); wr_swup = 1 / (0.02 * srate);   // the brief fades for switches (12 ms out, 20 ms in)
+);
+
+// output path: (a) a tone stack before (b) a gain stage, then (c) the speaker / line / cabinet response
+function wr_tpath() (
+  wr_path == 2 ? (
+    // AMP: a small valve combo: its tone stack, a gentle valve stage, a 1 x 12 cabinet
+    wr_a1l.bq_set(4, 100, 0.7, 3); wr_a1r.bq_set(4, 100, 0.7, 3);
+    wr_a2l.bq_set(2, 600, 0.8, -3); wr_a2r.bq_set(2, 600, 0.8, -3);
+    wr_a3l.bq_set(3, 3000, 0.7, 2.5); wr_a3r.bq_set(3, 3000, 0.7, 2.5);
+    wr_c1l.bq_set(1, 75, 0.8, 0); wr_c1r.bq_set(1, 75, 0.8, 0);
+    wr_c2l.bq_set(2, 120, 1.3, 3); wr_c2r.bq_set(2, 120, 1.3, 3);
+    wr_c3l.bq_set(2, 2200, 1.0, 3); wr_c3r.bq_set(2, 2200, 1.0, 3);
+    wr_c4l.bq_set(0, 4800, 0.8, 0); wr_c4r.bq_set(0, 4800, 0.8, 0);
+    wr_c5l.bq_set(0, 8000, 0.7, 0); wr_c5r.bq_set(0, 8000, 0.7, 0);
+    wr_sg = 2.2; wr_sb = -0.15; wr_cg = 10 ^ (1 / 20);
+  ) : wr_path == 1 ? (
+    // LINE: the direct output, after the preamp and the volume control
+    wr_a1l.bq_set(4, 120, 0.7, 1.5); wr_a1r.bq_set(4, 120, 0.7, 1.5);
+    wr_a2l.bq_set(2, 600, 0.8, 0); wr_a2r.bq_set(2, 600, 0.8, 0);
+    wr_a3l.bq_set(3, 3000, 0.7, 0); wr_a3r.bq_set(3, 3000, 0.7, 0);
+    wr_c1l.bq_set(1, 28, 0.7, 0); wr_c1r.bq_set(1, 28, 0.7, 0);
+    wr_c2l.bq_set(2, 120, 1.3, 0); wr_c2r.bq_set(2, 120, 1.3, 0);
+    wr_c3l.bq_set(2, 2800, 0.7, 1); wr_c3r.bq_set(2, 2800, 0.7, 1);
+    wr_c4l.bq_set(0, 13000, 0.7, 0); wr_c4r.bq_set(0, 13000, 0.7, 0);
+    wr_c5l.bq_set(0, 18000, 0.7, 0); wr_c5r.bq_set(0, 18000, 0.7, 0);
+    wr_sg = 0.6; wr_sb = -0.05; wr_cg = 1;
+  ) : (
+    // SPEAKERS: the power amp and the two small speakers in the lid: little low end, a boxy mid, the honk at 1 - 2 kHz
+    wr_a1l.bq_set(4, 120, 0.7, 0); wr_a1r.bq_set(4, 120, 0.7, 0);
+    wr_a2l.bq_set(2, 600, 0.8, 0); wr_a2r.bq_set(2, 600, 0.8, 0);
+    wr_a3l.bq_set(3, 3000, 0.7, 0); wr_a3r.bq_set(3, 3000, 0.7, 0);
+    wr_c1l.bq_set(1, 140, 1.1, 0); wr_c1r.bq_set(1, 140, 1.1, 0);
+    wr_c2l.bq_set(2, 350, 1.5, 2.5); wr_c2r.bq_set(2, 350, 1.5, 2.5);
+    wr_c3l.bq_set(2, 1300, 0.9, 5); wr_c3r.bq_set(2, 1300, 0.9, 5);
+    wr_c4l.bq_set(0, 5200, 0.9, 0); wr_c4r.bq_set(0, 5200, 0.9, 0);
+    wr_c5l.bq_set(0, 9000, 0.7, 0); wr_c5r.bq_set(0, 9000, 0.7, 0);
+    wr_sg = 1.3; wr_sb = -0.05; wr_cg = 10 ^ (1.5 / 20);
+  );
+  wr_stb = vo_tanh(wr_sb); wr_sn = wr_cg / (wr_sg * (1 - wr_stb * wr_stb));
+);
+function wr_ttone() ( wr_tbl.bq_set(3, 2500, 0.7, wr_trs); wr_tbr.bq_set(3, 2500, 0.7, wr_trs); );
+// BARK: the preamp's gain (and how far its bias sags); the output is compensated, so it gets denser, a little louder
+function wr_tpre() (
+  wr_pg = 2 * (1 + 8 * wr_bark ^ 1.4);
+  wr_pdn = 1 / (wr_pg ^ 0.82 * 2 ^ 0.18);
+  wr_psag = 0.12 + 0.25 * wr_bark;
+);
+
+ins_drift_init();
+wr_seed = 100 + floor(rand(800));                          // this instance's solder tuning (saved with the project)
+wr_pedal = 0; wr_age = 0; wr_kn = 0; wr_hw = 0; wr_lph = 0; wr_pk = 0; wr_ld1 = 0; wr_ld2 = 1;
+wr_dcxl = wr_dcyl = wr_dcxr = wr_dcyr = 0; wr_adn = 0.000000000000000001;
+mf_stya = -1; wr_swr = wr_swg = 1; mf_dkr = mf_skr = 1; mf_dstop = mf_sstop = 1;
+wr_gon = wr_goff = 0;
+wr_srinit();
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                     // a new instance opens Large, on Init
+update();
+wr_urs = wr_ura = wr_urt; wr_drs = wr_drift;
+wr_tpath(); wr_trs = wr_tone; wr_ttone(); wr_tpre(); wr_pgs = wr_pg; wr_pdns = wr_pdn;
+wr_vol = wr_volt;
+ui_dflt = 1;
+
+@slider
+update();
+
+@block
+srate != wr_sr ? wr_srinit();
+wr_treq > 0 && wr_treq != wr_tql ? ( load_preset(wr_treq); wr_tql = wr_treq; );     // test hook
+update();
+// MIDI is queued with its offset and played at the right sample in @sample (sample-accurate timing)
+wr_qc = 0; wr_qi = 0; wr_spos = 0;
+while (midirecv(mofs, m1, m2, m3)) (
+  ins_chan_ok(m1, wr_chan) && wr_qc < 250 ? (
+    wr_st = m1 & 0xF0;
+    wr_qt = wr_st == 0x90 && m3 > 0 ? 1 : (wr_st == 0x80 || wr_st == 0x90) ? 0 :
+            wr_st == 0xB0 && m2 == 64 ? 2 : wr_st == 0xB0 && (m2 == 123 || m2 == 120) ? 3 : -1;
+    wr_qt >= 0 ? ( WRQO[wr_qc] = mofs; WRQT[wr_qc] = wr_qt; WRQN[wr_qc] = m2; WRQV[wr_qc] = m3; wr_qc += 1; );
+    wr_qt == 1 ? ins_midi_hit();
+  );
+);
+// keys clicked on the panel's keyboard
+wr_goff > 0 ? ( WRQO[wr_qc] = 0; WRQT[wr_qc] = 0; WRQN[wr_qc] = wr_goff - 1; WRQV[wr_qc] = 0; wr_qc += 1; wr_goff = 0; );
+wr_gon > 0 ? ( WRQO[wr_qc] = 0; WRQT[wr_qc] = 1; WRQN[wr_qc] = wr_gon - 1; WRQV[wr_qc] = 96; wr_qc += 1; wr_gon = 0; ins_midi_hit(); );
+wr_drs += (wr_drift - wr_drs) * (1 - exp(-samplesblock / (0.3 * srate)));   // (the DRIFT amount glides)
+ins_drift_block(wr_drs, samplesblock);
+wr_pbt = -0.22 + 0.12 * ins_cut / 0.45;                     // preamp bias, wandering slowly with DRIFT
+wr_tset < 0 ? (
+  wr_tpath(); wr_tset = 1; wr_ta = wr_path; wr_swp = 0; wr_swr = wr_swg = 1;
+  wr_drs = wr_drift; wr_urs = wr_ura = wr_urt; wr_trs = wr_tone; wr_ttone(); wr_tpre(); wr_pgs = wr_pg; wr_pdns = wr_pdn;
+  wr_tds = wr_tdep; wr_tsm = wr_tst; wr_pbs = wr_pbt;
+  mf_chds = mf_chd; mf_vocs = mf_voct; mf_dfbs = mf_dfb; mf_rg = mf_rgt; mf_dt = mf_dtgl = mf_dtg = slider34;
+) : (
+  wr_ta != wr_path ? wr_swp = 1;                              // SPEAKERS / LINE / AMP: switched in @sample under a brief fade
+);
+wr_tpre();
+// VOICING: glided per sample; while it moves, the sounding voices re-normalise (on the 32-sample tick)
+abs(wr_urt - wr_urs) < 0.0000001 && abs(wr_urt - wr_ura) < 0.0000001 ? wr_urs = wr_ura = wr_urt;
+wr_urs != wr_urt ? wr_gtl = floor(0.05 * srate) : wr_gtl = max(wr_gtl - samplesblock, 0);
+wr_gmov = wr_gtl > 0;
+
+// per voice: dampers (the felt lands over ~10 ms), freeing spent voices
+wr_ramp = 1 - exp(-samplesblock / (0.010 * srate));
+wr_nage = -1; wr_na = 0; wr_nur = wr_urt;
+wr_i = 0;
+loop(WRNV,
+  wr_p = WRV + wr_i * WRVS;
+  wr_p[0] ? (
+    wr_p[5] ? (
+      wr_q = wr_p + 40; wr_k = 0;
+      loop(wr_p[19],
+        wr_rt = wr_rr((wr_p[15] ? 0.025 : wr_relt * wr_p[21]) * (wr_k ? 0.5 : 1));
+        wr_q[9] < wr_rt ? wr_rt = wr_q[9];
+        wr_q[9] += (wr_rt - wr_q[9]) * (wr_p[15] ? 1 : wr_ramp);
+        wr_q += 10; wr_k += 1;
+      );
+    );
+    // stop computing the 3rd mode after 0.25 s and the 2nd once it has died away (zeroed so they restart clean)
+    wr_p[25] += samplesblock;
+    wr_n = wr_p[25] > wr_p[29] ? 1 : wr_p[25] > 0.25 * srate ? min(wr_p[19], 2) : wr_p[19];
+    wr_n < wr_p[31] ? (
+      wr_k = wr_n; loop(wr_p[31] - wr_n, wr_p[40 + 10 * wr_k] = wr_p[41 + 10 * wr_k] = 0; wr_k += 1; );
+      wr_p[31] = wr_n;
+    );
+    wr_p[14] = wr_urs * wr_p[22];
+    wr_gmov ? wr_norm(wr_p);
+    wr_coefs(wr_p);
+    wr_q = wr_p + 40;
+    wr_e = abs(wr_q[0] * wr_q[5]) + abs(wr_q[1] * wr_q[5]) + abs(wr_p[50] * wr_p[55]);
+    wr_p[7] <= 0 && (wr_p[5] ? wr_e < 0.00003 : wr_e < 0.000003) ? wr_p[0] = 0;
+    wr_p[2] >= wr_nage ? (
+      wr_nage = wr_p[2];
+      wr_na = abs(wr_q[5]) * sqrt(max(wr_q[0] * wr_q[0] + wr_q[1] * wr_q[1] - 2 * wr_p[30] * wr_q[0] * wr_q[1], 0)) * wr_p[27];
+      wr_nur = wr_p[14];
+    );
+  );
+  wr_i += 1;
+);
+mf_dq = mf_dsync == 1 ? 1 : mf_dsync == 2 ? 0.75 : mf_dsync == 3 ? 0.5 : 2 / 3;
+mf_dtg = mf_dsync > 0 && tempo > 0 ? min(1500, mf_dq * 60000 / tempo) : slider34;
+abs(mf_dtg - mf_dtgl) > 0.2 * max(mf_dtgl, 1) ? mf_djp = 1; mf_dtgl = mf_dtg;
+(mf_dg > 0.0001 || mf_dlon) ? (
+  mf_dlon && mf_dstop ? ( memset(MFDA, 0, MFDN); memset(MFDB, 0, MFDN); memset(MFVA + 30, 0, 8); mf_din = 0; mf_dstop = 0; mf_dt = mf_dtg; mf_djp = 0; mf_dkr = 1; );
+) : ( mf_dstop = 1; mf_dt = mf_dtg; mf_djp = 0; mf_dkr = 1; );
+(mf_sg > 0.0001 || mf_spon) ? (
+  mf_spon && mf_sstop ? ( memset(MFR, 0, 4 * MFRN); mf_z0 = mf_z1 = mf_z2 = mf_z3 = 0; mf_sstop = 0; mf_ssw = 0; mf_skr = 1;
+    mf_stya != mf_sty ? ( mf_stya = mf_sty; mf_sparams(mf_stya); ); mf_rg = mf_rgt; );
+  mf_stya != mf_sty ? mf_ssw = 1;
+) : ( mf_sstop = 1; mf_ssw = 0; mf_skr = 1; mf_stya != mf_sty ? ( mf_stya = mf_sty; mf_sparams(mf_stya); ); mf_rg = mf_rgt; );
+mf_dlen = floor(min(1.6 * srate, MFDN - 8));
+wr_ga = wr_na; wr_gur = wr_nur;                             // for the panel's pickup window
+wr_tinc = wr_trate / srate;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+file_var(0, wr_seed);
+
+@sample
+while (wr_qi < wr_qc && WRQO[wr_qi] <= wr_spos) (
+  wr_qt = WRQT[wr_qi];
+  wr_qt == 1 ? ( wr_note_on(WRQN[wr_qi], WRQV[wr_qi]); mf_ghold = mf_ghl; ) :
+  wr_qt == 0 ? wr_note_off(WRQN[wr_qi]) :
+  wr_qt == 2 ? ( wr_pedal = WRQV[wr_qi] >= 64; !wr_pedal ? wr_pedal_up(); ) :
+  wr_all_off();
+  wr_qi += 1;
+);
+wr_spos += 1;
+wr_S0 = wr_S1 = 0; wr_th = 0;
+wr_T = 1 / srate;
+wr_tk += 1; wr_tick = wr_tk >= 32; wr_tick ? wr_tk = 0;
+wr_gmov ? ( wr_ura += (wr_urt - wr_ura) * wr_gk; wr_urs += (wr_ura - wr_urs) * wr_gk; );
+wr_p = WRV;
+loop(WRNV,
+  wr_p[0] ? (
+    wr_tick ? wr_drag(wr_p);
+    wr_gmov ? ( wr_tick ? wr_norm(wr_p); wr_p[16] += (wr_p[17] - wr_p[16]) * wr_nk; );
+    // ----- the felt pulse (only while the hammer is on the reed) -----
+    wr_F = 0;
+    wr_p[7] > 0 ? (
+      wr_F = 1 - cos(2 * $pi * (wr_p[8] + 0.5) / wr_p[10]);
+      wr_th += wr_F * wr_p[20]; wr_F *= wr_p[9];
+      wr_p[8] += 1; wr_p[7] -= 1;
+    );
+    // ----- the reed modes: tip position now (xt) and half a sample ago (xm) -----
+    wr_q = wr_p + 40;
+    wr_y = wr_q[2] * wr_q[0] - wr_q[3] * wr_q[1] + wr_q[4] * wr_F;
+    wr_xm = wr_q[6] * wr_y + wr_q[7] * wr_q[0]; wr_q[1] = wr_q[0]; wr_q[0] = wr_y; wr_xt = wr_q[5] * wr_y;
+    loop(wr_p[31] - 1,
+      wr_q += 10;
+      wr_y = wr_q[2] * wr_q[0] - wr_q[3] * wr_q[1] + wr_q[4] * wr_F;
+      wr_xm += wr_q[6] * wr_y + wr_q[7] * wr_q[0]; wr_q[1] = wr_q[0]; wr_q[0] = wr_y; wr_xt += wr_q[5] * wr_y;
+    );
+    // ----- the pickup at 2x: i = U0 x dC/dt -----
+    wr_u = wr_gmov ? wr_urs * wr_p[22] : wr_p[14]; wr_nr = wr_p[16];
+    wr_cm = wr_C(wr_u + wr_xm); wr_ct = wr_C(wr_u + wr_xt);
+    wr_o0 = (wr_cm - wr_p[18]) * wr_nr; wr_o1 = (wr_ct - wr_cm) * wr_nr;
+    wr_gmov ? (
+      // while the rest position glides the capacitance at rest moves too: that step is not the reed's signal
+      wr_cr = wr_C(wr_u); wr_o0 -= (wr_cr - wr_p[77]) * wr_nr; wr_p[77] = wr_cr;
+    );
+    wr_p[18] = wr_ct;
+    wr_S0 += wr_o0; wr_S1 += wr_o1;
+  );
+  wr_p += WRVS;
+);
+
+// ---------- the preamp at 2x, then decimate ----------
+wr_pgs += (wr_pg - wr_pgs) * wr_gk2; wr_pdns += (wr_pdn - wr_pdns) * wr_gk2;
+wr_pbs += (wr_pbt - wr_pbs) * wr_gk2;
+WRH[wr_hw] = wr_pre(wr_S0); wr_hw = (wr_hw + 1) & 63;
+WRH[wr_hw] = wr_pre(wr_S1);
+wr_x = wr_hb(WRH, wr_hw);
+wr_hw = (wr_hw + 1) & 63;
+
+// ---------- mechanism: hammer thump and felt click, key-off knock (very quiet) ----------
+wr_kn > 0.0000001 ? ( wr_kx = (rand(2) - 1) * wr_kn; wr_kn *= wr_knd; ) : ( wr_kx = 0; wr_kn = 0; );
+wr_x += wr_tq.bq_run(wr_th + wr_kx * 0.3) + wr_tc.bq_run(wr_th) * 0.25 + wr_kq.bq_run(wr_kx);
+wr_adn = -wr_adn; wr_x += wr_adn;
+wr_tiv > 0 ? ( wr_tic = (wr_tic + 1) % 16384; wr_tic == 0 ? wr_x += wr_tiv; );   // test hook: an impulse into the amp
+
+// ---------- TREMOLO: an LED and a light-dependent resistor (MONO), or two in anti-phase (STEREO pan) ----------
+wr_lph += wr_tinc; wr_lph >= 1 ? wr_lph -= 1;
+wr_ls = 0.5 + 0.5 * sin(2 * $pi * wr_lph);
+wr_ld1 += (wr_ls - wr_ld1) * (wr_ls > wr_ld1 ? wr_lat : wr_lrl);
+wr_ld2 += ((1 - wr_ls) - wr_ld2) * ((1 - wr_ls) > wr_ld2 ? wr_lat : wr_lrl);
+wr_tds += (wr_tdep - wr_tds) * wr_gk2; wr_tsm += (wr_tst - wr_tsm) * wr_gk2;
+wr_c1 = wr_ld1 ^ 1.4; wr_c2 = wr_ld2 ^ 1.4;
+wr_gl = 1 - wr_tds * 0.9 * wr_c1;
+wr_gr = wr_gl + wr_tsm * ((1 - wr_tds * 0.9 * wr_c2) - wr_gl);
+wr_gm = 1 + 0.25 * wr_tds * wr_tsm;
+wr_ol = wr_x * wr_gl * wr_gm; wr_or = wr_x * wr_gr * wr_gm;
+
+// ---------- OUTPUT PATH: tone stack, gain stage, speaker / line / cabinet; then TONE ----------
+wr_ol = wr_a1l.bq_run(wr_ol); wr_or = wr_a1r.bq_run(wr_or);
+wr_ol = wr_a2l.bq_run(wr_ol); wr_or = wr_a2r.bq_run(wr_or);
+wr_ol = wr_a3l.bq_run(wr_ol); wr_or = wr_a3r.bq_run(wr_or);
+wr_ol = (vo_tanh(wr_sg * wr_ol + wr_sb) - wr_stb) * wr_sn;
+wr_or = (vo_tanh(wr_sg * wr_or + wr_sb) - wr_stb) * wr_sn;
+wr_ol = wr_c1l.bq_run(wr_ol); wr_or = wr_c1r.bq_run(wr_or);
+wr_ol = wr_c2l.bq_run(wr_ol); wr_or = wr_c2r.bq_run(wr_or);
+wr_ol = wr_c3l.bq_run(wr_ol); wr_or = wr_c3r.bq_run(wr_or);
+wr_ol = wr_c4l.bq_run(wr_ol); wr_or = wr_c4r.bq_run(wr_or);
+wr_ol = wr_c5l.bq_run(wr_ol); wr_or = wr_c5r.bq_run(wr_or);
+wr_tick ? ( wr_trs != wr_tone ? ( wr_trs += (wr_tone - wr_trs) * wr_k32; abs(wr_tone - wr_trs) < 0.002 ? wr_trs = wr_tone; wr_ttone(); ); );
+wr_ol = wr_tbl.bq_run(wr_ol); wr_or = wr_tbr.bq_run(wr_or);
+// SPEAKERS / LINE / AMP: faded out (12 ms), switched, faded back in (20 ms); the FX tails ring on
+(wr_swp || wr_swr < 1) ? (
+  wr_swp ? (
+    wr_swr -= wr_swdn;
+    wr_swr <= 0 ? ( wr_swr = 0; wr_tpath(); wr_ta = wr_path; wr_swp = 0; );
+  ) : wr_swr = min(1, wr_swr + wr_swup);
+  wr_swg = 0.5 - 0.5 * cos($pi * wr_swr);
+  wr_ol *= wr_swg; wr_or *= wr_swg;
+);
+
+// ---------- FX: CHORUS, VIBE, DELAY, SPACE (each fades in and out, and is skipped while off) ----------
+mf_cg += ((mf_chon * 1) - mf_cg) * mf_gsm; mf_vg += (mf_vbon * mf_vwet - mf_vg) * mf_gsm;
+mf_dg += (mf_dlon * mf_dmix - mf_dg) * mf_gsm; mf_sg += (mf_spon * mf_sam - mf_sg) * mf_gsm;
+mf_chds += (mf_chd - mf_chds) * mf_gsm2; mf_vocs += (mf_voct - mf_vocs) * mf_gsm2;
+mf_cpl += mf_cpc * (wr_ol - mf_cpl); mf_cpr += mf_cpc * (wr_or - mf_cpr);
+MFCA[mf_cw] = mf_cpl; MFCB[mf_cw] = mf_cpr;
+mf_cg > 0.0001 ? (
+  mf_cph += mf_chr / srate; mf_cph -= floor(mf_cph);
+  mf_wl = mf_read(MFCA, MFCN, mf_cw - (8 + mf_chds * sin(2 * $pi * mf_cph)) * srate * 0.001);
+  mf_wr = mf_read(MFCB, MFCN, mf_cw - (8 + mf_chds * sin(2 * $pi * (mf_cph + 0.25))) * srate * 0.001);
+  wr_ol += mf_cg * (0.6 * mf_wl - 0.15 * wr_ol); wr_or += mf_cg * (0.6 * mf_wr - 0.15 * wr_or);
+);
+mf_cw = (mf_cw + 1) & (MFCN - 1);
+mf_vg > 0.0001 ? (
+  mf_vt += 1; mf_vtk = mf_vt >= 8; mf_vtk ? mf_vt = 0;
+  mf_vph += mf_vbr / srate; mf_vph -= floor(mf_vph);
+  wr_ol += mf_vg * mf_vibe(wr_ol, 0, MFVA, mf_vtk); wr_or += mf_vg * mf_vibe(wr_or, 0.25, MFVB, mf_vtk);
+);
+(mf_dg > 0.0001 || mf_dlon) ? (
+  mf_djp ? (
+    mf_dkr -= wr_swdn; mf_dkr <= 0 ? ( mf_dkr = 0; mf_dt = mf_dtg; mf_djp = 0; );
+  ) : (
+    mf_dkr < 1 ? mf_dkr = min(1, mf_dkr + wr_swup);
+    mf_dt += mf_dts * (mf_dtg - mf_dt);
+  );
+  mf_dsm = max(2, min(mf_dlen - 4, mf_dt * srate * 0.001));
+  mf_ya = mf_read(MFDA, mf_dlen, mf_dw - mf_dsm); mf_yb = mf_read(MFDB, mf_dlen, mf_dw - mf_dsm);
+  mf_dkr < 1 ? ( mf_dkg = 0.5 - 0.5 * cos($pi * mf_dkr); mf_ya *= mf_dkg; mf_yb *= mf_dkg; );
+  mf_din += (mf_dlon - mf_din) * mf_gsm; mf_dfbs += (mf_dfb - mf_dfbs) * mf_gsm;
+  MFDA[mf_dw] = mf_din * 0.5 * (wr_ol + wr_or) + mf_dloop(mf_yb, MFVA + 30);
+  MFDB[mf_dw] = mf_dloop(mf_ya, MFVA + 34);
+  wr_ol += mf_dg * mf_ya; wr_or += mf_dg * mf_yb;
+  mf_dw += 1; mf_dw >= mf_dlen ? mf_dw = 0;
+);
+(mf_sg > 0.0001 || mf_spon) ? (
+  mf_ssw ? (
+    mf_skr -= wr_swdn;
+    mf_skr <= 0 ? ( mf_skr = 0; mf_stya = mf_sty; mf_sparams(mf_stya); mf_rg = mf_rgt; memset(MFR, 0, 4 * MFRN); mf_z0 = mf_z1 = mf_z2 = mf_z3 = 0; mf_ssw = 0; );
+  ) : mf_skr < 1 ? mf_skr = min(1, mf_skr + wr_swup);
+  mf_skg = mf_skr < 1 ? 0.5 - 0.5 * cos($pi * mf_skr) : 1;
+  mf_rg += (mf_rgt - mf_rg) * mf_gsm;
+  mf_q0 = MFR[(mf_rw - mf_l0) & MFRM]; mf_q1 = MFR[MFRN + ((mf_rw - mf_l1) & MFRM)];
+  mf_q2 = MFR[2 * MFRN + ((mf_rw - mf_l2) & MFRM)]; mf_q3 = MFR[3 * MFRN + ((mf_rw - mf_l3) & MFRM)];
+  mf_z0 += (mf_q0 - mf_z0) * mf_slp; mf_z1 += (mf_q1 - mf_z1) * mf_slp; mf_z2 += (mf_q2 - mf_z2) * mf_slp; mf_z3 += (mf_q3 - mf_z3) * mf_slp;
+  mf_qin = 0.5 * (wr_ol + wr_or) * mf_sg * 0.45;
+  MFR[mf_rw]             = mf_qin + 0.5 * mf_rg * (mf_z0 + mf_z1 + mf_z2 + mf_z3);
+  MFR[MFRN + mf_rw]      = mf_qin + 0.5 * mf_rg * (mf_z0 - mf_z1 + mf_z2 - mf_z3);
+  MFR[2 * MFRN + mf_rw]  = mf_qin + 0.5 * mf_rg * (mf_z0 + mf_z1 - mf_z2 - mf_z3);
+  MFR[3 * MFRN + mf_rw]  = mf_qin + 0.5 * mf_rg * (mf_z0 - mf_z1 - mf_z2 + mf_z3);
+  mf_ghold -= 1; mf_gt = mf_ghold > 0; mf_gs += (mf_gt - mf_gs) * (mf_gt ? 0.01 : mf_grl);
+  mf_gm = (mf_stya == 2 ? mf_gs : 1) * mf_slv * mf_skg;
+  wr_ol += mf_sg * (mf_z0 - mf_z2) * 0.7 * mf_gm; wr_or += mf_sg * (mf_z1 - mf_z3) * 0.7 * mf_gm;
+  mf_rw = (mf_rw + 1) & MFRM;
+);
+
+// ---------- master ----------
+wr_vol += (wr_volt - wr_vol) * wr_sm;
+wr_ol *= wr_vol; wr_or *= wr_vol;
+wr_dcyl = wr_ol - wr_dcxl + 0.9995 * wr_dcyl; wr_dcxl = wr_ol; wr_ol = wr_dcyl;
+wr_dcyr = wr_or - wr_dcxr + 0.9995 * wr_dcyr; wr_dcxr = wr_or; wr_or = wr_dcyr;
+// the bus: a soft knee above -6 dBFS that never passes -1 dBFS
+wr_e = abs(wr_ol); wr_e > 0.5 ? wr_ol = sign(wr_ol) * (0.5 + 0.39 * vo_tanh((wr_e - 0.5) * 2.564));
+wr_e = abs(wr_or); wr_e > 0.5 ? wr_or = sign(wr_or) * (0.5 + 0.39 * vo_tanh((wr_e - 0.5) * 2.564));
+wr_ol = ostL.ost_band(wr_ol); wr_or = ostR.ost_band(wr_or);
+ost_out(wr_ol, wr_or);
+spl0 = ost_l; spl1 = ost_r;
+wr_pk = max(wr_pk, max(abs(spl0), abs(spl1)));
+
+@gfx 1100 640
+ui_thm = 5; ui_hw = 0;
+ui_begin(1100, 640);
+ui_col(0x2B211D); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_size_picker(1030 * sc, 21 * sc);
+ui_end();
