@@ -28,8 +28,8 @@ desc:GFX G Mark 73
 // LAYERS   tine fundamental, octave (pickup position), BELL (the bell / chime partial, its own level), hammer clink
 //          (the short bright high modes, heard on hard hits), thump, growl (over-swing), damper and key-off noise
 //          (MECH sets the noises). Hard hits stretch the tine a few cents sharp; it settles within ~30-60 ms.
-// KEYS     each key has its own fixed (seeded, repeatable) personality: tuning (+/-0.3 cent), tonebar beat (a gentle
-//          1 - 2 dB, 0.3 - 1 Hz cycle, never a pitch wobble), pickup alignment, partial balance and decay.
+// KEYS     each key has its own fixed (seeded, repeatable) personality: tuning (+/-0.15 cent), tonebar beat (a faint
+//          amplitude swell, 0.3 - 1 Hz, never a pitch wobble), pickup alignment, partial balance and decay.
 // RELEASE  the damper felt lands on the tine (fast but not instant, a soft damper tick); key-off knock; sustain
 //          pedal (CC64) with a little sympathetic ring between the undamped tines.
 // AMP      three stages: (a) tone stack (STAGE flat; SUITCASE bass and treble shelving with a mid scoop), (b) the
@@ -39,8 +39,11 @@ desc:GFX G Mark 73
 //          incandescent bulbs and photocells (the filament heats faster than it cools): smooth and rounded.
 // PLAYING  VELOCITY (0 % = one fixed hammer speed, 100 % = a long hammer throw: the widest soft-to-slammed range),
 //          WIDTH (keys spread low-left to high-right), POLYPHONY, FINE, RANDOM (a small random offset on every note).
-// DRIFT    GFX instrument drift, kept gentle (25 % = standard): the tuning wanders about +/-1 cent, every note lands
-//          up to +/-0.75 cent off, the coil's top end and the pickup alignment breathe, the modulation rate wavers.
+// DRIFT    GFX instrument drift, kept gentle (15 % here): the tuning wanders well under a cent, every note lands
+//          a fraction of a cent off, the coil's top end and the pickup alignment breathe, the modulation rate wavers.
+// FX       after the amp, as in Harbour Keys (after GFX Mod Rack): CHORUS (stereo BBD-style: RATE, DEPTH), VIBE
+//          (lamp-driven photocell phaser: RATE, DEPTH), DELAY (ping-pong with warm saturating feedback: TIME in ms or
+//          synced to the tempo, FEEDBACK, MIX), SPACE (ROOM / PLATE / GATED, AMOUNT); each has its own lit ON key.
 // MIDI     note on / off, sustain (CC64), all notes off (CC120 / CC123).
 
 import gfx-drift.jsfx-inc
@@ -64,11 +67,11 @@ slider9:70<0,100,1>-Velocity (%)
 slider10:30<0,100,1>-Width (%)
 slider11:16<4,32,1>-Polyphony
 slider12:0<-50,50,0.1>-Fine (cents)
-slider13:0.5<0,10,0.1>-Random (cents)
+slider13:0<0,10,0.1>-Random (cents)
 slider14:0<0,100,1>-Overdrive (%)
 slider15:0<0,1,1{Stage,Suitcase}>-Amp
-slider16:35<0,100,1>-Mechanism noise (%)
-slider17:25<0,100,1>-Drift (%)
+slider16:30<0,100,1>-Mechanism noise (%)
+slider17:15<0,100,1>-Drift (%)
 slider18:0<-24,6,0.1>-Volume (dB)
 slider19:0<0,100,1>-Band sat (%)
 slider20:30<0,100,1>-Bias (%)
@@ -78,6 +81,20 @@ slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
 slider25:0<0,16,1>-MIDI channel (0 = omni)
 slider26:40<0,100,1>-Bell (%)
+slider27:0<0,1,1{Off,On}>-Chorus
+slider28:0.6<0.05,8,0.01>-Chorus rate (Hz)
+slider29:50<0,100,1>-Chorus depth (%)
+slider30:0<0,1,1{Off,On}>-Vibe
+slider31:1.2<0.1,10,0.01>-Vibe rate (Hz)
+slider32:50<0,100,1>-Vibe depth (%)
+slider33:0<0,1,1{Off,On}>-Delay
+slider34:375<20,1500,1>-Delay time (ms)
+slider35:35<0,95,1>-Delay feedback (%)
+slider36:25<0,100,1>-Delay mix (%)
+slider37:0<0,4,1{ms,1/4,1/8 dotted,1/8,1/4 triplet}>-Delay sync
+slider38:0<0,1,1{Off,On}>-Space
+slider39:0<0,2,1{Room,Plate,Gated}>-Space type
+slider40:25<0,100,1>-Space amount (%)
 
 in_pin:none
 out_pin:left output
@@ -93,6 +110,12 @@ MKV = 30000; MKVS = 124; MKNV = 36;                         // 36 voice slots x 
 MKHL = 35000; MKHR = 35100;                                 // half-band decimator rings (64 each)
 MKDEF = 35200;                                              // the Init values of sliders 1-18
 MKTMP = 35300;                                              // preset parser scratch (400)
+// FX: chorus lines, vibe states, space lines, ping-pong delay lines
+MFCA = 40000; MFCB = 44100; MFCN = 4096;                    // chorus (4096 each)
+MFVA = 48200; MFVB = 48240;                                 // vibe stage states (lamp, coefficients)
+MFR = 50000; MFRN = 8192; MFRM = MFRN - 1;                  // space: 4 lines x 8192
+MFDA = 90000; MFDB = 420000; MFDN = 330000;                 // delay: up to 1.6 s at 192 kHz
+memset(MFCA, 0, 2 * 4100); memset(MFVA, 0, 80); memset(MFR, 0, 4 * MFRN);
 memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 
 // voice slots (p = MKV + 124 * v):
@@ -139,7 +162,7 @@ function mk_t60(n) local(i, x0, x1) (
 );
 
 // ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
-#mk_def = "50 40 50 50 50 0 0 4.5 70 30 16 0 0.5 0 0 35 25 0";
+#mk_def = "50 40 50 50 50 0 0 4.5 70 30 16 0 0 0 0 30 15 0";
 function mk_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
   n = 0; i = 0; inn = 0; len = strlen(s);
   loop(len + 1,
@@ -159,30 +182,33 @@ function mk_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
   n;
 );
 mk_nums(#mk_def, MKDEF);
+#mk_fxd = "0 0.6 50 0 1.2 50 0 375 35 25 0 0 0 25";             // FX sliders 27-40 at Init (all off)
+mk_nums(#mk_fxd, MKDEF + 20);
 
 #mk_pm = "Init|Stage Mark|Bright Stage|Mellow Ballad|Suitcase Tremolo|Auto Pan Wide|Bark & Bite|Bell Tines|Soft Felt|Drive Amp|Gospel Bark|Lo-Fi Upright|Dyno Bright|Dark Ballad";
 function mk_pstr(p) (
-  p == 2  ? "1:60 3:40 4:42 5:55 9:72 10:25 26:35" :
-  p == 3  ? "1:50 3:65 4:52 5:45 6:4 9:78 10:35 14:6 26:50" :
-  p == 4  ? "1:70 2:55 3:22 4:18 5:62 6:-3 9:62 10:30 16:20 26:28 18:-1.7" :
-  p == 5  ? "1:66 3:35 4:30 5:56 7:55 8:4.8 15:1 10:20 26:32" :
+  p == 2  ? "1:60 3:40 4:42 5:55 9:72 10:25 26:35 38:1 39:0 40:18" :
+  p == 3  ? "1:50 3:65 4:52 5:45 6:4 9:78 10:35 14:6 26:50 27:1 28:0.5 29:40" :
+  p == 4  ? "1:70 2:55 3:22 4:18 5:62 6:-3 9:62 10:30 16:20 26:28 18:-1.7 27:1 28:0.4 29:45 38:1 39:1 40:30" :
+  p == 5  ? "1:66 3:35 4:30 5:56 7:55 8:4.8 15:1 10:20 26:32 38:1 39:0 40:20" :
   p == 6  ? "1:66 3:35 4:32 5:56 6:1 7:-85 8:3.2 15:1 10:0 26:32" :
-  p == 7  ? "1:50 2:35 3:60 4:58 5:30 9:90 14:22 6:1 26:35" :
-  p == 8  ? "1:60 3:72 4:30 5:55 6:4 9:72 10:45 26:80 18:-0.7" :
+  p == 7  ? "1:50 2:35 3:60 4:58 5:30 9:90 14:22 6:1 26:35 30:1 31:0.9 32:40 18:1.8" :
+  p == 8  ? "1:60 3:72 4:30 5:55 6:4 9:72 10:45 26:80 18:-3.6 27:1 28:0.7 29:55 38:1 39:1 40:28" :
   p == 9  ? "1:66 2:55 3:8 4:24 5:65 6:-5 9:55 16:18 26:25 18:-1.5" :
-  p == 10 ? "1:55 3:50 4:48 5:42 9:82 14:65 15:1 7:30 8:5.6 26:30 18:-4" :
-  p == 11 ? "1:60 3:58 4:56 5:32 9:88 14:30 15:1 7:20 8:6.2 6:2 26:35 18:-1.9" :
-  p == 12 ? "1:40 2:30 3:30 4:35 6:-7 7:22 8:6.8 15:1 13:6 17:70 10:10 16:60 26:30" :
-  p == 13 ? "1:55 3:60 4:90 5:52 6:2 9:78 10:35 26:55 18:2.3" :
-  p == 14 ? "1:72 2:58 3:22 4:6 5:58 6:-4 9:66 10:28 15:1 16:20 26:25 18:-4.6" :
+  p == 10 ? "1:55 3:50 4:48 5:42 9:82 14:65 15:1 7:30 8:5.6 26:30 18:-4 33:1 34:320 35:30 36:18" :
+  p == 11 ? "1:60 3:58 4:56 5:32 9:88 14:30 15:1 7:20 8:6.2 6:2 26:35 18:-1.9 38:1 39:0 40:22" :
+  p == 12 ? "1:40 2:30 3:30 4:35 6:-7 7:22 8:6.8 15:1 13:4 17:70 10:10 16:40 26:30" :
+  p == 13 ? "1:55 3:60 4:90 5:52 6:2 9:78 10:35 26:55 18:2.3 27:1 28:0.8 29:50 33:1 37:2 35:28 36:15 38:1 39:1 40:22" :
+  p == 14 ? "1:60 2:58 3:22 4:6 5:74 6:-4 9:66 10:28 15:1 16:20 26:25 18:-7.4" :
   "";
 );
 function load_preset(p) local(n, i) (
   i = 0; loop(18, slider(i + 1) = MKDEF[i]; i += 1; );
   slider26 = 40;
+  i = 0; loop(14, slider(27 + i) = MKDEF[20 + i]; i += 1; );
   n = mk_nums(mk_pstr(p), MKTMP);
-  i = 0; loop(floor(n / 2), (MKTMP[i * 2] >= 1 && MKTMP[i * 2] <= 18) || MKTMP[i * 2] == 26 ? slider(MKTMP[i * 2]) = MKTMP[i * 2 + 1]; i += 1; );
-  i = 1; loop(18, ui_auto(i); i += 1; ); ui_auto(26);
+  i = 0; loop(floor(n / 2), (MKTMP[i * 2] >= 1 && MKTMP[i * 2] <= 18) || (MKTMP[i * 2] >= 26 && MKTMP[i * 2] <= 40) ? slider(MKTMP[i * 2]) = MKTMP[i * 2 + 1]; i += 1; );
+  i = 1; loop(18, ui_auto(i); i += 1; ); i = 26; loop(15, ui_auto(i); i += 1; );
   pr_cur = p;
 );
 
@@ -204,7 +230,7 @@ function mk_drag(p) local(q, a, e, r, h) (
   a = abs(q[5]) * sqrt(max(q[0] * q[0] + q[1] * q[1] - 2 * p[16] * q[0] * q[1], 0)) * p[37];
   e = max(a - mk_dk, 0);
   r = q[9] * exp(-mk_db * e * e);
-  q[2] = 2 * r * (e > 0 ? cos(p[35] * (1 + mk_kp * e * e)) : p[16]); q[3] = r * r;
+  q[2] = 2 * r * (e > 0 ? cos(p[35] * (1 + min(mk_kp * e * e, 0.00115))) : p[16]); q[3] = r * r;
   h = q[5] / (2 * sqrt(r) * p[39]); q[6] = h; q[7] = h * r;
   a;
 );
@@ -243,7 +269,7 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
   p[6] = vel / 127;
   fresh ? (
     // ----- the tine: pitch (with the key's own tuning error), modes, decays -----
-    f = 440 * 2 ^ ((n - 69 + (h1 - 0.5) * 0.006 + (rand(2) - 1) * (mk_rnd + mk_drift * 3) / 100) / 12) * mk_fine;   // key +/-0.3 ct, RANDOM, DRIFT half the house amount
+    f = 440 * 2 ^ ((n - 69 + (h1 - 0.5) * 0.003 + (rand(2) - 1) * (mk_rnd + mk_drift * 1.5) / 100) / 12) * mk_fine;   // key +/-0.15 ct, RANDOM, DRIFT a quarter of the house amount
     p[1] = n;
     p[20] = 0;
     T = mk_dec * mk_t60(n) * (0.88 + 0.24 * h2);                       // fundamental T60 (s), measured curve
@@ -287,7 +313,7 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
     A = (2.3 - 1.55 * tr) * (0.92 + 0.16 * h4) * (0.79 + 0.3 * mk_vsens);
     off = mk_off0 * (1 + (h5 - 0.5) * 0.12 + (tr - 0.5) * 0.15);
     p[38] = off; p[17] = off;
-    p[118] = (mk_hash(n, 40) - 0.5) * 0.24;                               // the tine sits a hair off the pole sideways too
+    p[118] = (mk_hash(n, 40) - 0.5) * 0.03;                               // the tine sits a hair off the pole sideways too
     p[119] = 1 / (2 * (9 - 4 * tr));                                      // the tip moves on a circle about the clamp
     xr = 2 * p[90] * 2 * mh * 0.85 / (2 * $pi * f);                       // tip swing of the fundamental at full speed
     g = A / xr;
@@ -300,7 +326,7 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
     // ----- the horizontal polarisation of the fundamental and the bell: a weaker, slightly detuned twin, so the tip
     // traces a slowly precessing ellipse in front of the pole (the timbre turns over without any pitch change)
     ef = (0.08 + 0.17 * mk_hash(n, 41)) * mk_thor;                         // how much of the blow goes sideways
-    dh = (0.05 + 0.25 * mk_hash(n, 42)) * (mk_hash(n, 43) > 0.5 ? 1 : -1);  // detune (Hz)
+    dh = (0.01 + 0.05 * mk_hash(n, 42)) * (mk_hash(n, 43) > 0.5 ? 1 : -1);  // detune (Hz): a very slow precession, no chorus
     i = 0; q = p + 102;
     loop(min(p[20], 2),
       q[0] = q[1] = 0;
@@ -313,8 +339,8 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
     // designed from the beat it should give: a slow rate (0.3 - 1 Hz, slower in the bass) and a gentle 1 - 2 dB swell on
     // the fundamental, kept small enough that the two coupled modes never read as a pitch wobble (< ~0.35 cent)
     dt = 0.3 + (0.25 + 0.45 * tr) * h2;                                  // beat rate (Hz)
-    cHz = 10 ^ ((0.5 + 0.5 * h3) / 20); cHz = (cHz - 1) / (cHz + 1);     // tonebar share of the tine motion (b / a): subtle
-    cHz = min(cHz, 0.35 / 1731 * f / dt);
+    cHz = 10 ^ ((0.3 + 0.4 * h3) / 20); cHz = (cHz - 1) / (cHz + 1);     // tonebar share of the tine motion (b / a): subtle
+    cHz = min(cHz, 0.2 / 1731 * f / dt);
     cHz = 0.5 * tan(2 * atan(sqrt(cHz)));                                 // coupling / detune ratio
     dt /= sqrt(1 + 4 * cHz * cHz);                                        // detune (Hz)
     cHz *= dt;                                                            // coupling (Hz)
@@ -368,11 +394,10 @@ function mk_alloc() local(i, p, best, ba, nact) (
 
 function mk_release(p) local(q, i) (
   p[5] = 1; p[3] = 0; p[4] = 0;
-  p[120] = p[20]; p[121] = 0.2 * srate; p[122] = 0.6 * srate;     // the damper tick rings the high modes again
   // the damper felt touches the tine: a soft tick into the tine modes
   q = p + 40; i = 0;
-  loop(p[20], q[0] -= q[4] * mk_mech * 0.012 * 3 * srate * (q[0] - q[1] > 0 ? 1 : -1) * p[6] * (i ? 0.4 : 1); q += 10; i += 1; );
-  mk_kn = max(mk_kn, mk_mech * 0.008 * (0.4 + 0.6 * p[6]));
+  loop(min(p[20], 2), q[0] -= q[4] * mk_mech * 0.005 * 3 * srate * (q[0] - q[1] > 0 ? 1 : -1) * p[6] * (i ? 0.3 : 1); q += 10; i += 1; );   // a soft felt 'thup'
+  mk_kn = max(mk_kn, mk_mech * 0.0045 * (0.4 + 0.6 * p[6]));
 );
 
 function mk_note_on(n, vel) local(i, p, found) (
@@ -411,6 +436,32 @@ function mk_hb(b, w) (
   - 0.0010131992 * (b[(w - 0) & 63] + b[(w - 38) & 63]);
 );
 
+// ---------- FX (after GFX Mod Rack, simplified as in Harbour Keys) ----------
+function mf_read(buf, n, pos) local(ii, fr, xm1, x0, x1, x2, c1, c2, c3) (
+  pos < 0 ? pos += n; pos >= n ? pos -= n;
+  ii = floor(pos); fr = pos - ii;
+  xm1 = buf[(ii - 1 + n) % n]; x0 = buf[ii]; x1 = buf[(ii + 1) % n]; x2 = buf[(ii + 2) % n];
+  c1 = 0.5 * (x1 - xm1); c2 = xm1 - 2.5 * x0 + 2 * x1 - 0.5 * x2; c3 = 0.5 * (x2 - xm1) + 1.5 * (x0 - x1);
+  ((c3 * fr + c2) * fr + c1) * fr + x0;
+);
+// vibe: a lamp-driven 4-stage photocell all-pass; vs[0..7] states, [8] lamp, [9..12] stage coefficients
+function mf_vibe(x, phoff, vs, tick) local(ph, lf, k, y, f, t, a1, xi) (
+  tick ? (
+    ph = mf_vph + phoff; ph -= floor(ph); lf = 0.5 - 0.5 * cos(2 * $pi * ph);
+    vs[8] += (lf > vs[8] ? mf_vat : mf_vrl) * (lf - vs[8]);
+    k = 0; loop(4,
+      f = min(srate * 0.45, (k == 0 ? 60 : k == 1 ? 180 : k == 2 ? 480 : 1300) * 2 ^ (mf_voct * vs[8]));
+      t = tan($pi * f / srate); vs[9 + k] = (t - 1) / (t + 1); k += 1; );
+  );
+  y = x; k = 0;
+  loop(4, a1 = vs[9 + k]; xi = y; y = a1 * xi + vs[k * 2] - a1 * vs[k * 2 + 1]; vs[k * 2] = xi; vs[k * 2 + 1] = y; k += 1; );
+  0.5 * (y - x);
+);
+function mf_dloop(y, st) (
+  st[0] += mf_dlc * (y - st[0]); st[1] += mf_dhc * (st[0] - st[1]);
+  vo_tanh((st[0] - st[1]) * mf_dfb * 1.15) / 1.15;
+);
+
 // ---------- parameters ----------
 function update() (
   mk_dec = 2 ^ ((slider1 - 50) / 50 * 1.5);                // 0.35x .. 2.8x
@@ -432,8 +483,19 @@ function update() (
   mk_chan = slider25;
   mk_dk = 0.75; mk_db = 14 / srate;                          // drag: knee (pole widths) and strength
   mk_ckg = 20;                                               // clink layer level
-  mk_kp = 0.0025;                                            // stretch: pitch rise per (pole width over the knee)^2
+  mk_kp = 0.0012;                                            // stretch: pitch rise per (pole width over the knee)^2, at most 2 cents
   ins_output_setup(19);
+  // FX
+  mf_chon = slider27 >= 0.5; mf_chr = slider28; mf_chd = slider29 / 100 * 4;
+  mf_vbon = slider30 >= 0.5; mf_vbr = slider31; mf_voct = 3 * slider32 / 100; mf_vwet = min(1, 2 * slider32 / 100);
+  mf_dlon = slider33 >= 0.5; mf_dfb = 0.95 * slider35 / 95; mf_dmix = slider36 / 100; mf_dsync = floor(slider37 + 0.5);
+  mf_spon = slider38 >= 0.5; mf_sty = floor(slider39 + 0.5); mf_sam = slider40 / 100;
+  mf_sk = mf_sty == 1 ? 0.6 : mf_sty == 2 ? 0.85 : 1;
+  mf_st60 = mf_sty == 1 ? 1.4 + 2.6 * mf_sam : mf_sty == 2 ? 2.4 : 0.5 + 0.8 * mf_sam;
+  mf_slv = mf_sty == 1 ? 0.8 : mf_sty == 2 ? 1.4 : 1;
+  mf_rg = 10 ^ (-3 * 0.015 * mf_sk / mf_st60);
+  mf_l0 = floor(0.0073 * srate * mf_sk); mf_l1 = floor(0.0119 * srate * mf_sk); mf_l2 = floor(0.0171 * srate * mf_sk); mf_l3 = floor(0.0217 * srate * mf_sk);
+  mf_slp = 1 - exp(-2 * $pi * (mf_sty == 1 ? 10000 : mf_sty == 2 ? 8000 : 6500) / srate);
 );
 
 function mk_srinit() (
@@ -442,7 +504,14 @@ function mk_srinit() (
   ost_init(20000);
   mk_tq.bq_set(5, 150, 1.2, 0);                             // hammer thump body (key bed)
   mk_tc.bq_set(1, 2500, 0.7, 0);                            // hammer click
-  mk_kq.bq_set(5, 900, 1.4, 0);                             // key-off knock
+  mk_knd = exp(-1 / (0.012 * srate));
+  mf_cpc = 1 - exp(-2 * $pi * 9000 / srate);
+  mf_vat = 1 - exp(-8 / (0.008 * srate)); mf_vrl = 1 - exp(-8 / (0.04 * srate));     // vibe lamp (per 8 samples)
+  mf_dlc = 1 - exp(-2 * $pi * 3500 / srate); mf_dhc = 1 - exp(-2 * $pi * 70 / srate);
+  mf_dts = 1 - exp(-1 / (0.25 * srate)); mf_gsm = 1 - exp(-1 / (0.02 * srate));
+  mf_ghl = floor(0.3 * srate); mf_grl = 1 - exp(-1 / (0.025 * srate));
+  memset(MFDA, 0, MFDN); memset(MFDB, 0, MFDN); mf_dw = 0;
+  mk_kq.bq_set(5, 320, 0.9, 0);                             // key-off knock: a dull felt bump, not a click
   mk_bh = 1 - exp(-1 / (0.014 * srate)); mk_bc = 1 - exp(-1 / (0.045 * srate));   // bulb: heats ~14 ms, cools ~45 ms
   mk_tset = -1;
 );
@@ -503,7 +572,7 @@ update();
 while (midirecv(mofs, m1, m2, m3)) (
   ins_chan_ok(m1, mk_chan) ? (
     mk_st = m1 & 0xF0;
-    mk_st == 0x90 && m3 > 0 ? ( mk_note_on(m2, m3); ins_midi_hit(); ) :
+    mk_st == 0x90 && m3 > 0 ? ( mk_note_on(m2, m3); ins_midi_hit(); mf_ghold = mf_ghl; ) :
     mk_st == 0x80 || (mk_st == 0x90 && m3 == 0) ? mk_note_off(m2) :
     mk_st == 0xB0 ? (
       m2 == 64 ? ( mk_pedal = m3 >= 64; !mk_pedal ? mk_pedal_up(); ) :
@@ -555,6 +624,9 @@ loop(MKNV,
   );
   mk_i += 1;
 );
+mf_dq = mf_dsync == 1 ? 1 : mf_dsync == 2 ? 0.75 : mf_dsync == 3 ? 0.5 : 2 / 3;
+mf_dtg = mf_dsync > 0 && tempo > 0 ? min(1500, mf_dq * 60000 / tempo) : slider34;
+mf_dlen = floor(min(1.6 * srate, MFDN - 8));
 mk_ga = mk_na; mk_goff = mk_noff;                          // for the panel's pickup window
 mk_lpinc = mk_rate * (1 + 0.04 * ins_fx) / srate;
 
@@ -641,7 +713,7 @@ mk_l = mk_hb(MKHL, mk_hw); mk_r_ = mk_hb(MKHR, mk_hw);
 mk_hw = (mk_hw + 1) & 63;
 
 // ---------- mechanism: hammer thump and click, key-off knock (centred) ----------
-mk_kn > 0.0000001 ? ( mk_kx = (rand(2) - 1) * mk_kn; mk_kn *= 0.9975; ) : ( mk_kx = 0; mk_kn = 0; );
+mk_kn > 0.0000001 ? ( mk_kx = (rand(2) - 1) * mk_kn; mk_kn *= mk_knd; ) : ( mk_kx = 0; mk_kn = 0; );
 mk_mx = mk_tq.bq_run(mk_th + mk_kx * 0.3) + mk_tc.bq_run(mk_th) * 0.3 + mk_kq.bq_run(mk_kx);
 mk_l += mk_mx; mk_r_ += mk_mx;
 
@@ -678,6 +750,47 @@ mk_l = mk_c4l.bq_run(mk_l); mk_r_ = mk_c4r.bq_run(mk_r_);
 // ---------- TREBLE ----------
 mk_l = mk_tbl.bq_run(mk_l); mk_r_ = mk_tbr.bq_run(mk_r_);
 
+// ---------- FX: CHORUS, VIBE, DELAY, SPACE (each fades in and out, and is skipped while off) ----------
+mf_cg += ((mf_chon * 1) - mf_cg) * mf_gsm; mf_vg += (mf_vbon * mf_vwet - mf_vg) * mf_gsm;
+mf_dg += (mf_dlon * mf_dmix - mf_dg) * mf_gsm; mf_sg += (mf_spon * mf_sam - mf_sg) * mf_gsm;
+mf_cpl += mf_cpc * (mk_l - mf_cpl); mf_cpr += mf_cpc * (mk_r_ - mf_cpr);
+MFCA[mf_cw] = mf_cpl; MFCB[mf_cw] = mf_cpr;
+mf_cg > 0.0001 ? (
+  mf_cph += mf_chr / srate; mf_cph -= floor(mf_cph);
+  mf_wl = mf_read(MFCA, MFCN, mf_cw - (8 + mf_chd * sin(2 * $pi * mf_cph)) * srate * 0.001);
+  mf_wr = mf_read(MFCB, MFCN, mf_cw - (8 + mf_chd * sin(2 * $pi * (mf_cph + 0.25))) * srate * 0.001);
+  mk_l += mf_cg * (0.6 * mf_wl - 0.15 * mk_l); mk_r_ += mf_cg * (0.6 * mf_wr - 0.15 * mk_r_);
+);
+mf_cw = (mf_cw + 1) & (MFCN - 1);
+mf_vg > 0.0001 ? (
+  mf_vt += 1; mf_vtk = mf_vt >= 8; mf_vtk ? mf_vt = 0;
+  mf_vph += mf_vbr / srate; mf_vph -= floor(mf_vph);
+  mk_l += mf_vg * mf_vibe(mk_l, 0, MFVA, mf_vtk); mk_r_ += mf_vg * mf_vibe(mk_r_, 0.25, MFVB, mf_vtk);
+);
+(mf_dg > 0.0001 || mf_dlon) ? (
+  mf_dt += mf_dts * (mf_dtg - mf_dt);
+  mf_dsm = max(2, min(mf_dlen - 4, mf_dt * srate * 0.001));
+  mf_ya = mf_read(MFDA, mf_dlen, mf_dw - mf_dsm); mf_yb = mf_read(MFDB, mf_dlen, mf_dw - mf_dsm);
+  MFDA[mf_dw] = mf_dlon * 0.5 * (mk_l + mk_r_) + mf_dloop(mf_yb, MFVA + 30);   // in on the left, then across: ping-pong
+  MFDB[mf_dw] = mf_dloop(mf_ya, MFVA + 34);
+  mk_l += mf_dg * mf_ya; mk_r_ += mf_dg * mf_yb;
+  mf_dw += 1; mf_dw >= mf_dlen ? mf_dw = 0;
+);
+(mf_sg > 0.0001 || mf_spon) ? (
+  mf_q0 = MFR[(mf_rw - mf_l0) & MFRM]; mf_q1 = MFR[MFRN + ((mf_rw - mf_l1) & MFRM)];
+  mf_q2 = MFR[2 * MFRN + ((mf_rw - mf_l2) & MFRM)]; mf_q3 = MFR[3 * MFRN + ((mf_rw - mf_l3) & MFRM)];
+  mf_z0 += (mf_q0 - mf_z0) * mf_slp; mf_z1 += (mf_q1 - mf_z1) * mf_slp; mf_z2 += (mf_q2 - mf_z2) * mf_slp; mf_z3 += (mf_q3 - mf_z3) * mf_slp;
+  mf_qin = 0.5 * (mk_l + mk_r_) * mf_sg * 0.45;
+  MFR[mf_rw]             = mf_qin + 0.5 * mf_rg * (mf_z0 + mf_z1 + mf_z2 + mf_z3);
+  MFR[MFRN + mf_rw]      = mf_qin + 0.5 * mf_rg * (mf_z0 - mf_z1 + mf_z2 - mf_z3);
+  MFR[2 * MFRN + mf_rw]  = mf_qin + 0.5 * mf_rg * (mf_z0 + mf_z1 - mf_z2 - mf_z3);
+  MFR[3 * MFRN + mf_rw]  = mf_qin + 0.5 * mf_rg * (mf_z0 - mf_z1 - mf_z2 + mf_z3);
+  mf_ghold -= 1; mf_gt = mf_ghold > 0; mf_gs += (mf_gt - mf_gs) * (mf_gt ? 0.01 : mf_grl);
+  mf_gm = (mf_sty == 2 ? mf_gs : 1) * mf_slv;
+  mk_l += mf_sg * (mf_z0 - mf_z2) * 0.7 * mf_gm; mk_r_ += mf_sg * (mf_z1 - mf_z3) * 0.7 * mf_gm;
+  mf_rw = (mf_rw + 1) & MFRM;
+);
+
 // ---------- master ----------
 mk_vol += (mk_volt - mk_vol) * mk_sm;
 mk_l *= mk_vol; mk_r_ *= mk_vol;
@@ -691,9 +804,9 @@ ost_out(mk_l, mk_r_);
 spl0 = ost_l; spl1 = ost_r;
 mk_pk = max(mk_pk, max(abs(spl0), abs(spl1)));
 
-@gfx 1100 440
+@gfx 1100 600
 ui_thm = 5; ui_hw = 0;
-ui_begin(1100, 440);
+ui_begin(1100, 600);
 
 // ---------- the faceplate: oxblood sparkle with chiffon-white print ----------
 mg_red = 0x5E1519; mg_s1 = 0x51121A; mg_s2 = 0x4A1016; mg_s3 = 0x430E14; mg_s4 = 0x3C0C11;
@@ -703,6 +816,8 @@ dy_ink = mg_ink; dy_nov = 1; rd_sqbg = 0x22080B; dy_kst = 7;
 gfx_setfont(10, "Trebuchet MS", 12 * sc, 'b');           // section titles
 gfx_setfont(11, "Trebuchet MS", 11.5 * sc, 'b');         // small print
 gfx_setfont(12, "Trebuchet MS", 13 * sc, 'b');           // key captions
+gfx_setfont(13, "Trebuchet MS", 13 * sc, 'b');           // side labels (readable at M)
+gfx_setfont(14, "Trebuchet MS", 13.5 * sc, 'b');         // header subtitle
 
 function mg_r(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc); );
 function mg_t(x, y, s) ( gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
@@ -732,12 +847,12 @@ function mg_small(cx, cy, r, idx, lo, hi, def, cap, label, fmt) (
 );
 
 ui_col(0x0B0B0C); gfx_rect(0, 0, gfx_w, gfx_h);
-ui_col(mg_red); mg_r(0, 0, 1100, 440);
+ui_col(mg_red); mg_r(0, 0, 1100, 600);
 gfx_gradrect(0, 0, 1100 * sc, 240 * sc, 1, 0.85, 0.8, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06 / (240 * sc));
 mg_i = 0;
-loop(1400,
+loop(1900,
   ui_cola(0xFFD8C8, 0.04 + 0.26 * rd_hash(mg_i + 3333) ^ 3);
-  gfx_rect(floor(rd_hash(mg_i) * 1100 * sc), floor(rd_hash(mg_i + 7777) * 440 * sc), max(1, sc * 0.9), max(1, sc * 0.9));
+  gfx_rect(floor(rd_hash(mg_i) * 1100 * sc), floor(rd_hash(mg_i + 7777) * 600 * sc), max(1, sc * 0.9), max(1, sc * 0.9));
   mg_i += 1;
 );
 // the name rail
@@ -749,11 +864,11 @@ ui_cola(0x000000, 0.35); mg_r(0, 62, 1100, 3);
 // ---------- header ----------
 rd_badge(32, 30, 17, mg_ink, 0x2A090C);
 rd_title(60, 9, "MARK 73", 30, mg_ink);
-gfx_setfont(11); ui_col(mg_dim); mg_t(198, 15, "TINE ELECTRIC PIANO"); mg_t(198, 31, "STAGE  •  SUITCASE");
-mg_k = pk_preset(370 * sc, 13 * sc, 410 * sc, 36 * sc, pr_cur, #mk_pm);
+gfx_setfont(14); ui_col(mg_dim); mg_t(198, 12, "TINE ELECTRIC PIANO"); mg_t(198, 31, "STAGE  •  SUITCASE");
+mg_k = pk_preset(376 * sc, 8 * sc, 404 * sc, 44 * sc, pr_cur, #mk_pm);
 mg_k > 0 ? load_preset(mg_k);
 rd_led(812, 24, 4.5, ins_midi_lit(), 0x3ADF6A);
-gfx_setfont(11); ui_col(mg_dim); mg_ct(812, 43, "MIDI");
+gfx_setfont(13); ui_col(mg_dim); mg_ct(812, 44, "MIDI");
 sprintf(#mgl, slider25 < 0.5 ? "OMNI" : "CH %.0f", slider25);
 mg_key(834, 17, 74, 28, 0, #mgl) ? (
   strcpy(#mgm, ""); mg_n = 0;
@@ -772,9 +887,9 @@ mg_kn(293, mg_ky, 24, 2, 0, 100, 40, 0, mg_cream, "RELEASE", "%.0f%%");
 
 mg_sect(358, mg_y, 420, mg_h, mg_s2, "PICKUP");
 mg_kn(412, mg_ky, 27, 4, 0, 100, 50, 0, mg_acc, "VOICING", "%.0f%%");
-gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_ct(380, mg_ky + 26, "DARK"); mg_ct(446, mg_ky + 26, "DYNO");
+gfx_setfont(13); ui_cola(mg_dim, 0.95); mg_ct(378, mg_ky + 27, "DARK"); mg_ct(448, mg_ky + 27, "DYNO");
 mg_kn(726, mg_ky, 27, 5, 0, 100, 50, 0, mg_cream, "GAP", "%.0f%%");
-gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_ct(696, mg_ky + 26, "NEAR"); mg_ct(758, mg_ky + 26, "FAR");
+gfx_setfont(13); ui_cola(mg_dim, 0.95); mg_ct(692, mg_ky + 27, "NEAR"); mg_ct(760, mg_ky + 27, "FAR");
 // the pickup window: flux across the pole, where the tine rests, how far the last note is swinging
 mg_wx = 470; mg_wy = mg_y + 34; mg_ww = 192; mg_wh = 116;
 ui_col(0x0A0A0B); mg_r(mg_wx - 2, mg_wy - 2, mg_ww + 4, mg_wh + 4);
@@ -803,7 +918,7 @@ loop(97,
 mg_px = mg_cx + mg_off * mg_zs; mg_py = mg_base - (1 / (1 + mg_off * mg_off)) * (mg_wh - 36);
 ui_col(mg_acc); mg_r(mg_px - 0.75, mg_wy + 4, 1.5, mg_wh - 26);
 gfx_circle(mg_px * sc, mg_py * sc, 4 * sc, 1, 1);
-gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_t(mg_wx + 6, mg_wy + 5, "FLUX");
+gfx_setfont(13); ui_cola(mg_dim, 0.9); mg_t(mg_wx + 6, mg_wy + 5, "FLUX");
 sprintf(#mgs, mg_sw > 0.002 ? "SWING %.2f" : "AT REST", mg_sw); mg_rt(mg_wx + mg_ww - 6, mg_wy + 11, #mgs);
 mg_t(mg_cx + 14, mg_base + 5, "POLE");
 
@@ -819,7 +934,9 @@ mg_sect(14, mg_y, 280, mg_h, mg_s2, "MODULATION");
 mg_lv = mk_mod != 0 ? mk_pc1 : 0;
 slider7 < -0.5 ? sprintf(#mgv, "PAN %.0f%%", -slider7) : slider7 > 0.5 ? sprintf(#mgv, "TREM %.0f%%", slider7) : strcpy(#mgv, "OFF");
 dy_knob(84, mg_ky, 30, 7, -100, 100, 0, 0, mg_acc, "MODULATION", #mgv);
-gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_ct(44, mg_ky + 30, "PAN"); mg_ct(124, mg_ky + 30, "TREM");
+gfx_setfont(13); ui_cola(mg_dim, 0.95); mg_ct(40, mg_ky + 31, "PAN"); mg_ct(128, mg_ky + 31, "TREM");
+// the halfway mark: a clear tick at 12 o'clock (left = more pan, right = more tremolo)
+ui_col(mg_ink); mg_r(84 - 2, mg_ky - 30 - 15, 4, 12);
 mg_kn(222, mg_ky, 25, 8, 0.1, 12, 4.5, 1, mg_cream, "RATE", "%.2f Hz");
 rd_led(150, mg_y + 16, 5, 0, 0xFF5A3A);
 mk_mod != 0 ? ( ui_cola(0xFF5A3A, 0.25 + 0.6 * mg_lv); gfx_circle(150 * sc, (mg_y + 16) * sc, 9 * sc, 1, 1); ui_cola(0xFF5A3A, 0.4 + 0.6 * mg_lv); gfx_circle(150 * sc, (mg_y + 16) * sc, 5 * sc, 1, 1); );
@@ -839,10 +956,36 @@ mg_kn(912, mg_y + 66, 25, 18, -24, 6, 0, 0, mg_cream, "VOLUME", "%+.1f dB");
 mg_small(892, mg_y + 132, 12, 17, 0, 100, 25, mg_grey, "DRIFT", "%.0f%%");
 mg_small(944, mg_y + 132, 12, 16, 0, 100, 35, mg_grey, "MECH", "%.0f%%");
 mg_small(996, mg_y + 132, 12, 19, 0, 100, 0, 0xD8B040, "SAT", "%.0f%%");
-gfx_setfont(11); ui_col(mg_dim); mg_ct(997, mg_y + 14, "OUT");
+gfx_setfont(13); ui_col(mg_dim); mg_ct(997, mg_y + 14, "OUT");
 mg_okf = ui_okfs; ui_okfs = 1.15; ui_outkeys(966, mg_y + 30, 62, 22, 5, 24); ui_okfs = mg_okf;
 mgL.ui_ledm(1046 * sc, (mg_y + 34) * sc, 10 * sc, 116 * sc, mk_pk); mgR.ui_ledm(1060 * sc, (mg_y + 34) * sc, 10 * sc, 116 * sc, mk_pk);
 mk_pk *= 0.85;
+
+// ---------- row 3: FX (CHORUS, VIBE, DELAY, SPACE) ----------
+mg_y = 446; mg_h = 140; mg_ky = mg_y + 84;
+mg_sect(14, mg_y, 250, mg_h, mg_s3, "CHORUS");
+mg_key(196, mg_y + 5, 54, 22, slider27 >= 0.5, "ON") ? mg_set(27, slider27 >= 0.5 ? 0 : 1);
+mg_kn(80,  mg_ky, 23, 28, 0.05, 8, 0.6, 1, mg_cream, "RATE", "%.2f Hz");
+mg_kn(190, mg_ky, 23, 29, 0, 100, 50, 0, mg_cream, "DEPTH", "%.0f%%");
+mg_sect(278, mg_y, 250, mg_h, mg_s2, "VIBE");
+mg_key(460, mg_y + 5, 54, 22, slider30 >= 0.5, "ON") ? mg_set(30, slider30 >= 0.5 ? 0 : 1);
+mg_kn(344, mg_ky, 23, 31, 0.1, 10, 1.2, 1, mg_cream, "RATE", "%.2f Hz");
+mg_kn(454, mg_ky, 23, 32, 0, 100, 50, 0, mg_cream, "DEPTH", "%.0f%%");
+mg_sect(542, mg_y, 310, mg_h, mg_s1, "DELAY");
+mg_key(784, mg_y + 5, 54, 22, slider33 >= 0.5, "ON") ? mg_set(33, slider33 >= 0.5 ? 0 : 1);
+mg_ds = floor(slider37 + 0.5);
+mg_key(690, mg_y + 5, 84, 22, mg_ds > 0, mg_ds == 0 ? "SYNC: MS" : mg_ds == 1 ? "1/4" : mg_ds == 2 ? "1/8 DOT" : mg_ds == 3 ? "1/8" : "1/4 TRIP") ? mg_set(37, mg_ds >= 4 ? 0 : mg_ds + 1);
+mg_ds > 0 ? ( mg_dq = mg_ds == 1 ? 1 : mg_ds == 2 ? 0.75 : mg_ds == 3 ? 0.5 : 2 / 3; sprintf(#mgv, "%.0f ms", tempo > 0 ? min(1500, mg_dq * 60000 / tempo) : slider34); dy_knob(600, mg_ky, 23, 34, 20, 1500, 375, 1, mg_grey, "TIME", #mgv); ) :
+  mg_kn(600, mg_ky, 23, 34, 20, 1500, 375, 1, mg_cream, "TIME", "%.0f ms");
+mg_kn(698, mg_ky, 23, 35, 0, 95, 35, 0, mg_cream, "FEEDBACK", "%.0f%%");
+mg_kn(796, mg_ky, 23, 36, 0, 100, 25, 0, mg_acc, "MIX", "%.0f%%");
+mg_sect(866, mg_y, 220, mg_h, mg_s4, "SPACE");
+mg_key(1018, mg_y + 5, 54, 22, slider38 >= 0.5, "ON") ? mg_set(38, slider38 >= 0.5 ? 0 : 1);
+mg_st = floor(slider39 + 0.5);
+mg_key(878, mg_y + 40, 62, 24, mg_st == 0, "ROOM") ? mg_set(39, 0);
+mg_key(878, mg_y + 70, 62, 24, mg_st == 1, "PLATE") ? mg_set(39, 1);
+mg_key(878, mg_y + 100, 62, 24, mg_st == 2, "GATED") ? mg_set(39, 2);
+mg_kn(1010, mg_ky, 27, 40, 0, 100, 25, 0, mg_acc, "AMOUNT", "%.0f%%");
 
 dy_kst = 7; dy_nov = 0;
 pk_end();
