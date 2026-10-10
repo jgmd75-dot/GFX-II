@@ -699,7 +699,7 @@ function cs_update() local(cs_a) (
   cs_con = cs_k > 0.001;
   cs_gt = slider52 <= -59.9 ? 0 : 10 ^ (slider52 / 20);
   cs_a = (slider51 + 100) / 200;
-  cs_cl = min(1, 2 * (1 - cs_a)); cs_cr = min(1, 2 * cs_a);                             // balance
+  cs_bl = min(1, 2 * (1 - cs_a)); cs_br = min(1, 2 * cs_a);                             // balance
 );
 function cs_run() (
   cs_g += (cs_gt - cs_g) * cs_sm;
@@ -717,7 +717,7 @@ function cs_run() (
     cs_e0 *= cs_cg; cs_e1 *= cs_cg;
   ) : cs_grs = 0;
   cs_grm = max(cs_grm, cs_grs);
-  cs_ml = cs_e0 * cs_g * cs_cl; cs_mr = cs_e1 * cs_g * cs_cr;
+  cs_ml = cs_e0 * cs_g * cs_bl; cs_mr = cs_e1 * cs_g * cs_br;
   // desk noise, the summing amp, main mix
   cs_nse ? ( cs_ml += (rand(2) - 1) * cs_nz_g; cs_mr += (rand(2) - 1) * cs_nz_g; );
   cs_ml = cs_rail(cs_ml * cs_mm); cs_mr = cs_rail(cs_mr * cs_mm);
@@ -725,18 +725,18 @@ function cs_run() (
 
 function cs_reset() (
   // all state back to zero, then the desk init
-  cs_ca = cs_cg = cs_cl = cs_cm = cs_con = cs_cr = cs_db = cs_e0 = cs_e1 = cs_env = cs_g = cs_gr = cs_grm = 0;
-  cs_grs = cs_gs = cs_gt = cs_hot = cs_k = cs_mk = cs_ml = cs_mm = cs_mr = cs_nse = cs_nz_g = cs_ov = cs_pk = 0;
-  cs_rat = cs_sm = cs_thr = cs_pl_.cs_h.a1 = cs_pl_.cs_h.a2 = cs_pl_.cs_h.b0 = cs_pl_.cs_h.b1 = cs_pl_.cs_h.b2 = 0;
-  cs_pl_.cs_h.x1 = cs_pl_.cs_h.x2 = cs_pl_.cs_h.y1 = cs_pl_.cs_h.y2 = cs_pl_.cs_l.a1 = cs_pl_.cs_l.a2 = 0;
-  cs_pl_.cs_l.b0 = cs_pl_.cs_l.b1 = cs_pl_.cs_l.b2 = cs_pl_.cs_l.x1 = cs_pl_.cs_l.x2 = cs_pl_.cs_l.y1 = 0;
-  cs_pl_.cs_l.y2 = cs_pl_.cs_m.a1 = cs_pl_.cs_m.a2 = cs_pl_.cs_m.b0 = cs_pl_.cs_m.b1 = cs_pl_.cs_m.b2 = 0;
-  cs_pl_.cs_m.x1 = cs_pl_.cs_m.x2 = cs_pl_.cs_m.y1 = cs_pl_.cs_m.y2 = cs_pr_.cs_h.a1 = cs_pr_.cs_h.a2 = 0;
-  cs_pr_.cs_h.b0 = cs_pr_.cs_h.b1 = cs_pr_.cs_h.b2 = cs_pr_.cs_h.x1 = cs_pr_.cs_h.x2 = cs_pr_.cs_h.y1 = 0;
-  cs_pr_.cs_h.y2 = cs_pr_.cs_l.a1 = cs_pr_.cs_l.a2 = cs_pr_.cs_l.b0 = cs_pr_.cs_l.b1 = cs_pr_.cs_l.b2 = 0;
-  cs_pr_.cs_l.x1 = cs_pr_.cs_l.x2 = cs_pr_.cs_l.y1 = cs_pr_.cs_l.y2 = cs_pr_.cs_m.a1 = cs_pr_.cs_m.a2 = 0;
-  cs_pr_.cs_m.b0 = cs_pr_.cs_m.b1 = cs_pr_.cs_m.b2 = cs_pr_.cs_m.x1 = cs_pr_.cs_m.x2 = cs_pr_.cs_m.y1 = 0;
-  cs_pr_.cs_m.y2 = 0;
+  cs_bl = cs_br = cs_ca = cs_cg = cs_cm = cs_con = cs_cr = cs_db = cs_e0 = cs_e1 = cs_env = cs_g = cs_gr = 0;
+  cs_grm = cs_grs = cs_gs = cs_gt = cs_hot = cs_k = cs_mk = cs_ml = cs_mm = cs_mr = cs_nse = cs_nz_g = cs_ov = 0;
+  cs_pk = cs_rat = cs_sm = cs_thr = cs_pl_.cs_h.a1 = cs_pl_.cs_h.a2 = cs_pl_.cs_h.b0 = cs_pl_.cs_h.b1 = 0;
+  cs_pl_.cs_h.b2 = cs_pl_.cs_h.x1 = cs_pl_.cs_h.x2 = cs_pl_.cs_h.y1 = cs_pl_.cs_h.y2 = cs_pl_.cs_l.a1 = 0;
+  cs_pl_.cs_l.a2 = cs_pl_.cs_l.b0 = cs_pl_.cs_l.b1 = cs_pl_.cs_l.b2 = cs_pl_.cs_l.x1 = cs_pl_.cs_l.x2 = 0;
+  cs_pl_.cs_l.y1 = cs_pl_.cs_l.y2 = cs_pl_.cs_m.a1 = cs_pl_.cs_m.a2 = cs_pl_.cs_m.b0 = cs_pl_.cs_m.b1 = 0;
+  cs_pl_.cs_m.b2 = cs_pl_.cs_m.x1 = cs_pl_.cs_m.x2 = cs_pl_.cs_m.y1 = cs_pl_.cs_m.y2 = cs_pr_.cs_h.a1 = 0;
+  cs_pr_.cs_h.a2 = cs_pr_.cs_h.b0 = cs_pr_.cs_h.b1 = cs_pr_.cs_h.b2 = cs_pr_.cs_h.x1 = cs_pr_.cs_h.x2 = 0;
+  cs_pr_.cs_h.y1 = cs_pr_.cs_h.y2 = cs_pr_.cs_l.a1 = cs_pr_.cs_l.a2 = cs_pr_.cs_l.b0 = cs_pr_.cs_l.b1 = 0;
+  cs_pr_.cs_l.b2 = cs_pr_.cs_l.x1 = cs_pr_.cs_l.x2 = cs_pr_.cs_l.y1 = cs_pr_.cs_l.y2 = cs_pr_.cs_m.a1 = 0;
+  cs_pr_.cs_m.a2 = cs_pr_.cs_m.b0 = cs_pr_.cs_m.b1 = cs_pr_.cs_m.b2 = cs_pr_.cs_m.x1 = cs_pr_.cs_m.x2 = 0;
+  cs_pr_.cs_m.y1 = cs_pr_.cs_m.y2 = 0;
   cs_sm = 1 - exp(-1 / (0.02 * srate));
   cs_ca = 1 - exp(-1 / (0.005 * srate)); cs_cr = 1 - exp(-1 / (0.150 * srate)); cs_gs = 1 - exp(-1 / (0.002 * srate));   // COMP detector / gain
   cs_nz_g = 10 ^ (-84 / 20);

@@ -49,7 +49,8 @@ desc:GFX Sum 92 [summing mixer]
 //          Parameter list only: FIELD input iron, limiter attack / release.
 //
 // OUTPUT: every model's output clips softly at -0.3 dBFS (the house CLIP at its ceiling, always on, no latency, no
-//   controls): part of the 92 chassis. Below about -2 dBFS it does nothing, so each model is its original there.
+//   controls): part of the 92 chassis. Below about -2 dBFS it does nothing. 15 / 44 / COMPACT play 6 dB quieter than
+//   their originals with the same colour (6 dB more headroom before the clip); FIELD plays at its original level.
 //
 // MODEL SWITCH: only the selected model runs (CPU = that model). A change crossfades the outgoing model into the
 //   incoming one over 20 ms (both run for those 20 ms); the incoming model starts from a clean, reset state.
@@ -972,10 +973,10 @@ function s92_reset(m) ( m == 0 ? ca_reset() : m == 1 ? cb_reset() : m == 2 ? cp_
 function s92_update(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : m == 2 ? cp_update() : fm_update(); );
 function s92_block(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : m == 2 ? cp_update() : fm_blockrun(); );
 function s92_run(m) (
-  m == 0 ? ( ca_run(); s92_rL = ca_ml; s92_rR = ca_mr; ) :
-  m == 1 ? ( cb_run(); s92_rL = cb_ml; s92_rR = cb_mr; ) :
-  m == 2 ? ( cp_run(); s92_rL = cp_ml; s92_rR = cp_mr; ) :
-           ( fm_run(); s92_rL = fm_oL; s92_rR = fm_oR; );
+  m == 0 ? ( ca_run(); s92_rL = ca_ml; s92_rR = ca_mr; s92_rg = S92_HR; ) :
+  m == 1 ? ( cb_run(); s92_rL = cb_ml; s92_rR = cb_mr; s92_rg = S92_HR; ) :
+  m == 2 ? ( cp_run(); s92_rL = cp_ml; s92_rR = cp_mr; s92_rg = S92_HR; ) :
+           ( fm_run(); s92_rL = fm_oL; s92_rR = fm_oR; s92_rg = 1; );
 );
 // MODEL change: start the 20 ms crossfade (a change during a fade keeps whichever model is louder as the outgoing one)
 function s92_switch() local(m) (
@@ -1146,6 +1147,11 @@ function s92_load(p) (
   s92_pr = p > 20 ? 1 : p;
 );
 
+// 15 / 44 / COMPACT play 6 dB quieter than their originals, so normal mixes stay clear of the chassis clip: the
+// model runs exactly as the original (same tape drive, NR, saturation, hiss and noise - the same colour) and its
+// output is turned down 6 dB, which is the same as trimming the input 6 dB and raising every level-dependent
+// reference inside by 6 dB
+S92_HR = 10 ^ (-6 / 20);
 // panel memory and constants
 cg_LHD = 300; cp_LHD = 500; cg_vu_sine = 10 * log10(2);
 s92_srinit();
@@ -1166,16 +1172,18 @@ s92_n = 0; loop(12, file_avail(0) != 0 ? file_string(0, UI_NM + s92_n); s92_n +=
 file_avail(0) != 0 ? file_var(0, s92_pr);          // the preset in use
 
 @sample
-s92_run(s92_cur); s92_yL = s92_rL; s92_yR = s92_rR;
+s92_run(s92_cur); s92_yL = s92_rL; s92_yR = s92_rR; s92_g = s92_rg;
 s92_xf ? (
   // the MODEL crossfade: the outgoing model runs alongside for 20 ms
   s92_w = 0.5 - 0.5 * cos($pi * s92_xt);
   s92_run(s92_old);
   s92_yL = s92_yL * s92_w + s92_rL * (1 - s92_w); s92_yR = s92_yR * s92_w + s92_rR * (1 - s92_w);
+  s92_g = s92_g * s92_w + s92_rg * (1 - s92_w);
   s92_xt += s92_xfc; s92_xt >= 1 ? s92_xf = 0;
 );
-// the chassis clip (band saturation off: it passes the signal unchanged)
-s92_yL = s92_ostL.ost_band(s92_yL); s92_yR = s92_ostR.ost_band(s92_yR);
+// 6 dB of headroom for the 15 / 44 / COMPACT ahead of the chassis clip (S92_HR), then the clip (band saturation
+// off: it passes the signal unchanged)
+s92_yL = s92_ostL.ost_band(s92_yL * s92_g); s92_yR = s92_ostR.ost_band(s92_yR * s92_g);
 ost_out(s92_yL, s92_yR);
 spl0 = ost_l; spl1 = ost_r;
 spl2 = spl3 = spl4 = spl5 = spl6 = spl7 = spl8 = spl9 = spl10 = spl11 = 0;
