@@ -1,0 +1,636 @@
+desc:GFX DRP-45
+//tags: reverb hall room plate gated reverse early reflections echo delay digital broadcast vintage 12-bit lo-fi space
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// DRP-45. An early-80s digital broadcast reverb / delay with two machines in one case, switched by the
+// TOKYO / BERLIN keys (the faceplate and the algorithms change together):
+//   TOKYO  - in the spirit of the Japanese broadcast and arcade-sound research labs: massively parallel 16-bit
+//            processing, hyper-precise parameter entry from a terminal-style controller (data-entry keys, rubber
+//            program selectors, a monochrome VFD with hexadecimal parameter addresses). Clean, dense, no
+//            modulation, no smear on transients. HALL, ROOM, PLATE (glassy), EARLY REF, GATE, REVERSE.
+//   BERLIN - in the spirit of the East German state-laboratory broadcast processors: brute-force digital delay /
+//            reverb on locally made memory with discrete converters. A band-limited (9 kHz), 12-bit-ish tank,
+//            an input transformer, companding noise; pushed hard the reflections smear into a gritty wash.
+//            RAUM A, RAUM B, PLATTE B, ECHO. Bone-grey enamel rack (the 45 family; ENAMEL / VFD / MATRIX skins).
+//
+// SIGNAL FLOW
+//   input -> DRIVE (0 - 100 %: into the converter / transformer and the same back out, so it adds colour, not level)
+//     TOKYO: 0 to +18 dB into a clean 16-bit converter: transparent until full scale, then a firm soft clip.
+//     BERLIN: 0 to +24 dB into the input transformer (the lows saturate the core first) and an asymmetric
+//             early-silicon stage (even harmonics); then a 4-pole 9 kHz anti-alias filter.
+//   -> PRE-DELAY 0 - 300 ms (glides; BERLIN: coarse 20 ms steps + fine)
+//   -> the algorithm:
+//     FDN algorithms (HALL, ROOM, PLATE, RAUM A, RAUM B, PLATTE B): four input diffusers per side into a 16-line
+//       feedback delay network (16 x 16 Hadamard). Each line: an allpass for density, a loss filter (low shelf /
+//       high shelf round a mid gain set by DECAY, measured RT60 within a few %), plates add two dispersion allpasses
+//       per line. SIZE scales every line (glides). The two outputs tap all 16 lines at spread points with different
+//       signs (L / R decorrelated).
+//       TOKYO: discrete, clean early reflections (HALL, ROOM) straight to the output; integer delays, no modulation.
+//       BERLIN: the reflections run through a prime-length allpass cluster (DIFFUSION and DRIVE raise its
+//       gains, and DRIVE adds saturation between the stages: discrete taps turn into a gritty wash); the tank
+//       is quantised every pass (magnitude truncation: grain and stepping without limit cycles; GRAIN 0 % = 16 bit,
+//       50 % = 12 bit, 100 % = 9 bit) and soft-clips when overloaded (REGELRESERVE shows the headroom).
+//     EARLY REF: 16 discrete reflections per side over 24 - 120 ms (SIZE); DECAY sets their slope (no tail).
+//     GATE: 96 taps per side over GATE TIME (60 - 1000 ms) of a densely diffused copy: a flat burst, then a hard
+//       close. SHAPE tilts the burst down (0 = flat, 100 = -14 dB across it).
+//     REVERSE: the same taps on a rising, non-linear ramp (SHAPE = steeper), then the hard stop.
+//     ECHO (BERLIN): a ping-pong delay (ECHO TIME 40 - 1000 ms, glides) with two extra taps; DECAY = how long the
+//       repeats take to fall 60 dB; the loop is band-limited, damped (HF DAMPING), quantised and saturated (DRIVE),
+//       DIFFUSION smears the repeats.
+//   -> the return: BERLIN 9.5 kHz reconstruction filter and companding noise (follows the signal, set by GRAIN);
+//      TOKYO 16-bit word length; LOW CUT (yellow cap, 2-pole, 20 - 600 Hz); DC blocker
+//   -> MIX (default 30 % for an insert: dry stays full up to 50 %, wet full from 50 %; 100 % on a send)
+//   -> OUTPUT -> the house output stage (band SAT, OFF / CLIP / LIMIT).
+//   A version or algorithm change fades the return out, swaps the machine, clears it and fades back in (25 ms).
+//
+// HF DAMPING (0 - 100 %): how much sooner the highs die than the mids (0 = as long, 100 = about a seventh).
+//   The dial clicks into steps of 10 (SHIFT = fine, no detents); double-click = 40 %.
+// DRIFT (0 - 100 %, 50 % = standard): converter / clock wander. BERLIN: the tank delays wander slowly (up to about
+//   +/-0.25 ms at 50 %), converter hiss (about -88 dBFS at 50 %) and 50 Hz hum (about -90 dBFS) on the return.
+//   TOKYO stays clean: a crystal clock - only the decay time wanders, by up to +/-1.5 % at 50 %.
+// SKIN: ENAMEL / VFD / MATRIX restyle the BERLIN panel; TOKYO takes its VFD colour from it (ENAMEL cool cyan,
+//   VFD neon amber, MATRIX phosphor green). Stored in a slider.
+// GUI: drag a knob (SHIFT = fine, double-click = default, wheel); values show while a knob is touched (TOKYO:
+//   on the VFD, with the parameter address). TOKYO data-entry keys: PARAM < > pick an address, - / + step it.
+//   S / M / L / ? = size and help. Click the LCD (or PRESETS) for the preset list.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,1,1{Tokyo,Berlin}>-Version
+slider2:0<0,5,1{Hall,Room,Plate,Early Ref,Gate,Reverse}>-Tokyo algorithm
+slider3:0<0,3,1{Raum A,Raum B,Platte B,Echo}>-Berlin algorithm
+slider4:2.4<0.2,10,0.01>-Decay (s)
+slider5:300<60,1000,1>-Gate / reverse time (ms)
+slider6:30<0,100,1>-Gate / reverse shape (%)
+slider7:20<0,300,0.1>-Pre-delay (ms)
+slider8:40<0,100,1>-HF damping (%)
+slider9:80<20,600,1>-Low cut (Hz)
+slider10:20<0,100,1>-Drive (%)
+slider11:100<50,150,1>-Size (%)
+slider12:70<0,100,1>-Diffusion (%)
+slider13:50<0,100,1>-Grain (Berlin quantisation, %)
+slider14:300<40,1000,1>-Echo time (ms)
+slider15:30<0,100,1>-Mix (%)
+slider16:50<0,100,1>-Drift (%)
+slider17:0<0,2,1{Enamel,VFD,Matrix}>-Skin
+slider18:0<-24,12,0.1>-Output (dB)
+slider19:0<0,100,1>-Band sat (%)
+slider20:30<0,100,1>-Bias (%)
+slider21:120<40,400,1>-Sat low band (Hz)
+slider22:6000<2000,16000,10>-Sat high band (Hz)
+slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+options:maxmem=4194304
+
+@init
+#ui_man = "gfx-drp-45";                                 // the ? pop-up links to this manual
+ext_noinit = 1;
+
+// ---------- memory ----------
+nextmem = 0;
+function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
+function dp_p2(n) local(p) ( p = 1; while (p < n) ( p *= 2; ); p; );
+function dp_prime(n) local(ok, d) (
+  n = max(floor(n), 3) | 1;
+  ok = 0;
+  while (!ok) (
+    ok = 1; d = 3;
+    while (ok && d * d <= n) ( n % d == 0 ? ok = 0; d += 2; );
+    !ok ? n += 2;
+  );
+  n;
+);
+dp_bsz = dp_p2(0.2 * srate);   dp_bm = dp_bsz - 1;      // the 16 tank lines
+dp_asz = dp_p2(0.034 * srate); dp_am = dp_asz - 1;      // allpasses: in the lines, input diffusers, the cluster
+dp_psz = dp_p2(0.31 * srate);  dp_pm = dp_psz - 1;      // pre-delay
+dp_tsz = dp_p2(1.06 * srate);  dp_tm = dp_tsz - 1;      // the tap line (reflections, gate, reverse, echo)
+dp_lb = alloc(16 * dp_bsz);
+dp_ab = alloc(16 * dp_asz);
+dp_db = alloc(8 * dp_asz);
+dp_cb = alloc(10 * dp_asz);
+dp_tb = alloc(2 * dp_tsz);
+dp_tank0 = dp_lb; dp_tank1 = nextmem;                   // everything that rings (cleared on a change of machine)
+dp_pb = alloc(2 * dp_psz);
+dp_len = alloc(16); dp_ln = alloc(16); dp_lf = alloc(16); dp_apl = alloc(16); dp_kl = alloc(16); dp_ja = alloc(16);
+dp_jb = alloc(16); dp_tfl = alloc(16); dp_tfr = alloc(16); dp_tql = alloc(16); dp_tqr = alloc(16); dp_sgl = alloc(16);
+dp_sgr = alloc(16); dp_is = alloc(16); dp_o = alloc(16); dp_dv = alloc(16); dp_dr = alloc(64);
+dp_dln = alloc(8); dp_dbl = alloc(8); dp_cln = alloc(8); dp_cbl = alloc(8);
+dp_etl = alloc(16); dp_etr = alloc(16); dp_egl = alloc(16); dp_egr = alloc(16); dp_efl = alloc(16); dp_efr = alloc(16);
+dp_gtl = alloc(96); dp_gtr = alloc(96); dp_ggl = alloc(96); dp_ggr = alloc(96); dp_gjl = alloc(96); dp_gjr = alloc(96);
+dp_st0 = nextmem;                                       // filter states (cleared with the tank)
+dp_lo = alloc(16); dp_y = alloc(16); dp_d1x = alloc(16); dp_d1y = alloc(16); dp_d2x = alloc(16); dp_d2y = alloc(16);
+dp_st1 = nextmem;
+dp_his = alloc(6 * 32);                                 // the VFD's decay matrix (written by the panel only)
+ost_init(alloc(4096));
+
+dp_dn = 0.000000000000001;                              // anti-denormal: a -300 dB alternating whisper in the loops
+
+// ---------- fixed tables ----------
+function dp_hash(i) local(v) ( v = sin(i * 12.9898 + 78.233) * 43758.5453; v - floor(v); );
+// the 16 tank lines (ms, before the algorithm's scale) and the allpass inside each (ms)
+i = 0;
+loop(16,
+  dp_len[i] = i == 0 ? 17.3 : i == 1 ? 19.9 : i == 2 ? 22.7 : i == 3 ? 24.1 : i == 4 ? 26.9 : i == 5 ? 29.3 : i == 6 ? 31.7 : i == 7 ? 33.1 :
+              i == 8 ? 35.9 : i == 9 ? 38.3 : i == 10 ? 40.1 : i == 11 ? 43.7 : i == 12 ? 46.1 : i == 13 ? 49.3 : i == 14 ? 52.7 : 56.9;
+  dp_dv[i] = 0;
+  // output taps: one per line and side, spread along the line
+  f = i * 0.6180339 + 0.13 - floor(i * 0.6180339 + 0.13); dp_tfl[i] = 0.06 + 0.9 * f;
+  f = i * 0.3819661 + 0.71 - floor(i * 0.3819661 + 0.71); dp_tfr[i] = 0.06 + 0.9 * f;
+  dp_sgl[i] = (i == 1 || i == 2 || i == 6 || i == 9 || i == 11 || i == 12 || i == 13 || i == 15) ? -1 : 1;
+  dp_sgr[i] = (i == 0 || i == 3 || i == 4 || i == 6 || i == 10 || i == 11 || i == 13 || i == 14) ? -1 : 1;
+  dp_is[i] = (i == 2 || i == 3 || i == 6 || i == 7 || i == 9 || i == 12 || i == 13 || i == 14) ? -1 : 1;
+  // reflection pattern: positions along the span (0..1, irregular, sparse first) and signs
+  dp_efl[i] = min(max(((i + 0.55 + 0.38 * (dp_hash(i + 3) - 0.5)) / 16) ^ 1.12, 0.01), 1);
+  dp_efr[i] = min(max(((i + 0.45 + 0.38 * (dp_hash(i + 41) - 0.5)) / 16) ^ 1.12, 0.01), 1);
+  i += 1;
+);
+i = 0;
+loop(96,
+  dp_gjl[i] = (i + 0.5 + 0.84 * (dp_hash(i + 101) - 0.5)) / 96;
+  dp_gjr[i] = (i + 0.5 + 0.84 * (dp_hash(i + 211) - 0.5)) / 96;
+  i += 1;
+);
+// input diffusers (ms): four per side; the BERLIN cluster (ms, made prime in samples): four per side
+i = 0;
+loop(8,
+  dp_dbl[i] = i == 0 ? 1.13 : i == 1 ? 1.71 : i == 2 ? 2.93 : i == 3 ? 4.31 : i == 4 ? 1.29 : i == 5 ? 1.93 : i == 6 ? 3.17 : 4.67;
+  dp_cbl[i] = i == 0 ? 3.7 : i == 1 ? 5.3 : i == 2 ? 7.9 : i == 3 ? 11.3 : i == 4 ? 4.1 : i == 5 ? 6.1 : i == 6 ? 8.9 : 12.7;
+  dp_cln[i] = dp_prime(dp_cbl[i] * 0.001 * srate);
+  i += 1;
+);
+
+// ---------- the machines ----------
+// k: 0 HALL, 1 ROOM, 2 PLATE, 3 EARLY REF, 4 GATE, 5 REVERSE (TOKYO); 8 RAUM A, 9 RAUM B, 10 PLATTE B, 11 ECHO (BERLIN)
+function dp_setup(k) local(i, s, ap) (
+  dp_ber = k >= 8;
+  dp_mode = k == 3 ? 1 : (k == 4 || k == 5) ? 2 : k == 11 ? 3 : 0;
+  dp_rev = k == 5;
+  // tank scale, reflections, loss, density
+  dp_lsc  = k == 0 ? 1.9  : k == 1 ? 0.72 : k == 2 ? 1.15 : k == 8 ? 0.62 : k == 9 ? 1.25 : 1.3;
+  dp_erl  = k == 0 ? 0.45 : k == 1 ? 0.8  : k == 8 ? 0.75 : k == 9 ? 0.6  : 0;
+  dp_ers  = k == 0 ? 0.075 : k == 1 ? 0.034 : k == 8 ? 0.028 : k == 9 ? 0.058 : 0.1;
+  dp_c0   = k == 2 ? -0.32 : k == 10 ? -0.5 : 0;        // dispersion (plates)
+  dp_thf  = k == 0 ? 7 : k == 1 ? 5 : k == 2 ? 10 : k == 8 ? 2.6 : k == 9 ? 3.0 : 2.3;   // the medium's own HF loss (s)
+  dp_lomul = k == 0 ? 1.15 : k == 1 ? 1.0 : k == 2 ? 0.92 : k == 8 ? 1.2 : k == 9 ? 1.25 : 1.05;
+  dp_apg  = k == 0 ? 0.62 : k == 1 ? 0.58 : k == 2 ? 0.66 : k == 8 ? 0.45 : k == 9 ? 0.48 : 0.6;
+  dp_cal  = 1;
+  dp_wg   = k == 1 ? 0.75 : k == 2 ? 1.12 : k == 3 ? 0.58 : k == 8 ? 1.12 : k == 9 ? 1.36 : k == 10 ? 1.82 : k == 11 ? 0.9 : 1;   // level matched (steady noise)
+  dp_chi = 1 - exp(-2 * $pi * (dp_ber ? 2200 : 3500) / srate);
+  dp_clo = 1 - exp(-2 * $pi * 300 / srate);
+  i = 0;
+  loop(16,
+    s = sqrt(dp_lsc);
+    ap = i == 0 ? 3.1 : i == 1 ? 4.3 : i == 2 ? 5.3 : i == 3 ? 6.1 : i == 4 ? 2.7 : i == 5 ? 3.7 : i == 6 ? 4.9 : i == 7 ? 5.7 :
+         i == 8 ? 2.3 : i == 9 ? 3.3 : i == 10 ? 4.1 : i == 11 ? 5.9 : i == 12 ? 6.7 : i == 13 ? 2.9 : i == 14 ? 3.9 : 4.7;
+    dp_apl[i] = floor(ap * s * 0.001 * srate) | 1;
+    // reflection gains: falling towards the tail, alternate taps leaning left / right
+    dp_egl[i] = (dp_hash(i + 7) < 0.5 ? -1 : 1) * (1 - 0.55 * dp_efl[i]) * (i & 1 ? 0.75 : 1);
+    dp_egr[i] = (dp_hash(i + 77) < 0.5 ? -1 : 1) * (1 - 0.55 * dp_efr[i]) * (i & 1 ? 1 : 0.75);
+    i += 1;
+  );
+  dp_ern = dp_mode == 1 ? 16 : 12;
+  dp_gch = -1;                                          // re-make the gate taps
+);
+function dp_clear() (
+  memset(dp_tank0, 0, dp_tank1 - dp_tank0);
+  memset(dp_st0, 0, dp_st1 - dp_st0);
+  dp_elA = dp_elB = dp_ehA = dp_ehB = 0;
+);
+
+// ---------- drift sources in memory (a, b, phase, rate) ----------
+function dp_dinit(p) ( p[0] = rand(2) - 1; p[1] = rand(2) - 1; p[2] = rand(1); p[3] = 0.7 + rand(0.6); );
+function dp_dtick(p, inc) (
+  p[2] += inc * p[3];
+  p[2] >= 1 ? ( p[2] -= 1; p[0] = p[1]; p[1] = rand(2) - 1; );
+  p[0] + (p[1] - p[0]) * (0.5 - 0.5 * cos($pi * p[2]));
+);
+
+// ---------- input stages ----------
+// TOKYO: a clean converter - transparent below full scale, then a firm soft clip
+function dp_satt(u) local(a) ( a = abs(u); a < 0.8 ? u : sign(u) * (0.8 + 0.2 * ost_tanh((a - 0.8) * 5)); );
+// BERLIN: input transformer (the lows saturate the core first) into an asymmetric early-silicon stage
+dp_eb = ost_tanh(0.8 * 0.18); dp_en = 1 / (0.8 * (1 - dp_eb * dp_eb));
+dp_xc = 1 - exp(-2 * $pi * 120 / srate);
+function dp_sate(u) instance(lp) (
+  lp += (u - lp) * dp_xc;
+  u += 0.45 * (ost_tanh(lp * 1.4) * 0.7142857 - lp);
+  (ost_tanh(0.8 * (u + 0.18)) - dp_eb) * dp_en;
+);
+
+// ---------- diffusers / cluster ----------
+function dp_diff(x, k0) local(j, b, d, y) (
+  j = 0;
+  loop(4,
+    b = dp_db + (k0 + j) * dp_asz;
+    d = b[(dp_aw - dp_dln[k0 + j]) & dp_am];
+    y = d - dp_dg * x; b[dp_aw] = x + dp_dg * y; x = y;
+    j += 1;
+  );
+  x;
+);
+function dp_clus(x, k0) local(j, b, d, y) (
+  j = 0;
+  loop(4,
+    b = dp_cb + (k0 + j) * dp_asz;
+    d = b[(dp_aw - dp_cln[k0 + j]) & dp_am];
+    y = d - dp_cg * x; b[dp_aw] = x + dp_cg * y; x = y;
+    x += dp_csat * (x / (1 + 2.5 * abs(x)) - x);        // DRIVE: grit between the stages
+    j += 1;
+  );
+  x;
+);
+// BERLIN word length: magnitude truncation (never adds energy: no limit cycles), soft clip on overload
+function dp_quant(v) (
+  dp_tpk = max(dp_tpk, abs(v));
+  v = v >= 0 ? floor(v * dp_qi) * dp_q : -floor(-v * dp_qi) * dp_q;
+  abs(v) > 0.9 ? ( dp_ovt = 1; v = sign(v) * (0.9 + (abs(v) - 0.9) / (1 + (abs(v) - 0.9) * 3.3333)); );
+  v;
+);
+
+// ---------- gate / reverse taps ----------
+function dp_gtaps() local(i, f, e, sl, sr, L) (
+  L = dp_gtm * 0.001 * srate; sl = 0; sr = 0;
+  i = 0;
+  loop(96,
+    f = dp_gjl[i];
+    e = dp_rev ? f ^ (1 + 2.5 * dp_gsh) : 1 - 0.8 * dp_gsh * f;
+    f > 0.975 ? e *= (1 - f) / 0.025;
+    dp_gtl[i] = max(floor(f * L), 1); dp_ggl[i] = e * (dp_hash(i + 300) < 0.5 ? -1 : 1); sl += e * e;
+    f = dp_gjr[i];
+    e = dp_rev ? f ^ (1 + 2.5 * dp_gsh) : 1 - 0.8 * dp_gsh * f;
+    f > 0.975 ? e *= (1 - f) / 0.025;
+    dp_gtr[i] = max(floor(f * L), 1); dp_ggr[i] = e * (dp_hash(i + 500) < 0.5 ? -1 : 1); sr += e * e;
+    i += 1;
+  );
+  sl = 1 / sqrt(max(sl, 0.01)); sr = 1 / sqrt(max(sr, 0.01));
+  i = 0; loop(96, dp_ggl[i] *= sl; dp_ggr[i] *= sr; i += 1; );
+);
+
+// ---------- control rate (every 32 samples) ----------
+dp_tk = 1 - exp(-32 / (0.12 * srate));                  // decay / size glide
+function dp_ctl() local(i, T, Tl, Th, L, gl, gm, gh, d, sz, s2) (
+  dp_ts += (dp_tt - dp_ts) * dp_tk;
+  dp_szs += (dp_szt - dp_szs) * dp_tk;
+  T = dp_ts * dp_cal * (1 + dp_ddv) * (dp_ber ? 1 + 0.6 * ((16 - dp_bits) / 9) ^ 4 : 1);   // (the short words' own loss, made up)
+  Tl = T * dp_lomul;
+  Th = 1 / (1 / (T * dp_dmp) + 1 / dp_thf);
+  sz = dp_lsc * dp_szs * 0.001 * srate;
+  i = 0;
+  loop(16,
+    d = max(dp_len[i] * sz + dp_mdep * dp_dv[i], 8);
+    dp_ln[i] = floor(d); dp_lf[i] = d - dp_ln[i];
+    dp_tql[i] = max(floor(d * dp_tfl[i]), 1); dp_tqr[i] = max(floor(d * dp_tfr[i]), 1);
+    L = (d + dp_apl[i]) * -6.9077553 / srate;
+    gl = exp(L / Tl); gm = exp(L / T); gh = exp(L / Th);
+    dp_kl[i] = gl / gm - 1; dp_ja[i] = gh / gm - 1; dp_jb[i] = gm;
+    i += 1;
+  );
+  // diffusers follow SIZE (the gate's are longer, for a dense burst)
+  s2 = dp_szt * (dp_mode == 2 ? 0.9 * max(1, dp_gtm / 350) ^ 0.7 : 1) * 0.001 * srate;
+  i = 0; loop(8, dp_dln[i] = max(floor(dp_dbl[i] * s2), 1); i += 1; );
+  // reflections: TOKYO HALL / ROOM / RAUM over a span x SIZE; EARLY REF 24 - 120 ms, sloped by DECAY
+  d = dp_mode == 1 ? (0.024 + 0.096 * (dp_szt - 0.5)) : dp_ers * dp_szt;
+  i = 0;
+  loop(16,
+    dp_etl[i] = max(floor(dp_efl[i] * d * srate), 1); dp_etr[i] = max(floor(dp_efr[i] * d * srate), 1);
+    i += 1;
+  );
+  dp_mode == 1 ? (
+    i = 0;
+    loop(16,
+      dp_egl[i] = sign(dp_egl[i]) * 10 ^ (-3 * dp_efl[i] * d / dp_ts) * (i & 1 ? 0.8 : 1);
+      dp_egr[i] = sign(dp_egr[i]) * 10 ^ (-3 * dp_efr[i] * d / dp_ts) * (i & 1 ? 1 : 0.8);
+      i += 1;
+    );
+  );
+  // gate taps
+  dp_mode == 2 && (dp_gtm != dp_gch || dp_gsh != dp_gsc) ? ( dp_gch = dp_gtm; dp_gsc = dp_gsh; dp_gtaps(); );
+  // BERLIN gain ranging: the word's range follows the level in 6 dB steps (fast up, slow down)
+  dp_rpk = max(dp_rpk * 0.985, dp_tpk); dp_tpk = 0;
+  dp_q = 2 ^ max(ceil(log(max(dp_rpk, 0.0000000001) * 1.25) * 1.442695), -26) * dp_qm; dp_qi = 1 / dp_q;
+  // echo: repeats fall 60 dB in DECAY
+  dp_eg = min(10 ^ (-3 * dp_ett / (dp_ts * srate)), 0.97);
+  dp_wgs = dp_wg * (2.4 / max(dp_ts, 0.2)) ^ 0.15;      // longer decays a touch quieter (equal loudness feel)
+);
+
+// ---------- settings ----------
+function update() local(b) (
+  dp_vtar = slider1 >= 0.5;
+  dp_ktar = dp_vtar ? 8 + min(max(slider3 | 0, 0), 3) : min(max(slider2 | 0, 0), 5);
+  dp_tt = min(max(slider4, 0.2), 10);
+  dp_gtm = min(max(slider5, 60), 1000);
+  dp_gsh = min(max(slider6, 0), 100) / 100;
+  dp_pret = min(max(slider7, 0), 300) * 0.001 * srate;
+  dp_dmp = 1 - 0.86 * min(max(slider8, 0), 100) / 100;
+  slider9 != dp_lcl ? ( dp_lcl = slider9; lcL.bq_set(1, slider9, 0.7071, 0); lcR.bq_set(1, slider9, 0.7071, 0);
+                        dp_ehc = 1 - exp(-2 * $pi * slider9 * 0.6 / srate); );
+  dp_drv = slider10 / 100;
+  dp_szt = min(max(slider11, 50), 150) / 100;
+  dp_dif = slider12 / 100;
+  b = 16 - 9 * min(max(slider13, 0), 100) / 100;        // BERLIN word length (the mantissa of the gain-ranging words)
+  dp_bits = b; dp_qm = 2 ^ (1 - b);
+  dp_cn = 2 ^ (-b) * 6;                                 // companding noise, relative to the signal
+  dp_ett = min(max(slider14, 40), 1000) * 0.001 * srate;
+  dp_mxt = slider15 / 100;
+  drift_macro(slider16);
+  dp_ot = 10 ^ (slider18 / 20);
+  ost_setup(slider19 / 100, slider20 / 100, slider21, slider22, slider23, slider24);
+  // drive staging and diffusion per machine
+  dp_ber ? (
+    dp_dgt = 10 ^ (dp_drv * 24 / 20);
+    dp_cg = min(0.25 + 0.3 * dp_dif + 0.3 * dp_drv * dp_drv, 0.82);
+    dp_csat = min(dp_drv * dp_drv * 1.2, 1);
+  ) : dp_dgt = 10 ^ (dp_drv * 18 / 20);
+  dp_dg = dp_mode == 2 ? 0.55 + 0.2 * dp_dif : 0.35 + 0.35 * dp_dif;
+  dp_mdep = dp_ber ? 0.00025 * srate * dm_a : 0;
+  dp_elc = 1 - exp(-2 * $pi * (1500 + 7000 * (1 - slider8 / 100)) / srate);   // ECHO: the loop's damping
+  dp_esm = 0.68 * dp_dif;                               // ECHO: smear
+);
+
+// ---------- presets (the skin and the output stage are left alone) ----------
+function dp_set(v, ta, ba, dec, gt, gs, pd, dmp, lc, drv, sz, dif, gr, et, mx, dft) (
+  slider1 = v; slider2 = ta; slider3 = ba; slider4 = dec; slider5 = gt; slider6 = gs; slider7 = pd; slider8 = dmp;
+  slider9 = lc; slider10 = drv; slider11 = sz; slider12 = dif; slider13 = gr; slider14 = et; slider15 = mx; slider16 = dft;
+  slider_automate(65535);                               // sliders 1-16
+);
+function load_preset(p) (
+  //                v  ta ba  dec   gt  gs  pd  dmp  lc  drv  sz dif  gr   et   mx dft
+  p == 1  ? dp_set(0, 0, 0, 2.4, 300, 30, 20, 40,  80, 20, 100, 70, 50, 300,  30, 50) :   // Init
+  p == 2  ? dp_set(0, 4, 0, 2.4, 280, 15,  8, 30, 150, 25, 100, 85, 50, 300,  25, 50) :   // Tokyo Snare Gate
+  p == 3  ? dp_set(0, 0, 0, 3.6, 300, 30, 35, 25, 100, 15, 130, 80, 50, 300,  30, 50) :   // Arcade Hall
+  p == 4  ? dp_set(0, 2, 0, 2.2, 300, 30, 12, 15, 160, 15, 100, 85, 50, 300,  25, 50) :   // Glass Plate
+  p == 5  ? dp_set(0, 3, 0, 0.6, 300, 30,  0, 30, 120, 20,  80, 70, 50, 300,  25, 50) :   // Early Punch
+  p == 6  ? dp_set(0, 5, 0, 2.4, 450, 50,  0, 35, 180, 15, 100, 80, 50, 300,  30, 50) :   // Reverse Vocal
+  p == 7  ? dp_set(0, 1, 0, 0.9, 300, 30,  6, 35, 100, 20,  90, 75, 50, 300,  22, 50) :   // Neon Room
+  p == 8  ? dp_set(1, 0, 0, 1.2, 300, 30, 10, 50, 100, 25, 100, 60, 50, 300,  25, 50) :   // Berlin Raum
+  p == 9  ? dp_set(1, 0, 1, 1.6, 300, 30,  0, 45, 140, 65,  85, 60, 60, 300,  28, 50) :   // Post-Punk Drums
+  p == 10 ? dp_set(1, 0, 1, 4.5, 300, 30, 40, 55,  90, 30, 140, 70, 45, 300,  32, 50) :   // Plattenbau Hall
+  p == 11 ? dp_set(1, 0, 3, 3.0, 300, 30,  0, 60, 150, 35, 100, 30, 55, 375,  25, 50) :   // Grau Echo
+  p == 12 ? dp_set(1, 0, 2, 6.5, 300, 30, 60, 50, 120, 85, 130, 100, 80, 300, 40, 70) :   // Smeared Wash
+  p == 13 ? dp_set(0, 0, 0, 2.4, 300, 30, 25, 40, 120, 20, 100, 70, 50, 300, 100, 50) :   // Studio Send 100%
+  p == 14 ? dp_set(1, 0, 2, 2.0, 300, 30, 45, 45, 160, 20, 100, 70, 35, 300,  25, 50) :   // Funkhaus Vocal
+  p == 15 ? (                                           // Reset all to defaults
+    dp_set(0, 0, 0, 2.4, 300, 30, 20, 40, 80, 20, 100, 70, 50, 300, 30, 50);
+    slider18 = 0; slider19 = 0; slider20 = 30; slider21 = 120; slider22 = 6000; slider23 = -0.3; slider24 = 1;
+    slider_automate(16646144);                          // sliders 18-24
+  );
+);
+
+// ---------- state ----------
+in_init(); in_setup(0, 0);
+ostL.ost_ch_init(); ostR.ost_ch_init();
+dp_lcl = -1;
+aaL1.bq_set(0, 9000, 0.5412, 0); aaL2.bq_set(0, 9000, 1.3066, 0);   // BERLIN: 4-pole anti-alias at 9 kHz
+aaR1.bq_set(0, 9000, 0.5412, 0); aaR2.bq_set(0, 9000, 1.3066, 0);
+rcL.bq_set(0, 9500, 0.7071, 0); rcR.bq_set(0, 9500, 0.7071, 0);     // BERLIN: reconstruction
+dp_smk = 1 - exp(-1 / (0.03 * srate));
+dp_vfs = 1 / (0.025 * srate);
+dp_dcc = 1 - 2 * $pi * 4 / srate;
+dp_enc = 1 - exp(-1 / (0.006 * srate));                 // companding envelope (attack)
+dp_enr = 1 - exp(-1 / (0.08 * srate));                  // (release)
+dp_bnc = 1 - exp(-1 / (0.04 * srate));                  // VFD band envelopes
+dp_bk1 = 1 - exp(-2 * $pi * 250 / srate); dp_bk2 = 1 - exp(-2 * $pi * 700 / srate); dp_bk3 = 1 - exp(-2 * $pi * 1800 / srate);
+dp_bk4 = 1 - exp(-2 * $pi * 4500 / srate); dp_bk5 = 1 - exp(-2 * $pi * min(9000, srate * 0.4) / srate);
+i = 0; loop(16, dp_dinit(dp_dr + i * 4); i += 1; );
+drD.drift_init(0.8 + rand(0.5)); drH.drift_init(0.8 + rand(0.5));
+dp_key = dp_ktar = 0;
+update();
+dp_key = dp_ktar; dp_ver = dp_vtar; dp_setup(dp_key); dp_clear(); dp_vf = 1;
+update();
+dp_ts = dp_tt; dp_szs = dp_szt; dp_ddv = 0; dp_ctl(); dp_cc = 0;
+dp_mx = dp_mxt; dp_o_ = dp_ot; dp_pre = dp_pret; dp_et = dp_ett;
+dp_w = 0; dp_aw = 0; dp_pw = 0; dp_tw = 0; dp_hph = 0;
+dp_ipk = 0; dp_ovl = 0; dp_hpk = 0; dp_opkL = 0; dp_opkR = 0; dp_ovt = 0; dp_env = 0;
+
+ui_thm = 5; ui_hw = 1;
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                  // new instances open in Large, on Init
+ui_dflt = 1;
+
+@slider
+update();
+
+@block
+update();
+// DRIFT: BERLIN - every tank line's clock wanders on its own, hiss and hum; TOKYO - only the decay wanders a little
+dp_di = 0.15 * dm_s * samplesblock / srate;
+dp_ddv = (dp_ber ? 0.02 : 0.015) * dm_a * drD.drift_tick(dp_di);
+i = 0; loop(16, dp_dv[i] = dp_dtick(dp_dr + i * 4, dp_di); i += 1; );
+dp_hum = dp_ber ? 0.000032 * dm_a * (1 + 0.35 * drH.drift_tick(dp_di * 2)) : 0;
+dp_hss = dp_ber ? 0.000068 * dm_a : 0;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+in_process(spl0, spl1);
+dp_l = in_l; dp_r = in_r;
+
+// ---------- glides ----------
+dp_mx += (dp_mxt - dp_mx) * dp_smk;
+dp_o_ += (dp_ot - dp_o_) * dp_smk;
+dp_pre += (dp_pret - dp_pre) * 0.0004;
+dp_et += (dp_ett - dp_et) * 0.0002;
+// a change of machine: fade the return out, swap, clear, fade back in
+dp_ktar != dp_key ? (
+  dp_vf -= dp_vfs;
+  dp_vf <= 0 ? ( dp_vf = 0; dp_key = dp_ktar; dp_ver = dp_vtar; dp_setup(dp_key); update(); dp_clear(); dp_cc = 0; );
+) : dp_vf < 1 ? dp_vf = min(dp_vf + dp_vfs, 1);
+(dp_cc -= 1) <= 0 ? ( dp_cc = 32; dp_ctl(); );
+dp_dn = -dp_dn;
+
+// ---------- DRIVE: the converter (TOKYO) / the input transformer (BERLIN) ----------
+dp_xa = dp_l * dp_dgt; dp_xb = dp_r * dp_dgt;
+dp_ipk = max(dp_ipk, max(abs(dp_xa), abs(dp_xb)));
+dp_ber ? (
+  dp_xa = saA.dp_sate(dp_xa) / dp_dgt; dp_xb = saB.dp_sate(dp_xb) / dp_dgt;
+  dp_xa = aaL2.bq_run(aaL1.bq_run(dp_xa)); dp_xb = aaR2.bq_run(aaR1.bq_run(dp_xb));
+) : (
+  dp_xa = dp_satt(dp_xa) / dp_dgt; dp_xb = dp_satt(dp_xb) / dp_dgt;
+);
+
+// ---------- pre-delay (gliding, linear interpolation) ----------
+dp_pb[dp_pw] = dp_xa; dp_pb[dp_psz + dp_pw] = dp_xb;
+dp_rp = dp_pw - dp_pre; dp_rp < 0 ? dp_rp += dp_psz;
+dp_ri = floor(dp_rp); dp_rf = dp_rp - dp_ri;
+dp_i0 = dp_ri & dp_pm; dp_i1 = (dp_ri + 1) & dp_pm;
+dp_xa = dp_pb[dp_i0] + (dp_pb[dp_i1] - dp_pb[dp_i0]) * dp_rf;
+dp_xb = dp_pb[dp_psz + dp_i0] + (dp_pb[dp_psz + dp_i1] - dp_pb[dp_psz + dp_i0]) * dp_rf;
+dp_pw = (dp_pw + 1) & dp_pm;
+
+dp_wl = 0; dp_wr = 0;
+dp_mode == 0 ? (
+  // ================= FDN machines =================
+  // reflections from the tap line
+  dp_tb[dp_tw] = dp_xa; dp_tb[dp_tsz + dp_tw] = dp_xb;
+  dp_el = 0; dp_er = 0;
+  dp_erl > 0 ? (
+    i = 0;
+    loop(12,
+      dp_el += dp_egl[i] * dp_tb[(dp_tw - dp_etl[i]) & dp_tm];
+      dp_er += dp_egr[i] * dp_tb[dp_tsz + ((dp_tw - dp_etr[i]) & dp_tm)];
+      i += 1;
+    );
+    dp_el *= 0.3; dp_er *= 0.3;
+    dp_ber ? (                                          // BERLIN: the prime cluster smears them (DRIVE: into a wash)
+      dp_el = dp_quant(dp_clus(dp_el, 0)); dp_er = dp_quant(dp_clus(dp_er, 4));
+    );
+  );
+  dp_da = dp_diff(dp_xa, 0) * 0.5 + dp_el * 0.35;
+  dp_db_ = dp_diff(dp_xb, 4) * 0.5 + dp_er * 0.35;
+
+  dp_tl = 0; dp_tr = 0;
+  i = 0;
+  loop(16,
+    dp_bb = dp_lb + i * dp_bsz;
+    dp_n = dp_w - dp_ln[i];
+    dp_v = dp_bb[dp_n & dp_bm]; dp_v += (dp_bb[(dp_n - 1) & dp_bm] - dp_v) * dp_lf[i];
+    dp_tl += dp_sgl[i] * dp_bb[(dp_w - dp_tql[i]) & dp_bm];
+    dp_tr += dp_sgr[i] * dp_bb[(dp_w - dp_tqr[i]) & dp_bm];
+    dp_lo[i] += (dp_v - dp_lo[i]) * dp_clo;
+    dp_v += dp_kl[i] * dp_lo[i];
+    dp_y[i] += (dp_v - dp_y[i]) * dp_chi;
+    dp_o[i] = dp_jb[i] * (dp_v + dp_ja[i] * (dp_v - dp_y[i]));
+    i += 1;
+  );
+  // 16 x 16 Hadamard (four butterfly stages, unrolled)
+  dp_ha0 = dp_o[0] + dp_o[1]; dp_ha1 = dp_o[0] - dp_o[1]; dp_ha2 = dp_o[2] + dp_o[3]; dp_ha3 = dp_o[2] - dp_o[3];
+  dp_ha4 = dp_o[4] + dp_o[5]; dp_ha5 = dp_o[4] - dp_o[5]; dp_ha6 = dp_o[6] + dp_o[7]; dp_ha7 = dp_o[6] - dp_o[7];
+  dp_ha8 = dp_o[8] + dp_o[9]; dp_ha9 = dp_o[8] - dp_o[9]; dp_ha10 = dp_o[10] + dp_o[11]; dp_ha11 = dp_o[10] - dp_o[11];
+  dp_ha12 = dp_o[12] + dp_o[13]; dp_ha13 = dp_o[12] - dp_o[13]; dp_ha14 = dp_o[14] + dp_o[15]; dp_ha15 = dp_o[14] - dp_o[15];
+  dp_hb0 = dp_ha0 + dp_ha2; dp_hb2 = dp_ha0 - dp_ha2; dp_hb1 = dp_ha1 + dp_ha3; dp_hb3 = dp_ha1 - dp_ha3;
+  dp_hb4 = dp_ha4 + dp_ha6; dp_hb6 = dp_ha4 - dp_ha6; dp_hb5 = dp_ha5 + dp_ha7; dp_hb7 = dp_ha5 - dp_ha7;
+  dp_hb8 = dp_ha8 + dp_ha10; dp_hb10 = dp_ha8 - dp_ha10; dp_hb9 = dp_ha9 + dp_ha11; dp_hb11 = dp_ha9 - dp_ha11;
+  dp_hb12 = dp_ha12 + dp_ha14; dp_hb14 = dp_ha12 - dp_ha14; dp_hb13 = dp_ha13 + dp_ha15; dp_hb15 = dp_ha13 - dp_ha15;
+  dp_ha0 = dp_hb0 + dp_hb4; dp_ha4 = dp_hb0 - dp_hb4; dp_ha1 = dp_hb1 + dp_hb5; dp_ha5 = dp_hb1 - dp_hb5;
+  dp_ha2 = dp_hb2 + dp_hb6; dp_ha6 = dp_hb2 - dp_hb6; dp_ha3 = dp_hb3 + dp_hb7; dp_ha7 = dp_hb3 - dp_hb7;
+  dp_ha8 = dp_hb8 + dp_hb12; dp_ha12 = dp_hb8 - dp_hb12; dp_ha9 = dp_hb9 + dp_hb13; dp_ha13 = dp_hb9 - dp_hb13;
+  dp_ha10 = dp_hb10 + dp_hb14; dp_ha14 = dp_hb10 - dp_hb14; dp_ha11 = dp_hb11 + dp_hb15; dp_ha15 = dp_hb11 - dp_hb15;
+  dp_o[0] = dp_ha0 + dp_ha8; dp_o[8] = dp_ha0 - dp_ha8; dp_o[1] = dp_ha1 + dp_ha9; dp_o[9] = dp_ha1 - dp_ha9;
+  dp_o[2] = dp_ha2 + dp_ha10; dp_o[10] = dp_ha2 - dp_ha10; dp_o[3] = dp_ha3 + dp_ha11; dp_o[11] = dp_ha3 - dp_ha11;
+  dp_o[4] = dp_ha4 + dp_ha12; dp_o[12] = dp_ha4 - dp_ha12; dp_o[5] = dp_ha5 + dp_ha13; dp_o[13] = dp_ha5 - dp_ha13;
+  dp_o[6] = dp_ha6 + dp_ha14; dp_o[14] = dp_ha6 - dp_ha14; dp_o[7] = dp_ha7 + dp_ha15; dp_o[15] = dp_ha7 - dp_ha15;
+  i = 0;
+  loop(16,
+    dp_u = dp_o[i] * 0.25 + dp_is[i] * (i & 1 ? dp_db_ : dp_da);
+    dp_bb = dp_ab + i * dp_asz;
+    dp_v = dp_bb[(dp_aw - dp_apl[i]) & dp_am];
+    dp_g = i & 1 ? -dp_apg : dp_apg;
+    dp_y_ = dp_v - dp_g * dp_u; dp_bb[dp_aw] = dp_u + dp_g * dp_y_;
+    dp_c0 != 0 ? (                                      // plates: the bending waves (highs travel faster)
+      dp_u = dp_c0 * dp_y_ + dp_d1x[i] - dp_c0 * dp_d1y[i]; dp_d1x[i] = dp_y_; dp_d1y[i] = dp_u;
+      dp_y_ = dp_c0 * dp_u + dp_d2x[i] - dp_c0 * dp_d2y[i]; dp_d2x[i] = dp_u; dp_d2y[i] = dp_y_;
+    );
+    dp_ber ? dp_y_ = dp_quant(dp_y_);
+    dp_bb = dp_lb + i * dp_bsz; dp_bb[dp_w] = min(max(dp_y_ + dp_dn, -4), 4);
+    i += 1;
+  );
+  dp_w = (dp_w + 1) & dp_bm;
+  dp_wl = dp_tl * 0.25 * dp_wgs + dp_el * dp_erl;
+  dp_wr = dp_tr * 0.25 * dp_wgs + dp_er * dp_erl;
+) : dp_mode == 1 ? (
+  // ================= EARLY REF: discrete reflections only =================
+  dp_tb[dp_tw] = dp_xa; dp_tb[dp_tsz + dp_tw] = dp_xb;
+  i = 0;
+  loop(16,
+    dp_wl += dp_egl[i] * dp_tb[(dp_tw - dp_etl[i]) & dp_tm];
+    dp_wr += dp_egr[i] * dp_tb[dp_tsz + ((dp_tw - dp_etr[i]) & dp_tm)];
+    i += 1;
+  );
+  dp_wl *= 0.42 * dp_wg; dp_wr *= 0.42 * dp_wg;
+) : dp_mode == 2 ? (
+  // ================= GATE / REVERSE: a dense diffused copy, read by 96 shaped taps per side =================
+  dp_tb[dp_tw] = dp_diff(dp_xa, 0); dp_tb[dp_tsz + dp_tw] = dp_diff(dp_xb, 4);
+  i = 0;
+  loop(96,
+    dp_wl += dp_ggl[i] * dp_tb[(dp_tw - dp_gtl[i]) & dp_tm];
+    dp_wr += dp_ggr[i] * dp_tb[dp_tsz + ((dp_tw - dp_gtr[i]) & dp_tm)];
+    i += 1;
+  );
+  dp_wl *= 0.8 * dp_wg; dp_wr *= 0.8 * dp_wg;
+) : (
+  // ================= ECHO (BERLIN): ping-pong with two extra taps, a dirty loop =================
+  dp_n = floor(dp_et); dp_f = dp_et - dp_n;
+  dp_k = (dp_tw - dp_n) & dp_tm; dp_k1 = (dp_tw - dp_n - 1) & dp_tm;
+  dp_ea = dp_tb[dp_k] + (dp_tb[dp_k1] - dp_tb[dp_k]) * dp_f;
+  dp_eb_ = dp_tb[dp_tsz + dp_k] + (dp_tb[dp_tsz + dp_k1] - dp_tb[dp_tsz + dp_k]) * dp_f;
+  dp_wl = dp_ea + 0.38 * dp_tb[(dp_tw - floor(dp_et * 0.375)) & dp_tm];
+  dp_wr = dp_eb_ + 0.5 * dp_tb[(dp_tw - floor(dp_et * 0.625)) & dp_tm];
+  // the loop: damping, low cut, smear, word length, grit
+  dp_elA += (dp_ea - dp_elA) * dp_elc;  dp_elB += (dp_eb_ - dp_elB) * dp_elc;
+  dp_ehA += (dp_elA - dp_ehA) * dp_ehc; dp_ehB += (dp_elB - dp_ehB) * dp_ehc;
+  dp_fa = dp_elA - dp_ehA; dp_fb = dp_elB - dp_ehB;
+  dp_bb = dp_cb + 8 * dp_asz; dp_v = dp_bb[(dp_aw - dp_cln[3]) & dp_am];
+  dp_y_ = dp_v - dp_esm * dp_fa; dp_bb[dp_aw] = dp_fa + dp_esm * dp_y_; dp_fa = dp_y_;
+  dp_bb = dp_cb + 9 * dp_asz; dp_v = dp_bb[(dp_aw - dp_cln[7]) & dp_am];
+  dp_y_ = dp_v - dp_esm * dp_fb; dp_bb[dp_aw] = dp_fb + dp_esm * dp_y_; dp_fb = dp_y_;
+  dp_fa += dp_csat * (dp_fa / (1 + 2 * abs(dp_fa)) - dp_fa); dp_fb += dp_csat * (dp_fb / (1 + 2 * abs(dp_fb)) - dp_fb);
+  dp_tb[dp_tw] = dp_quant(0.5 * (dp_xa + dp_xb) + dp_eg * dp_fb + dp_dn);
+  dp_tb[dp_tsz + dp_tw] = dp_quant(dp_eg * dp_fa + dp_dn);
+  dp_wl *= 0.8 * dp_wg; dp_wr *= 0.8 * dp_wg;
+);
+dp_tw = (dp_tw + 1) & dp_tm;
+dp_aw = (dp_aw + 1) & dp_am;
+dp_hpk = max(dp_hpk, max(abs(dp_wl), abs(dp_wr)));
+
+// ---------- the return ----------
+dp_ber ? (
+  dp_wl = rcL.bq_run(dp_wl); dp_wr = rcR.bq_run(dp_wr);
+  // companding noise: rides on the signal (gain-ranging converters), silent in silence
+  dp_ea = max(abs(dp_wl), abs(dp_wr));
+  dp_env += (dp_ea - dp_env) * (dp_ea > dp_env ? dp_enc : dp_enr);
+  dp_ea = dp_env * dp_cn;
+  dp_wl += dp_ea * (rand(2) - 1); dp_wr += dp_ea * (rand(2) - 1);
+  // DRIFT: converter hiss and mains hum
+  dp_hph += 50 / srate; dp_hph >= 1 ? dp_hph -= 1;
+  dp_hv = sin(2 * $pi * dp_hph); dp_hv = dp_hum * (0.7 * dp_hv + 0.5 * (abs(dp_hv) - 0.6366));
+  dp_wl += dp_hv + dp_hss * (rand(2) - 1); dp_wr += dp_hv + dp_hss * (rand(2) - 1);
+) : (
+  dp_wl = floor(dp_wl * 32768 + 0.5) / 32768; dp_wr = floor(dp_wr * 32768 + 0.5) / 32768;   // 16-bit word
+);
+dp_wl = lcL.bq_run(dp_wl); dp_wr = lcR.bq_run(dp_wr);
+dp_dxl = dp_wl - dp_dcl + dp_dcc * dp_dxl; dp_dcl = dp_wl; dp_wl = dp_dxl * dp_vf;
+dp_dxr = dp_wr - dp_dcr + dp_dcc * dp_dxr; dp_dcr = dp_wr; dp_wr = dp_dxr * dp_vf;
+// the VFD's band envelopes (TOKYO decay matrix)
+dp_bm_ = 0.5 * (dp_wl + dp_wr);
+dp_b1 += (dp_bm_ - dp_b1) * dp_bk1; dp_b2 += (dp_bm_ - dp_b2) * dp_bk2; dp_b3 += (dp_bm_ - dp_b3) * dp_bk3;
+dp_b4 += (dp_bm_ - dp_b4) * dp_bk4; dp_b5 += (dp_bm_ - dp_b5) * dp_bk5;
+dp_e0 += (abs(dp_b1) - dp_e0) * dp_bnc; dp_e1 += (abs(dp_b2 - dp_b1) - dp_e1) * dp_bnc; dp_e2 += (abs(dp_b3 - dp_b2) - dp_e2) * dp_bnc;
+dp_e3 += (abs(dp_b4 - dp_b3) - dp_e3) * dp_bnc; dp_e4 += (abs(dp_b5 - dp_b4) - dp_e4) * dp_bnc; dp_e5 += (abs(dp_bm_ - dp_b5) - dp_e5) * dp_bnc;
+// mix: dry full down to 50 %, wet full from 50 %
+dp_gd = min(2 * (1 - dp_mx), 1); dp_gw = min(2 * dp_mx, 1);
+dp_ol = dp_l * dp_gd + dp_wl * dp_gw;
+dp_or = dp_r * dp_gd + dp_wr * dp_gw;
+
+// ---------- output stage ----------
+dp_ol = ostL.ost_band(dp_ol) * dp_o_;
+dp_or = ostR.ost_band(dp_or) * dp_o_;
+ost_out(dp_ol, dp_or);
+spl0 = abs(ost_l) < 0.00000000000000000001 ? 0 : ost_l;
+spl1 = abs(ost_r) < 0.00000000000000000001 ? 0 : ost_r;
+dp_opkL = max(dp_opkL, abs(spl0)); dp_opkR = max(dp_opkR, abs(spl1));
+
+@gfx 920 340
+ui_begin(920, 340);
+ui_col(0x222222); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_pextra = "Reset all to defaults";
+k_ = pk_preset(440 * sc, 10 * sc, 310 * sc, 34 * sc, pr_cur,
+  "Init|Tokyo Snare Gate|Arcade Hall|Glass Plate|Early Punch|Reverse Vocal|Neon Room|Berlin Raum|Post-Punk Drums|Plattenbau Hall|Grau Echo|Smeared Wash|Studio Send 100%|Funkhaus Vocal");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 14 ? 1 : k_; );
+ui_size_picker(858 * sc, 18 * sc);
+pk_end();
+ui_end();
