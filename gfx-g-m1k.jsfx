@@ -6,7 +6,7 @@ desc:GFX G M1K [analogue poly synth]
 // (.jsfx-inc) in the same folder.
 //
 // A six-voice analogue rack module in the spirit of the late-80s matrix-modulation synths: a single-space
-// box full of patches, with a full editor behind the EDIT key.
+// box full of patches, with a full editor behind the EDITOR key.
 // VOICE       two DCOs each: a SAW that morphs to TRIANGLE (SHAPE) and a PULSE (PW), switched in independently;
 //             DCO 2 adds NOISE (in place of its waves) and SYNC to DCO 1; MIX balances the two.
 //             24 dB low-pass VCF: CUTOFF, RESONANCE, ENV 1 amount, KEY tracking and FM (DCO 1 sweeping the cutoff).
@@ -1510,7 +1510,7 @@ spl1 = ost_r;
 @gfx 960 570
 // =====================================================================
 // GUI - the single-space rack unit along the top (black or cream faceplate); page 1 underneath lists every
-// patch (click a name to load it), EDIT opens page 2, the editor; and the PLAY strip along the bottom. Design space 1280 x 760 at qs = 0.75 * sc.
+// patch (click a name to load it), EDITOR opens page 2, the editor; and the PLAY strip along the bottom. Design space 1280 x 760 at qs = 0.75 * sc.
 // =====================================================================
 ui_begin(960, 570);
 qs = sc*0.75;
@@ -1662,7 +1662,7 @@ hitbox(566, 40, 330, 96) ? (
 ui_button(910*qs, 50*qs, 46*qs, 76*qs, "<", 0, 1) ? ( load_patch(slider1 <= 0 ? 99 : slider1 - 1); m1k_cat = cat_of(slider1); );
 ui_button(962*qs, 50*qs, 46*qs, 76*qs, ">", 0, 1) ? ( load_patch(slider1 >= 99 ? 0 : slider1 + 1); m1k_cat = cat_of(slider1); );
 
-key(1030, 44, 74, 30, m1k_edit, AMB, "EDIT") ? m1k_edit = !m1k_edit;
+ui_button(1030*qs, 44*qs, 88*qs, 48*qs, "EDITOR", m1k_edit, 1) ? m1k_edit = !m1k_edit;   // lit while open; again for the patch list
 key(1030, 104, 74, 30, m1k_face, m1k_face ? 0xE4DCC6 : 0x6A6F76, m1k_face ? "CREAM" : "BLACK") ? m1k_face = !m1k_face;
 rd_led(1132*0.75, 56*0.75, 6*0.75, ins_midi_lit(), GRN);
 gfx_setfont(8); ui_col(INK2); TX(1144, 50, "MIDI");

@@ -1701,7 +1701,7 @@ ui_button(842*qs, 24*qs, 42*qs, 102*qs, "<", 0, 1) ? ( setv(1, (cp_ + NP - 1) % 
 ui_button(888*qs, 24*qs, 42*qs, 102*qs, ">", 0, 1) ? ( setv(1, (cp_ + 1) % NP); );
 rd_sqbg = 0x55595E;
 hitbox(360, 18, 470, 114) ? p70_page = 0;                         // click the LCD for the patch list
-rd_sq(952*0.75, 24*0.75, 74*0.75, 32*0.75, p70_page != 0, AMB, "EDIT") ? p70_page = 1;
+ui_button(952*qs, 24*qs, 110*qs, 50*qs, "EDITOR", p70_page != 0, 1) ? p70_page = !p70_page;   // lit while open; again for the list
 rd_led(964*0.75, 104*0.75, 5*0.75, ins_midi_lit(), 0x46D86A);
 gfx_setfont(11); ui_col(0xA6ACB2); TX(978, 96, "MIDI IN");
 dy_kst = 7; dy_ink = 0xD8D8D2; dy_ntick = 11;
