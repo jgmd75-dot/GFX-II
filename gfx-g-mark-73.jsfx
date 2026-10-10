@@ -110,10 +110,11 @@ ext_noinit = 1;
 
 // ---------- memory ----------
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
-MKV = 30000; MKVS = 126; MKNV = 36;                         // 36 voice slots x 126 (32 playable + 4 for stolen fades)
+MKV = 30000; MKVS = 130; MKNV = 36;                         // 36 voice slots x 130 (32 playable + 4 for stolen fades)
 MKHL = 35000; MKHR = 35100;                                 // half-band decimator rings (64 each)
 MKDEF = 35200;                                              // the Init values of sliders 1-18
 MKTMP = 35300;                                              // preset parser scratch (400)
+MKQO = 36000; MKQT = 36300; MKQN = 36600; MKQV = 36900;     // MIDI event queue (256 each)
 // FX: chorus lines, vibe states, space lines, ping-pong delay lines
 MFCA = 40000; MFCB = 44100; MFCN = 4096;                    // chorus (4096 each)
 MFVA = 48200; MFVB = 48240;                                 // vibe stage states (lamp, coefficients)
@@ -122,7 +123,7 @@ MFDA = 90000; MFDB = 420000; MFDN = 330000;                 // delay: up to 1.6 
 memset(MFCA, 0, 2 * 4100); memset(MFVA, 0, 80); memset(MFR, 0, 4 * MFRN);
 memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 
-// voice slots (p = MKV + 126 * v):
+// voice slots (p = MKV + 130 * v):
 //   0 on   1 note   2 age   3 key held   4 held by the pedal   5 dampers down   6 velocity 0..1   7 hammer samples left
 //   8 hammer position   9 hammer velocity   10 T / hammer mass   11 felt K   12 felt exponent p   13 felt loss
 //   14 gain L   15 gain R   16 cos(w) of the fundamental   17 pickup offset (rest position across the pole)   18 output norm
@@ -139,6 +140,7 @@ memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 //   120 modes still computed (the clink and then the bell stop being computed once they have died away)
 //   121 samples since the strike   122 when the bell has died (samples)   123 full-speed swing
 //   124 the bell's linear path gain   125 cos(w) of the tonebar
+//   126 bell pulse: samples done   127 its length   128 its height
 
 function mk_hash(n, k) local(v) ( v = sin(n * 12.9898 + k * 78.233 + 0.5) * 43758.5453; v - floor(v); );
 
@@ -387,10 +389,13 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5
   // dependence on HARDNESS, at a level set by BELL
   p[20] > 1 ? (
     q = p + 50;
+    // rung by a short raised-cosine push (not an instant jump, so its onset has no click): 1.2 - 0.6 ms with
+    // HARDNESS, at most 1.2 bell periods; the push height is set so the ring reaches the same level
+    w = max(2, floor(min((1.2 - 0.6 * mk_hard) * 0.001 * srate, 1.2 * 2 * $pi / q[8])));
+    s0 = 0; dt = 0; i = 0; loop(w, cHz = 1 - cos(2 * $pi * (i + 0.5) / w); s0 += cHz * cos(q[8] * i); dt += cHz * sin(q[8] * i); i += 1; );
     v0 = mk_bk * mk_bell * (1 + 0.3 * u) * (0.8 + 0.4 * mk_hash(n, 30)) * p[123] * (vel / 127) ^ 1.45 * 2 ^ ((mk_hard - 0.5) * 0.8);
     v0 /= max(abs(p[55]) / 0.35, 0.0000001);                              // tip swing -> modal displacement
-    q[0] += v0 * sin(q[8]) * (mk_hash(n, 31) > 0.5 ? 1 : -1);
-    q = p + 110; q[0] += v0 * sin(q[7]) * 0.15 * mk_thor;                 // its sideways twin
+    p[126] = 0; p[127] = w; p[128] = v0 * sin(q[8]) / max(sqrt(s0 * s0 + dt * dt), 0.000001) * (mk_hash(n, 31) > 0.5 ? 1 : -1);
   );
   p[0] = 1; p[3] = 1; p[4] = 0; p[5] = 0; p[31] = 0;
   mk_coefs(p, mk_ptch);
@@ -599,15 +604,15 @@ update();
 srate != mk_sr ? mk_srinit();
 mk_treq > 0 && mk_treq != mk_tql ? ( load_preset(mk_treq); mk_tql = mk_treq; );     // test hook
 update();
+// MIDI is queued with its offset and played at the right sample in @sample (sample-accurate timing)
+mk_qc = 0; mk_qi = 0; mk_spos = 0;
 while (midirecv(mofs, m1, m2, m3)) (
-  ins_chan_ok(m1, mk_chan) ? (
+  ins_chan_ok(m1, mk_chan) && mk_qc < 256 ? (
     mk_st = m1 & 0xF0;
-    mk_st == 0x90 && m3 > 0 ? ( mk_note_on(m2, m3); ins_midi_hit(); mf_ghold = mf_ghl; ) :
-    mk_st == 0x80 || (mk_st == 0x90 && m3 == 0) ? mk_note_off(m2) :
-    mk_st == 0xB0 ? (
-      m2 == 64 ? ( mk_pedal = m3 >= 64; !mk_pedal ? mk_pedal_up(); ) :
-      m2 == 123 || m2 == 120 ? mk_all_off();
-    );
+    mk_qt = mk_st == 0x90 && m3 > 0 ? 1 : (mk_st == 0x80 || mk_st == 0x90) ? 0 :
+            mk_st == 0xB0 && m2 == 64 ? 2 : mk_st == 0xB0 && (m2 == 123 || m2 == 120) ? 3 : -1;
+    mk_qt >= 0 ? ( MKQO[mk_qc] = mofs; MKQT[mk_qc] = mk_qt; MKQN[mk_qc] = m2; MKQV[mk_qc] = m3; mk_qc += 1; );
+    mk_qt == 1 ? ins_midi_hit();
   );
 );
 ins_drift_block(mk_drift, samplesblock);
@@ -665,6 +670,15 @@ file_var(0, ui_sz);
 file_var(0, pr_cur);
 
 @sample
+while (mk_qi < mk_qc && MKQO[mk_qi] <= mk_spos) (
+  mk_qt = MKQT[mk_qi];
+  mk_qt == 1 ? ( mk_note_on(MKQN[mk_qi], MKQV[mk_qi]); mf_ghold = mf_ghl; ) :
+  mk_qt == 0 ? mk_note_off(MKQN[mk_qi]) :
+  mk_qt == 2 ? ( mk_pedal = MKQV[mk_qi] >= 64; !mk_pedal ? mk_pedal_up(); ) :
+  mk_all_off();
+  mk_qi += 1;
+);
+mk_spos += 1;
 mk_L0 = mk_L1 = mk_R0 = mk_R1 = 0; mk_th = 0; mk_rsum = 0;
 mk_T = 1 / srate;
 mk_tk += 1; mk_tick = mk_tk >= 32; mk_tick ? mk_tk = 0;
@@ -700,9 +714,11 @@ loop(MKNV,
     mk_xt = mk_q[5] * mk_y;
     // ----- the higher tine modes: 1 = the bell, 2 - 4 = the clink -----
     mk_xh = 0; mk_k = 0;
+    mk_bf = 0;
+    mk_p[126] < mk_p[127] ? ( mk_bf = mk_p[128] * (1 - cos(2 * $pi * (mk_p[126] + 0.5) / mk_p[127])); mk_p[126] += 1; );
     loop(mk_p[120] - 1,
       mk_q += 10; mk_k += 1;
-      mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F;
+      mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F + (mk_k == 1 ? mk_bf : 0);
       mk_xm += mk_q[6] * mk_y + mk_q[7] * mk_q[0];
       mk_q[1] = mk_q[0]; mk_q[0] = mk_y;
       mk_xt += mk_q[5] * mk_y;
@@ -716,7 +732,7 @@ loop(MKNV,
     mk_ym = mk_q[5] * mk_y + mk_q[6] * mk_q[0]; mk_q[1] = mk_q[0]; mk_q[0] = mk_y; mk_yt = mk_p[45] * mk_y;
     mk_p[120] > 1 ? (
       mk_q += 8;
-      mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F;
+      mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F + mk_bf * 0.15 * mk_thor;
       mk_ym += mk_q[5] * mk_y + mk_q[6] * mk_q[0]; mk_q[1] = mk_q[0]; mk_q[0] = mk_y; mk_yt += mk_p[55] * mk_y;
     );
     // ----- the pickup at 2x: the 2D tip position against the pole (on its circle about the clamp), flux, d/dt -----
