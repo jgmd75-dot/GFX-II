@@ -1,12 +1,12 @@
-desc:GFX Stimm 45
+desc:GFX Tuner 45
 //tags: tuner guitar bass chromatic strobe needle ladder utility
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-ui and gfx-panel (.jsfx-inc) in the same folder.
 //
-// Stimm 45 - a chromatic guitar / bass tuner in the spirit of 1980s / 90s Eastern Bloc laboratory and studio test
+// Tuner 45 - a chromatic guitar / bass tuner in the spirit of 1980s / 90s Eastern Bloc laboratory and studio test
 // hardware: brutalist, flat, sharp-cornered, thin framing lines, big readable figures. A matched pair with the
-// Pegel 45 meter.
+// Meter 45 level meter.
 //   DISPLAY   LADDER - centre-zero LED ladder: the centre lamp is in tune, blocks light to the left (flat) or the
 //                      right (sharp), green near the centre shifting to amber and red further out; a 1-cent vernier
 //                      row below covers +/-10 cents.
@@ -45,7 +45,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-stimm-45";                               // the ? pop-up links to this manual
+#ui_man = "gfx-tuner-45";                               // the ? pop-up links to this manual
 ext_nodenorm = 1;                                       // no anti-denormal DC added by the host: the pass-through stays bit-exact
                                                         // (the analysis filters flush their own denormals)
 
@@ -265,7 +265,7 @@ sg_t == 1 ? (
   sg_win = 0xD6D2C4; sg_wink = 0x1C1C1C; sg_ghost = ui_mix(0xD6D2C4, 0x000000, 0.07); sg_ok = 0x2E7D32; sg_okt = sg_ok;
   sg_mid = 0xFF7900; sg_hot = 0xA8321E; sg_acc = 0xFF7900; sg_kacc = 0xFF7900; sg_ndl = 0x101010; sg_knb = 0x1C1C1C; sg_kptr = 0xEEEFEA; sg_glow = 0;
 );
-// (the preset bar and size picker are the house keycaps, as on the Pegel 45)
+// (the preset bar and size picker are the house keycaps, as on the Meter 45)
 
 // ---------- drawing helpers (base units; crisp pixel edges) ----------
 function sg_rect(x, y, w, h) local(x0, y0) (
@@ -294,7 +294,7 @@ function sg_cap(x, y, w, s) local(tw, th) (
   ui_col(sg_ink2); sg_txtm(x, y, s, 0);
   ui_cola(sg_ink2, 0.6); gfx_line(x * sc + tw + 6 * sc, floor(y * sc + 0.5), (x + w) * sc, floor(y * sc + 0.5), 0);
 );
-// a flat, sharp-cornered lit key in the theme's manner (as the Pegel 45's keys); lit = the colour lc
+// a flat, sharp-cornered lit key in the theme's manner (as the Meter 45's keys); lit = the colour lc
 // (the accent for the selector keys, red for MUTE); returns 1 when clicked
 function sg_keyb(x, y, w, h, label, on, lc) local(hit, hov) (
   hov = sg_in(x, y, w, h);
@@ -391,10 +391,10 @@ ui_col(sg_bg); gfx_rect(0, 0, gfx_w, gfx_h);
 ui_col(sg_hdr); sg_rect(0, 0, 560, 46);
 ui_col(sg_t == 0 ? sg_ink : sg_acc); sg_rect(0, 46, 560, 2);
 
-// header: badge, name, preset bar, size picker (the Pegel 45's header, to the smaller panel)
+// header: badge, name, preset bar, size picker (the Meter 45's header, to the smaller panel)
 ui_col(sg_t == 2 ? sg_acc : sg_ink); gfx_circle(25 * sc, 23 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(sg_t == 0 ? 0xD6D2C4 : 0x111213); ui_text(25 * sc, 18 * sc, "GFX");
-sg_font(6, 0, 23); ui_col(sg_ink); sg_txt(46, 9, "STIMM 45", 0);
+sg_font(6, 0, 23); ui_col(sg_ink); sg_txt(46, 9, "TUNER 45", 0);
 sg_font(8, 0, 11); ui_col(sg_ink2); sg_txt(172, 10, sg_de ? "CHROMATISCH" : "CHROMATIC", 0); sg_txt(172, 24, sg_de ? "STIMMGERÄT" : "TUNER", 0);
 k_ = pk_preset(262 * sc, 8 * sc, 188 * sc, 30 * sc, pr_cur,
   "Init|Guitar Strobe|Bass Needle|Stage Ladder (VFD)|Studio Matrix|Lab Strobe|Quiet Room|Horn Section (flats)|Baroque 415|Concert 442|Orchestra 443|Verdi 432");

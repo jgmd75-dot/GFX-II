@@ -200,6 +200,72 @@ function sect(x, y, w, h, col, s) (
 );
 
 // the khaki case: a powder-coat texture, darker lip, screws
+// the house VU (as ui_vu in gfx-ui) with a clean bezel: the bezel and its drop shadow are pixel-snapped rounded
+// rectangles (rd_rr), so the corners are round and even; the shadow is opaque (the section colour darkened, it sits
+// on an SH1 section) so the overlapping parts of the rounded rectangle never show as dark blobs at the corners
+function f4_vu(x, y, w, h, vdb, title) instance(pos, vel, lt)
+  local(dt, tgt, fx, fy, fw, fh, cx, py, rr, hr, hy, i, lvl_db, ang, ink) (
+  dt = min(max(time_precise() - lt, 0.001), 0.05); lt = time_precise();
+  tgt = min(max(ui_vu_ang(min(max(vdb, -40), 6)), -0.9), 0.9);
+  vel += (160 * (tgt - pos) - 18 * vel) * dt;
+  pos += vel * dt;
+  pos = min(max(pos, -0.95), 0.95);
+  x = floor(x + 0.5); y = floor(y + 0.5); w = floor(w + 0.5); h = floor(h + 0.5);
+  fx = x + floor(6 * sc + 0.5); fy = y + floor(6 * sc + 0.5); fw = w - 2 * (fx - x); fh = h - 2 * (fy - y);
+  ui_col(ui_mix(SH1, 0x000000, 0.4)); rd_rr(x + floor(sc + 0.5), y + floor(2 * sc + 0.5), w, h, 6 * sc);
+  ui_col(0x0E0E10);       rd_rr(x, y, w, h, 6 * sc);
+  ui_col(0xEFE6C4);       gfx_rect(fx, fy, fw, fh);
+  gfx_gradrect(fx, fy + fh * 0.5, fw, fh * 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.12 / (fh * 0.5));
+  ink = 0x2A2620;
+  // the meter fitted to its window: pivot, hub, scale and figures all inside the face with a clean margin
+  hr = 11 * sc; hy = fy + fh - hr - 4 * sc; py = hy;
+  rr = min((py - fy - 16 * sc) / 1.03, (fw * 0.5 - 16 * sc) / 0.74); cx = fx + fw * 0.5;
+
+  ui_col(ink);
+  gfx_arc(cx, py, rr * 0.86, ui_vu_ang(-20), ui_vu_ang(0), 1);
+  ui_col(0xC0392B);
+  i = 0;
+  loop(3 * sc, gfx_arc(cx, py, rr * 0.86 + i, ui_vu_ang(0), ui_vu_ang(3), 1); i += 1; );
+  gfx_setfont(4);
+  i = 0;
+  loop(11,
+    lvl_db = i == 0 ? -20 : i == 1 ? -10 : i == 2 ? -7 : i == 3 ? -5 : i == 4 ? -3 : i == 5 ? -2 :
+         i == 6 ? -1 : i == 7 ? 0 : i == 8 ? 1 : i == 9 ? 2 : 3;
+    ang = ui_vu_ang(lvl_db);
+    lvl_db > 0 ? ui_col(0xC0392B) : ui_col(ink);
+    gfx_line(cx + sin(ang) * rr * 0.86, py - cos(ang) * rr * 0.86,
+             cx + sin(ang) * rr * 0.93, py - cos(ang) * rr * 0.93, 1);
+    (i == 0 || i == 1 || i == 2 || i == 3 || i == 4 || i == 7 || i == 10) ? (
+      sprintf(#vs, "%d", abs(lvl_db));
+      ui_text(cx + sin(ang) * rr * 1.03, py - cos(ang) * rr * 1.03 - 4 * sc, #vs);
+    );
+    i += 1;
+  );
+  ui_col(ink);
+  gfx_setfont(2); ui_text(cx, py - rr * 0.55, "VU");
+  gfx_setfont(4); gfx_x = fx + 4 * sc; gfx_y = fy + fh - 11 * sc; gfx_drawstr(title);
+  // needle
+  ui_cola(0x000000, 0.18);
+  gfx_line(cx + 2 * sc + sin(pos) * hr * 0.5, py - cos(pos) * hr * 0.5 + 2 * sc,
+           cx + 2 * sc + sin(pos) * rr * 0.98, py - cos(pos) * rr * 0.98 + 2 * sc, 1);
+  ui_col(0x151515);
+  gfx_line(cx + sin(pos) * hr * 0.5, py - cos(pos) * hr * 0.5,
+           cx + sin(pos) * rr * 0.98, py - cos(pos) * rr * 0.98, 1);
+  gfx_line(cx + sin(pos) * hr * 0.5 + 0.8, py - cos(pos) * hr * 0.5,
+           cx + sin(pos) * rr * 0.98 + 0.8, py - cos(pos) * rr * 0.98, 1);
+  ui_col(0x1A1A1C);
+  gfx_circle(cx, hy, hr, 1, 1);
+  ui_cola(0xFFFFFF, 0.12); gfx_rect(fx, fy, fw, fh * 0.3);
+);
+// the preset LCD (as pk_lcd in gfx-panel, amber) with a pixel-snapped rounded bezel (rd_rr): clean, even corners
+function f4_lcd(x, y, w, h) (
+  x = floor(x + 0.5); y = floor(y + 0.5); w = floor(w + 0.5); h = floor(h + 0.5);
+  ui_col(0x050505); rd_rr(x, y, w, h, 4 * sc);
+  gfx_gradrect(x + 4 * sc, y + 4 * sc, w - 8 * sc, h - 8 * sc, 0.17, 0.10, 0.02, 1, 0, 0, 0, 0, -0.06 / h, -0.04 / h, -0.01 / h, 0);
+  pk_lcdc = 0xE8A33A;
+  ui_cola(0xFFFFFF, 0.06); gfx_line(x + 5 * sc, y + 5 * sc, x + w - 6 * sc, y + 5 * sc);
+);
+
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
 ui_col(KHAKI); gfx_rect(0, 0, 960 * sc, 300 * sc);
 gi = 0;                                            // fine powder-coat speckle
@@ -216,7 +282,7 @@ rd_sub(204, 28, "LOCATION PREAMP", DIMI, 1);
 pm_ = rd_sq(424, 16, 78, 32, 0, 0xD8CBA4, "PRESETS");
 rd_sq(506, 16, 32, 32, 0, 0xD8CBA4, "◄") ? ( setv(14, (floor(slider14 + 0.5) + 7) % 8); apply_preset(slider14); lastp = slider14; );
 rd_sq(542, 16, 32, 32, 0, 0xD8CBA4, "►") ? ( setv(14, (floor(slider14 + 0.5) + 1) % 8); apply_preset(slider14); lastp = slider14; );
-pk_lcd(582 * sc, 9 * sc, 236 * sc, 46 * sc, 0);
+f4_lcd(582 * sc, 9 * sc, 236 * sc, 46 * sc);
 pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
 sprintf(#plcd, "PRESET %02d/08", floor(slider14 + 0.5) + 1); gfx_x = 594 * sc; gfx_y = 15 * sc; gfx_drawstr(#plcd);
 pk_lcdfont(9, 15 * sc); gfx_x = 594 * sc; gfx_y = 30 * sc; gfx_drawstr(pname(slider14));
@@ -231,7 +297,7 @@ ui_size_picker(848 * sc, 24 * sc);
 // ---------- INPUT VU ----------
 sect(16, 76, 214, 208, SH1, "INPUT");
 hw_ = ui_hw; ui_hw = 1;
-vuI.ui_vu(26 * sc, 98 * sc, 194 * sc, 136 * sc, 10 * log10(max(vu_e, 0.0000000001)) + 20 + vu_sine, "0 VU = -20 dBFS");
+vuI.f4_vu(26 * sc, 98 * sc, 194 * sc, 136 * sc, 10 * log10(max(vu_e, 0.0000000001)) + 20 + vu_sine, "0 VU = -20 dBFS");
 ui_hw = hw_;
 rd_led(62, 254, 5, pk_in > 0.89, REDL); rd_lbl(62, 264, "PEAK", DIMI, 1);
 rd_led(123, 254, 5, il_hit > 0.5, AMB); rd_lbl(123, 264, "IN LIM", DIMI, 1);

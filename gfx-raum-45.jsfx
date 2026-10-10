@@ -5,7 +5,7 @@ desc:GFX Raum 45
 // Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
 //
 // RAUM 45. A four-button stereo space processor in the spirit of the classic late-70s Japanese studio rack
-// "spatial" choruses, dressed as Eastern European studio gear (third of the family with Pegel 45 and Stimm 45).
+// "spatial" choruses, dressed as Eastern European studio gear (third of the family with Meter 45 and Tuner 45).
 // It is not a chorus you hear wobble: the image opens out and the sound gets a little bigger and smoother,
 // and it folds back to mono cleanly.
 //
@@ -292,7 +292,7 @@ rz_opkL = max(rz_opkL, abs(spl0)); rz_opkR = max(rz_opkR, abs(spl1));
 ui_begin(760, 260);
 
 // =====================================================================
-// Theme colours (the family palette: Pegel 45 / Stimm 45)
+// Theme colours (the family palette: Meter 45 / Tuner 45)
 // =====================================================================
 rq_th = slider9 | 0;
 rq_th == 0 ? (                                          // ENAMEL: light industrial laboratory
@@ -348,7 +348,7 @@ function rq_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = r
 function rq_lbl(x, y, s) ( gfx_setfont(11); ui_col(RQI2); rq_txt(x, y, s); );
 function rq_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
 
-// a flat, sharp-cornered lit key in the theme's manner (as on Pegel 45); returns 1 when clicked
+// a flat, sharp-cornered lit key in the theme's manner (as on Meter 45); returns 1 when clicked
 function rq_key(x, y, w, h, lbl, on) local(hov, hit) (
   hov = rq_hov(x, y, w, h);
   hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;
