@@ -123,7 +123,6 @@ AMPS & DRIVE
   PenguinDrive    gfx-penguindrive.jsfx
   Preamp Q        gfx-preamp-q.jsfx
   Ten Rack        gfx-ten-rack.jsfx
-  TS-7            gfx-ts7.jsfx
   Tuner 45        gfx-tuner-45.jsfx
 
 DYNAMICS
@@ -146,6 +145,7 @@ DYNAMICS
   Tandem          gfx-tandem.jsfx
   Tandem Q        gfx-tandem-q.jsfx
   Transient       gfx-transient.jsfx
+  TS-7            gfx-ts7.jsfx
   Twin Comp       gfx-twin-comp.jsfx
   VB30            gfx-vb30.jsfx
   Wingspan        gfx-wingspan.jsfx

@@ -1,16 +1,16 @@
 desc:GFX Heft [bus comp]
-//tags: compressor bus vca feedforward feedback stereo-link thrust
+//tags: compressor bus vca feedforward feedback stereo-link push
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-instrument and gfx-dyn (.jsfx-inc) in the same folder.
 //
 // A stereo VCA bus compressor in the spirit of the famous American stereo bus compressor with the stepped
-// controls and the THRUST switch (personal use; the sound is designed from scratch).
+// controls and the side-chain filter switch (personal use; the sound is designed from scratch).
 //   THRESHOLD - where it starts working.
 //   ATTACK    - .03 / .1 / .3 / 1 / 3 / 10 / 30 ms.   RATIO - 1.5 / 2 / 3 / 4 / 6 / 10 / INF : 1.
 //   RELEASE   - .05 / .1 / .2 / .5 / 1 / 2 s, or VAR (set by the VAR knob, 0.05 - 3 s).
 //   KNEE      - HARD / MED (6 dB) / SOFT (12 dB).
-//   THRUST    - what the detector hears: NORM (flat), MED (the lows count less), LOUD (the lows count much less
+//   PUSH    - what the detector hears: NORM (flat), MED (the lows count less), LOUD (the lows count much less
 //               and the highs more) - the bass drives the compressor less, so mixes stay big and punchy.
 //   TYPE      - NEW: feed-forward (the detector hears the input: precise, firm). OLD: feedback (it hears its own
 //               output: softer, more forgiving, the ratio eases off on big peaks - the vintage feel).
@@ -34,7 +34,7 @@ slider4:3<0,6,1{1.5:1,2:1,3:1,4:1,6:1,10:1,inf:1}>-Ratio
 slider5:3<0,6,1{.05 s,.1 s,.2 s,.5 s,1 s,2 s,Var}>-Release
 slider6:0.3<0.05,3,0.01>-Var release (s)
 slider7:1<0,2,1{Hard,Med,Soft}>-Knee
-slider8:0<0,2,1{Norm,Med,Loud}>-Thrust
+slider8:0<0,2,1{Norm,Med,Loud}>-Push
 slider9:0<0,1,1{New (feed-forward),Old (feedback)}>-Type
 slider10:100<0,100,1>-Link (%)
 slider11:0<0,2,1{Off,HP,BP}>-Link filter
@@ -62,7 +62,7 @@ function att_ms(i) ( i == 0 ? 0.03 : i == 1 ? 0.1 : i == 2 ? 0.3 : i == 3 ? 1 : 
 function rat_v(i)  ( i == 0 ? 1.5 : i == 1 ? 2 : i == 2 ? 3 : i == 3 ? 4 : i == 4 ? 6 : i == 5 ? 10 : 1000 );
 function rel_s(i)  ( i == 0 ? 0.05 : i == 1 ? 0.1 : i == 2 ? 0.2 : i == 3 ? 0.5 : i == 4 ? 1 : i == 5 ? 2 : slider6 );
 
-// one channel's side-chain: THRUST shaping, the link-filter copy, and a fast peak detector
+// one channel's side-chain: PUSH shaping, the link-filter copy, and a fast peak detector
 function sc_set(th, lf) instance(t1, t2, lk) (
   th == 0 ? ( t1.bq_set(4, 200, 0.7, 0); t2.bq_set(3, 3000, 0.7, 0); ) :
   th == 1 ? ( t1.bq_set(4, 220, 0.6, -6); t2.bq_set(3, 3000, 0.7, 1.5); ) :
@@ -96,14 +96,14 @@ function update() (
 );
 
 // ---------- presets ----------
-// threshold, attack, ratio, release, knee, thrust, type, link, link filter, makeup, mix
+// threshold, attack, ratio, release, knee, push, type, link, link filter, makeup, mix
 function pp(t, a, r, rl, kn, th, ty, lk, lf, mu, mx) (
   slider1 = 1; slider2 = t; slider3 = a; slider4 = r; slider5 = rl; slider7 = kn; slider8 = th; slider9 = ty;
   slider10 = lk; slider11 = lf; slider12 = mu; slider13 = mx;
 );
 function load_preset(p) (
   p == 1  ? pp(-14, 4, 1, 4, 2, 1, 0, 100, 1, 2, 100) :      // Mix Bus Glue
-  p == 2  ? pp(-18, 4, 3, 3, 1, 2, 0, 100, 1, 4, 100) :      // Big Mix (Loud thrust)
+  p == 2  ? pp(-18, 4, 3, 3, 1, 2, 0, 100, 1, 4, 100) :      // Big Mix (loud)
   p == 3  ? pp(-22, 3, 4, 2, 0, 1, 0, 80, 0, 6, 100) :       // Drum Bus Punch
   p == 4  ? pp(-30, 0, 5, 1, 0, 2, 0, 100, 0, 10, 40) :      // Drum Smash (parallel)
   p == 5  ? pp(-16, 4, 2, 6, 2, 0, 1, 100, 0, 3, 100) :      // Vintage Feedback
@@ -181,7 +181,7 @@ gfx_setfont(4); ui_col(PNL); ui_text(40 * sc, 29 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 26 * sc, 'b'); ui_col(INKW); gfx_x = 62 * sc; gfx_y = 18 * sc; gfx_drawstr("HEFT");
 gfx_setfont(4); ui_col(YEL); gfx_x = 200 * sc; gfx_y = 30 * sc; gfx_drawstr("STEREO BUS COMPRESSOR");
 pk_pextra = "Reset all to defaults";   // the house preset display: PRESETS, prev / next, LCD (click it for the list)
-k_ = pk_preset(470 * sc, 14 * sc, 346 * sc, 36 * sc, pr_cur, "Mix Bus Glue|Big Mix (loud thrust)|Drum Bus Punch|Drum Smash (parallel)|Vintage Feedback|Vocal Bus|Wide Stereo (independent)|Bus Limiter|Bass Control|Room Pump");
+k_ = pk_preset(470 * sc, 14 * sc, 346 * sc, 36 * sc, pr_cur, "Mix Bus Glue|Big Mix (loud)|Drum Bus Punch|Drum Smash (parallel)|Vintage Feedback|Vocal Bus|Wide Stereo (independent)|Bus Limiter|Bass Control|Room Pump");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 ui_size_picker(828 * sc, 22 * sc);
 
@@ -199,7 +199,7 @@ dy_step = 7; dy_steps = ".05|.1|.2|.5|1|2|VAR"; slider5 == 6 ? sprintf(#v, "VAR 
 dy_knob(404, 150, 26, 5, 0, 6, 3, 0, LGRY, "RELEASE", #v);
 sprintf(#v, "%.2f s", slider6); dy_knob(478, 140, 14, 6, 0.05, 3, 0.3, 1, slider5 == 6 ? YEL : DGRY, "VAR", #v);
 dy_step = 3; dy_steps = "HARD|MED|SOFT"; dy_knob(74, 266, 20, 7, 0, 2, 1, 0, DGRY, "KNEE", "");
-dy_step = 3; dy_steps = "NORM|MED|LOUD"; dy_knob(184, 266, 20, 8, 0, 2, 0, 0, YEL, "THRUST", "");
+dy_step = 3; dy_steps = "NORM|MED|LOUD"; dy_knob(184, 266, 20, 8, 0, 2, 0, 0, YEL, "PUSH", "");
 dy_btn(252, 244, slider9 == 0, BLU, "NEW") ? ( slider9 = 0; ui_auto(9); );
 dy_btn(300, 244, slider9 == 1, YEL, "OLD") ? ( slider9 = 1; ui_auto(9); );
 dy_lbl(296, 290, slider9 ? "FEEDBACK" : "FEED-FORWARD", 0.55);
