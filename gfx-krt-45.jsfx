@@ -5,7 +5,7 @@ desc:GFX KRT-45
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel and gfx-dyn (.jsfx-inc) in the same folder.
 //
 // KRT-45 (Phasen- und Frequenzkorrektor). A sonic phase processor in the spirit of the classic late-80s rack
-// "maximiser" units: phase alignment and harmonic restoration, dressed as heavy 1980s Eastern European laboratory
+// enhancers (phase alignment and harmonic restoration), dressed as heavy 1980s Eastern European laboratory
 // test-bench gear (fifth of the family with Pegel 45, Stimm 45, Raum 45 and Feld 45).
 // The idea: low frequencies travel more slowly through circuits and speaker drivers than the highs, so the
 // transient edge (the highs) and the body (the lows and mids) smear apart. The process holds the lows and mids
@@ -21,25 +21,36 @@ desc:GFX KRT-45
 //   path is delayed to match, so BYPASS never jumps in time).
 //
 // PHASE ALIGNMENT (the frequency-dependent delay)
-//   With all the controls at 0 the three bands sum back to a perfectly flat magnitude (an all-pass, +/-0.01 dB):
-//   the Linkwitz-Riley split is itself the first part of the delay network. Its all-pass sum already holds the
-//   lows back about 2.4 - 2.8 ms and the low mids about 0.3 - 0.5 ms relative to the highs.
+//   With all the controls at 0 the three bands sum back to a flat magnitude (an all-pass: within 0.04 dB from
+//   20 Hz to 20 kHz, the 0.04 dB being the 2 Hz DC blocker at 20 Hz). The Linkwitz-Riley split is itself the first
+//   part of the delay network: its all-pass sum already holds the lows back about 2.4 - 2.8 ms and the low mids
+//   about 0.5 ms (500 Hz) .. 0.2 ms (2 kHz) relative to the highs (measured at the default 200 Hz / 3 kHz splits).
 //   ALIGN (0 - 100 %) adds a second-order all-pass centred on the HI split (Q 1) that fills in the presence
-//   region: at 100 % the timing is the classic profile - lows about 2.6 - 2.9 ms, mids about 0.4 - 0.6 ms behind
-//   the highs (above 6 kHz the delay falls below 0.1 ms). It scales the added delay smoothly down to zero at 0 %.
-//   Everything is done with all-pass filters on the whole signal, so the sum stays smooth: no comb notches at the
-//   crossovers, ever (a plain delay on each band would notch where the bands overlap).
+//   region; at 100 % the timing is the classic profile: lows about 2.5 - 2.9 ms, mids about 0.65 ms (500 Hz) ..
+//   0.35 ms (1 - 3 kHz) behind the highs, under 0.1 ms above 5 kHz. Turning it down slides its centre up and its
+//   delay down smoothly to nothing at 0 % (then only the split's own rotation remains, which every phase-
+//   compensated band split has - it is what keeps the boosts free of dips). Lower splits mean more delay (150 Hz /
+//   2 kHz: lows about 3.8 ms, mids about 0.6 ms). Everything is done with all-pass filters on the whole signal,
+//   so the sum stays smooth: no comb notches at the crossovers at any setting (a plain delay on each band would
+//   notch where the bands overlap).
 //
-// LO-CONTOUR (0 - 10): a dynamic, phase-compensated low-band boost, up to +12 dB. The boost is the LO band itself
-//   (in phase with the all-pass sum, so it is a clean shelf with no dip at the split) through a 35 Hz sub filter
-//   (2-pole, Q 0.5), so the deep sub is not lifted. An internal compressor (threshold -20 dBFS on the boosted
-//   level, 3:1, 6 dB knee, attack 10 ms, release 160 ms) takes the boost back on loud, sustained bass, so the low
-//   end tightens instead of booming; the first 10 ms of each kick still get the full lift (punch).
-// HI-PROCESS (0 - 10): program-dependent high-band restoration, up to +12 dB. A VCA on the HI band is driven by
-//   the band's own envelope: 30 % of the set lift always, more when the programme is dull (the HI band is quiet
-//   compared with the whole signal) and on high-frequency transients (the HI band's peak against its RMS),
-//   attack 1 ms, release 60 ms. Very quiet passages (below about -60 dBFS RMS) get no lift (no hiss pumping).
+// LO-CONTOUR (0 - 10): a dynamic, phase-compensated low-band boost, up to about +12 dB (peak near 100 Hz). The
+//   boost is the LO band itself (in phase with the all-pass sum, so it is a clean shelf with no dip at the split)
+//   through a 35 Hz sub filter (2-pole, Q 0.5): at full boost 50 Hz gets +9 dB, 35 Hz +6 dB, 20 Hz -0.6 dB and
+//   15 Hz -3 dB, so the deep sub is held in check rather than lifted. An internal compressor (threshold -10 dBFS
+//   on the boosted LO level, 2:1, 6 dB knee, attack 10 ms, release 160 ms, never taking back more than 60 % of the
+//   lift) eases the boost on loud, sustained bass, so the low end tightens instead of booming; the first 10 ms of
+//   each kick still get the full lift (punch).
+// HI-PROCESS (0 - 10): program-dependent high-band restoration, up to +12 dB. A VCA on the HI band, attack 1 ms,
+//   release 60 ms, gives 30 % of the set lift always, plus up to 50 % more the duller the programme is (the HI
+//   band's share of the whole signal over 120 ms: pink noise or brighter = none, 24 dB under the whole = all),
+//   plus up to 40 % on high-frequency transients (the HI band's 3 ms level jumping over its 120 ms level).
+//   At HI-PROCESS 10: steady bright material about +3.6 dB, dark material about +6 .. +9 dB, transients on dull
+//   material up to +12 dB. Very quiet passages (below about -60 dBFS RMS) get no lift (no hiss pumping).
 //   The added top end passes a gentle soft clip (about -10 dBFS), so it never turns into fizz.
+// INPUT DRIVE (0 .. +18 dB): the gain into a small biased transistor curve, level-matched (no level jump), mostly
+//   2nd harmonic with some 3rd. 1 kHz at -18 dBFS: 0.13 % THD at +3 dB, 0.38 % at +12 dB, 0.8 % at +18 dB;
+//   at -6 dBFS and +18 dB about 6 %. At 0 dB the stage itself is switched out.
 // MIX: blends the LO-CONTOUR / HI-PROCESS action with the phase-aligned signal (the dry part goes through the
 //   same all-pass, so there is no combing at any MIX setting). DRIVE and ALIGN are not affected by MIX.
 // BYPASS: a lit key; a 20 ms crossfade to the untouched input (latency-matched), click-free.
@@ -644,7 +655,7 @@ ui_size_picker(744 * sc, 30 * sc);
 krv_y0 = 72; krv_h0 = 134;
 // ---------- INPUT DRIVE ----------
 kr_sect(22, krv_y0, 112, krv_h0, KRF, "INPUT");
-krv_nr = 15; kr_scale(78, 142, 26, 7, krv_nr + 1, "0|3|6|9|12|15|18", 2);
+kr_scale(78, 142, 26, 7, 19, "0|3|6|9|12|15|18", 2);
 krv_a = kr_knob(78, 142, 26, 1, 0, 18, 0);
 sprintf(#krv_v, "+%.1f dB", slider1); kr_name(78, 188, krv_a, "DRIVE", #krv_v);
 // ---------- LO-CONTOUR ----------
@@ -668,7 +679,7 @@ kr_lift(642, kra_b0, kra_b1);
 gfx_setfont(13); ui_col(KRI2); kr_ctxt(278, 197, "dB"); kr_ctxt(658, 197, "dB");
 // ---------- OUTPUT TRIM ----------
 kr_sect(686, krv_y0, 112, krv_h0, KRF, "OUTPUT");
-kr_scale(742, 142, 26, 5, 16, "-12|-6|0|+6|+12", 2);
+kr_scale(742, 142, 26, 5, 20, "-12|-6|0|+6|+12", 2);
 krv_a = kr_knob(742, 142, 26, 4, -12, 12, 0);
 sprintf(#krv_v, "%+.1f dB", slider4); kr_name(742, 188, krv_a, "TRIM", #krv_v);
 
