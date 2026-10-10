@@ -411,7 +411,7 @@ function sg_wtxt(x, y, s, al, c, a) (
   ui_cola(c, a); sg_txtm(x, y, s, al);
 );
 // ladder thresholds (cents) for the cells either side of the centre
-function sg_lth(i) ( i <= 5 ? i * 2 : i <= 11 ? 10 + (i - 5) * 5 : 50; );
+function sg_lth(i) ( i <= 4 ? i * 2.5 : 10 + (i - 4) * 5; );   // 2.5 5 7.5 10 | 15 20 25 30 35 40 45 50
 // needle scale geometry
 function sg_ang(c) ( c / 50 * sg_am; );
 function sg_tick(c, r1, r2) local(a) (
@@ -425,7 +425,7 @@ sg_window(DX, DY, DW, DH);
 sg_md = slider1;
 
 sg_md == 0 ? (
-  // LADDER: centre-zero, 2-cent steps to 10, then 5-cent steps to 50 (12 a side); a 1-cent vernier below
+  // LADDER: centre-zero, 2.5-cent steps to 10, then 5-cent steps to 50 (12 a side); a 1-cent vernier below
   sg_cw = 10.5; sg_cg = 3; sg_cc = 18;
   sg_x0 = DX + (DW - (24 * sg_cw + sg_cc + 24 * sg_cg)) * 0.5;
   sg_ly = DY + 24; sg_lh = 54;
@@ -440,10 +440,10 @@ sg_md == 0 ? (
                      : sg_i == 0 ? sg_x0 + 12 * (sg_cw + sg_cg) : sg_x0 + 12 * (sg_cw + sg_cg) + sg_cc + sg_cg + (sg_i - 1) * (sg_cw + sg_cg);
     sg_w0 = sg_i == 0 ? sg_cc : sg_cw;
     sg_on = sg_show && (sg_i == 0 ? 1 : sg_i < 0 ? sg_c <= -sg_lth(sg_ai) : sg_c >= sg_lth(sg_ai));
-    sg_col = sg_i == 0 ? sg_ok : sg_lth(sg_ai) <= 4 ? sg_ok : sg_lth(sg_ai) <= 15 ? sg_mid : sg_hot;
+    sg_col = sg_i == 0 ? sg_ok : sg_lth(sg_ai) <= 5 ? sg_ok : sg_lth(sg_ai) <= 15 ? sg_mid : sg_hot;
     sg_cell(sg_cx, sg_ly, sg_w0, sg_lh, sg_col, sg_on ? (sg_i == 0 && !sg_tune ? 0.45 : 1) * sg_k : 0);
     // scale under the ladder
-    (sg_ai == 0 || sg_ai == 5 || sg_ai == 7 || sg_ai == 9 || sg_ai == 12) ? (
+    (sg_ai == 0 || sg_ai == 4 || sg_ai == 6 || sg_ai == 8 || sg_ai == 10 || sg_ai == 12) ? (
       ui_cola(sg_wink, 0.7); gfx_line((sg_cx + sg_w0 * 0.5) * sc, (sg_ly + sg_lh + 3) * sc, (sg_cx + sg_w0 * 0.5) * sc, (sg_ly + sg_lh + 7) * sc, 0);
       sprintf(#sg_s, sg_ai == 0 ? "0" : sg_i < 0 ? "-%d" : "+%d", sg_lth(sg_ai));
       sg_font(8, 0, 11); sg_wtxt(sg_cx + sg_w0 * 0.5, sg_ly + sg_lh + 14, #sg_s, 1, sg_wink, 0.8);
@@ -598,7 +598,7 @@ sg_show ? (
     strcpy(#sg_a, sg_nm == 1 || sg_nm == 3 || sg_nm == 6 || sg_nm == 8 || sg_nm == 10 ? "#" : "");
   );
   sprintf(#sg_o, "%d", sg_oc);
-  sg_nc = sg_t == 0 ? sg_ink : sg_tune ? sg_okt : sg_t == 1 ? sg_ok : sg_mid;
+  sg_nc = sg_tune ? (sg_t == 0 ? 0x1F6E2A : sg_okt) : sg_t == 0 ? sg_ink : sg_t == 1 ? sg_ok : sg_mid;   // ENAMEL: a deep green on bone-grey
 ) : ( strcpy(#sg_l, "-"); strcpy(#sg_a, ""); strcpy(#sg_o, ""); sg_nc = sg_wink; );
 sg_font(6, 0, 54); gfx_measurestr(#sg_l, sg_tw, sg_th);
 sg_nx = (RX + RW * 0.5 - 6) * sc - sg_tw * 0.5;

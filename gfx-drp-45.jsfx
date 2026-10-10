@@ -32,7 +32,7 @@ desc:GFX DRP-45
 //       BERLIN: the reflections run through a prime-length allpass cluster (DIFFUSION and DRIVE raise its
 //       gains, and DRIVE adds saturation between the stages: discrete taps turn into a gritty wash); the tank
 //       is quantised every pass (magnitude truncation: grain and stepping without limit cycles; GRAIN 0 % = 16 bit,
-//       50 % = 12 bit, 100 % = 9 bit) and soft-clips when overloaded (REGELRESERVE shows the headroom).
+//       50 % = 12 bit, 100 % = 8 bit) and soft-clips when overloaded (REGELRESERVE shows the headroom).
 //     EARLY REF: 16 discrete reflections per side over 24 - 120 ms (SIZE); DECAY sets their slope (no tail).
 //     GATE: 96 taps per side over GATE TIME (60 - 1000 ms) of a densely diffused copy: a flat burst, then a hard
 //       close. SHAPE tilts the burst down (0 = flat, 100 = -14 dB across it).
@@ -299,7 +299,7 @@ function dp_gtaps() local(i, f, e, sl, sr, L) (
 function dp_ctl() local(i, T, Tl, Th, L, gl, gm, gh, d, sz, s2) (
   dp_ts += (dp_tt - dp_ts) * dp_tk;
   dp_szs += (dp_szt - dp_szs) * dp_tk;
-  T = dp_ts * dp_cal * (1 + dp_ddv) * (dp_ber ? 1 + 0.6 * ((16 - dp_bits) / 9) ^ 4 : 1);   // (the short words' own loss, made up)
+  T = dp_ts * dp_cal * (1 + dp_ddv) * (dp_ber ? 1 + 0.6 * ((16 - dp_bits) / 8) ^ 4 : 1);   // (the short words' own loss, made up)
   Tl = T * dp_lomul;
   Th = 1 / (1 / (T * dp_dmp) + 1 / dp_thf);
   sz = dp_lsc * dp_szs * 0.001 * srate;
@@ -313,8 +313,8 @@ function dp_ctl() local(i, T, Tl, Th, L, gl, gm, gh, d, sz, s2) (
     dp_kl[i] = gl / gm - 1; dp_ja[i] = gh / gm - 1; dp_jb[i] = gm;
     i += 1;
   );
-  // diffusers follow SIZE (the gate's are longer, for a dense burst)
-  s2 = dp_szt * (dp_mode == 2 ? 0.9 * max(1, dp_gtm / 350) ^ 0.7 : 1) * 0.001 * srate;
+  // diffusers follow SIZE (GATE / REVERSE: SIZE is inactive - the default 100 %, and longer diffusers for a dense burst)
+  s2 = (dp_mode == 2 ? 0.9 * max(1, dp_gtm / 350) ^ 0.7 : dp_szt) * 0.001 * srate;
   i = 0; loop(8, dp_dln[i] = max(floor(dp_dbl[i] * s2), 1); i += 1; );
   // reflections: TOKYO HALL / ROOM / RAUM over a span x SIZE; EARLY REF 24 - 120 ms, sloped by DECAY
   d = dp_mode == 1 ? (0.024 + 0.096 * (dp_szt - 0.5)) : dp_ers * dp_szt;
@@ -355,7 +355,7 @@ function update() local(b) (
   dp_drv = slider10 / 100;
   dp_szt = min(max(slider11, 50), 150) / 100;
   dp_dif = slider12 / 100;
-  b = 16 - 9 * min(max(slider13, 0), 100) / 100;        // BERLIN word length (the mantissa of the gain-ranging words)
+  b = 16 - 8 * min(max(slider13, 0), 100) / 100;        // BERLIN word length (the mantissa of the gain-ranging words)
   dp_bits = b; dp_qm = 2 ^ (1 - b);
   dp_cn = 2 ^ (-b) * 6;                                 // companding noise, relative to the signal
   dp_ett = min(max(slider14, 40), 1000) * 0.001 * srate;
@@ -714,7 +714,7 @@ function dq_fmt(idx) local(v) (
   idx == 5 || idx == 14 ? sprintf(#dq_fv, "%.0f ms", v) :
   idx == 7 ? sprintf(#dq_fv, "%.1f ms", v) :
   idx == 9 ? sprintf(#dq_fv, "%.0f Hz", v) :
-  idx == 13 ? sprintf(#dq_fv, "%.1f BIT", 16 - 9 * v / 100) :
+  idx == 13 ? sprintf(#dq_fv, "%.1f BIT", 16 - 8 * v / 100) :
   idx == 18 ? sprintf(#dq_fv, "%+.1f dB", v) :
   sprintf(#dq_fv, "%.0f%%", v);
   dq_dec(#dq_fv);

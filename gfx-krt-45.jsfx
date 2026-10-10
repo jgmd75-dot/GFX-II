@@ -735,23 +735,24 @@ kr_small(304, 245, 13, 8, 0, 100, 100, krv_th == 0 ? 0xD8B040 : KRA, "MIX", #krv
 sprintf(#krv_v, "%.0f%%", slider9);
 kr_small(356, 245, 13, 9, 0, 100, 50, krv_th == 0 ? 0x6F8794 : KRI2, "DRIFT", #krv_v);
 
-kr_sect(394, krv_y1, 186, krv_h1, KRS, "THEME");
-kr_key(401, 242, 62, 28, "ENAMEL", krv_th == 0) ? ( slider11 = 0; ui_auto(11); );
-kr_key(467, 242, 44, 28, "VFD",    krv_th == 1) ? ( slider11 = 1; ui_auto(11); );
-kr_key(515, 242, 58, 28, "MATRIX", krv_th == 2) ? ( slider11 = 2; ui_auto(11); );
+kr_sect(394, krv_y1, 180, krv_h1, KRS, "THEME");
+kr_key(401, 242, 60, 28, "ENAMEL", krv_th == 0) ? ( slider11 = 0; ui_auto(11); );
+kr_key(465, 242, 42, 28, "VFD",    krv_th == 1) ? ( slider11 = 1; ui_auto(11); );
+kr_key(511, 242, 56, 28, "MATRIX", krv_th == 2) ? ( slider11 = 2; ui_auto(11); );
 
-kr_sect(586, krv_y1, 120, krv_h1, KRS, "OUT STAGE");
+kr_sect(580, krv_y1, 134, krv_h1, KRS, "OUT STAGE");
 ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
 krv_i = 0;
 loop(3,
   krv_c = krv_i == 0 ? 0x3A9CFF : krv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  ui_okey(593 + krv_i * 37, 242, 34, 28, (slider12 | 0) == krv_i || (krv_i == 1 && ui_okclp > 0.1), krv_c) ? ( slider12 = krv_i; ui_auto(12); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext((593 + krv_i * 37 + 17) * sc, (242 + 14) * sc, krv_i == 0 ? "OFF" : krv_i == 1 ? "CLIP" : "LIM");
+  krv_kx = krv_i == 0 ? 587 : krv_i == 1 ? 624 : 665; krv_kw = krv_i == 0 ? 34 : krv_i == 1 ? 38 : 42;
+  ui_okey(krv_kx, 242, krv_kw, 28, (slider12 | 0) == krv_i || (krv_i == 1 && ui_okclp > 0.1), krv_c) ? ( slider12 = krv_i; ui_auto(12); );
+  gfx_setfont(12); ui_col(0x141414); ui_keytext((krv_kx + krv_kw * 0.5) * sc, (242 + 14) * sc, krv_i == 0 ? "OFF" : krv_i == 1 ? "CLIP" : "LIMIT");
   krv_i += 1;
 );
 
-kr_sect(712, krv_y1, 86, krv_h1, KRS, "");
-kr_big(722, 224, 66, 46, "BYPASS", slider10 >= 0.5) ? ( slider10 = slider10 >= 0.5 ? 0 : 1; ui_auto(10); );
+kr_sect(720, krv_y1, 78, krv_h1, KRS, "");
+kr_big(726, 224, 66, 46, "BYPASS", slider10 >= 0.5) ? ( slider10 = slider10 >= 0.5 ? 0 : 1; ui_auto(10); );
 
 // corner brackets last: they sit on top of the rim
 kr_bracket(0, 0, 1, 1); kr_bracket(820, 0, -1, 1); kr_bracket(0, 306, 1, -1); kr_bracket(820, 306, -1, -1);

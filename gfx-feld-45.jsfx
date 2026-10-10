@@ -39,7 +39,7 @@ desc:GFX Feld 45
 //   Line amp (class A): a gentle biased curve, mostly 2nd harmonic, rising with level (about 0.1 % at 0 VU).
 //   Output transformer: low-frequency saturation, only at high levels (about 0.4 % at 50 Hz, -6 dBFS).
 //
-// METER  GR (needle rests at 0 and swings back to the left), OUT and IN (VU: a sine peaking at -18 dBFS reads 0 VU,
+// METER  GR (needle rests at 0 and swings back to the left), OUT and IN (after INPUT; VU: a sine peaking at -18 dBFS reads 0 VU,
 //        the needle ballistics of Pegel 45), OFF. ENAMEL draws a needle meter (GR read on the printed VU scale, as on
 //        the hardware); VFD and MATRIX draw a ladder (GR 0 .. -20 dB, 1 dB blocks, lit from the right) and a readout.
 // MIX    parallel compression (100 % = all FET). DRIFT (0 - 100 %, 50 % = standard): FET bias wander - the threshold
@@ -339,7 +339,7 @@ spl0 = ost_l; spl1 = ost_r;
 // ---------- the meter's needle (mass + spring + damping, as Pegel 45) ----------
 fd_md = fd_mtr == 0 ? 0.5 * (fd_kgl + fd_kgr) :
         fd_mtr == 1 ? max(abs(spl0), abs(spl1)) * fd_vref :
-        fd_mtr == 2 ? max(abs(fd_il), abs(fd_ir)) * fd_vref : 0;
+        fd_mtr == 2 ? max(abs(fd_xl), abs(fd_xr)) * fd_vref : 0;   // IN: after INPUT (what drives the FET)
 fd_vv += (fd_vw2 * (fd_md - fd_vy) - fd_vzw * fd_vv) * fd_vdt; fd_vy += fd_vv * fd_vdt;
 
 @gfx 820 340
@@ -743,14 +743,15 @@ fd_sect(608, 238, 202, 92, FDF, "THEME");
 fd_key(616, 262, 64, 24, "ENAMEL", fdv_th == 0) ? ( slider10 = 0; ui_auto(10); );
 fd_key(684, 262, 46, 24, "VFD",    fdv_th == 1) ? ( slider10 = 1; ui_auto(10); );
 fd_key(734, 262, 66, 24, "MATRIX", fdv_th == 2) ? ( slider10 = 2; ui_auto(10); );
-fd_key(616, 296, 56, 24, "LINK", slider7 >= 0.5) ? ( slider7 = slider7 >= 0.5 ? 0 : 1; ui_auto(7); );
+fd_key(616, 296, 48, 24, "LINK", slider7 >= 0.5) ? ( slider7 = slider7 >= 0.5 ? 0 : 1; ui_auto(7); );
 // the house output stage keys, side by side
 ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
 fdv_i = 0;
 loop(3,
   fdv_c = fdv_i == 0 ? 0x3A9CFF : fdv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  ui_okey(680 + fdv_i * 41, 296, 38, 24, (slider11 | 0) == fdv_i || (fdv_i == 1 && ui_okclp > 0.1), fdv_c) ? ( slider11 = fdv_i; ui_auto(11); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext((680 + fdv_i * 41 + 19) * sc, (296 + 12) * sc, fdv_i == 0 ? "OFF" : fdv_i == 1 ? "CLIP" : "LIM");
+  fdv_kx = fdv_i == 0 ? 670 : fdv_i == 1 ? 710 : 754; fdv_kw = fdv_i == 0 ? 36 : fdv_i == 1 ? 40 : 46;
+  ui_okey(fdv_kx, 296, fdv_kw, 24, (slider11 | 0) == fdv_i || (fdv_i == 1 && ui_okclp > 0.1), fdv_c) ? ( slider11 = fdv_i; ui_auto(11); );
+  gfx_setfont(12); ui_col(0x141414); ui_keytext((fdv_kx + fdv_kw * 0.5) * sc, (296 + 12) * sc, fdv_i == 0 ? "OFF" : fdv_i == 1 ? "CLIP" : "LIMIT");
   fdv_i += 1;
 );
 
