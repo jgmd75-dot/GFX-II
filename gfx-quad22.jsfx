@@ -193,6 +193,8 @@ dcR = 1 - 2*$pi*5/srate;
 
 // meters (4 bands + 1 master)
 mtr = alloc(5);
+q2_old = alloc(64); q2_new = alloc(64);          // preset duck: the settings before / after a preset
+q2_dkr = 1 / (0.012*srate); q2_dk = 1; q2_dst = 0;
 
 LN10 = log(10);
 function db2g(d) ( exp(d*LN10/20); );
@@ -292,7 +294,7 @@ function pb(base, sat, drv, eq, cpd, gn) (
   slider(base) = sat; slider(base+1) = drv; slider(base+3) = eq; slider(base+4) = cpd; slider(base+7) = gn;
 );
 // Sat: 0 Off, 1 Transformer, 2 Tape, 3 Transistor. Compand: <0 lift, >0 expand.
-function apply_preset(n) (
+function q2_apply_now(n) (
   n == 0 ? ( // Init
     pm(0, -0.3, 100); pb(10, 0, 0, 0, 0, 0); pb(20, 0, 0, 0, 0, 0); pb(30, 0, 0, 0, 0, 0); pb(40, 0, 0, 0, 0, 0);
   ) : n == 1 ? ( // Air Lift: lift on bands 3-4, touch of high shelf
@@ -310,6 +312,15 @@ function apply_preset(n) (
   ) : ( // Loudness Push: lift on all bands, trim up
     pm(2.0, -0.3, 100); pb(10, 1, 10, 0, -25, 0); pb(20, 2, 10, 0, -30, 0); pb(30, 0, 0, 0, -30, 0); pb(40, 0, 0, 0, -30, 0);
   );
+);
+
+// a preset is staged: the old settings keep playing while the output ducks (12 ms), the new ones are
+// swapped in at silence, then it fades back in (band types, drive and comp switches can't glide)
+function apply_preset(n) local(i) (
+  i = 1; loop(49, q2_old[i] = slider(i); i += 1; );
+  q2_apply_now(n);
+  i = 1; loop(49, q2_new[i] = slider(i); i != 6 ? slider(i) = q2_old[i]; i += 1; );
+  q2_dst = 1;
 );
 
 // GUI state
@@ -331,6 +342,7 @@ slider6 != lastPreset ? ( apply_preset(slider6); lastPreset = slider6; );
 @block
 // Recalculate EQ coefficients only when a gain moves (covers host automation and @gfx edits)
 (slider13 != lg1 || slider23 != lg2 || slider33 != lg3 || slider43 != lg4) ? updEQ();
+q2_dst == 3 ? q2_dst = 2;                    // the new settings are in: fade back in
 
 @sample
 spl0 != spl0 ? spl0 = 0;
@@ -380,6 +392,10 @@ dryR = dirR;
 outL = (dryL*(1 - mixFrac) + procL*mixFrac) * trim;
 outR = (dryR*(1 - mixFrac) + procR*mixFrac) * trim;
 
+q2_dst == 1 ? ( q2_dk -= q2_dkr; q2_dk <= 0 ? (
+  q2_dk = 0; q2_i = 1; loop(49, slider(q2_i) = q2_new[q2_i]; q2_i += 1; ); q2_dst = 3; q2_note = 1; ); ) :
+q2_dst == 2 ? ( q2_dk += q2_dkr; q2_dk >= 1 ? ( q2_dk = 1; q2_dst = 0; ); );
+q2_dst ? ( q2_dkg = q2_dk*q2_dk*(3 - 2*q2_dk); outL *= q2_dkg; outR *= q2_dkg; );
 spl0 = limiter(outL, ceilL);
 spl1 = limiter(outR, ceilL);
 
@@ -391,6 +407,7 @@ mtr[3] = max(mtr[3]*0.92, max(abs(L4), abs(R4)));
 mtr[4] = max(mtr[4]*0.92, max(abs(spl0), abs(spl1)));
 
 @gfx 1020 510
+q2_note ? ( q2_note = 0; slider_automate(562949953421311); );   // tell the host about a swapped-in preset
 
 // =====================================================================
 // GUI - rack unit on the GFX UI library (S / M / L / ?, HW, automation).

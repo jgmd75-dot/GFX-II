@@ -248,6 +248,7 @@ gi = 0; loop(2048, GRB[gi] = 1; gi += 1; );
 lw = 0; l_sum = LA; l_g = 1; l_gm = 1;
 
 sm10 = coef(10);                        // 10 ms: bypass crossfades, gain changes
+msx_dkr = 1 / (0.012 * srate); msx_dk = 1; msx_dst = 0;   // preset duck: 12 ms out, hold through the latency, 12 ms in
 sm30 = coef(30);
 hf_att = coef(0.3); hf_rel = coef(60);
 dw = 0;
@@ -294,6 +295,7 @@ function p_hf(on, thr) ( slider22 = on; slider23 = thr; );
 function p_clip(mode, drv) ( slider24 = mode; slider25 = drv; mode > 0 ? clip_last = mode; );
 function p_lim(on, ceil, rel, out) ( slider26 = on; slider27 = ceil; slider28 = rel; slider29 = out; );
 function load_preset(p) (
+  msx_dst = 1;      // duck the output, swap the settings at silence (oversampling, clipper, EQ), fade back in
   p == 1 ? (        // TRANSPARENT: gentle glue and a safe ceiling, nothing coloured
     p_in(0, 1); p_tube(0, -3, 1); p_tone(1, 0, 0, 0, 0, 0); p_st(1, 30, 100); p_cmp(1, -16, 1.5, 8, 1, 1, 100);
     p_hf(0, -12); p_clip(0, 0); p_lim(1, -1, 120, 2);
@@ -370,10 +372,10 @@ hf_s = hf_t; hf_g = 1; hf_grm = 1; cmix = cmix_t; cdrv = cdrv_t; lim_s = lim_t; 
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+msx_dst != 1 ? update();                  // during a preset duck the swap applies the new settings
 
 @block
-update();                                 // knobs and keys on the faceplate do not run @slider, so read them here
+msx_dst != 1 ? update();                  // knobs and keys on the faceplate do not run @slider, so read them here
 // drift: the valve's bias and drive wander a little
 drift_macro(slider38);
 dinc = slider31 * dm_s * samplesblock / srate;
@@ -389,6 +391,9 @@ file_var(0, clip_last);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+// preset duck-and-swap: out, swap, stay silent while the old audio leaves the latency, back in
+msx_dst == 1 ? ( msx_dk -= msx_dkr; msx_dk <= 0 ? ( msx_dk = 0; update(); msx_hc = lat_t + floor(0.002 * srate); msx_dst = 2; ); ) :
+msx_dst == 2 ? ( msx_hc > 0 ? msx_hc -= 1 : ( msx_dk += msx_dkr; msx_dk >= 1 ? ( msx_dk = 1; msx_dst = 0; ); ); );
 // ======================================================================
 //  STAGE 1: INPUT TRIM
 // ======================================================================
@@ -502,6 +507,7 @@ xL = yL + (gL - yL) * lim_s;
 xR = yR + (gR - yR) * lim_s;
 l_gm = min(l_gm, l_g);
 
+msx_dst ? ( msx_dkg = msx_dk * msx_dk * (3 - 2 * msx_dk); xL *= msx_dkg; xR *= msx_dkg; );
 spl0 = xL;
 spl1 = xR;
 opL = max(opL, abs(spl0)); opR = max(opR, abs(spl1));

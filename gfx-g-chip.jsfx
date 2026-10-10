@@ -375,12 +375,17 @@ function update() (
   ins_output_setup(35); ins_stereo_setup(41);
   chip != last_chip ? ( machine_set(); last_chip = chip; );
 );
+// a patch change (or DRUMS / VOICES / PANIC) while voices sound: the old sound fades out (12 ms), the change
+// applies at the silent point, where the released notes end, and the output fades back in (12 ms): no click
+cp_pcf = 0; cp_pck = cp_pcg = 1;
+function cp_snd() ( !v0.vidle() || !v1.vidle() || !v2.vidle() || !v3.vidle() || !v4.vidle() || !v5.vidle(); );
 // ---------- patches (volume, channel, stereo and output are left alone) ----------
 function pt(c, du, mx, np, nt, bz, bt) ( slider1 = c; slider3 = du; slider4 = mx; slider5 = np; slider6 = nt; slider11 = bz; slider12 = bt; );
 function pe(a, d, s, r) ( slider7 = a; slider8 = d; slider9 = s; slider10 = r; );
 function pm(ar, asp, vb, vd, vr, gl, sw, swt) ( slider13 = ar; slider14 = asp; slider15 = vb; slider16 = vd; slider17 = vr; slider18 = gl; slider19 = sw; slider20 = swt; );
 function pf(al, fb, md, mdc, dt, ld) ( slider21 = al; slider22 = fb; slider23 = md; slider24 = mdc; slider25 = dt; slider26 = ld; );
 function load_patch(p) (
+  panic_req = 1;                                   // (first: the audio thread holds the old sound until it has faded)
   pf(4, 4, 100, 100, 0, 50); slider33 = 0;
   p == 0  ? ( pt(0, 50, 0, 70, 0, 0, 1);  pe(0, 300, 12, 80);    pm(0, 1, 15, 300, 6, 0, 0, 150); ) :
   p == 1  ? ( pt(0, 10, 0, 70, 0, 0, 1);  pe(0, 500, 14, 80);    pm(0, 1, 10, 250, 6, 0, 0, 150); ) :
@@ -426,7 +431,7 @@ function load_patch(p) (
   p >= 24 && p <= 31 ? fm_patch = p - 24;
   slider2 = p; last_patch = p;
   slider_automate(8589934591);                     // sliders 1-33
-  panic_req = 1; update();
+  panic_req = 1; !cp_pcf && !cp_snd() ? update();
 );
 function chip_first(c) ( c == 0 ? 0 : c == 1 ? 8 : c == 2 ? 16 : c == 3 ? 24 : 32; );
 
@@ -481,17 +486,33 @@ function patch_trim(p) (
   p == 39 ? 0.700 :
   0.305;
 );
+// notes played during the fade wait for its silent point (they start with the new sound)
+CPPN = 54000; cp_pcn = 0;                                    // (32 pairs: note, velocity)
+function cp_pchold(n, v) ( cp_pcn < 32 ? ( CPPN[cp_pcn * 2] = n; CPPN[cp_pcn * 2 + 1] = v; cp_pcn += 1; ); );
+function cp_pcunhold(n) local(i, j) (
+  i = j = 0; loop(cp_pcn, CPPN[i * 2] != n ? ( CPPN[j * 2] = CPPN[i * 2]; CPPN[j * 2 + 1] = CPPN[i * 2 + 1]; j += 1; ); i += 1; ); cp_pcn = j;
+);
+function cp_pcapply() local(i) (
+  v0.est == 4 ? v0.est = 0; v1.est == 4 ? v1.est = 0; v2.est == 4 ? v2.est = 0;
+  v3.est == 4 ? v3.est = 0; v4.est == 4 ? v4.est = 0; v5.est == 4 ? v5.est = 0;
+  update(); last_chm = arp == 7 && !drums; cp_ptr = patch_trim(slider2); cp_pcf = 0;
+  i = 0; loop(cp_pcn, note_on(CPPN[i * 2], CPPN[i * 2 + 1]); i += 1; ); cp_pcn = 0;
+);
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 0; !ui_dflt ? ui_kstyle = 0;
 update();
+cp_ptr = patch_trim(slider2);
 vol_s = vol_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+!panic_req && !cp_pcf ? update();
 
 @block
-update();
+!panic_req && !cp_pcf ? update();
 last_patch < 0 ? last_patch = slider2 : slider2 != last_patch ? ( load_patch(slider2); last_patch = slider2; );
+cp_pcr = 1 / (0.012 * srate);
+panic_req && !cp_pcf ? ( cp_snd() ? cp_pcf = 1 : update(); );
+!cp_pcf ? cp_ptr = patch_trim(slider2);         // (the level trim of the patch in use)
 // switching between held-arp and normal play while notes sound: clear them (their note-offs would go astray)
 chm_ = arp == 7 && !drums; chm_ != last_chm ? ( all_off(); last_chm = chm_; );
 
@@ -518,10 +539,12 @@ file_var(0, fm_patch);
 @sample
 while (eqi < qcount && EQO[eqi] <= spos) (
   et = EQT[eqi];
-  et == 1 ? note_on(EQN[eqi], EQV[eqi]) : et == 0 ? note_off(EQN[eqi]) : et == 2 ? pedal_up() : all_off();
+  et == 1 ? ( cp_pcf ? cp_pchold(EQN[eqi], EQV[eqi]) : note_on(EQN[eqi], EQV[eqi]); ) : et == 0 ? ( cp_pcunhold(EQN[eqi]); note_off(EQN[eqi]); ) : et == 2 ? pedal_up() : ( cp_pcn = 0; all_off(); );
   eqi += 1;
 );
 spos += 1;
+cp_pcf ? ( cp_pck -= cp_pcr; cp_pck <= 0 ? ( cp_pck = 0; cp_pcapply(); ); cp_pcg = 0.5 - 0.5 * cos($pi * cp_pck); ) :
+cp_pck < 1 ? ( cp_pck = min(cp_pck + cp_pcr, 1); cp_pcg = 0.5 - 0.5 * cos($pi * cp_pck); );
 
 // the frame tick: 50 or 60 times a second
 fcnt -= 1;
@@ -541,15 +564,16 @@ oL = y0 * (1 - max(v0.pan * stereo, 0)) + y1 * (1 - max(v1.pan * stereo, 0)) + y
    + y3 * (1 - max(v3.pan * stereo, 0)) + y4 * (1 - max(v4.pan * stereo, 0)) + y5 * (1 - max(v5.pan * stereo, 0));
 oR = y0 * (1 + min(v0.pan * stereo, 0)) + y1 * (1 + min(v1.pan * stereo, 0)) + y2 * (1 + min(v2.pan * stereo, 0))
    + y3 * (1 + min(v3.pan * stereo, 0)) + y4 * (1 + min(v4.pan * stereo, 0)) + y5 * (1 + min(v5.pan * stereo, 0));
+oL *= cp_pcg; oR *= cp_pcg;                      // (a patch fade reaches the output stage's filters too)
 // the machine's output stage, blended in by LO-FI
 fL = mlL.am_run(mhL.am_run(oL)); fR = mlR.am_run(mhR.am_run(oR));
 oL += (fL - oL) * lofi; oR += (fR - oR) * lofi;
 oL = dcL.am_run(oL); oR = dcR.am_run(oR);
 
 vol_s += (vol_t - vol_s) * sm;
-ptr_s = patch_trim(slider2);
-oL = ostL.ost_band(oL * 0.3 * ptr_s) * vol_s;
-oR = ostR.ost_band(oR * 0.3 * ptr_s) * vol_s;
+ptr_s = cp_ptr;
+oL = ostL.ost_band(oL * 0.3 * ptr_s * cp_pcg) * vol_s;
+oR = ostR.ost_band(oR * 0.3 * ptr_s * cp_pcg) * vol_s;
 ins_stereo(oL, oR); ost_out(ins_sl, ins_sr);
 spl0 = ost_l;
 spl1 = ost_r;

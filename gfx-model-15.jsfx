@@ -166,6 +166,7 @@ function pname(p) (
   "Reset all to defaults";
 );
 function load_preset(p) (
+  p >= 1 ? m15_dst = 1;                                     // duck the tape, swap the settings at silence, fade back in
   p == 1 ? setp(6, 1, 1, 45, 25, 50, 15, 1, 100) :        // Bedroom Demo
   p == 2 ? setp(15, 2, 2, 70, 35, 60, 25, 1, 100) :       // Hot and Boxy
   p == 3 ? setp(9, 0, 0, 55, 30, 90, 20, 0, 100) :        // No NR, Open Tape
@@ -191,13 +192,14 @@ cur_preset = 1;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
 update();
 mix_s = mix_t; out_s = out_t;
+m15_dkr = 1 / (0.012 * srate); m15_dk = 1; m15_dst = 0;   // preset duck: 12 ms out, hold through the tape delay, 12 ms in
 ui_dflt = 1;
 
 @slider
-update();
+m15_dst != 1 ? update();                                  // during a preset duck the swap applies the new settings
 
 @block
-update();
+m15_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
@@ -205,6 +207,10 @@ file_var(0, ui_sz);
 @sample
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
+// preset duck-and-swap: gain, EQ, tape, wow and NR change in silence; stay silent while the tape delay and
+// the NR envelopes catch up with the new settings
+m15_dst == 1 ? ( m15_dk -= m15_dkr; m15_dk <= 0 ? ( m15_dk = 0; update(); m15_hc = floor(0.008 * srate); m15_dst = 2; ); ) :
+m15_dst == 2 ? ( m15_hc > 0 ? m15_hc -= 1 : ( m15_dk += m15_dkr; m15_dk >= 1 ? ( m15_dk = 1; m15_dst = 0; ); ); );
 
 // ---------- transport: wow (0.6 Hz + a slow wander) and flutter (6 Hz) ----------
 wph += 0.6 / srate; wph -= floor(wph);
@@ -223,6 +229,7 @@ pL = f15_pre(inL); pR = f15_pre(inR);
 eL = eqL.f15_eq(pL); eR = eqR.f15_eq(pR);
 tL = tpL.f15_tape(eL, 10000, NZ0, nr_on); tR = tpR.f15_tape(eR, 10000 + WBSZ, NZ1, nr_on);
 wpos = (wpos + 1) & WBMSK;
+m15_dst ? ( m15_dkg = m15_dk * m15_dk * (3 - 2 * m15_dk); tL *= m15_dkg; tR *= m15_dkg; );
 
 mix_s += (mix_t - mix_s) * sm;
 out_s += (out_t - out_s) * sm;

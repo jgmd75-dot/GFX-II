@@ -168,6 +168,7 @@ function setp(m, erd, erl, rvd, rvl, t, hi, lo, vol, dn, df, lc, hc, dr, ck, bt,
   slider10 = dn; slider11 = df; slider12 = lc; slider13 = hc; slider14 = dr; slider15 = ck; slider16 = bt; slider17 = wd; slider20 = mx;
 );
 function load_preset(p) (
+  p >= 1 ? jv_dst = 1;                         // duck the reverb, swap the settings at silence, fade it back in
   p == 1 ? setp(0, 14, -10, 40, 0, 4.5, 0.5, 1.2, 8000, 60, 80, 50, 10000, 0, 0, 1, 130, 30) :     // Massive Hall
   p == 2 ? setp(0, 10, -8, 30, 0, 2.6, 0.6, 1.0, 3000, 60, 70, 100, 13000, 0, 0, 1, 120, 25) :     // Vocal Hall
   p == 3 ? setp(0, 20, -12, 60, 0, 8.0, 0.5, 1.5, 12000, 50, 90, 50, 10000, 0, 0, 1, 140, 40) :    // Synth Pad Space
@@ -226,14 +227,15 @@ sm = 1 - exp(-1 / (0.03 * srate));
 pkL = pkR = 0; piL = piR = 0;
 update();
 mix_s = mix_t; out_s = out_t;
+jv_dkr = 1 / (0.012 * srate); jv_dk = 1; jv_dst = 0;   // preset duck (the wet only): 12 ms out, 12 ms in
 
 @slider
-update();
+jv_dst != 1 ? update();                        // during a preset duck the swap applies the new settings
 
 @block
 // panel edits change the sliders directly: re-apply them whenever any slider has moved
 chk = 0; ci = 1; loop(29, chk += slider(ci) * (ci * 1.37 + 1); ci += 1; );
-chk != last_chk ? ( last_chk = chk; update(); );
+jv_dst != 1 && chk != last_chk ? ( last_chk = chk; update(); );
 vA = drA.drift_tick(dspd * samplesblock / srate); vB = drB.drift_tick(dspd * samplesblock / srate);
 // drift: in the hall the read taps move by up to two samples (density, never pitch); elsewhere the air absorption wanders
 mdl == 0 ? ( k = 0; loop(8, ln_mod[k] = dft * 2 * (k & 1 ? vA : vB) * (0.5 + 0.1 * k); k += 1; ); ) : ( bv_hdrift = 1 + 0.2 * dft * vA; bv_xover(); );
@@ -245,6 +247,13 @@ file_var(0, vsel);
 file_var(0, lastp);
 
 @sample
+// preset duck-and-swap on the wet: model, size, delays and the lo-fi clock change in silence, and the reverb
+// starts clean with its feed faded in (old audio at new line lengths would come round again as a click)
+jv_dst == 1 ? ( jv_dk -= jv_dkr; jv_dk <= 0 ? (
+  jv_dk = 0; update(); jv_dst = 2;
+  memset(BV_PRE, 0, BV_END - BV_PRE); memset(ln_z1, 0, 30); memset(cb_z, 0, 10); memset(fdn_v, 0, 20);
+); ) :
+jv_dst == 2 ? ( jv_dk += jv_dkr; jv_dk >= 1 ? ( jv_dk = 1; jv_dst = 0; ); );
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
 piL = max(piL, abs(inL)); piR = max(piR, abs(inR));
@@ -252,6 +261,7 @@ mix_s += (mix_t - mix_s) * sm; out_s += (out_t - out_s) * sm;
 
 xl = xfL.xfm_run(inL, drv, 0); xr = xfR.xfm_run(inR, drv, 0);
 xl = lfiL.lofi_in(xl); xr = lfiR.lofi_in(xr);
+jv_dst ? ( jv_dkg = jv_dk * jv_dk * (3 - 2 * jv_dk); xl *= jv_dkg; xr *= jv_dkg; );
 bv_pre(xl, xr);
 // reflections from the mono sum, at the 1st reflection delay
 er_run(0.5 * (pre_l(erd_s) + pre_r(erd_s)));
@@ -268,6 +278,7 @@ mdl == 0 ? (
 );
 wl = er_g * er_ol + rv_g * wl; wr = er_g * er_or + rv_g * wr;
 wl = lfoL.lofi_out(wl); wr = lfoR.lofi_out(wr);
+jv_dst ? ( wl *= jv_dkg; wr *= jv_dkg; );
 // lo / hi cut on the reverb
 lcL += (wl - lcL) * lc_c; wl -= lcL; lcR += (wr - lcR) * lc_c; wr -= lcR;
 hcL += (wl - hcL) * hc_c; wl = hcL; hcR += (wr - hcR) * hc_c; wr = hcR;

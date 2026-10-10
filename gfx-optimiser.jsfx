@@ -101,7 +101,7 @@ function bq(x, c0, c1, c2, d1, d2) instance(z1, z2) local(y) (
 // ---------- band compressor: stereo-linked, soft knee, returns gain reduction (dB) ----------
 function band_gr(pw, att, rel) instance(e, gr) local(ldb, ov, tg) (
   e += (pw - e) * cdet;
-  ldb = 10 * log10(max(e, 0.000000000001)) + drv_e;
+  ldb = 10 * log10(max(e, 0.000000000001)) + drv_s;
   ov = ldb - b_thr;
   tg = 2 * ov < -b_kn ? 0 : 2 * abs(ov) <= b_kn ? b_sl * sqr(ov + b_kn * 0.5) / (2 * b_kn) : b_sl * ov;
   gr += (tg - gr) * (tg > gr ? att : rel);
@@ -198,6 +198,7 @@ d_agc = 0; d_g1 = 0; d_g2 = 0; d_g3 = 0; d_g4 = 0; d_clp = 0;
 update();
 timing(1);
 mix_s = mix_t; out_s = out_t; drv_e = drv;
+drv_s = drv_e; clp_s = clp_g; bg1s = bg1; bg2s = bg2; bg3s = bg3; bg4s = bg4;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
@@ -225,6 +226,9 @@ inL = in_l; inR = in_r;
 vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
 mix_s += (mix_t - mix_s) * sm;
 out_s += (out_t - out_s) * sm;
+// drive, clip drive and band gains glide (30 ms) so a preset change doesn't step
+drv_s += (drv_e - drv_s) * sm; clp_s += (clp_g - clp_s) * sm;
+bg1s += (bg1 - bg1s) * sm; bg2s += (bg2 - bg2s) * sm; bg3s += (bg3 - bg3s) * sm; bg4s += (bg4 - bg4s) * sm;
 
 // 1. AGC: slow wideband gain riding towards -18 dBFS average
 agc_ms += (0.5 * (inL * inL + inR * inR) - agc_ms) * agc_c;
@@ -277,10 +281,10 @@ cpl > 0 ? (
   g1 = gav + min(max(g1 - gav, -glim), glim); g2 = gav + min(max(g2 - gav, -glim), glim);
   g3 = gav + min(max(g3 - gav, -glim), glim); g4 = gav + min(max(g4 - gav, -glim), glim);
 );
-k1 = bg1 * 10 ^ ((drv_e - g1) / 20);
-k2 = bg2 * 10 ^ ((drv_e - g2) / 20);
-k3 = bg3 * 10 ^ ((drv_e - g3) / 20);
-k4 = bg4 * 10 ^ ((drv_e - g4) / 20);
+k1 = bg1s * 10 ^ ((drv_s - g1) / 20);
+k2 = bg2s * 10 ^ ((drv_s - g2) / 20);
+k3 = bg3s * 10 ^ ((drv_s - g3) / 20);
+k4 = bg4s * 10 ^ ((drv_s - g4) / 20);
 // 3. clipper threshold: just under the ceiling (in LIMIT: just under the threshold, so the clipper and the
 //    limiter start at the same point)
 cth = (slider20 == 2 ? 10 ^ (slider19 / 20) : ost_ceil) * 0.98;
@@ -309,8 +313,8 @@ fz_on ? (
   fg_ = max(0.25, min(2, 0.05 * fzP / (fzE + 0.000001)));
   wL += fg_ * fe0; wR += fg_ * fe1;
 );
-cL = opt_clip(wL * clp_g, cth); cR = opt_clip(wR * clp_g, cth);
-cpk = max(abs(wL), abs(wR)) * clp_g;
+cL = opt_clip(wL * clp_s, cth); cR = opt_clip(wR * clp_s, cth);
+cpk = max(abs(wL), abs(wR)) * clp_s;
 cpk > cth ? d_clp = max(d_clp, 20 * log10(cpk / max(max(abs(cL), abs(cR)), 0.000001)));
 
 oL = dryL * (1 - mix_s) + cL * mix_s;
