@@ -749,9 +749,9 @@ spl0 = ost_l;
 spl1 = ost_r;
 fo_pkl = max(fo_pkl, abs(spl0)); fo_pkr = max(fo_pkr, abs(spl1));
 
-@gfx 1100 540
+@gfx 1100 660
 ui_thm = 0; ui_hw = 1;
-ui_begin(1100, 540);
+ui_begin(1100, 660);
 
 // ---------- palette: flat card colours ----------
 INK = 0x221C26; CARD = 0xF4E8CB; KEYF = 0xFFF8E6; SAND = 0xE9D49F; OCHRE = 0xD48A1E; TURQ = 0x1E9F9C;
@@ -830,7 +830,13 @@ function fg_arcw(cx, cy, r, a1, a2, w) local(k) (
 function fg_cap(cx, cy, r, n, col) local(rr, a, a0, ca, sa, w, i) (
   rr = r + 6 * sc; w = 3 * sc; a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
   ui_col(fg_trk); fg_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.3 * sc);
-  n > 0.004 ? (
+  fg_bip ? (
+    // bipolar: the arc grows from the top centre
+    abs(n - 0.5) > 0.004 ? (
+      ui_col(col); fg_arcw(cx, cy, rr, min(a, 0), max(a, 0), w);
+      gfx_circle(cx, cy - rr, w * 0.5, 1, 1); gfx_circle(cx + ca * rr, cy + sa * rr, w * 0.5, 1, 1);
+    );
+  ) : n > 0.004 ? (
     ui_col(col); fg_arcw(cx, cy, rr, a0, a, w);
     gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, w * 0.5, 1, 1); gfx_circle(cx + ca * rr, cy + sa * rr, w * 0.5, 1, 1);
   );
@@ -873,6 +879,7 @@ function fg_knob(cx, cy, r, idx, lo, hi, def, lg, st, col, label, val) local(v, 
   fg_cap(cx * sc, cy * sc, r * sc, n, col);
   (hov || drag_id == did) ? ( ui_cola(0xFFFFFF, 0.12); gfx_circle(cx * sc, cy * sc, (r - 1.5) * sc, 1, 1); );
   (hov || drag_id == did) ? fg_pill(cx, cy + r + 14, val) : ( gfx_setfont(10); ui_col(INK); fg_ctxt(cx, cy + r + 14, label); );
+  fg_bip = 0;
 );
 function fg_set(idx, v) ( slider(idx) = v; ui_auto(idx); );
 function fg_pc(n) ( n = n % 12;
@@ -944,8 +951,23 @@ function fg_emblem(x, y, w, h) local(wx, wy, ww, wh, i, a, sx, sy, cx, cy) (
   ui_col(INK); fg_th(cx - 8, cy + 11.5, cx + 5, cy + 11.5, 2.2);
 );
 
+// an LFO shape drawn on its key (centre cx, cy; base pixels)
+function fg_glyph(cx, cy, sh, col) local(i, x0, y0, x1, y1, t, n) (
+  ui_col(col); n = 16; i = 0;
+  loop(n + 1,
+    t = i / n;
+    y1 = sh == 0 ? -sin(2 * $pi * t) : sh == 1 ? -(1 - 4 * abs(t - 0.5)) : sh == 2 ? -(2 * t - 1) : sh == 3 ? (t < 0.5 ? -1 : 1) :
+         sh == 4 ? (t < 0.25 ? 0.2 : t < 0.5 ? -0.9 : t < 0.75 ? 0.6 : -0.3) : -(0.55 * sin(2 * $pi * t * 1.3 + 0.6) + 0.35 * sin(2 * $pi * t * 2.7));
+    x1 = cx - 8 + 16 * t; y1 = cy + y1 * 5;
+    i > 0 ? (
+      (sh == 3 || sh == 4) && abs(y1 - y0) > 1 ? ( fg_th(x0, y0, x1, y0, 1.6); fg_th(x1, y0, x1, y1, 1.6); ) : fg_th(x0, y0, x1, y1, 1.6);
+    );
+    x0 = x1; y0 = y1; i += 1;
+  );
+);
+
 // ---------- one path (I, II, III): pattern and voice ----------
-function fg_path(a, x, y, w, h, bg, ac) local(b, s, i, sx, sy, len, pos, lit, md, cx, kx, gx, on, nm) (
+function fg_path(a, x, y, w, h, bg, ac) local(b, s, i, sx, sy, len, pos, lit, md, cx, kx, gx, on, nm, lb, lv) (
   b = 1 + 16 * a; s = FO_AS + 16 * a;
   fg_field(x, y, w, h, bg);
   fg_trk = ui_mix(bg, 0x000000, 0.28);
@@ -998,18 +1020,42 @@ function fg_path(a, x, y, w, h, bg, ac) local(b, s, i, sx, sy, len, pos, lit, md
   fg_knob(cx + 60, y + 280, 15, b + 12, 20, 4000, FO_DEF[b + 11], 1, 1, ac, "DECAY", #fgv);
   sprintf(#fgv, "%d%%", slider(b + 13));                fg_knob(cx - 60, y + 336, 15, b + 13, 0, 100, FO_DEF[b + 12], 0, 1, ac, "LEVEL", #fgv);
   slider(b + 14) == 0 ? strcpy(#fgv, "C") : sprintf(#fgv, slider(b + 14) < 0 ? "L%d" : "R%d", abs(slider(b + 14)));
-  fg_knob(cx, y + 336, 15, b + 14, -100, 100, FO_DEF[b + 13], 0, 1, ac, "PAN", #fgv);
+  fg_bip = 1; fg_knob(cx, y + 336, 15, b + 14, -100, 100, FO_DEF[b + 13], 0, 1, ac, "PAN", #fgv);
   sprintf(#fgv, "%d%%", slider(b + 15));                fg_knob(cx + 60, y + 336, 15, b + 15, 0, 100, FO_DEF[b + 14], 0, 1, ac, "SEND", #fgv);
+  // the LFO: shape, destination, rate (synced or free), depth, SYNC and RETRIG
+  lb = 69 + 7 * a;
+  ui_cola(INK, 0.3); fg_r(x + 12, y + 376, w - 24, 1.5);
+  gfx_setfont(12); ui_col(INK); fg_txt(x + 12, y + 386, "LFO");
+  lv = FO_LS[a * 16 + 7] * (slider(lb + 3) != 0);
+  ui_col(INK); fg_disc(x + 52, y + 394, 5); ui_col(ui_mix(KEYF, ac, 0.5 + 0.5 * lv)); fg_disc(x + 52, y + 394, 3.6);
+  kx = (w - 72) / 6;
+  i = 0; loop(6,
+    gx = x + 62 + i * kx + 1;
+    fg_key(gx, y + 383, kx - 2, 22, "", slider(lb + 4) == i, ac) ? fg_set(lb + 4, i);
+    fg_glyph(gx + (kx - 2) * 0.5, y + 394, i, slider(lb + 4) == i ? ui_ink(ac) : INK);
+    i += 1; );
+  kx = (w - 20) / 6;
+  i = 0; loop(6,
+    fg_key(x + 10 + i * kx + 1, y + 411, kx - 2, 22, i == 0 ? "CUT" : i == 1 ? "RES" : i == 2 ? "DEC" : i == 3 ? "LVL" : i == 4 ? "PAN" : "SND", slider(lb + 5) == i, ac) ? fg_set(lb + 5, i);
+    i += 1; );
+  slider(lb + 2) >= 0.5 ? (
+    sprintf(#fgv, "%s", fo_lname(slider(lb + 1)));   fg_knob(x + 40, y + 456, 15, lb + 1, 0, 9, FO_DEF[lb], 0, 1, ac, "RATE", #fgv);
+  ) : (
+    sprintf(#fgv, slider(lb) < 1 ? "%.2f Hz" : "%.1f Hz", slider(lb)); fg_knob(x + 40, y + 456, 15, lb, 0.02, 20, FO_DEF[lb - 1], 1, 0.01, ac, "RATE", #fgv);
+  );
+  sprintf(#fgv, "%+d%%", slider(lb + 3));              fg_bip = 1; fg_knob(x + 100, y + 456, 15, lb + 3, -100, 100, 0, 0, 1, ac, "DEPTH", #fgv);
+  fg_key(x + 134, y + 440, w - 144, 22, "SYNC", slider(lb + 2) >= 0.5, ac) ? fg_set(lb + 2, slider(lb + 2) >= 0.5 ? 0 : 1);
+  fg_key(x + 134, y + 466, w - 144, 22, "RETRIG", slider(lb + 6) >= 0.5, ac) ? fg_set(lb + 6, slider(lb + 6) >= 0.5 ? 0 : 1);
 );
 
 // =====================================================================
 // the card
 // =====================================================================
 ui_col(0x16121A); gfx_rect(0, 0, gfx_w, gfx_h);
-ui_col(CARD); fg_rr(3, 3, 1094, 534, 14);
-ui_col(INK); fg_rr(9, 9, 1082, 522, 10);
-ui_col(CARD); fg_rr(11.5, 11.5, 1077, 517, 8);
-ui_cola(INK, 0.5); fg_rr(15, 15, 1070, 510, 7); ui_col(CARD); fg_rr(16, 16, 1068, 508, 6);
+ui_col(CARD); fg_rr(3, 3, 1094, 654, 14);
+ui_col(INK); fg_rr(9, 9, 1082, 642, 10);
+ui_col(CARD); fg_rr(11.5, 11.5, 1077, 637, 8);
+ui_cola(INK, 0.5); fg_rr(15, 15, 1070, 630, 7); ui_col(CARD); fg_rr(16, 16, 1068, 628, 6);
 
 // ---------- header: badge, presets, the numeral, the held chord, MIDI, size ----------
 ui_col(INK); fg_disc(42, 39, 17); ui_col(CARD); fg_disc(42, 39, 15);
@@ -1035,24 +1081,24 @@ gfx_setfont(4); ui_col(INK); fg_ctxt(952, 47, "MIDI");
 ui_size_picker(1016 * sc, 30 * sc);
 
 // ---------- the emblem column: the card picture, STEP OFF, RETURN, SEED, HOLD, KEY SYNC ----------
-fg_emblem(24, 66, 184, 198);
+fg_emblem(24, 66, 184, 300);
 fg_flash = time_precise() - fg_sot < 0.25;
-ui_cola(MAG, fg_flash ? 0.5 : 0.25); fg_rr(20, 272, 192, 60, 10);
-ui_cola(0x000000, 0.22); fg_rr(25, 278, 184, 52, 7);
-ui_col(INK); fg_rr(24, 276, 184, 52, 7);
-fg_hv = fg_hov(24, 276, 184, 52);
-ui_col(fg_flash ? 0xFF5C93 : fg_hv ? 0xD93A77 : MAG); fg_rr(26.5, 278.5, 179, 47, 5);
-ui_cola(0xFFFFFF, 0.35); fg_r(32, 280.5, 168, 1.5);
-gfx_setfont(16); ui_col(0xFFF6DC); fg_ctxt(116, 302, "STEP OFF");
+ui_cola(MAG, fg_flash ? 0.5 : 0.25); fg_rr(20, 374, 192, 60, 10);
+ui_cola(0x000000, 0.22); fg_rr(25, 380, 184, 52, 7);
+ui_col(INK); fg_rr(24, 378, 184, 52, 7);
+fg_hv = fg_hov(24, 378, 184, 52);
+ui_col(fg_flash ? 0xFF5C93 : fg_hv ? 0xD93A77 : MAG); fg_rr(26.5, 380.5, 179, 47, 5);
+ui_cola(0xFFFFFF, 0.35); fg_r(32, 382.5, 168, 1.5);
+gfx_setfont(16); ui_col(0xFFF6DC); fg_ctxt(116, 404, "STEP OFF");
 fg_hv && pressed && drag_id == 0 ? ( drag_id = -1; fo_stepoff(-1); fg_sot = time_precise(); );
 
-fg_key(24, 340, 76, 34, "RETURN", 0, SUN) ? fo_return();
-!fo_hasprev ? ( ui_cola(CARD, 0.55); fg_rr(24, 340, 76, 34, 4); );
-pk_lcd(106 * sc, 340 * sc, 102 * sc, 34 * sc, 0);
-pk_lcdfont(9, 9.5 * sc); ui_col(pk_lcdc); fg_txt(114, 343, "SEED");
-pk_lcdfont(9, 17 * sc); sprintf(#fgl, "%04d", slider54); fg_txt(114, 354, #fgl);
-ui_cola(pk_lcdc, 0.8); fg_tri(194, 348, 190, 354, 198, 354); fg_tri(190, 360, 198, 360, 194, 366);
-fg_hov(106, 340, 102, 34) ? (
+fg_key(24, 442, 76, 34, "RETURN", 0, SUN) ? fo_return();
+!fo_hasprev ? ( ui_cola(CARD, 0.55); fg_rr(24, 442, 76, 34, 4); );
+pk_lcd(106 * sc, 442 * sc, 102 * sc, 34 * sc, 0);
+pk_lcdfont(9, 9.5 * sc); ui_col(pk_lcdc); fg_txt(114, 445, "SEED");
+pk_lcdfont(9, 17 * sc); sprintf(#fgl, "%04d", slider54); fg_txt(114, 456, #fgl);
+ui_cola(pk_lcdc, 0.8); fg_tri(194, 450, 190, 456, 198, 456); fg_tri(190, 462, 198, 462, 194, 468);
+fg_hov(106, 442, 102, 34) ? (
   mouse_wheel != 0 ? ( fo_stepoff(min(max(slider54 + (mouse_wheel > 0 ? 1 : -1), 0), 9999)); mouse_wheel = 0; fg_sot = time_precise(); );
   pressed && drag_id == 0 ? ( drag_id = 2900; fg_sy = mouse_y; );
 );
@@ -1061,8 +1107,8 @@ drag_id == 2900 ? (
     fo_stepoff(min(max(slider54 + (mouse_y < fg_sy ? 1 : -1), 0), 9999)); fg_sy = mouse_y; fg_sot = time_precise();
   );
 );
-fg_key(24, 384, 89, 30, "HOLD", slider49 >= 0.5, SUN) ? fg_set(49, slider49 >= 0.5 ? 0 : 1);
-fg_key(119, 384, 89, 30, slider50 >= 0.5 ? "KEY SYNC" : "FREE", slider50 >= 0.5, SKY2) ? fg_set(50, slider50 >= 0.5 ? 0 : 1);
+fg_key(24, 488, 89, 30, "HOLD", slider49 >= 0.5, SUN) ? fg_set(49, slider49 >= 0.5 ? 0 : 1);
+fg_key(119, 488, 89, 30, slider50 >= 0.5 ? "KEY SYNC" : "FREE", slider50 >= 0.5, SKY2) ? fg_set(50, slider50 >= 0.5 ? 0 : 1);
 // the full circle: after how many beats the three paths line up again (the LCM of their pattern lengths in time)
 fg_cyc = 1; fg_i = 0;
 loop(3,
@@ -1077,79 +1123,79 @@ loop(3,
 );
 fg_cyc /= 24;
 sprintf(#fgl, fg_cyc == floor(fg_cyc) ? "FULL CIRCLE %.0f BEATS" : "FULL CIRCLE %.1f BEATS", fg_cyc);
-gfx_setfont(10); ui_cola(INK, 0.85); fg_ctxt(116, 428, #fgl);
+gfx_setfont(10); ui_cola(INK, 0.85); fg_ctxt(116, 540, #fgl);
 
 // ---------- the three paths ----------
-fg_path(0, 218, 66, 222, 376, P1BG, TURQ);
-fg_path(1, 446, 66, 222, 376, P2BG, MAG);
-fg_path(2, 674, 66, 222, 376, P3BG, OCHRE);
+fg_path(0, 218, 66, 222, 496, P1BG, TURQ);
+fg_path(1, 446, 66, 222, 496, P2BG, MAG);
+fg_path(2, 674, 66, 222, 496, P3BG, OCHRE);
 
 // ---------- THE JOURNEY: delay and reverb ----------
-fg_field(904, 66, 176, 196, FXBG);
+fg_field(904, 66, 176, 248, FXBG);
 fg_band(904, 66, 176, 30, LAPIS, "THE JOURNEY");
 fg_trk = ui_mix(FXBG, 0x000000, 0.28);
-gfx_setfont(10); ui_cola(INK, 0.75); fg_ctxt(992, 108, "DELAY");
-sprintf(#fgv, "%s", fo_dname(slider55));      fg_knob(936, 140, 15, 55, 0, 7, 3, 0, 1, LAPIS, "RATE", #fgv);
-sprintf(#fgv, "%d%%", slider56);              fg_knob(992, 140, 15, 56, 0, 90, 35, 0, 1, LAPIS, "FDBK", #fgv);
-sprintf(#fgv, "%d%%", slider57);              fg_knob(1048, 140, 15, 57, 0, 100, 30, 0, 1, LAPIS, "LEVEL", #fgv);
-ui_cola(INK, 0.3); fg_r(916, 180, 152, 1.5);
-gfx_setfont(10); ui_cola(INK, 0.75); fg_ctxt(992, 192, "REVERB");
-sprintf(#fgv, "%d%%", slider58);              fg_knob(956, 222, 15, 58, 0, 100, 60, 0, 1, LAPIS, "SIZE", #fgv);
-sprintf(#fgv, "%d%%", slider59);              fg_knob(1028, 222, 15, 59, 0, 100, 30, 0, 1, LAPIS, "LEVEL", #fgv);
+gfx_setfont(10); ui_cola(INK, 0.75); fg_ctxt(992, 116, "DELAY");
+sprintf(#fgv, "%s", fo_dname(slider55));      fg_knob(936, 156, 15, 55, 0, 7, 3, 0, 1, LAPIS, "RATE", #fgv);
+sprintf(#fgv, "%d%%", slider56);              fg_knob(992, 156, 15, 56, 0, 90, 35, 0, 1, LAPIS, "FDBK", #fgv);
+sprintf(#fgv, "%d%%", slider57);              fg_knob(1048, 156, 15, 57, 0, 100, 30, 0, 1, LAPIS, "LEVEL", #fgv);
+ui_cola(INK, 0.3); fg_r(916, 208, 152, 1.5);
+gfx_setfont(10); ui_cola(INK, 0.75); fg_ctxt(992, 224, "REVERB");
+sprintf(#fgv, "%d%%", slider58);              fg_knob(956, 264, 15, 58, 0, 100, 60, 0, 1, LAPIS, "SIZE", #fgv);
+sprintf(#fgv, "%d%%", slider59);              fg_knob(1028, 264, 15, 59, 0, 100, 30, 0, 1, LAPIS, "LEVEL", #fgv);
 
 // ---------- FATE and VOLUME, the output meter ----------
-fg_field(904, 270, 176, 172, FATEBG);
-fg_band(904, 270, 176, 30, 0x6A3E8E, "FATE");
+fg_field(904, 322, 176, 240, FATEBG);
+fg_band(904, 322, 176, 30, 0x6A3E8E, "FATE");
 fg_trk = ui_mix(FATEBG, 0x000000, 0.28);
-sprintf(#fgv, "%d%%", slider60);              fg_knob(948, 340, 22, 60, 0, 100, 35, 0, 1, 0x8A4FB8, "FATE", #fgv);
-sprintf(#fgv, "%+.1f dB", slider61);          fg_knob(1036, 340, 22, 61, -24, 6, 0, 0, 0.1, 0x8A4FB8, "VOLUME", #fgv);
+sprintf(#fgv, "%d%%", slider60);              fg_knob(948, 410, 22, 60, 0, 100, 35, 0, 1, 0x8A4FB8, "FATE", #fgv);
+sprintf(#fgv, "%+.1f dB", slider61);          fg_knob(1036, 410, 22, 61, -24, 6, 0, 0, 0.1, 0x8A4FB8, "VOLUME", #fgv);
 fg_mL = max(fo_pkl, fg_mL * 0.86); fg_mR = max(fo_pkr, fg_mR * 0.86); fo_pkl = 0; fo_pkr = 0;
 fg_i = 0;
 loop(2,
   fg_v = fg_i == 0 ? fg_mL : fg_mR;
   fg_db = 20 * log10(max(fg_v, 0.00001)); fg_f = min(max((fg_db + 48) / 48, 0), 1);
-  ui_col(INK); fg_r(918, 398 + fg_i * 14, 148, 10);
-  ui_col(0xFFF6DC); fg_r(919.5, 399.5 + fg_i * 14, 145, 7);
-  ui_col(fg_db > -1 ? 0xE0402A : fg_db > -6 ? SUN : TURQ); fg_r(919.5, 399.5 + fg_i * 14, 145 * fg_f, 7);
+  ui_col(INK); fg_r(918, 504 + fg_i * 16, 148, 10);
+  ui_col(0xFFF6DC); fg_r(919.5, 505.5 + fg_i * 16, 145, 7);
+  ui_col(fg_db > -1 ? 0xE0402A : fg_db > -6 ? SUN : TURQ); fg_r(919.5, 505.5 + fg_i * 16, 145 * fg_f, 7);
   fg_i += 1;
 );
-ui_cola(INK, 0.5); fg_i = 0; loop(5, fg_r(919.5 + 145 * (1 - fg_i * 12 / 48), 396, 1, 3); fg_i += 1; );
+ui_cola(INK, 0.5); fg_i = 0; loop(5, fg_r(919.5 + 145 * (1 - fg_i * 12 / 48), 498, 1, 4); fg_i += 1; );
 
 // ---------- the bottom strip: key, scale, channel, SAT, OUT ----------
-fg_field(24, 450, 1056, 40, SAND);
+fg_field(24, 572, 1056, 40, SAND);
 fg_trk = ui_mix(CARD, 0x000000, 0.28);
-sprintf(#fgv, "%+d st", slider51);            fg_knob(50, 470, 12, 51, -12, 12, 0, 0, 1, OCHRE, "", #fgv);
-gfx_setfont(10); ui_col(INK); fg_txt(70, 463, "TRANSPOSE");
-fg_txt(156, 463, "SCALE");
+sprintf(#fgv, "%+d st", slider51);            fg_bip = 1; fg_knob(50, 592, 12, 51, -12, 12, 0, 0, 1, OCHRE, "", #fgv);
+gfx_setfont(10); ui_col(INK); fg_txt(70, 585, "TRANSPOSE");
+fg_txt(156, 585, "SCALE");
 fg_i = 0; loop(5,
-  fg_key(204 + fg_i * 52, 457, 48, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "MAJ" : fg_i == 2 ? "MIN" : fg_i == 3 ? "DOR" : "PENT", slider52 == fg_i, OCHRE) ? fg_set(52, fg_i);
+  fg_key(204 + fg_i * 52, 579, 48, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "MAJ" : fg_i == 2 ? "MIN" : fg_i == 3 ? "DOR" : "PENT", slider52 == fg_i, OCHRE) ? fg_set(52, fg_i);
   fg_i += 1; );
-sprintf(#fgv, "%s", fg_pc(slider53));         fg_knob(486, 470, 12, 53, 0, 11, 0, 0, 1, OCHRE, "", #fgv);
-gfx_setfont(10); ui_col(INK); fg_txt(506, 463, "ROOT");
-gfx_setfont(12); ui_col(INK); fg_txt(548, 461, fg_pc(slider53));
+sprintf(#fgv, "%s", fg_pc(slider53));         fg_knob(486, 592, 12, 53, 0, 11, 0, 0, 1, OCHRE, "", #fgv);
+gfx_setfont(10); ui_col(INK); fg_txt(506, 585, "ROOT");
+gfx_setfont(12); ui_col(INK); fg_txt(548, 583, fg_pc(slider53));
 // MIDI channel
-fg_hv = fg_hov(650, 457, 84, 26);
-ui_col(INK); fg_rr(650, 457, 84, 26, 4); ui_col(fg_hv ? 0xFFFFFF : KEYF); fg_rr(651.5, 458.5, 81, 23, 3);
-gfx_setfont(11); ui_col(INK); slider62 < 0.5 ? strcpy(#fgl, "MIDI OMNI") : sprintf(#fgl, "MIDI CH %d", slider62); fg_ctxt(692, 470, #fgl);
+fg_hv = fg_hov(650, 579, 84, 26);
+ui_col(INK); fg_rr(650, 579, 84, 26, 4); ui_col(fg_hv ? 0xFFFFFF : KEYF); fg_rr(651.5, 580.5, 81, 23, 3);
+gfx_setfont(11); ui_col(INK); slider62 < 0.5 ? strcpy(#fgl, "MIDI OMNI") : sprintf(#fgl, "MIDI CH %d", slider62); fg_ctxt(692, 592, #fgl);
 fg_hv && pressed && drag_id == 0 ? (
   drag_id = -1; strcpy(#fgm, ""); fg_i = 0;
   loop(17, fg_i == floor(slider62 + 0.5) ? strcat(#fgm, "!"); fg_i == 0 ? strcat(#fgm, "Omni") : ( sprintf(#fgn, "Channel %d", fg_i); strcat(#fgm, #fgn); ); fg_i < 16 ? strcat(#fgm, "|"); fg_i += 1; );
-  gfx_x = 650 * sc; gfx_y = 485 * sc; fg_i = gfx_showmenu(#fgm); fg_i > 0 ? fg_set(62, fg_i - 1);
+  gfx_x = 650 * sc; gfx_y = 607 * sc; fg_i = gfx_showmenu(#fgm); fg_i > 0 ? fg_set(62, fg_i - 1);
 );
 // SAT and the OUT stage
-sprintf(#fgv, "%d%%", slider63);              fg_knob(800, 470, 12, 63, 0, 100, 0, 0, 1, 0xD8B040, "", #fgv);
-gfx_setfont(10); ui_col(INK); fg_txt(820, 463, "SAT");
-fg_txt(862, 463, "OUT");
+sprintf(#fgv, "%d%%", slider63);              fg_knob(800, 592, 12, 63, 0, 100, 0, 0, 1, 0xD8B040, "", #fgv);
+gfx_setfont(10); ui_col(INK); fg_txt(820, 585, "SAT");
+fg_txt(862, 585, "OUT");
 fg_i = 0; loop(3,
-  fg_key(898 + fg_i * 58, 457, 56, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "CLIP" : "LIMIT", slider68 == fg_i,
+  fg_key(898 + fg_i * 58, 579, 56, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "CLIP" : "LIMIT", slider68 == fg_i,
          fg_i == 0 ? 0x3A9CFF : fg_i == 1 ? (ost_clipped ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22) ? fg_set(68, fg_i);
   fg_i += 1; );
 ost_clipped = 0;
 
 // ---------- the title ----------
-ui_col(INK); fg_th(250, 510, 446, 510, 2); fg_th(654, 510, 850, 510, 2);
-fg_disc(244, 510, 3); fg_disc(856, 510, 3);
-gfx_setfont(13); ui_col(INK); fg_ctxt(550, 510, "THE FOOL");
+ui_col(INK); fg_th(250, 632, 446, 632, 2); fg_th(654, 632, 850, 632, 2);
+fg_disc(244, 632, 3); fg_disc(856, 632, 3);
+gfx_setfont(13); ui_col(INK); fg_ctxt(550, 632, "THE FOOL");
 
 pk_end();
 ui_end();
