@@ -13,7 +13,8 @@ desc:GFX MK3 [channel strip]
 //           PRESENCE bell 0.7 / 1 / 1.4 / 2 / 2.8 / 4 / 5.6 kHz  +-12 dB
 //           TREBLE shelf 5 / 8 / 12 kHz  +-15 dB
 //           FIZZ: the broadcast "cut-through" top. An exciter generates new harmonics from everything
-//           above 3 kHz, a peak shapes them round 8 kHz, and the result is pinned at a fixed level
+//           above 3.5 kHz (driven by how much top the source really has, so guitars stay smooth),
+//           a peak shapes them round 8 kHz, and the result is pinned at a fixed level
 //           under the programme (the way a station's multiband processor holds its top band), so
 //           the air stays constant and the voice cuts through background noise. It runs in parallel:
 //           only the new harmonics are added, about 26 dB under the programme. Works with EQ IN.
@@ -144,10 +145,11 @@ cVb = alloc(5); sVbL = alloc(4); sVbR = alloc(4);
 ost_init(alloc(4096));                              // GFX output stage
 cBP(cVb, 2000, 0.7);
 // FIZZ: high-pass into the exciter, high-pass after it, a peak at 8 kHz
-cFz1 = alloc(5); cFz2 = alloc(5); cFz3 = alloc(5);
+cFz1 = alloc(5); cFz2 = alloc(5); cFz3 = alloc(5); cFz4 = alloc(5);
 sFz1L = alloc(4); sFz1R = alloc(4); sFz2L = alloc(4); sFz2R = alloc(4); sFz3L = alloc(4); sFz3R = alloc(4);
-cHP(cFz1, 3000, 0.7071); cHP(cFz2, 5000, 0.7071); cPK(cFz3, 8000, 6, 0.9);
-fzA = cms(0.001); fzR = cms(0.04); fzW = cms(0.03); fzEnv = 0; fzPrg = 0; fzH = 0;
+sFz4L = alloc(4); sFz4R = alloc(4);
+cHP(cFz1, 3500, 0.7071); cHP(cFz2, 5500, 0.7071); cPK(cFz3, 8000, 4, 0.7); cHS(cFz4, 12000, -6, 0.7);
+fzA = cms(0.003); fzR = cms(0.12); fzW = cms(0.06); fzEnv = 0; fzPrg = 0; fzH = 0;
 
 ironC = 1 - exp(-2*$pi*180/srate);
 prcC = 1 - exp(-2*$pi*150/srate);
@@ -161,19 +163,22 @@ lastEq = -1;
 
 // EQ and the compressor work on the globals ch0 / ch1
 // FIZZ (parallel): only the NEW harmonics of the top are added to the untouched signal. The band above
-// 3 kHz is normalised to a steady drive so it really saturates at any level, the clean part is subtracted
-// (leaving just the distortion products), shaped round 8 kHz and held about 26 dB under the programme.
+// 3.5 kHz is normalised against the larger of its own level and the programme's, so a source with little
+// real top (distorted guitar, dull pads) is driven gently instead of being forced into hard saturation.
+// The products are mostly even (smoother on guitar), shaped round 8 kHz with the extreme top rolled off,
+// and held about 26 dB under the programme; the hold never boosts, it only pulls back.
 function doFizz() local(h0, h1, ha, n_, u0, u1, e0, e1, ea, pa, g) (
   h0 = bqf(ch0, cFz1, sFz1L); h1 = bqf(ch1, cFz1, sFz1R);
   ha = max(abs(h0), abs(h1)); fzH += (ha - fzH)*(ha > fzH ? fzA : fzR);
-  n_ = 1/(fzH + 0.00001);
-  u0 = h0*n_; u1 = h1*n_;
-  e0 = (tanh(3*u0)/3 - u0 + 0.25*u0*u0)*fzH;        // odd + even products only, back at the band's level
-  e1 = (tanh(3*u1)/3 - u1 + 0.25*u1*u1)*fzH;
-  e0 = bqf(bqf(e0, cFz2, sFz2L), cFz3, sFz3L); e1 = bqf(bqf(e1, cFz2, sFz2R), cFz3, sFz3R);
-  ea = max(abs(e0), abs(e1)); fzEnv += (ea - fzEnv)*(ea > fzEnv ? fzA : fzR);
   pa = max(abs(ch0), abs(ch1)); fzPrg += (pa - fzPrg)*fzW;
-  g = max(0.25, min(2, 0.05*fzPrg/(fzEnv + 0.000001)));   // pinned, gently: +6 / -12 dB at most
+  n_ = 1/(max(fzH, 0.25*fzPrg) + 0.00001);
+  u0 = h0*n_; u1 = h1*n_;
+  e0 = (tanh(2*u0)/2 - u0 + 0.4*u0*u0)*fzH;         // mild odd + stronger even products, back at the band's level
+  e1 = (tanh(2*u1)/2 - u1 + 0.4*u1*u1)*fzH;
+  e0 = bqf(bqf(bqf(e0, cFz2, sFz2L), cFz3, sFz3L), cFz4, sFz4L);
+  e1 = bqf(bqf(bqf(e1, cFz2, sFz2R), cFz3, sFz3R), cFz4, sFz4R);
+  ea = max(abs(e0), abs(e1)); fzEnv += (ea - fzEnv)*(ea > fzEnv ? fzA : fzR);
+  g = max(0.25, min(1, 0.05*fzPrg/(fzEnv + 0.000001)));   // pinned, gently: never boosts, -12 dB at most
   ch0 += g*e0; ch1 += g*e1;
 );
 function doEQ() (
