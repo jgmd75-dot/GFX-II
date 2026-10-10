@@ -16,27 +16,31 @@ desc:GFX G Mark 73
 //          each with its own decay (the high partials die in milliseconds, the fundamental sings). The hammer
 //          strikes near the clamp, so its force reaches each mode by that mode's shape at the strike point.
 // TONEBAR  the heavy arm of the asymmetric tuning fork: a resonator tuned a fraction of a hertz off the tine,
-//          lightly coupled to it. Energy flows tine -> tonebar -> tine, so the tine's swing (and with it the
-//          pickup's harmonics) cycles slowly, and the note keeps a long second-stage sustain.
-// PICKUP   the tine TIP DISPLACEMENT is read by a magnetic pickup: the flux is a bell-shaped (Lorentzian) function
-//          of the tip's position across the pole, the voltage is d(flux)/dt. VOICING = where the tine rests
-//          against the pole (round: on the flank where the curve is straight; barky: close to the centre line),
-//          GAP = how far the pole sits from the swing. Big swings sweep past the pole and fold the curve: the bark.
-//          As the note decays the swing shrinks and the harmonic balance keeps moving: the decay cycles through
-//          its tone colours on its own. The pickup runs at 2x (exact half-sample tine positions) and is
-//          decimated with a half-band filter, so the bark does not alias.
-// KEYS     each key has its own fixed (seeded, repeatable) personality: tuning, tonebar beat, pickup alignment,
-//          partial balance and decay. Bass keys swing wider (more bark, longer, darker), treble keys are struck
-//          harder and sit rounder on the pole (more bell, shorter).
+//          lightly coupled to it. A little energy flows tine -> tonebar -> tine, so the tine's swing (and with it
+//          the pickup's harmonics) swells and eases slowly: an amplitude / timbre cycle, not a pitch wobble.
+// PICKUP   the tine TIP DISPLACEMENT is read by a magnetic pickup: the flux is a bell-shaped function of the tip's
+//          position across the pole, the voltage is d(flux)/dt. VOICING is the tech's voicing screw: left = DARK, the
+//          tine far off the pole axis (fundamental, nearly a sine, a little low-order colour); centre = the classic
+//          factory voicing; right = DYNO, the tine inline with the pole (the curve is symmetric, so the output is the
+//          octave: shallow and bright). GAP = how far the pole sits from the swing. Slammed notes swing past the pole
+//          and fold the curve: the bark and growl. As the note decays the swing shrinks and the harmonic balance keeps
+//          moving. The pickup runs at 2x (exact half-sample tine positions) and is decimated, so it does not alias.
+// LAYERS   tine fundamental, octave (pickup position), BELL (the bell / chime partial, its own level), hammer clink
+//          (the short bright high modes, heard on hard hits), thump, growl (over-swing), damper and key-off noise
+//          (MECH sets the noises). Hard hits stretch the tine a few cents sharp; it settles within ~30-60 ms.
+// KEYS     each key has its own fixed (seeded, repeatable) personality: tuning (+/-0.3 cent), tonebar beat (a gentle
+//          1 - 2 dB, 0.3 - 1 Hz cycle, never a pitch wobble), pickup alignment, partial balance and decay.
 // RELEASE  the damper felt lands on the tine (fast but not instant, a soft damper tick); key-off knock; sustain
 //          pedal (CC64) with a little sympathetic ring between the undamped tines.
-// AMP      after the pickups: preamp (soft clipping), STAGE (a plain stage amp) or SUITCASE (its own preamp EQ,
-//          power amp and 12-inch speaker cabinet), MODULATION (right: tremolo, left: stereo auto-pan) at RATE,
-//          OVERDRIVE (preamp and power amp break up), TREBLE, VOLUME and the house output stage.
-// PLAYING  VELOCITY (how much the hammer speed follows the key), WIDTH (keys spread low-left to high-right),
-//          POLYPHONY, FINE, RANDOM (a random tuning offset on every note), MECH (hammer thump, damper and key noise).
-// DRIFT    GFX instrument standard (25 % = standard): the tuning wanders, every note lands slightly off, the coil's
-//          top end and the pickup alignment breathe, and the modulation rate wavers.
+// AMP      three stages: (a) tone stack (STAGE flat; SUITCASE bass and treble shelving with a mid scoop), (b) the
+//          valves / transistors, tanh(x g + b) - tanh(b), driven by OVERDRIVE (the bias adds even harmonics),
+//          (c) speaker (STAGE: direct, rolled off ~10 kHz; SUITCASE: 4 x 12 open cabinet, ~5 kHz low-pass, mid bump,
+//          ~100 Hz resonance), then TREBLE. MODULATION (right: tremolo, left: stereo auto-pan) at RATE runs through
+//          incandescent bulbs and photocells (the filament heats faster than it cools): smooth and rounded.
+// PLAYING  VELOCITY (0 % = one fixed hammer speed, 100 % = a long hammer throw: the widest soft-to-slammed range),
+//          WIDTH (keys spread low-left to high-right), POLYPHONY, FINE, RANDOM (a small random offset on every note).
+// DRIFT    GFX instrument drift, kept gentle (25 % = standard): the tuning wanders about +/-1 cent, every note lands
+//          up to +/-0.75 cent off, the coil's top end and the pickup alignment breathe, the modulation rate wavers.
 // MIDI     note on / off, sustain (CC64), all notes off (CC120 / CC123).
 
 import gfx-drift.jsfx-inc
@@ -51,7 +55,7 @@ import gfx-faceplate.jsfx-inc
 slider1:50<0,100,1>-Decay (%)
 slider2:40<0,100,1>-Release (%)
 slider3:50<0,100,1>-Hardness (%)
-slider4:50<0,100,1>-Voicing (round - barky, %)
+slider4:50<0,100,1>-Voicing (dark - dyno, %)
 slider5:50<0,100,1>-Pickup gap (%)
 slider6:0<-12,12,0.1>-Treble (dB)
 slider7:0<-100,100,1>-Modulation (pan - / trem +, %)
@@ -60,7 +64,7 @@ slider9:70<0,100,1>-Velocity (%)
 slider10:30<0,100,1>-Width (%)
 slider11:16<4,32,1>-Polyphony
 slider12:0<-50,50,0.1>-Fine (cents)
-slider13:2<0,25,0.1>-Random (cents)
+slider13:0.5<0,10,0.1>-Random (cents)
 slider14:0<0,100,1>-Overdrive (%)
 slider15:0<0,1,1{Stage,Suitcase}>-Amp
 slider16:35<0,100,1>-Mechanism noise (%)
@@ -73,6 +77,7 @@ slider22:6000<2000,16000,10>-Sat high band (Hz)
 slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
 slider25:0<0,16,1>-MIDI channel (0 = omni)
+slider26:50<0,100,1>-Bell (%)
 
 in_pin:none
 out_pin:left output
@@ -84,32 +89,34 @@ ext_noinit = 1;
 
 // ---------- memory ----------
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
-MKV = 30000; MKVS = 100; MKNV = 36;                         // 36 voice slots x 100 (32 playable + 4 for stolen fades)
+MKV = 30000; MKVS = 110; MKNV = 36;                         // 36 voice slots x 110 (32 playable + 4 for stolen fades)
 MKHL = 34000; MKHR = 34100;                                 // half-band decimator rings (64 each)
 MKDEF = 34200;                                              // the Init values of sliders 1-18
 MKTMP = 34300;                                              // preset parser scratch (400)
 memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 
-// voice slots (p = MKV + 100 * v):
+// voice slots (p = MKV + 110 * v):
 //   0 on   1 note   2 age   3 key held   4 held by the pedal   5 dampers down   6 velocity 0..1   7 hammer samples left
 //   8 hammer position   9 hammer velocity   10 T / hammer mass   11 felt K   12 felt exponent p   13 felt loss
 //   14 gain L   15 gain R   16 cos(w) of the fundamental   17 pickup offset (rest position across the pole)   18 output norm
 //   19 flux at the last 2x step   20 tine modes in use   21 / 22 tonebar y1 / y2   23 / 24 tonebar a1 / a2
 //   25 coupling into the tonebar   26 coupling into the tine   27 tonebar angle   28 tonebar r   29 thump gain
 //   30 tonebar r (sustain)   31 stolen (fast fade)   32 own pickup out (for the sympathetic rail)
-//   33 sympathetic gain   34 strike displacement (last)   35 level estimate   36 release T60 scale (register)
+//   33 sympathetic gain   34 strike displacement (last)   35 angle of the fundamental (now)   36 release T60 scale (register)
 //   37 1 / sin(w) of the fundamental   38 offset (drift-free)   39 cos(w / 2) of the fundamental
 //   40 + 10 k   tine mode k (0..4): y1, y2, a1, a2, force gain, tip weight, half-step h1, h2, angle, r
 //   90 + k      mode shape at the strike point      95 + k   r while the dampers are up
+//   100 clink: last high-mode tip position   101 clink gain
 
 function mk_hash(n, k) local(v) ( v = sin(n * 12.9898 + k * 78.233 + 0.5) * 43758.5453; v - floor(v); );
 
 // ---------- the flux curve of the pickup and its slope ----------
 function mk_flux(z) ( 1 / (1 + z * z); );
 function mk_slope(z) ( 2 * z / sqr(1 + z * z); );            // |d flux / dz|
+function mk_curv(z) ( (6 * z * z - 2) / (1 + z * z) ^ 3; );     // d2 flux / dz2 (the octave)
 
 // ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
-#mk_def = "50 40 50 50 50 0 0 4.5 70 30 16 0 2 0 0 35 25 0";
+#mk_def = "50 40 50 50 50 0 0 4.5 70 30 16 0 0.5 0 0 35 25 0";
 function mk_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
   n = 0; i = 0; inn = 0; len = strlen(s);
   loop(len + 1,
@@ -130,46 +137,51 @@ function mk_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
 );
 mk_nums(#mk_def, MKDEF);
 
-#mk_pm = "Init|Stage Mark|Bright Stage|Mellow Ballad|Suitcase Tremolo|Auto Pan Wide|Bark & Bite|Bell Tines|Soft Felt|Drive Amp|Gospel Bark|Lo-Fi Upright";
+#mk_pm = "Init|Stage Mark|Bright Stage|Mellow Ballad|Suitcase Tremolo|Auto Pan Wide|Bark & Bite|Bell Tines|Soft Felt|Drive Amp|Gospel Bark|Lo-Fi Upright|Dyno Bright|Dark Ballad";
 function mk_pstr(p) (
-  p == 2  ? "1:55 3:55 4:58 9:72 10:25 15:0 18:0" :
-  p == 3  ? "1:45 3:78 4:45 5:42 6:4 9:78 10:35 14:6" :
-  p == 4  ? "1:70 2:55 3:25 4:30 5:62 6:-3 9:62 10:30 16:25" :
-  p == 5  ? "1:60 3:50 4:52 6:2 7:55 8:4.8 15:1 10:20 18:1.2" :
-  p == 6  ? "1:60 3:48 4:45 6:3 7:-85 8:3.2 15:1 10:0 18:1" :
-  p == 7  ? "1:45 2:30 3:72 4:90 5:30 9:85 14:22 15:0 6:2 18:-3" :
-  p == 8  ? "1:55 3:88 4:20 5:55 6:6 9:72 10:45 18:-2" :
-  p == 9  ? "1:60 2:55 3:8 4:35 5:65 6:-5 9:55 16:20" :
-  p == 10 ? "1:50 3:62 4:72 5:40 9:82 14:65 15:1 7:30 8:5.6 6:1 18:-9.5" :
-  p == 11 ? "1:58 3:65 4:82 5:35 9:88 14:30 15:1 7:20 8:6.2 6:3 18:-4.5" :
-  p == 12 ? "1:35 2:30 3:40 4:55 6:-7 7:22 8:6.8 15:1 13:9 17:70 10:10 16:60 18:1.2" :
+  p == 2  ? "1:55 3:55 4:55 9:72 10:25" :
+  p == 3  ? "1:45 3:78 4:56 5:42 6:4 9:78 10:35 14:6 26:62 18:-0.7" :
+  p == 4  ? "1:70 2:55 3:25 4:28 5:62 6:-3 9:62 10:30 16:25 26:40 18:-1.1" :
+  p == 5  ? "1:60 3:50 4:50 6:2 7:55 8:4.8 15:1 10:20 18:1.0" :
+  p == 6  ? "1:60 3:48 4:46 6:3 7:-85 8:3.2 15:1 10:0" :
+  p == 7  ? "1:45 2:30 3:72 4:64 5:22 9:90 14:22 6:2 18:2.2" :
+  p == 8  ? "1:55 3:88 4:36 5:55 6:5 9:72 10:45 26:85 18:-4.4" :
+  p == 9  ? "1:60 2:55 3:8 4:32 5:65 6:-5 9:55 16:20 26:30 18:-1.0" :
+  p == 10 ? "1:50 3:62 4:58 5:38 9:82 14:65 15:1 7:30 8:5.6 6:1 18:-3.1" :
+  p == 11 ? "1:58 3:65 4:62 5:28 9:88 14:30 15:1 7:20 8:6.2 6:3 18:-0.8" :
+  p == 12 ? "1:35 2:30 3:40 4:50 6:-7 7:22 8:6.8 15:1 13:6 17:70 10:10 16:60" :
+  p == 13 ? "1:50 3:68 4:90 5:48 6:3 9:78 10:35 26:70" :
+  p == 14 ? "1:72 2:58 3:22 4:6 5:58 6:-4 9:66 10:28 15:1 16:20 26:25 18:-4.6" :
   "";
 );
 function load_preset(p) local(n, i) (
   i = 0; loop(18, slider(i + 1) = MKDEF[i]; i += 1; );
+  slider26 = 50;
   n = mk_nums(mk_pstr(p), MKTMP);
-  i = 0; loop(floor(n / 2), MKTMP[i * 2] >= 1 && MKTMP[i * 2] <= 18 ? slider(MKTMP[i * 2]) = MKTMP[i * 2 + 1]; i += 1; );
-  i = 1; loop(18, ui_auto(i); i += 1; );
+  i = 0; loop(floor(n / 2), (MKTMP[i * 2] >= 1 && MKTMP[i * 2] <= 18) || MKTMP[i * 2] == 26 ? slider(MKTMP[i * 2]) = MKTMP[i * 2 + 1]; i += 1; );
+  i = 1; loop(18, ui_auto(i); i += 1; ); ui_auto(26);
   pr_cur = p;
 );
 
 // ---------- the velocity curve: key velocity -> hammer speed (0..1) ----------
-// (0 % = every note at one fixed hammer speed, 25 % = a light curve, 100 % = a heavy, wide-range touch)
+// (0 % = every note at one fixed hammer speed, 25 % = a light curve, 100 % = a long hammer throw: the widest
+// soft-to-slammed range, and a little more swing at the top)
 function mk_vcurve(vel) local(x, b) (
   x = min(max(vel / 127, 0.01), 1);
   b = min(mk_vsens * 4, 1);
-  0.7 * (1 - b) + b * x ^ (0.45 + 1.65 * mk_vsens);
+  0.7 * (1 - b) + b * x ^ (0.45 + 2.15 * mk_vsens ^ 1.3);
 );
 
 // ---------- voice coefficients for the current pitch (drift) and damper state ----------
 // the tine's fundamental loses energy faster while it swings wide (air drag and clamp friction rise steeply
 // with amplitude): a hard note's over-swing settles within tens of milliseconds into its singing sustain
+// ... and while it swings wide it is stretched a little sharp: a hard hit settles a few cents down within ~30 ms
 function mk_drag(p) local(q, a, e, r, h) (
   q = p + 40;
   a = abs(q[5]) * sqrt(max(q[0] * q[0] + q[1] * q[1] - 2 * p[16] * q[0] * q[1], 0)) * p[37];
   e = max(a - mk_dk, 0);
   r = q[9] * exp(-mk_db * e * e);
-  q[2] = 2 * r * p[16]; q[3] = r * r;
+  q[2] = 2 * r * (e > 0 ? cos(p[35] * (1 + mk_kp * e * e)) : p[16]); q[3] = r * r;
   h = q[5] / (2 * sqrt(r) * p[39]); q[6] = h; q[7] = h * r;
   a;
 );
@@ -179,7 +191,7 @@ function mk_coefs(p, pitch) local(k, q, w, r, h) (
     w = q[8] * pitch; r = q[9];
     q[2] = 2 * r * cos(w); q[3] = r * r;
     h = q[5] / (2 * sqrt(r) * cos(0.5 * w)); q[6] = h; q[7] = h * r;
-    k == 0 ? ( p[16] = cos(w); p[37] = 1 / sin(w); p[39] = cos(0.5 * w); );
+    k == 0 ? ( p[16] = cos(w); p[37] = 1 / sin(w); p[39] = cos(0.5 * w); p[35] = w; );
     q += 10; k += 1;
   );
   mk_drag(p);
@@ -198,7 +210,7 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
   p[6] = vel / 127;
   fresh ? (
     // ----- the tine: pitch (with the key's own tuning error), modes, decays -----
-    f = 440 * 2 ^ ((n - 69 + (h1 - 0.5) * 0.03 + (rand(2) - 1) * mk_rnd / 100) / 12) * mk_fine * ins_note_detune();
+    f = 440 * 2 ^ ((n - 69 + (h1 - 0.5) * 0.006 + (rand(2) - 1) * (mk_rnd + mk_drift * 3) / 100) / 12) * mk_fine;   // key +/-0.3 ct, RANDOM, DRIFT half the house amount
     p[1] = n;
     p[20] = 0;
     T = mk_dec * 9 * 2 ^ (-kt / 2.0) * (0.85 + 0.3 * h2);            // fundamental T60 (s)
@@ -209,15 +221,15 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
           i == 3 ? 35.6 * (1 + (h5 - 0.5) * 0.03) : 58.6;
       w = 2 * $pi * f * R / srate;
       w < 0.78 * $pi && f * R < 17000 ? (
-        // decay of this mode: the fundamental sings, the higher partials ring off fast
-        ph = i == 0 ? T : (i == 1 ? 1.15 : i == 2 ? 0.34 : i == 3 ? 0.13 : 0.06) * 2 ^ (-kt / 1.5) * (0.8 + 0.4 * mk_hash(n, 10 + i)) * sqrt(mk_dec);
+        // decay of this mode: the fundamental sings, the bell (mode 2) rings, modes 3-5 are the hammer clink
+        ph = i == 0 ? T : (i == 1 ? 1.15 : i == 2 ? 0.30 : i == 3 ? 0.07 : 0.04) * 2 ^ (-kt / 1.5) * (0.8 + 0.4 * mk_hash(n, 10 + i)) * sqrt(mk_dec);
         ph = min(ph, T);
         q[8] = w; q[9] = mk_r(ph); p[95 + i] = q[9];
         // mode shape at the strike point (clamped-free cantilever struck near the clamp), key-to-key spread
         p[90 + i] = (i == 0 ? 0.070 : i == 1 ? 0.36 : i == 2 ? 0.83 : i == 3 ? 1.25 : 1.45) * (i ? 0.85 + 0.3 * mk_hash(n, 20 + i) : 1);
         q[4] = p[90 + i] * sin(w) / (2 * $pi * f * R * srate);                // force (one sample) -> modal displacement
         // how much of each mode the tip shows (the tuning spring and the taper): the bell is brighter in the treble
-        pt = i == 0 ? 1 : i == 1 ? (0.2 + 0.8 * tr ^ 1.2) * (0.8 + 0.4 * mk_hash(n, 30)) : i == 2 ? 0.2 : i == 3 ? 0.09 : 0.05;
+        pt = i == 0 ? 1 : i == 1 ? (0.2 + 0.8 * tr ^ 1.2) * (0.8 + 0.4 * mk_hash(n, 30)) * mk_bell : (i == 2 ? 0.2 : i == 3 ? 0.11 : 0.07) * mk_tclk;
         q[5] = (i % 2 ? -2 : 2) * pt;                                   // (scaled by the pickup gain below)
         q[0] = q[1] = 0;
         p[20] += 1;
@@ -232,33 +244,42 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
     cmax = tc / (2 * J);
     p[12] = pe; p[11] = (pe + 1) * 3 / (2 * cmax ^ (pe + 1)); p[10] = 1 / (3 * srate);   // hammer mass 3 (modal mass 1)
     p[13] = 0.18 + 0.25 * (1 - mk_hard);                                 // felt loss (Hunt-Crossley)
-    p[29] = mk_mech * 0.035 * tc / 3;                                    // hammer thump (from the contact force)
+    p[29] = mk_mech * 0.055 * tc / 3;                                    // hammer thump (from the contact force)
     // ----- the pickup: swing at full speed in pole widths, rest offset, output norm -----
-    A = (2.3 - 1.55 * tr) * mk_swing * (0.92 + 0.16 * h4);
-    off = mk_off0 + (h5 - 0.5) * 0.06 + (tr - 0.5) * 0.08;
-    off = max(off, 0.12);
+    A = (2.3 - 1.55 * tr) * mk_swing * (0.92 + 0.16 * h4) * (0.79 + 0.3 * mk_vsens);
+    off = mk_off0 * (1 + (h5 - 0.5) * 0.12 + (tr - 0.5) * 0.15);
     p[38] = off; p[17] = off;
     xr = 2 * 0.070 * 2 * 3 * 0.85 / (2 * $pi * f);                         // tip swing of the fundamental at full speed
     g = A / xr;
     q = p + 40; loop(p[20], q[5] *= g; q += 10; );
-    p[18] = 0.22 * (1 - 0.22 * tr) * (0.94 + 0.12 * h3) / (mk_slope(off) * A * $pi * f / srate);
+    // output norm: the level of the fundamental and the octave at a medium swing, so VOICING changes the colour, not the level
+    xr = 0.45 * A;
+    p[18] = 0.22 * 0.45 * (1 - 0.22 * tr) * (0.94 + 0.12 * h3) / (sqrt(sqr(mk_slope(off) * xr) + sqr(mk_curv(off) * xr * xr * 0.5)) * $pi * f / srate);
     p[19] = mk_flux(off);
     // ----- the tonebar: a heavy resonator a fraction of a hertz off the tine, lightly coupled -----
     mu = 5;
-    dt = (0.45 + 1.1 * h2) * (h1 > 0.5 ? 1 : -1) * (0.7 + 0.6 * tr);         // detune (Hz) -> the slow beat
-    cHz = abs(dt) * (0.24 + 0.2 * h3);                                    // coupling (Hz): a partial exchange, no dead nulls
+    // designed from the beat it should give: a slow rate (0.3 - 1 Hz, slower in the bass) and a gentle 1 - 2 dB swell on
+    // the fundamental, kept small enough that the two coupled modes never read as a pitch wobble (< ~0.35 cent)
+    dt = 0.3 + (0.25 + 0.45 * tr) * h2;                                  // beat rate (Hz)
+    cHz = 10 ^ ((1 + h3) / 20); cHz = (cHz - 1) / (cHz + 1);             // tonebar share of the tine motion (b / a)
+    cHz = min(cHz, 0.35 / 1731 * f / dt);
+    cHz = 0.5 * tan(2 * atan(sqrt(cHz)));                                 // coupling / detune ratio
+    dt /= sqrt(1 + 4 * cHz * cHz);                                        // detune (Hz)
+    cHz *= dt;                                                            // coupling (Hz)
+    h1 < 0.5 ? dt = -dt;
     g = 2 * sqrt(mu) * cHz / f;
     // the coupling spring stiffens both: pre-tune them so the tine sounds at f and the bar at f + dt
     w = 2 * $pi * f / srate;
     p[48] = w / sqrt(1 + g);
     w = sqrt(sqr(2 * $pi * (f + dt) / srate) - g * w * w / mu);
-    p[27] = w; Tb = min(T * 1.7, 50); p[30] = p[28] = mk_r(Tb);
+    p[27] = w; Tb = T; p[30] = p[28] = mk_r(Tb);
     p[25] = g * (2 * $pi * f / srate) * sin(w) / mu * mk_tcpl;
     p[26] = g * (2 * $pi * f / srate) * sin(2 * $pi * f / srate) * mk_tcpl;
     p[21] = p[22] = 0;
     p[36] = 1 + 1.2 * (1 - tr);                                           // bass dampers are slower
     p[33] = mk_symk * 2 * $pi * f / srate / max(abs(p[45]), 0.000001);
-    p[32] = 0; p[34] = 0; p[35] = 1;
+    p[32] = 0; p[34] = 0;
+    p[100] = 0; p[101] = mk_ckg * p[18] * max(mk_slope(off), 0.35) * (0.3 + 2 * mk_mech) * min(max(2 ^ (1.8 * kt), 0.25), 6);   // the clink layer (hammer tick)
   ) : (
     // the same key struck again while it rings: the dampers come up, the hammer meets the moving tine
     i = 0; q = p + 40; loop(p[20], q[9] = p[95 + i]; q += 10; i += 1; );
@@ -269,7 +290,7 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
   p[8] = s0; p[9] = v0 * 1; p[34] = s0;
   p[7] = floor(0.03 * srate);
   p[0] = 1; p[3] = 1; p[4] = 0; p[5] = 0; p[31] = 0;
-  mk_coefs(p, ins_pitch);
+  mk_coefs(p, mk_ptch);
 );
 
 function mk_pan(p, n) local(pan) (
@@ -295,8 +316,8 @@ function mk_release(p) local(q, i) (
   p[5] = 1; p[3] = 0; p[4] = 0;
   // the damper felt touches the tine: a soft tick into the tine modes
   q = p + 40; i = 0;
-  loop(p[20], q[0] -= q[4] * mk_mech * 0.006 * 3 * srate * (q[0] - q[1] > 0 ? 1 : -1) * p[6] * (i ? 0.4 : 1); q += 10; i += 1; );
-  mk_kn = max(mk_kn, mk_mech * 0.0035 * (0.4 + 0.6 * p[6]));
+  loop(p[20], q[0] -= q[4] * mk_mech * 0.012 * 3 * srate * (q[0] - q[1] > 0 ? 1 : -1) * p[6] * (i ? 0.4 : 1); q += 10; i += 1; );
+  mk_kn = max(mk_kn, mk_mech * 0.008 * (0.4 + 0.6 * p[6]));
 );
 
 function mk_note_on(n, vel) local(i, p, found) (
@@ -337,7 +358,8 @@ function update() (
   mk_dec = 2 ^ ((slider1 - 50) / 50 * 1.5);                // 0.35x .. 2.8x
   mk_relt = 0.03 * 2 ^ (slider2 / 100 * 5.5);              // damper T60: 30 ms .. 1.4 s
   mk_hard = slider3 / 100;
-  mk_off0 = 0.66 - 0.36 * slider4 / 100;                   // round (on the flank) .. barky (near the centre line)
+  mk_off0 = 0.015 + 1.185 * (1 - slider4 / 100) ^ 1.45;      // tine rest across the pole: far off-axis (dark) .. inline (dyno)
+  mk_bell = (slider26 / 50) ^ 1.5;
   mk_swing = 2 ^ ((0.5 - slider5 / 100) * 1.6);            // GAP: near = wider swing in pole widths
   mk_treb = slider6;
   mk_mod = slider7 / 100; mk_rate = slider8;
@@ -350,6 +372,8 @@ function update() (
   mk_volt = 10 ^ (slider18 / 20);
   mk_chan = slider25;
   mk_dk = 0.75; mk_db = 14 / srate;                          // drag: knee (pole widths) and strength
+  mk_ckg = 20;                                               // clink layer level
+  mk_kp = 0.0025;                                            // stretch: pitch rise per (pole width over the knee)^2
   ins_output_setup(19);
 );
 
@@ -360,6 +384,7 @@ function mk_srinit() (
   mk_tq.bq_set(5, 150, 1.2, 0);                             // hammer thump body (key bed)
   mk_tc.bq_set(1, 2500, 0.7, 0);                            // hammer click
   mk_kq.bq_set(5, 900, 1.4, 0);                             // key-off knock
+  mk_bh = 1 - exp(-1 / (0.014 * srate)); mk_bc = 1 - exp(-1 / (0.045 * srate));   // bulb: heats ~14 ms, cools ~45 ms
   mk_tset = -1;
 );
 
@@ -368,32 +393,40 @@ function mk_tone() local(f) (
   f = 6800 * 2 ^ (ins_tone * 0.35);
   mk_cl.bq_set(0, f, 0.85, 0); mk_cr.bq_set(0, f, 0.85, 0);
   mk_amp ? (
-    // SUITCASE: preamp EQ (bass lift), power amp, two-by-12 cabinet (low cut, cone presence, top roll-off)
-    mk_e1l.bq_set(4, 95, 0.7, 4.5); mk_e1r.bq_set(4, 95, 0.7, 4.5);
-    mk_e2l.bq_set(2, 2600, 1.1, 2.2); mk_e2r.bq_set(2, 2600, 1.1, 2.2);
-    mk_e3l.bq_set(0, 5200, 0.9, 0); mk_e3r.bq_set(0, 5200, 0.9, 0);
-    mk_e4l.bq_set(1, 55, 0.8, 0); mk_e4r.bq_set(1, 55, 0.8, 0);
-    mk_pre = 1.35; mk_bias = 0.18;
+    // SUITCASE (a) its preamp tone stack: bass and treble shelving with a mid scoop
+    mk_a1l.bq_set(4, 110, 0.7, 3.5); mk_a1r.bq_set(4, 110, 0.7, 3.5);
+    mk_a2l.bq_set(2, 650, 0.8, -5); mk_a2r.bq_set(2, 650, 0.8, -5);
+    mk_a3l.bq_set(3, 3200, 0.7, 4); mk_a3r.bq_set(3, 3200, 0.7, 4);
+    // (c) the 4 x 12 open-back cabinet: low resonance, cone mid bump, roll-off from ~5 kHz, low cut
+    mk_c1l.bq_set(2, 100, 1.6, 3.5); mk_c1r.bq_set(2, 100, 1.6, 3.5);
+    mk_c2l.bq_set(2, 1800, 1.0, 3); mk_c2r.bq_set(2, 1800, 1.0, 3);
+    mk_c3l.bq_set(0, 5000, 0.8, 0); mk_c3r.bq_set(0, 5000, 0.8, 0);
+    mk_c4l.bq_set(1, 55, 0.8, 0); mk_c4r.bq_set(1, 55, 0.8, 0);
+    mk_pre = 1.25; mk_bias = -0.3; mk_cg = 10 ^ (2 / 20);
   ) : (
-    // STAGE: a plain, nearly flat stage amp and speaker
-    mk_e1l.bq_set(4, 120, 0.7, 1.5); mk_e1r.bq_set(4, 120, 0.7, 1.5);
-    mk_e2l.bq_set(2, 900, 0.8, -1.0); mk_e2r.bq_set(2, 900, 0.8, -1.0);
-    mk_e3l.bq_set(0, 9500, 0.71, 0); mk_e3r.bq_set(0, 9500, 0.71, 0);
-    mk_e4l.bq_set(1, 35, 0.7, 0); mk_e4r.bq_set(1, 35, 0.7, 0);
-    mk_pre = 0.85; mk_bias = 0.12;
+    // STAGE (a) a flatter stage-amp input
+    mk_a1l.bq_set(4, 120, 0.7, 1.5); mk_a1r.bq_set(4, 120, 0.7, 1.5);
+    mk_a2l.bq_set(2, 900, 0.8, -1); mk_a2r.bq_set(2, 900, 0.8, -1);
+    mk_a3l.bq_set(3, 3200, 0.7, 0); mk_a3r.bq_set(3, 3200, 0.7, 0);
+    // (c) direct / DI-like: a gentle top roll-off around 10 kHz
+    mk_c1l.bq_set(2, 100, 1.6, 0); mk_c1r.bq_set(2, 100, 1.6, 0);
+    mk_c2l.bq_set(2, 1800, 1.0, 0); mk_c2r.bq_set(2, 1800, 1.0, 0);
+    mk_c3l.bq_set(0, 10000, 0.6, 0); mk_c3r.bq_set(0, 10000, 0.6, 0);
+    mk_c4l.bq_set(1, 30, 0.7, 0); mk_c4r.bq_set(1, 30, 0.7, 0);
+    mk_pre = 0.85; mk_bias = -0.2; mk_cg = 1;
   );
   mk_tbl.bq_set(3, 3000, 0.7, mk_treb); mk_tbr.bq_set(3, 3000, 0.7, mk_treb);
-  mk_dg = mk_pre * (1 + 9 * mk_od * mk_od);                // preamp drive
+  // (b) the valves / transistors: tanh(x g + b) - tanh(b), the bias makes the drive add even harmonics
+  mk_dg = mk_pre * (1 + 30 * mk_od * mk_od);
   mk_bt = vo_tanh(mk_bias);
-  mk_dn = 1 / (sqrt(mk_dg * mk_pre) * (1 - mk_bt * mk_bt));   // the drive adds gain like a real preamp, half of it made up
-  mk_pg = 1 + 5 * mk_od * mk_od;                           // power amp drive
+  mk_dn = mk_cg / (mk_dg ^ 0.75 * mk_pre ^ 0.25 * (1 - mk_bt * mk_bt));   // drive adds some gain, like a real amp
 );
 
 ins_drift_init();
-mk_tcpl = 1;                                               // tine / tonebar coupling scale (a test hook: 1 = as designed)
+mk_tcpl = 1; mk_tclk = 1;                                  // test hooks: tonebar coupling, clink modes (1 = as designed)
 mk_symk = 0.00012;                                         // sympathetic coupling between undamped tines
 mk_pedal = 0; mk_age = 0; mk_kn = 0; mk_hw = 0; mk_lph = 0; mk_rail = 0; mk_pk = 0;
-mk_dcxl = mk_dcyl = mk_dcxr = mk_dcyr = 0; mk_adn = 0.000000000000000001;
+mk_dcxl = mk_dcyl = mk_dcxr = mk_dcyr = 0; mk_ptch = 1; mk_bu1 = mk_bu2 = 0.5; mk_adn = 0.000000000000000001;
 mk_srinit();
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                     // a new instance opens Large, on Init
 update();
@@ -420,6 +453,7 @@ while (midirecv(mofs, m1, m2, m3)) (
   );
 );
 ins_drift_block(mk_drift, samplesblock);
+mk_ptch = ins_pitch ^ 0.2;                                 // the harp's tuning wanders only gently (+/-1 ct at 25 %)
 (mk_tset < 0 || mk_ta != mk_amp || mk_tt != mk_treb || mk_to != mk_od || abs(mk_tn - ins_tone) > 0.01) ? (
   mk_tone(); mk_tset = 1; mk_ta = mk_amp; mk_tt = mk_treb; mk_to = mk_od; mk_tn = ins_tone;
 );
@@ -442,11 +476,10 @@ loop(MKNV,
       mk_rt = mk_r(mk_p[31] ? 0.025 : mk_relt * mk_p[36] * 2.5); mk_rt < mk_p[28] ? mk_p[28] += (mk_rt - mk_p[28]) * mk_ramp;
     );
     mk_p[17] = mk_p[38] * (1 + ins_cut * 0.05);            // the pickup alignment breathes (DRIFT)
-    mk_coefs(mk_p, ins_pitch);
+    mk_coefs(mk_p, mk_ptch);
     // level estimate: tip swing + tonebar
     mk_e = abs(mk_p[40] * mk_p[45]) + abs(mk_p[41] * mk_p[45]) + abs(mk_p[21] * mk_p[45]) + abs(mk_p[50] * mk_p[55]);
     mk_p[7] <= 0 && (mk_p[5] ? mk_e < 0.00003 : mk_e < 0.000003) ? mk_p[0] = 0;
-    mk_p[35] = mk_e;
     mk_p[2] >= mk_nage ? (
       mk_nage = mk_p[2];
       mk_q = mk_p + 40;
@@ -497,20 +530,25 @@ loop(MKNV,
     mk_xm = mk_q[6] * mk_y + mk_q[7] * mk_q[0];
     mk_q[1] = mk_q[0]; mk_q[0] = mk_y;
     mk_xt = mk_q[5] * mk_y;
-    // ----- the higher tine modes -----
+    // ----- the higher tine modes: 1 = the bell, 2 - 4 = the clink -----
+    mk_xh = 0; mk_k = 0;
     loop(mk_p[20] - 1,
-      mk_q += 10;
+      mk_q += 10; mk_k += 1;
       mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F;
       mk_xm += mk_q[6] * mk_y + mk_q[7] * mk_q[0];
       mk_q[1] = mk_q[0]; mk_q[0] = mk_y;
       mk_xt += mk_q[5] * mk_y;
+      mk_k > 1 ? mk_xh += mk_q[5] * mk_y;
     );
+    // the clink: the short bright high modes also heard directly (the hammer tick), velocity-shaped by the contact
+    mk_ck = (mk_xh - mk_p[100]) * mk_p[101] * 0.5; mk_p[100] = mk_xh;
     // ----- the pickup at 2x: flux of the tip position, its rate of change -----
     mk_z = mk_xm + mk_p[17]; mk_flm = 1 / (1 + mk_z * mk_z);
     mk_z = mk_xt + mk_p[17]; mk_fl = 1 / (1 + mk_z * mk_z);
     mk_o0 = (mk_flm - mk_p[19]) * mk_p[18]; mk_o1 = (mk_fl - mk_flm) * mk_p[18];
     mk_p[19] = mk_fl;
     mk_p[32] = mk_o1; mk_rsum += mk_o1;
+    mk_o0 += mk_ck; mk_o1 += mk_ck;
     mk_L0 += mk_o0 * mk_p[14]; mk_L1 += mk_o1 * mk_p[14];
     mk_R0 += mk_o0 * mk_p[15]; mk_R1 += mk_o1 * mk_p[15];
   );
@@ -532,24 +570,35 @@ mk_l += mk_mx; mk_r_ += mk_mx;
 // ---------- pickup coil load ----------
 mk_adn = -mk_adn;                                            // a tiny alternating offset keeps the filters out of denormals
 mk_l = mk_cl.bq_run(mk_l + mk_adn); mk_r_ = mk_cr.bq_run(mk_r_ + mk_adn);
+mk_tiv > 0 ? ( mk_tic = (mk_tic + 1) % 16384; mk_tic == 0 ? ( mk_l += mk_tiv; mk_r_ += mk_tiv; ); );   // test hook: an impulse into the amp
+mk_tsv > 0 ? ( mk_tsp += 261.63 / srate; mk_tsp -= floor(mk_tsp); mk_l += mk_tsv * sin(2 * $pi * mk_tsp); mk_r_ += mk_tsv * sin(2 * $pi * mk_tsp); );   // test hook: a sine into the amp
 
-// ---------- preamp: soft clipping, a little asymmetric ----------
+// ---------- AMP (a) tone stack before the gain stage ----------
+mk_l = mk_a1l.bq_run(mk_l); mk_r_ = mk_a1r.bq_run(mk_r_);
+mk_l = mk_a2l.bq_run(mk_l); mk_r_ = mk_a2r.bq_run(mk_r_);
+mk_l = mk_a3l.bq_run(mk_l); mk_r_ = mk_a3r.bq_run(mk_r_);
+// ---------- AMP (b) asymmetric waveshaping with bias (OVERDRIVE drives it) ----------
 mk_l = (vo_tanh(mk_dg * mk_l + mk_bias) - mk_bt) * mk_dn;
 mk_r_ = (vo_tanh(mk_dg * mk_r_ + mk_bias) - mk_bt) * mk_dn;
-mk_l = mk_e1l.bq_run(mk_l); mk_r_ = mk_e1r.bq_run(mk_r_);
-mk_l = mk_e2l.bq_run(mk_l); mk_r_ = mk_e2r.bq_run(mk_r_);
-mk_l = mk_tbl.bq_run(mk_l); mk_r_ = mk_tbr.bq_run(mk_r_);
 
-// ---------- MODULATION: right = tremolo, left = stereo auto-pan ----------
+// ---------- MODULATION: right = tremolo, left = stereo auto-pan, through bulbs and photocells ----------
+// the LFO lights an incandescent bulb (the filament heats faster than it cools), its light sets a photocell's
+// conductance: a smooth, slightly rounded swell rather than a clean sine VCA
 mk_lph += mk_lpinc; mk_lph >= 1 ? mk_lph -= 1;
-mk_ls = sin(2 * $pi * mk_lph); mk_ls = mk_ls * (1.25 - 0.25 * mk_ls * mk_ls);    // slightly flattened sine (the old circuit)
-mk_mod > 0 ? ( mk_g = 1 - mk_mod * (0.5 - 0.5 * mk_ls); mk_l *= mk_g; mk_r_ *= mk_g; ) :
-mk_mod < 0 ? ( mk_g = -mk_mod; mk_l *= 1 - mk_g * (0.5 + 0.5 * mk_ls); mk_r_ *= 1 - mk_g * (0.5 - 0.5 * mk_ls); mk_l *= 1 + 0.25 * mk_g; mk_r_ *= 1 + 0.25 * mk_g; );
+mk_ls = 0.5 + 0.5 * sin(2 * $pi * mk_lph);
+mk_bu1 += (mk_ls - mk_bu1) * (mk_ls > mk_bu1 ? mk_bh : mk_bc);
+mk_bu2 += ((1 - mk_ls) - mk_bu2) * ((1 - mk_ls) > mk_bu2 ? mk_bh : mk_bc);
+mk_pc1 = (mk_bu1 * mk_bu1) ^ 0.7; mk_pc2 = (mk_bu2 * mk_bu2) ^ 0.7;      // light ~ T^2, photocell law ~ light^0.7
+mk_mod > 0 ? ( mk_g = 1 - mk_mod * mk_pc1; mk_l *= mk_g; mk_r_ *= mk_g; ) :
+mk_mod < 0 ? ( mk_g = -mk_mod; mk_l *= (1 - mk_g * mk_pc1) * (1 + 0.3 * mk_g); mk_r_ *= (1 - mk_g * mk_pc2) * (1 + 0.3 * mk_g); );
 
-// ---------- power amp and speaker ----------
-mk_od > 0.001 ? ( mk_l = vo_tanh(mk_l * mk_pg) / sqrt(mk_pg); mk_r_ = vo_tanh(mk_r_ * mk_pg) / sqrt(mk_pg); );
-mk_l = mk_e3l.bq_run(mk_l); mk_r_ = mk_e3r.bq_run(mk_r_);
-mk_l = mk_e4l.bq_run(mk_l); mk_r_ = mk_e4r.bq_run(mk_r_);
+// ---------- AMP (c) speaker / cabinet ----------
+mk_l = mk_c1l.bq_run(mk_l); mk_r_ = mk_c1r.bq_run(mk_r_);
+mk_l = mk_c2l.bq_run(mk_l); mk_r_ = mk_c2r.bq_run(mk_r_);
+mk_l = mk_c3l.bq_run(mk_l); mk_r_ = mk_c3r.bq_run(mk_r_);
+mk_l = mk_c4l.bq_run(mk_l); mk_r_ = mk_c4r.bq_run(mk_r_);
+// ---------- TREBLE ----------
+mk_l = mk_tbl.bq_run(mk_l); mk_r_ = mk_tbr.bq_run(mk_r_);
 
 // ---------- master ----------
 mk_vol += (mk_volt - mk_vol) * mk_sm;
@@ -638,13 +687,14 @@ ui_size_picker(1030 * sc, 21 * sc);
 // ---------- row 1: TINES, PICKUP, AMP ----------
 mg_y = 82; mg_h = 160; mg_ky = mg_y + 84;
 mg_sect(14, mg_y, 330, mg_h, mg_s1, "HAMMER & TINES");
-mg_kn(70,  mg_ky, 27, 3, 0, 100, 50, 0, mg_cream, "HARDNESS", "%.0f%%");
-mg_kn(178, mg_ky, 27, 1, 0, 100, 50, 0, mg_cream, "DECAY", "%.0f%%");
-mg_kn(286, mg_ky, 27, 2, 0, 100, 40, 0, mg_cream, "RELEASE", "%.0f%%");
+mg_kn(56,  mg_ky, 24, 3, 0, 100, 50, 0, mg_cream, "HARDNESS", "%.0f%%");
+mg_kn(135, mg_ky, 24, 26, 0, 100, 50, 0, mg_acc, "BELL", "%.0f%%");
+mg_kn(214, mg_ky, 24, 1, 0, 100, 50, 0, mg_cream, "DECAY", "%.0f%%");
+mg_kn(293, mg_ky, 24, 2, 0, 100, 40, 0, mg_cream, "RELEASE", "%.0f%%");
 
 mg_sect(358, mg_y, 420, mg_h, mg_s2, "PICKUP");
 mg_kn(412, mg_ky, 27, 4, 0, 100, 50, 0, mg_acc, "VOICING", "%.0f%%");
-gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_ct(380, mg_ky + 26, "ROUND"); mg_ct(446, mg_ky + 26, "BARK");
+gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_ct(380, mg_ky + 26, "DARK"); mg_ct(446, mg_ky + 26, "DYNO");
 mg_kn(726, mg_ky, 27, 5, 0, 100, 50, 0, mg_cream, "GAP", "%.0f%%");
 gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_ct(696, mg_ky + 26, "NEAR"); mg_ct(758, mg_ky + 26, "FAR");
 // the pickup window: flux across the pole, where the tine rests, how far the last note is swinging
@@ -688,7 +738,7 @@ mg_kn(1006, mg_ky + 18, 25, 14, 0, 100, 0, 0, mg_acc, "OVERDRIVE", "%.0f%%");
 // ---------- row 2: MODULATION, PLAYING, TUNING, MASTER ----------
 mg_y = 262; mg_h = 164; mg_ky = mg_y + 86;
 mg_sect(14, mg_y, 280, mg_h, mg_s2, "MODULATION");
-mk_mod != 0 ? ( mg_lv = mk_mod > 0 ? 0.5 + 0.5 * mk_ls : 0.5 - 0.5 * mk_ls; ) : mg_lv = 0;
+mg_lv = mk_mod != 0 ? mk_pc1 : 0;
 slider7 < -0.5 ? sprintf(#mgv, "PAN %.0f%%", -slider7) : slider7 > 0.5 ? sprintf(#mgv, "TREM %.0f%%", slider7) : strcpy(#mgv, "OFF");
 dy_knob(84, mg_ky, 30, 7, -100, 100, 0, 0, mg_acc, "MODULATION", #mgv);
 gfx_setfont(11); ui_cola(mg_dim, 0.9); mg_ct(44, mg_ky + 30, "PAN"); mg_ct(124, mg_ky + 30, "TREM");
@@ -704,7 +754,7 @@ slider11 != floor(slider11 + 0.5) ? slider11 = floor(slider11 + 0.5);
 
 mg_sect(652, mg_y, 196, mg_h, mg_s3, "TUNING");
 mg_kn(700, mg_ky, 23, 12, -50, 50, 0, 0, mg_grey, "FINE", "%+.1f ct");
-mg_kn(800, mg_ky, 23, 13, 0, 25, 2, 0, mg_grey, "RANDOM", "%.1f ct");
+mg_kn(800, mg_ky, 23, 13, 0, 10, 0.5, 0, mg_grey, "RANDOM", "%.1f ct");
 
 mg_sect(862, mg_y, 224, mg_h, mg_s4, "MASTER");
 mg_kn(912, mg_y + 66, 25, 18, -24, 6, 0, 0, mg_cream, "VOLUME", "%+.1f dB");
