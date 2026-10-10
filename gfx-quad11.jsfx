@@ -23,7 +23,7 @@ desc:GFX Quad11 [multiband comp]
 //   MASTER EQ - HPF, low shelf, high shelf, LPF on the whole bus, ahead of the split.
 //   PRESETS   - starting points for common bus jobs (they set the split, the bands, the master EQ and MIX).
 //   MIX       - parallel compression: blends the processed bus with the dry one.
-// MASTER holds SAT and the OUT stage (OFF / CLIP / LIM; click its name to step it); INPUT has TRIM and GUARD.
+// MASTER holds SAT; INPUT has TRIM and GUARD.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -40,8 +40,8 @@ slider5:0<0,100,1>-Band sat (%)
 slider6:30<0,100,1>-Bias (%)
 slider7:120<40,400,1>-Sat low band (Hz)
 slider8:6000<2000,16000,10>-Sat high band (Hz)
-slider9:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider10:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider9:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider10:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider11:120<30,16000,1>-Crossover 1 (Hz)
 slider12:1000<30,16000,1>-Crossover 2 (Hz)
 slider13:5000<30,16000,1>-Crossover 3 (Hz)
@@ -333,7 +333,7 @@ function update() (
   mix_t = any_solo ? 1 : slider3 / 100;            // a soloed band is heard on its own, without the dry signal
   out_t = 10 ^ (slider4 / 20);
   in_setup(slider1, slider2);
-  ins_output_setup(5);
+  ins_output_straight(5);   // output stage: straight through
 );
 
 in_init();
@@ -612,7 +612,7 @@ qgroup(888, 344, 188, 258, "MASTER", ACC, SH2);
 ui_section(2); C_INK = INKL;
 ui_knob(940 * sc, 396 * sc, 3, 0, 100, 100, 0, "MIX", "%.0f%%");
 ui_knob(940 * sc, 474 * sc, 4, -24, 12, 0, 0, "OUTPUT", "%+.1f dB");
-ins_io(898, 534, 5, INKL);                         // SAT and the OUT stage (OFF / CLIP / LIM)
+ins_io(898, 534, 5, INKL);                         // SAT
 mO.ui_ledm(1040 * sc, 362 * sc, 12 * sc, 206 * sc, pkO);
 gfx_setfont(4); ui_col(INKL); ui_text(1046 * sc, 574 * sc, "OUT");
 any_solo ? ( ui_col(AMBL); ui_text(940 * sc, 586 * sc, "SOLO ON"); );

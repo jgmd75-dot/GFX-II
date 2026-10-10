@@ -1426,9 +1426,9 @@ function ui_guardclick(kid, iG, cx, cy, ro) local(on, g, d, lx, ly) (
   on ? ( ui_cola(0xFFFFFF, 0.55); gfx_circle((lx - 0.8) * sc, (ly - 0.9) * sc, 0.9 * sc, 1, 1); );
 );
 
-// ---------- the OUT stage keys: OFF / CLIP / LIMIT as three small off-white keys stacked vertically ----------
-// The selected key glows (blue OFF, yellow CLIP, amber LIMIT); captions stay black. x, y, w, h unscaled (one key).
-// ui_okfs: caption size relative to font 4. While the output clips, the CLIP key flashes red.
+// ---------- house keys (formerly the OUT stage keys): small off-white keys; the selected one glows in its colour ----------
+// x, y, w, h unscaled. ui_okfs: caption size relative to font 4.
+// (The output stage itself has no keys any more: each unit's mode is fixed - see gfx-output.jsfx-inc.)
 ui_okfs = 0.85;
 function ui_okey(x, y, w, h, on, col) local(hov, hit) (
   hov = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
@@ -1449,16 +1449,8 @@ function ui_keytext(cx, cy, s) local(w, h) (
   // the line box holds descender room below the capitals, so lift by a little to centre the capitals themselves
   gfx_measurestr(s, w, h); gfx_x = floor(cx - w * 0.5 + 0.5); gfx_y = floor(cy - h * 0.58 + 0.5); gfx_drawstr(s);
 );
-function ui_outkeys(x, y, w, h, gap, iM) local(i, c, yy) (
-  ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-  gfx_setfont(8, "Trebuchet MS", ui_fs4 * ui_okfs, 'b');
-  i = 0; loop(3,
-    yy = y + i * (h + gap);
-    c = i == 0 ? 0x3A9CFF : i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-    ui_okey(x, yy, w, h, slider(iM) == i || (i == 1 && ui_okclp > 0.1), c) ? ( slider(iM) = i; ui_auto(iM); );
-    gfx_setfont(8); ui_col(0x141414); ui_keytext((x + w * 0.5) * sc, (yy + h * 0.5) * sc, i == 0 ? "OFF" : i == 1 ? "CLIP" : "LIMIT");
-    i += 1; );
-);
+// the output stage no longer has keys: kept so older panels still compile; it draws nothing
+function ui_outkeys(x, y, w, h, gap, iM) ( gfx_setfont(8, "Trebuchet MS", ui_fs4 * ui_okfs, 'b'); ost_clipped = 0; );
 
 // ---------- FLAT / HARDWARE switch ----------
 function ui_hw_toggle(x, y) (

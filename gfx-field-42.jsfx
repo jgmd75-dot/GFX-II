@@ -53,8 +53,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-Ceiling (dB)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -115,7 +115,7 @@ function update() local(th) (
   tone_on = slider10 > 0.5; tone_f = slider11 < 0.5 ? 1000 : slider11 < 1.5 ? 400 : 100; tone_a = 10 ^ ((slider12 - 20) / 20) * sqrt(2);
   drift_macro(slider13);
   l_at = 1 - exp(-1 / (max(slider16, 0.05) * 0.001 * srate)); l_rl = 1 - exp(-1 / (slider17 * 0.001 * srate));
-  ost_setup(slider18 / 100, slider19 / 100, slider20, slider21, slider22, floor(slider23 + 0.5));
+  ost_setup(slider18 / 100, slider19 / 100, slider20, slider21, slider22, 1);   // output stage: CLIP, always on
 );
 
 f4_ia = 1 - exp(-2 * $pi * 110 / srate);           // the core's flux (low-frequency) band

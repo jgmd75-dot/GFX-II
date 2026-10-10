@@ -47,8 +47,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-Ceiling (dB)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:20<20,500,1>-Mono below (Hz, 20 = off)
 slider23:0<0,100,1>-Stereo width (%)
 slider24:0<0,3,1{Felt,Tack,Pluck,Mallet}>-Striker
@@ -461,7 +461,7 @@ function update() (
   trR = slider41; tr_d = slider42 / 100;
   vbR = slider43; vbOct = 3 * slider44 / 100; vbWet = min(1, 2 * slider44 / 100);
   dlFb = 0.95 * slider46 / 95; dl_mix = slider47 / 100; dl_sync = floor(slider48 + 0.5);
-  ins_output_setup(16); ins_stereo_setup(22);
+  ins_output_setup(16); ins_stereo_setup(22);   // output stage: CLIP, always on
 );
 last_model = -1; last_sus = -1; last_dmp = -1;
 tkdec = exp(-1 / (0.0025 * srate));
@@ -929,9 +929,7 @@ stitle(470, 460, "MASTER"); stitle(606, 460, "OUTPUT"); stitle(746, 460, "STEREO
 ui_knob(436 * sc, 520 * sc, 14, 0, 100, 15, 0, "DRIFT", "%.0f%%");
 ui_knob(504 * sc, 520 * sc, 15, -24, 6, 0, 0, "VOLUME", "%.1f dB");
 divider(538, 456, 556);
-ui_knob(574 * sc, 520 * sc, 16, 0, 100, 0, 0, "SAT", "%.0f%%");
-ui_okfs = 1.05; ui_outkeys(612, 495, 50, 14, 3, 21); ui_okfs = 0.85;
-gfx_setfont(2); ui_col(INK); ui_text(637 * sc, 546 * sc, "OUT");
+ui_knob(607 * sc, 520 * sc, 16, 0, 100, 0, 0, "SAT", "%.0f%%");
 divider(676, 456, 556);
 ui_knob(712 * sc, 520 * sc, 22, 20, 500, 20, 1, "MONO", slider22 <= 20.5 ? "OFF" : "%.0f Hz");
 ui_knob(780 * sc, 520 * sc, 23, 0, 100, 0, 0, "WIDTH", "+%.0f%%");

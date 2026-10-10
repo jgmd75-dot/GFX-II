@@ -17,7 +17,7 @@ desc:GFX Tilt EQ [one-knob tilt EQ]
 //   OUTPUT, EQ IN.
 //   STYLE (header) switches between two looks: HORIZON (sky and sea, gold) and CLASSIC (cream and red);
 //   HW switches between the hardware panel and a flat one.
-// PRESETS. IN / OUT (bottom row): TRIM with the GUARD key, SAT and the OUT stage (OFF / CLIP / LIM).
+// PRESETS. IN / OUT (bottom row): TRIM with the GUARD key and SAT.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -44,8 +44,8 @@ slider13:0<0,100,1>-Band sat (%)
 slider14:30<0,100,1>-Bias (%)
 slider15:120<40,400,1>-Sat low band (Hz)
 slider16:6000<2000,16000,10>-Sat high band (Hz)
-slider17:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider17:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider18:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -112,7 +112,7 @@ function update() local(b, cs) (
   LPL.bw_set(0, te_lpf, ordr(slider7)); LPR.bw_set(0, te_lpf, ordr(slider7));   // te_lpf: glided in @sample
   tmode = slider8; og = 10 ^ (slider9 / 20); eq_on = slider10;
   in_setup(slider11, slider12);
-  ins_output_setup(13);
+  ins_output_straight(13);   // output stage: straight through
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------

@@ -19,7 +19,7 @@ desc:GFX G PCM 12 [PCM drum machine]
 //   click a step for off / hit / accent; plays in time with Reaper's transport, SWING; a new pattern starts at
 //   the next bar; COPY / CLEAR; factory patterns for the TIGHT FUNK kit. EXPORT MIDI hands the pattern (with each
 //   pad's note) to the companion ReaScript "GFX G-PCM 12 - export MIDI.lua", which drops it at the edit cursor.
-// IN / OUT: the strip along the bottom holds SAT, the OUT stage (OFF / CLIP / LIM) and STEREO (MONO, WIDTH).
+// IN / OUT: the strip along the bottom holds SAT and STEREO (MONO, WIDTH).
 
 options:gmem=GFX_GPCM12
 
@@ -38,8 +38,8 @@ slider5:0<0,100,1>-Band sat (%)
 slider6:30<0,100,1>-Bias (%)
 slider7:120<40,400,1>-Sat low band (Hz)
 slider8:6000<2000,16000,10>-Sat high band (Hz)
-slider9:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider10:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider9:-0.3<-24,0,0.1>-Ceiling (dB)
+slider10:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider11:20<20,500,1>-Mono below (Hz, 20 = off)
 slider12:0<0,100,1>-Stereo width (%)
 // EDIT: the selected pad's voice (the panel loads and stores these per pad)
@@ -397,7 +397,7 @@ function update() (
   dac_g = tan($pi * min(slider4, srate * 0.45) / srate); dac_a1 = 1 / (1 + dac_g * (dac_g + 1.414)); dac_a2 = dac_g * dac_a1; dac_a3 = dac_g * dac_a2;
   chk_c = exp(-1 / (0.001 * srate));
   sq_play = slider24; sq_swing = slider25 / 100 * 0.5;
-  ins_output_setup(5); ins_stereo_setup(11);
+  ins_output_setup(5); ins_stereo_setup(11);   // output stage: CLIP, always on
 );
 // the EDIT sliders <-> the selected pad (the panel calls these)
 function ed_to_sliders() local(b) (

@@ -24,7 +24,7 @@ desc:GFX Oontecho [trance gate]
 //          multipliers (x0.5, x0.75, x1, x1.5, x2), FEEDBACK, DAMP (high-cut in the feedback loop), MIX (level of
 //          the echoes on top of the gated sound), PING (cross-feedback ping-pong).
 // SPACE    an eight-line feedback-delay-network wash: SIZE, DECAY (0.4 - 10 s), MIX (level on top).
-// MASTER   MIX (dry / wet), OUTPUT, and the house IN / OUT strip: TRIM (click it for GUARD), SAT, OFF / CLIP / LIMIT.
+// MASTER   MIX (dry / wet), OUTPUT, and the house IN / OUT strip: TRIM (click it for GUARD), SAT.
 // DRIFT    never rhythmic - the timing stays locked to the grid. The filter cutoff wanders slowly, and the delay's
 //          colour (its damping and a little of its feedback) breathes with it. 0 - 100 %.
 //
@@ -74,7 +74,7 @@ slider26:25<0,100,1>-Drift (%)
 slider27:0<-24,12,0.1>-Input trim (dB)
 slider28:0<0,1,1{Off,On}>-Input guard
 slider29:0<0,100,1>-Band sat (%)
-slider30:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider30:1<0,1,1{Off,Clip}>-(unused, was output stage)
 // steps: level 0 - 100 (+ 128 when accented)
 slider31:100<0,228,1>-Step 1
 slider32:100<0,228,1>-Step 2
@@ -294,7 +294,7 @@ function oa_update() local(i, t60, ln) (
   oa_out = 10 ^ (slider25 / 20);
   drift_macro(slider26);
   in_setup(slider27, slider28);
-  ost_setup(slider29 / 100, 0.3, 120, 6000, -0.3, floor(slider30 + 0.5));
+  ost_setup(slider29 / 100, 0.3, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 oa_update();
 oa_szs = oa_szt; oa_dtLs = oa_dtL; oa_dtRs = oa_dtR; oa_mixs = oa_mix; oa_outs = oa_out; oa_dmxs = oa_dmx; oa_smxs = oa_smx;

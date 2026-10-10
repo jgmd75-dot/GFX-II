@@ -12,7 +12,7 @@ desc:GFX G Bass 1X [bass synth]
 // DRIFT: slow analogue wander of pitch (up to +/-20 cents), osc 2, pulse width and cutoff,
 // plus a small random tuning offset on every new note. The DRIFT dial scales it (50% = the Drift setting,
 // 100% = twice, 0 = none) and speeds the wander up with it.
-// IN / OUT: SAT (the GFX band saturation) and the OUT stage (off / clip / limit), always on the panel.
+// IN / OUT: SAT (the GFX band saturation), always on the panel; a soft clipper on the output (always on).
 // Click the SUB / OSC 2 / RATE / GLIDE labels to switch sub octave, osc 2 octave, LFO shape, glide mode.
 
 import gfx-drift.jsfx-inc
@@ -61,8 +61,8 @@ slider36:0<0,100,1>-Band sat (%)
 slider37:30<0,100,1>-Bias (%)
 slider38:120<40,400,1>-Sat low band (Hz)
 slider39:6000<2000,16000,10>-Sat high band (Hz)
-slider40:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider41:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider40:-0.3<-24,0,0.1>-Ceiling (dB)
+slider41:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider42:0<0,1,1{Off,On}>-Sub+ (octave below and above)
 slider43:50<0,100,1>-Sub+ sub level (%)
 slider44:30<0,100,1>-Sub+ upper harmonics (%)
@@ -174,7 +174,7 @@ function update() (
   t1 = exp(2 * (drv_g * 0.15 / drv_h + drv_b)); t2 = exp(2 * drv_b);
   drv_n = 0.15 / ((t1 - 1) / (t1 + 1) - (t2 - 1) / (t2 + 1));
   vol_t = 10 ^ (slider34 / 20);
-  ins_output_setup(36);
+  ins_output_setup(36);   // output stage: CLIP, always on
   sp_on = slider42; sp_sub = slider43 / 100; sp_up = slider44 / 100;
   sp_lc = 1 - exp(-2 * $pi * 5000 / srate);
 );
@@ -194,13 +194,11 @@ function inset(x, y, w, h, col) local(b, ox, oy, ow, oh) (
   ui_cola(0xFFFFFF, 0.14); gfx_line(ox, oy, ox + ow, oy, 1);                                               // panel edge catching the light
   ui_cola(0x000000, 0.30); gfx_line(ox, oy + oh, ox + ow, oy + oh, 1);
 );
-// IN / OUT strip (an instrument has no input, so no TRIM / GUARD): SAT and the OUT stage dial, its OFF / CLIP / LIM
-// printed round it and clickable; the dial's name turns red while the output is clipping. Knobs in the panel's own style (set ui_section first). Unscaled x, y; 160 x 70,
-// knob centres at y + 30. Uses C_INK.
+// IN / OUT strip (an instrument has no input, so no TRIM / GUARD): SAT, centred in the 160-wide strip (the output
+// stage has no keys: CLIP is always on). Knobs in the panel's own style (set ui_section first). Unscaled x, y;
+// knob centre at y + 30. iM is not used.
 function io_strip(x, y, iS, iM) (
-  ui_knob((x + 30) * sc, (y + 30) * sc, iS, 0, 100, 0, 0, "SAT", "%.0f%%");
-  ui_outkeys(x + 80, y + 6, 58, 15, 3, iM);
-  gfx_setfont(4); ui_cola(C_INK, 0.85); ui_text((x + 109) * sc, (y + 62) * sc, "OUT");
+  ui_knob((x + 80) * sc, (y + 30) * sc, iS, 0, 100, 0, 0, "SAT", "%.0f%%");
 );
 update();
 vol_s = vol_t;

@@ -23,7 +23,6 @@ desc:GFX Bern EQ [broadcast EQ]
 // OUTPUT  -18 .. +18 dB after the output amplifier and transformer (its core thickens the lows first when driven).
 // DRIFT   the supply voltage is not quite steady: the band gains and frequencies ease very slightly with it, and the
 //         amplifiers' headroom breathes (a hot signal softens a little more when the rail sags). 0 - 100 %, 20 % default.
-// OUT     the GFX output stage: OFF / CLIP (soft clip at -0.3 dBFS) / LIMIT (3 ms lookahead).
 //
 // Filters: matched (pole / zero matched to the analogue prototype) bell and high shelf, so the curves stay true
 // right up to the top of the band without the usual digital cramping; parameters glide (30 ms) and coefficients are
@@ -53,7 +52,7 @@ slider10:0<-15,15,0.1>-High gain (dB)
 slider11:1<0,1,1{Out,In}>-EQ In
 slider12:0<-18,18,0.1>-Output (dB)
 slider13:20<0,100,1>-Drift (%)
-slider14:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider14:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -214,14 +213,14 @@ file_var(0, pr_cur);
 
 @slider
 bz_targets();
-ost_setup(0, 0, 120, 6000, -0.3, floor(slider14 + 0.5));
+ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 
 @block
 // DRIFT: the supply voltage - a slow random walk, eased so it never steps
 bz_dW -= samplesblock; bz_dW <= 0 ? ( bz_dW = srate*(0.7 + rand(2.3)); bz_dT = rand(2) - 1; );
 bz_dV += (bz_dT - bz_dV)*min(1, samplesblock/(1.2*srate));
 bz_targets();
-ost_setup(0, 0, 120, 6000, -0.3, floor(slider14 + 0.5));
+ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 
 @sample
 bz_cnt <= 0 ? ( bz_glide(); bz_cnt = 16; ); bz_cnt -= 1;
@@ -369,7 +368,7 @@ function gz_db(c, f) local(w, c1, c2, nu, de) (
 // ---------------------------------------------------------------------
 ui_col(0x101214); gfx_rect(0, 0, gfx_w, gfx_h);
 
-// ---- the meter-bridge strip: roundel, name, presets, EQ IN, drift, out stage, size ----
+// ---- the meter-bridge strip: roundel, name, presets, EQ IN, drift, size ----
 ui_col(HDR); R(0, 0, 1200, 84);
 gfx_gradrect(0, 0, 1200*qs, 40*qs, 1, 1, 1, 0.08, 0, 0, 0, 0, 0, 0, 0, -0.08/(40*qs));
 ui_col(0x262E35); R(0, 82, 1200, 2);

@@ -34,14 +34,14 @@ desc:GFX Drive-45 [studio drive]
 // SIGNAL FLOW
 //   input -> INPUT trim -> 4x oversampling (linear-phase Kaiser half-bands, 63 + 23 taps) -> the two units in
 //   series (ORDER: DRIVE 45 -> JDM-45 or JDM-45 -> DRIVE 45) -> back to 1x -> OUTPUT -> the house output stage
-//   (band SAT, OFF / CLIP / LIMIT).
+//   (band SAT, soft clip always on).
 //   Each unit: DRIVE (0 .. +30 dB into the circuit) -> the selected CIRCUIT -> DC blocker (5 Hz) -> level matched
 //   (each circuit's small-signal gain is unity whatever the DRIVE, and a per-circuit calibration table removes the
 //   loudness the circuits gain or lose at each DRIVE, measured on programme at -18 dBFS RMS) -> BLEND with the
 //   unit's own input (inside the oversampled domain, so the dry and the wet line up sample for sample) -> OUTPUT
 //   -> 3-band EQ (LOW shelf 100 Hz, MID bell 200 Hz - 8 kHz, Q 0.9, HIGH shelf 10 kHz, +/-15 dB; post-circuit,
 //   on the unit's output) -> the ON key (10 ms fade). Changing CIRCUIT crossfades the two circuits (15 ms).
-//   Latency: 37 samples (the oversampling; reported; LIMIT adds 3 ms).
+//   Latency: 37 samples (the oversampling; reported).
 // DRIFT (0 - 100 %, 50 % = standard): component tolerance. The bias points and clip thresholds of every circuit
 //   wander slowly (bias +/-0.03, threshold +/-3 %), the EQ frequencies wander (+/-2 %), and the left and right
 //   channels never quite match (fixed tolerances: threshold +/-1 %, bias +/-0.012, redrawn per instance).
@@ -88,8 +88,8 @@ slider25:0<0,100,1>-Band sat (%)
 slider26:30<0,100,1>-Bias (%)
 slider27:120<40,400,1>-Sat low band (Hz)
 slider28:6000<2000,16000,10>-Sat high band (Hz)
-slider29:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider30:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider29:-0.3<-24,0,0.1>-Ceiling (dB)
+slider30:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider31:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
@@ -394,9 +394,9 @@ function dq_update() local(t) (
   dq_tin = 10 ^ (slider22 / 20);
   drift_macro(slider23);
   dq_tog = 10 ^ (slider24 / 20);
-  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, slider30 | 0);
+  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, 1);   // output stage: CLIP, always on
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = dq_LAT + ((slider30 | 0) == 2 ? ost_N : 0);
+  pdc_delay = dq_LAT;
 );
 
 // ---------- presets ----------
@@ -1042,7 +1042,7 @@ dv_unit(600, 60, 492, 274, "JDM-45", dv_de ? "RUNDFUNK-" : "BROADCAST", dv_de ? 
 dv_face(1, 600, 11, dv_v2, dv_v3, dv_ckB);
 
 // =====================================================================
-// The central mounting bracket: ORDER, INPUT, DRIFT, OUTPUT, band SAT and the output stage (x 490..610)
+// The central mounting bracket: ORDER, INPUT, DRIFT, OUTPUT and band SAT (x 490..610)
 // =====================================================================
 KF = 0x9DA2A8; KI = 0x1C1C1C; KI2 = 0x3A3D40; KHI = 0x8A2E00; dv_b = 1; dv_u = 0; dv_bg = 0xA3A8AE;
 ui_cola(0x000000, 0.5); dv_r(492, 62, 120, 276);
@@ -1063,22 +1063,13 @@ function dv_okey(y, rev) local(on, c) (
 );
 dv_okey(86, 0); dv_okey(110, 1);
 sprintf(#dvv, "%+.1f dB", slider22);
-dv_ticks(526, 158, 13); dv_knob(526, 158, 13, 22, 0, -24, 12, 0, 0x9DA2A8, dv_de ? "EING." : "INPUT", #dvv, 27);
+dv_ticks(526, 182, 13); dv_knob(526, 182, 13, 22, 0, -24, 12, 0, 0x9DA2A8, dv_de ? "EING." : "INPUT", #dvv, 27);
 sprintf(#dvv, "%.0f %%", slider23);
-dv_ticks(574, 158, 13); dv_knob(574, 158, 13, 23, 0, 0, 100, 50, 0x6F8794, "DRIFT", #dvv, 27);
+dv_ticks(574, 182, 13); dv_knob(574, 182, 13, 23, 0, 0, 100, 50, 0x6F8794, "DRIFT", #dvv, 27);
 sprintf(#dvv, "%+.1f dB", slider24);
-dv_ticks(526, 216, 13); dv_knob(526, 216, 13, 24, 0, -24, 12, 0, 0x9DA2A8, dv_de ? "AUSG." : "OUTPUT", #dvv, 27);
+dv_ticks(526, 262, 13); dv_knob(526, 262, 13, 24, 0, -24, 12, 0, 0x9DA2A8, dv_de ? "AUSG." : "OUTPUT", #dvv, 27);
 sprintf(#dvv, "%.0f %%", slider25);
-dv_ticks(574, 216, 13); dv_knob(574, 216, 13, 25, 0, 0, 100, 0, 0xD8B040, dv_de ? "SÄTT." : "SAT", #dvv, 27);
-// the house output stage keys
-ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-dv_i = 0;
-loop(3,
-  dv_c = dv_i == 0 ? 0x3A9CFF : dv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  ui_okey(516, 252 + dv_i * 23, 68, 19, (slider30 | 0) == dv_i || (dv_i == 1 && ui_okclp > 0.1), dv_c) ? ( slider30 = dv_i; ui_auto(30); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext(550 * sc, (252 + dv_i * 23 + 9.5) * sc, dv_i == 0 ? (dv_de ? "AUS" : "OFF") : dv_i == 1 ? "CLIP" : (dv_de ? "BEGR." : "LIMIT"));
-  dv_i += 1;
-);
+dv_ticks(574, 262, 13); dv_knob(574, 262, 13, 25, 0, 0, 100, 0, 0xD8B040, dv_de ? "SÄTT." : "SAT", #dvv, 27);
 
 pk_end();
 ui_end();

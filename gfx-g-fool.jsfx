@@ -34,7 +34,7 @@ desc:GFX G Fool [arp synth]
 //   FATE (the series' drift, 0-100 %, 50 % = the standard amount): the cards reshuffle a little - each path's
 //                       micro-timing, step chance, filter cutoff and pan wander slowly and independently; the tuning
 //                       wanders a touch and every note lands slightly differently in tune.
-//   VOLUME, SAT and the house OUT stage (OFF / CLIP / LIMIT).
+//   VOLUME and SAT (the output soft clip is always on).
 // Tempo-locked when the project plays, free-running from the first key when stopped. Notes are timed inside the
 // synth (each note carries its own gate), so chord changes or a transport stop never leave a note hanging.
 // MIDI: notes (channel select), CC120 / CC123 all notes off.
@@ -112,8 +112,8 @@ slider63:0<0,100,1>-Band sat (%)
 slider64:30<0,100,1>-Bias (%)
 slider65:120<40,400,1>-Sat low band (Hz)
 slider66:6000<2000,16000,10>-Sat high band (Hz)
-slider67:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider68:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider67:-0.3<-24,0,0.1>-Ceiling (dB)
+slider68:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider69:0.7<0.02,20,0.01>-I LFO rate (Hz)
 slider70:2<0,9,1{4 bars,2 bars,1 bar,3/4,1/2,1/4,1/4T,1/8,1/8T,1/16}>-I LFO sync rate
 slider71:1<0,1,1{Off,On}>-I LFO sync
@@ -774,7 +774,7 @@ function fo_params() local(a, b, s, t) (
   fo_sync = slider50 >= 0.5; fo_tr = slider51; fo_scale = slider52; fo_root = slider53; fo_seed = slider54;
   drift_macro(slider60);
   fo_chan = slider62;
-  ins_output_setup(63);
+  ins_output_setup(63);   // output stage: CLIP, always on
   fo_volt = 10 ^ (slider61 / 20) * fo_trim;
   fo_cfon = slider90 >= 0.5; fo_mdon = slider96 >= 0.5; fo_plon = slider101 >= 0.5;
   fo_cftgt(); fo_mdtgt();
@@ -1465,23 +1465,17 @@ sprintf(#fgv, "%s", fg_pc(slider53));         fg_knob(486, 690, 12, 53, 0, 11, 0
 gfx_setfont(10); ui_col(INK); fg_txt(506, 683, "ROOT");
 gfx_setfont(12); ui_col(INK); fg_txt(548, 681, fg_pc(slider53));
 // MIDI channel
-fg_hv = fg_hov(650, 677, 84, 26);
-ui_col(INK); fg_rr(650, 677, 84, 26, 4); ui_col(fg_hv ? 0xFFFFFF : KEYF); fg_rr(651.5, 678.5, 81, 23, 3);
-gfx_setfont(11); ui_col(INK); slider62 < 0.5 ? strcpy(#fgl, "MIDI OMNI") : sprintf(#fgl, "MIDI CH %d", slider62); fg_ctxt(692, 690, #fgl);
+fg_hv = fg_hov(720, 677, 100, 26);
+ui_col(INK); fg_rr(720, 677, 100, 26, 4); ui_col(fg_hv ? 0xFFFFFF : KEYF); fg_rr(721.5, 678.5, 97, 23, 3);
+gfx_setfont(11); ui_col(INK); slider62 < 0.5 ? strcpy(#fgl, "MIDI OMNI") : sprintf(#fgl, "MIDI CH %d", slider62); fg_ctxt(770, 690, #fgl);
 fg_hv && pressed && drag_id == 0 ? (
   drag_id = -1; strcpy(#fgm, ""); fg_i = 0;
   loop(17, fg_i == floor(slider62 + 0.5) ? strcat(#fgm, "!"); fg_i == 0 ? strcat(#fgm, "Omni") : ( sprintf(#fgn, "Channel %d", fg_i); strcat(#fgm, #fgn); ); fg_i < 16 ? strcat(#fgm, "|"); fg_i += 1; );
-  gfx_x = 650 * sc; gfx_y = 705 * sc; fg_i = gfx_showmenu(#fgm); fg_i > 0 ? fg_set(62, fg_i - 1);
+  gfx_x = 720 * sc; gfx_y = 705 * sc; fg_i = gfx_showmenu(#fgm); fg_i > 0 ? fg_set(62, fg_i - 1);
 );
-// SAT and the OUT stage
-sprintf(#fgv, "%d%%", slider63);              fg_knob(800, 690, 12, 63, 0, 100, 0, 0, 1, 0xD8B040, "", #fgv);
-gfx_setfont(10); ui_col(INK); fg_txt(820, 683, "SAT");
-fg_txt(862, 683, "OUT");
-fg_i = 0; loop(3,
-  fg_key(898 + fg_i * 58, 677, 56, 26, fg_i == 0 ? "OFF" : fg_i == 1 ? "CLIP" : "LIMIT", slider68 == fg_i,
-         fg_i == 0 ? 0x3A9CFF : fg_i == 1 ? (ost_clipped ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22) ? fg_set(68, fg_i);
-  fg_i += 1; );
-ost_clipped = 0;
+// SAT
+sprintf(#fgv, "%d%%", slider63);              fg_knob(1010, 690, 12, 63, 0, 100, 0, 0, 1, 0xD8B040, "", #fgv);
+gfx_setfont(10); ui_col(INK); fg_txt(1030, 683, "SAT");
 
 // ---------- the title ----------
 ui_col(INK); fg_th(250, 730, 446, 730, 2); fg_th(654, 730, 850, 730, 2);

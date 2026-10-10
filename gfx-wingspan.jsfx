@@ -6,7 +6,7 @@ desc:GFX Wingspan [dynamic width]
 // Pushes the stereo image wider (or pulls it narrower) when the music gets loud.
 //   L/R -> M/S encode (M = (L+R)/2, S = (L-R)/2) -> LOW MONO (sides high-passed, 24 dB/oct)
 //       -> detector (listens to Mid, Side or a blend: DETECT) -> dynamic Side gain -> BASE WIDTH
-//       -> M/S decode (L = M + S', R = M - S') -> MIX (parallel, against the untouched input) -> OUTPUT -> OUT stage.
+//       -> M/S decode (L = M + S', R = M - S') -> MIX (parallel, against the untouched input) -> OUTPUT.
 // The Mid is never touched, so the mono sum stays exactly as it was (mono-safe by design).
 //
 // THRESHOLD   level (dB) the detector must pass before the image starts to move.
@@ -22,7 +22,6 @@ desc:GFX Wingspan [dynamic width]
 //             POST: the detector hears the original image; BASE WIDTH is applied after the dynamic stage.
 // LOW MONO    keeps the bass mono below 80 / 120 / 200 Hz (mastering safety for vinyl, clubs, mono playback).
 // MIX         parallel blend with the dry input.  OUTPUT  output gain.
-// OUT         the GFX output stage: OFF / CLIP (soft clip at -0.3 dBFS) / LIMIT (3 ms lookahead).
 // No drift: like the other mastering tools, Wingspan is deliberately steady. Zero latency (except OUT = LIMIT).
 //
 // GUI: drag knobs (Shift = fine), double-click / Ctrl-click = reset. Click the LCD (or PRESETS) for the preset list.
@@ -47,7 +46,7 @@ slider8:1<0,1,1{Pre,Post}>-Base width position
 slider9:0<0,3,1{Off,80 Hz,120 Hz,200 Hz}>-Low mono
 slider10:100<0,100,1>-Mix (%)
 slider11:0<-12,12,0.1>-Output (dB)
-slider12:0<0,2,1{Off,Clip,Limit}>-Output stage
+slider12:0<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -59,7 +58,7 @@ out_pin:right output
 nextmem = 0;
 function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
 
-ost_init(alloc(4096));                           // output stage lookahead buffer (uses 4096 slots)
+ost_init(alloc(4096));                           // the house output stage
 ws_gn = 1024; ws_gl = alloc(ws_gn); ws_gr = alloc(ws_gn);   // goniometer ring (output L / R)
 ws_hn = 240;  ws_hist = alloc(ws_hn);            // side-gain history, 60 points a second (4 s)
 
@@ -80,7 +79,7 @@ function ws_setup() local(f) (
   ws_lmt = ws_lmi > 0;
   ws_mixt = slider10 / 100;
   ws_outt = 10 ^ (slider11 / 20);
-  ost_setup(0, 0, 120, 6000, -0.3, floor(slider12 + 0.5));
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 ws_lmf = -1;
@@ -492,10 +491,9 @@ loop(4,
 );
 gfx_setfont(8); ui_col(INK2); TC(1058, 368, "LOW MONO  (Hz)");
 
-mknob(10, 960, 470, 30, 0, 100, 100, 0, 7, CAPU, "MIX", sprintf(#v10, "%d%%", floor(slider10 + 0.5)));
-mknob(11, 1064, 474, 24, -12, 12, 0, 0, 20, CAPS, "OUTPUT", fdb(slider11));
-ui_okfs = 1; ui_outkeys(1116*0.75, 418*0.75, 60, 20, 4, 12);
-gfx_setfont(8); ui_col(INK2); TC(1156, 536, "OUT STAGE");
+mknob(10, 1000, 470, 30, 0, 100, 100, 0, 7, CAPU, "MIX", sprintf(#v10, "%d%%", floor(slider10 + 0.5)));
+mknob(11, 1120, 474, 24, -12, 12, 0, 0, 20, CAPS, "OUTPUT", fdb(slider11));
+gfx_setfont(8, "Trebuchet MS", ui_fs4, 'b');   // (the meter captions below use this size)
 
 // IN / OUT meters
 wg_il = ws_pil; wg_ir = ws_pir; wg_ol = ws_pol; wg_or = ws_por; ws_pil = ws_pir = ws_pol = ws_por = 0;

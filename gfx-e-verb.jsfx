@@ -17,7 +17,7 @@ desc:GFX E-Verb [digital reverb]
 // time (seconds), low-end multiplier, ROOM SIZE (cubic metres); DENSITY and DIFFUSION of the reflections,
 // LO CUT / HI CUT of the reverb, DRIVE (input transformer), WIDTH, DRIFT, MIX.
 // VINTAGE runs the reverb through the converters of the era (clock rate and bits per model).
-// Keys 1 - 9 recall presets. IN / OUT (right): TRIM + GUARD, LEVEL, SAT and the OUT stage (OFF / CLIP / LIM).
+// Keys 1 - 9 recall presets. IN / OUT (right): TRIM + GUARD, LEVEL and SAT.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -52,8 +52,8 @@ slider22:0<0,100,1>-Band sat (%)
 slider23:30<0,100,1>-Bias (%)
 slider24:120<40,400,1>-Sat low band (Hz)
 slider25:6000<2000,16000,10>-Sat high band (Hz)
-slider26:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider27:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider26:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider27:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider28:0<-24,12,0.1>-Input trim (dB)
 slider29:0<0,1,1{Off,On}>-Input guard
 
@@ -168,7 +168,7 @@ function update() local(k, sz, L, lens, er_s, dens) (
   wid = slider17 / 100;
   dft = slider18 / 100; dspd = slider19 * (0.5 + 0.5 * slider18 / 20);   // the wander speeds up with DRIFT (1x at its default 20%)
   mix_t = slider20 / 100; out_t = 10 ^ (slider21 / 20);
-  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, slider27);
+  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, 0);   // output stage: straight through
   in_setup(slider28, slider29);
 );
 
@@ -458,17 +458,12 @@ key(700, 180, 48, 30, "LIST", -1, 0) ? (
   load_preset(gfx_showmenu("Vocal Air|Concert Room|Drum Room|Broadcast Plate|Warm Hall (vintage)|Voice-Over Booth|Narration Space|Gated Snare|Reverse Swell|Tight Ambience|Reset all to defaults"));
 );
 gi = 0; loop(10, key(650 + (gi % 5) * 20, 242 + floor(gi / 5) * 23, 18, 20, gi == 9 ? "0" : sprintf(#kn, "%d", gi + 1), -1, 0) ? load_preset(gi + 1); gi += 1; );
-// ---------- IN / OUT: trim + guard, the output level, saturation and the output stage ----------
+// ---------- IN / OUT: trim + guard, the output level and saturation ----------
 group(1192, 52, 232, 248, "IN / OUT");
 disp(16, 1206, 64, "TRIM", "dB");
 disp(17, 1206, 182, "LEVEL", "dB");
 disp(19, 1316, 64, "SAT", "%");
-key(1318, 162, 84, 22, "GUARD", slider29, 0) ? ( slider29 = 1 - slider29; ui_auto(29); update(); );
-key(1318, 194, 84, 22, "OFF", slider27 == 0, 0) ? ( slider27 = 0; ui_auto(27); update(); );
-key(1318, 220, 84, 22, "CLIP", slider27 == 1, 0) ? ( slider27 = 1; ui_auto(27); update(); );
-key(1318, 246, 84, 22, "LIMIT", slider27 == 2, 0) ? ( slider27 = 2; ui_auto(27); update(); );
-io_clp = ost_clipped ? 1 : io_clp * 0.9; ost_clipped = 0;
-io_clp > 0.1 ? txt(1330, 274, "CLIPPING", 10, 1) : txt(1328, 274, "OUT STAGE", 9, 0.6);
+key(1318, 215, 84, 22, "GUARD", slider29, 0) ? ( slider29 = 1 - slider29; ui_auto(29); update(); );
 
 pk_end();
 ui_end();

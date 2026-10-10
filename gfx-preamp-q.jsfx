@@ -16,7 +16,7 @@ desc:GFX Preamp Q [preamp + EQ]
 //   ZEN   - gentle symmetrical diode-style saturation, smooth amp-like breakup
 //   TRANS - single-transistor drive: asymmetric, bites earlier, furrier when pushed
 // Drift: BIAS (asymmetry wanders) and COMP (sag depth breathes).
-// The bottom cream row: DRIFT (one dial: 50% = the drift settings), IN / OUT (TRIM + GUARD, SAT, OUT stage), MASTER.
+// The bottom cream row: DRIFT (one dial: 50% = the drift settings), IN / OUT (TRIM + GUARD, SAT), MASTER.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -42,8 +42,8 @@ slider12:0<0,100,1>-Band sat (%)
 slider13:30<0,100,1>-Bias (%)
 slider14:120<40,400,1>-Sat low band (Hz)
 slider15:6000<2000,16000,10>-Sat high band (Hz)
-slider16:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider17:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider16:-0.3<-24,0,0.1>-Ceiling (dB)
+slider17:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider18:0<-24,12,0.1>-Input trim (dB)
 slider19:1<0,1,1{Off,On}>-Input guard
 slider20:20<20,400,1>-EQ: HPF (Hz, 20 = off)
@@ -186,7 +186,7 @@ function update() local(drv, fc, f1, f2, f3, gb) (
   eqA.peak_set(f1, gb); eqB.peak_set(f1 * 10, gb); eqC.peak_set(f1 * 100, gb);
 
   in_setup(slider18, slider19);
-  ost_setup(slider12 / 100, slider13 / 100, slider14, slider15, slider16, slider17);
+  ost_setup(slider12 / 100, slider13 / 100, slider14, slider15, slider16, 1);   // output stage: CLIP, always on
 );
 
 // ---------- presets (leave Drift speed, Output and the I/O rows alone) ----------
@@ -375,7 +375,7 @@ yR = chR.ch_proc(inR, bnow, sagk);
 oL = inL * (1 - mix_s) + yL * mix_s;
 oR = inR * (1 - mix_s) + yR * mix_s;
 
-// output stage: band saturation -> output gain -> clipper / limiter
+// output stage: band saturation -> output gain -> clipper
 q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;

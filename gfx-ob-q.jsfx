@@ -52,8 +52,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider24:20<20,400,1>-EQ: HPF (Hz, 20 = off)
 slider25:22000<3000,22000,10>-EQ: LPF (Hz, 22000 = off)
 slider26:0<-15,15,0.1>-EQ: LF gain (dB)
@@ -125,7 +125,7 @@ function update() (
   g_on = slider8; gthr = slider9; grange = slider10; grel_c = dy_ms(slider11); gmode = slider12;
   xfm = slider13; lnk = slider14; mix_t = slider15 / 100;
   in_setup(0, slider17);
-  ost_setup(0, 0, 120, 6000, -0.3, -1);  // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------

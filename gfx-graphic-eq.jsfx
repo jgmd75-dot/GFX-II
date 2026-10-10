@@ -17,7 +17,7 @@ desc:GFX Graphic EQ [31-band EQ]
 //   Theme picker and HW / flat switch in the header.
 //   OUTPUT   - level after the EQ. FLAT centres every fader. IN switches the EQ (and filters) in or out.
 // The analyser shows the output level of each band; the yellow line is the EQ's response.
-// PRESETS, and IN / OUT (bottom row): TRIM with the GUARD key, SAT and the OUT stage (OFF / CLIP / LIM).
+// PRESETS, and IN / OUT (bottom row): TRIM with the GUARD key and SAT.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -71,8 +71,8 @@ slider40:0<0,100,1>-Band sat (%)
 slider41:30<0,100,1>-Bias (%)
 slider42:120<40,400,1>-Sat low band (Hz)
 slider43:6000<2000,16000,10>-Sat high band (Hz)
-slider44:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider45:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider44:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider45:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -142,7 +142,7 @@ function update() local(b, k, cs) (
   HCL.bq_set(0, ge_hcf, 0.707, 0); HCR.bq_set(0, ge_hcf, 0.707, 0);   // ge_hcf: glided in @sample
   og = 10 ^ (slider36 / 20); eq_on = slider37;
   in_setup(slider38, slider39);
-  ins_output_setup(40);
+  ins_output_straight(40);   // output stage: straight through
 );
 
 // ---------- presets: curves drawn from simple shapes (leave INPUT and OUTPUT alone) ----------

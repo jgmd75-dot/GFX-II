@@ -19,8 +19,8 @@ desc:GFX MasterSuite [mastering strip]
 // Latency (oversampling + lookahead) is reported to the host.
 //
 // OUTPUT gain feeds the limiter, so the CEILING always has the final say.
-// IN / OUT (top left): the input TRIM, the GFX output stage's SAT (band saturation) and its OUT stage
-// (OFF / CLIP / LIM), which sits just before the true-peak limiter.
+// IN / OUT (top left): the input TRIM, the GFX output stage's SAT (band saturation),
+// which sits just before the true-peak limiter.
 // DRIFT (in TUBE): the valve's bias and drive wander a little. The dial scales the drift amount
 // (50% = the Drift amount setting, 100% = twice, 0 = none) and speeds the wander up with it.
 //
@@ -69,8 +69,8 @@ slider32:0<0,100,1>-Band sat (%)
 slider33:30<0,100,1>-Bias (%)
 slider34:120<40,400,1>-Sat low band (Hz)
 slider35:6000<2000,16000,10>-Sat high band (Hz)
-slider36:-0.3<-24,0,0.1>-Output stage ceiling / threshold (dB)
-slider37:0<0,2,1{Off,Clip,Limit}>-Output stage
+slider36:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider37:0<0,1,1{Off,Clip}>-(unused, was output stage)
 slider38:50<0,100,1>-Drift (%)
 
 in_pin:left input
@@ -356,8 +356,8 @@ function update() (
   lfA_R.bq_set(0, 6000, 0.7071, 0, srate); lfB_R.bq_set(0, 6000, 0.7071, 0, srate);
   // latency: the oversampler (more stages add their own later)
   os_lat = os_n == 0 ? 0 : os_n == 1 ? 2 * K1 : 2 * K1 + K2;
-  ins_output_setup(32);                    // (it writes pdc_delay: put ours back straight away)
-  lat_t = 2 * os_lat + LDEL + (slider37 == 2 ? ost_N : 0);                   // oversamplers, limiters
+  ins_output_straight(32);   // output stage: straight through (it writes pdc_delay: put ours back straight away)
+  lat_t = 2 * os_lat + LDEL;                   // oversamplers, limiters
   pdc_delay = lat_t; pdc_bot_ch = 0; pdc_top_ch = 2;
   // (kept constant whatever is bypassed, so switching a stage never shifts the timing)
 );
@@ -476,7 +476,7 @@ cmix += (cmix_t - cmix) * sm10; cdrv += ((slider24 > 0 ? cdrv_t : 1) - cdrv) * s
 xL = cL.clip_run(xL);
 xR = cR.clip_run(xR);
 
-// output gain, then the GFX output stage (band saturation, Off / Clip / Limit), into the limiter
+// output gain, then the GFX output stage (band saturation), into the limiter
 out_s += (out_t - out_s) * sm10;
 xL = ostL.ost_band(xL * out_s); xR = ostR.ost_band(xR * out_s);
 ost_out(xL, xR); xL = ost_l; xR = ost_r;
@@ -528,12 +528,10 @@ k_ = pk_preset(724 * sc, 52 * sc, 380 * sc, 30 * sc, pr_cur, "Transparent|Warm G
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 0 : k_; );
 
 // ---------- helpers ----------
-// the IN / OUT strip: TRIM, SAT and the OUT stage dial (OFF / CLIP / LIM round it), knob centres at y + 30
+// the IN / OUT strip: TRIM and SAT, knob centres at y + 30
 function ms_io(x, y) (
-  ui_kcap = 0x3A3B40; ui_knob((x + 20) * sc, (y + 30) * sc, 1, -12, 12, 0, 0, "TRIM", "%+.1f dB");
-  ui_kcap = 0xD8B040; ui_knob((x + 78) * sc, (y + 30) * sc, 32, 0, 100, 0, 0, "SAT", "%.0f%%");
-  ui_outkeys(x + 114, y + 6, 54, 14, 3, 37);
-  gfx_setfont(4); ui_cola(C_INK, 0.85); ui_text((x + 141) * sc, (y + 59) * sc, "OUT");
+  ui_kcap = 0x3A3B40; ui_knob((x + 38) * sc, (y + 30) * sc, 1, -12, 12, 0, 0, "TRIM", "%+.1f dB");
+  ui_kcap = 0xD8B040; ui_knob((x + 116) * sc, (y + 30) * sc, 32, 0, 100, 0, 0, "SAT", "%.0f%%");
 );
 // a stage's ON key, top right of its group
 function st_on(x, y, idx) (

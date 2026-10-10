@@ -16,7 +16,7 @@ desc:GFX G Seventy [mono synth]
 // DRIFT (heavy, 70s unstable; 60% by default): the universal GFX instrument drift pushed harder - pitch,
 // VCO 2 detune, pulse width and the filters wander, with a random tuning offset on each new note -
 // and the envelope's timing wanders too, a little different on every note. 0% = steady.
-// IN / OUT: the GFX band saturation and output stage (SAT and OFF / CLIP / LIM on the panel).
+// IN / OUT: the GFX band saturation (SAT on the panel); the output soft clip is always on.
 
 import gfx-drift.jsfx-inc
 import gfx-voice.jsfx-inc
@@ -56,8 +56,8 @@ slider26:0<0,100,1>-Band sat (%)
 slider27:30<0,100,1>-Bias (%)
 slider28:120<40,400,1>-Sat low band (Hz)
 slider29:6000<2000,16000,10>-Sat high band (Hz)
-slider30:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider31:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider30:-0.3<-24,0,0.1>-Ceiling (dB)
+slider31:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:none
 out_pin:left output
@@ -162,7 +162,7 @@ function update() (
   drift = slider23 / 100 * 1.6;                   // heavy: the universal drift pushed further
   vol_t = 10 ^ (slider24 / 20);
   sv_ptr = patch_trim(slider25);
-  ins_output_setup(26);
+  ins_output_setup(26);   // output stage: CLIP, always on
 );
 // recessed front-panel section (the GFX instrument inset): sloped walls, corner creases, light from the top left
 function inset(x, y, w, h, col) local(b, ox, oy, ow, oh) (
@@ -417,13 +417,9 @@ inset(358, 392, 160, 132, SH1); band(358, 392, 160, "PLAYING");
 sprintf(#v, "%.0f%%", slider22); dy_knob(438, 462, 22, 22, 0, 100, 0, 0, CAPD, "VELOCITY", #v);
 
 inset(530, 392, 414, 132, SH2); band(530, 392, 414, "MASTER");
-sprintf(#v, "%.0f%%", slider23); dy_knob(572, 466, 18, 23, 0, 100, 60, 0, CAPG, "DRIFT", #v);
-sprintf(#v, "%+.1f dB", slider24); dy_knob(652, 462, 24, 24, -24, 6, 0, 0, CAPC, "VOLUME", #v);
-sprintf(#v, "%.0f%%", slider26); dy_knob(732, 466, 18, 26, 0, 100, 0, 0, CAPG, "SAT", #v);
-rd_lbl(830, 418, "OUT", DIMI, 1);
-rd_sq(780, 428, 100, 22, slider31 == 0, ORG, "OFF") ? setv(31, 0);
-rd_sq(780, 454, 100, 22, slider31 == 1, ORG, "CLIP") ? setv(31, 1);
-rd_sq(780, 480, 100, 22, slider31 == 2, ORG, "LIMIT") ? setv(31, 2);
+sprintf(#v, "%.0f%%", slider23); dy_knob(595, 466, 18, 23, 0, 100, 60, 0, CAPG, "DRIFT", #v);
+sprintf(#v, "%+.1f dB", slider24); dy_knob(713, 462, 24, 24, -24, 6, 0, 0, CAPC, "VOLUME", #v);
+sprintf(#v, "%.0f%%", slider26); dy_knob(831, 466, 18, 26, 0, 100, 0, 0, CAPG, "SAT", #v);
 mL.ui_ledm(906 * sc, 420 * sc, 10 * sc, 92 * sc, pkL); pkL *= 0.85;
 
 (drag_id > 1600 && drag_id <= 1622) ? edited = 1;

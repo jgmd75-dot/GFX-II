@@ -54,8 +54,8 @@ slider18:0<0,100,1>-Band sat (%)
 slider19:30<0,100,1>-Bias (%)
 slider20:120<40,400,1>-Sat low band (Hz)
 slider21:6000<2000,16000,10>-Sat high band (Hz)
-slider22:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider23:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider22:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider23:1<0,1,1{Off,Clip}>-(unused, was output stage)
 
 in_pin:left input
 in_pin:right input
@@ -154,12 +154,11 @@ function update() (
   key = slider7;
   mix_t = slider15 / 100;
   in_setup(0, slider17);
-  ost_setup(0, 0, 120, 6000, -0.3, slider23 == 1);   // no GFX output stage on this unit, only CLIP: a soft clip at -0.3 dBFS
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 in_init();
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
-ost_nolim = 1;   // OFF / CLIP only: no look-ahead delay, no latency
 rms_c = 1 - exp(-1 / (0.008 * srate));              // RMS integration (8 ms)
 rel_step = 120 / srate;                             // release: 120 dB per second
 sm = 1 - exp(-1 / (0.03 * srate));
@@ -350,12 +349,8 @@ transfer(692, 100, 184, 88);
 cknob(734, 238, 20, 14, 0, 400, 0, 0xF2C21B, 1, 0, 0, 0, "SC HPF", slider14 < 20 ? "OFF" : "%.0f Hz");
 tick(734 * sc, 238 * sc, 20 * sc, 0, "OFF", INK); tick(734 * sc, 238 * sc, 20 * sc, 0.5, "200", INK); tick(734 * sc, 238 * sc, 20 * sc, 1, "400", INK);
 cknob(834, 238, 20, 15, 0, 100, 100, CAP_M, 0, 3, 0, 50, "MIX", "%.0f%%");
-mI.ui_ledm(712 * sc, 304 * sc, 88 * sc, 9 * sc, pkI);
-mO.ui_ledm(712 * sc, 318 * sc, 88 * sc, 9 * sc, pkO);
-// CLIP: soft-clips the output at -0.3 dBFS (the label turns red while it is clipping)
-pk_ledbtn(808 * sc, 303 * sc, 30 * sc, 18 * sc, slider23 == 1, 0xFF3A2A) ? ( slider23 = slider23 == 1 ? 0 : 1; ui_auto(23); );
-clpd = ost_clipped ? 1 : clpd * 0.9; ost_clipped = 0;
-lbl(823, 325, "CLIP", clpd > 0.1 ? 0xFF3A2A : INK, clpd > 0.1 ? 1 : 0.7);
+mI.ui_ledm(712 * sc, 304 * sc, 128 * sc, 9 * sc, pkI);
+mO.ui_ledm(712 * sc, 318 * sc, 128 * sc, 9 * sc, pkO);
 lbl(700, 303, "IN", INK, 0.7); lbl(700, 317, "OUT", INK, 0.7);
 pkI *= 0.85; pkO *= 0.85;
 sprintf(#gt, "%.1f", min(s1.eL + s2.eL, 0)); lbl(856, 303, "GR", INK, 0.7); lbl(856, 317, #gt, INK, 0.9);

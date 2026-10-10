@@ -16,9 +16,8 @@ desc:GFX KRT-45 [enhancer]
 //   input -> INPUT DRIVE (0 .. +18 dB into a small transistor stage, level-matched: odd + even harmonics, at 0 dB
 //   the stage is out) -> ALIGN all-pass -> 3-way Linkwitz-Riley crossover (24 dB/oct; LO split 150 - 250 Hz,
 //   HI split 2 - 4 kHz) -> LO / MID / HI -> LO-CONTOUR and HI-PROCESS -> MIX -> OUTPUT trim -> 2 Hz DC blocker
-//   -> the house output stage (OFF / CLIP / LIMIT) -> BYPASS crossfade.
-//   Latency 0 samples (all filters are minimum-phase IIR); LIMIT adds 3 ms (reported to the host, and the bypass
-//   path is delayed to match, so BYPASS never jumps in time).
+//   -> the house output stage (soft clip, always on) -> BYPASS crossfade.
+//   Latency 0 samples (all filters are minimum-phase IIR).
 //
 // PHASE ALIGNMENT (the frequency-dependent delay)
 //   With all the controls at 0 the three bands sum back to a flat magnitude (an all-pass: within 0.04 dB from
@@ -80,7 +79,7 @@ slider8:100<0,100,1>-Mix (%)
 slider9:50<0,100,1>-Drift (%)
 slider10:0<0,1,1{Off,On}>-Bypass
 slider11:0<0,2,1{Enamel,VFD,Matrix}>-Theme
-slider12:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider12:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider13:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
@@ -96,9 +95,7 @@ ext_noinit = 1;
 nextmem = 0;
 function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
 kr_C  = alloc(64);                                      // filter coefficients: 2 channels x 4 sets x (a1, a2, a3, k)
-kr_DL = alloc(4096); kr_DR = alloc(4096);               // dry ring buffers (latency-matched bypass)
 ost_init(alloc(4096));                                  // the house output stage
-kr_wp = 0;
 
 // ---------- the TPT state-variable filter (stable under modulation) ----------
 // returns the low-pass; the band-pass and high-pass go to kr_bp / kr_hp
@@ -203,7 +200,7 @@ function kr_srinit() (
   kr_aV  = 1 - exp(-1 / (0.001 * srate)); kr_rV = exp(-1 / (0.060 * srate));
   kr_psm = 1 - exp(-1 / (0.02 * srate));                // knob smoothing (per sample)
   kr_xf  = 1 / (0.02 * srate);                          // bypass crossfade step (20 ms)
-  ost_init(ost_buf);                                    // the output stage again, on its own buffer
+  ost_init(0);                                       // the output stage again (resets it)
 );
 kr_srinit();
 kr_ic2 = 1 / sqr(0.32);                                 // soft clip of the added top end (about -10 dBFS)
@@ -221,9 +218,9 @@ function kr_update() (
   drift_macro(slider9);
   kr_tbyp = slider10 >= 0.5;
   kr_om   = slider12 | 0;
-  ost_setup(0, 0, 120, 6000, -0.3, kr_om);
+  ost_setup(0, 0, 120, 6000, -0.3, 1);   // output stage: CLIP, always on
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = ost_N;                                    // the output stage has the same latency in every mode
+  pdc_delay = 0;                                        // no latency
 );
 
 // ---------- presets: drive, lo, hi, output, align, lo split, hi split, mix, drift ----------
@@ -329,15 +326,12 @@ kr_t = kr_yl - kr_ox0 + kr_dco * kr_oy0; kr_ox0 = kr_yl; kr_oy0 = kr_t; kr_yl = 
 kr_t = kr_yr - kr_ox1 + kr_dco * kr_oy1; kr_ox1 = kr_yr; kr_oy1 = kr_t; kr_yr = kr_t;
 // ---------- the house output stage ----------
 ost_out(kr_yl, kr_yr);
-// ---------- BYPASS: crossfade to the input, delayed to match the output stage ----------
-kr_DL[kr_wp] = kr_il; kr_DR[kr_wp] = kr_ir;
-kr_rp = (kr_wp - ost_N + 4096) & 4095;
-kr_wp = (kr_wp + 1) & 4095;
+// ---------- BYPASS: crossfade to the input ----------
 kr_bx = kr_tbyp ? min(kr_bx + kr_xf, 1) : max(kr_bx - kr_xf, 0);
 kr_bx > 0 ? (
   kr_t = kr_bx * kr_bx * (3 - 2 * kr_bx);               // smooth S-curve
-  spl0 = ost_l + (kr_DL[kr_rp] - ost_l) * kr_t;
-  spl1 = ost_r + (kr_DR[kr_rp] - ost_r) * kr_t;
+  spl0 = ost_l + (kr_il - ost_l) * kr_t;
+  spl1 = ost_r + (kr_ir - ost_r) * kr_t;
 ) : ( spl0 = ost_l; spl1 = ost_r; );
 
 @gfx 820 306
@@ -740,40 +734,29 @@ loop(5,
 );
 
 // =====================================================================
-// Lower row (y 212..278): ÜBERGANG, LAUFZEIT, MIX / DRIFT, THEME, OUT STAGE, BYPASS
+// Lower row (y 212..278): ÜBERGANG, LAUFZEIT, MIX / DRIFT, THEME, BYPASS
 // =====================================================================
 krv_y1 = 212; krv_h1 = 72;
-kr_sect(22, krv_y1, 150, krv_h1, KRS, krv_de ? "ÜBERGANG" : "CROSSOVER");
+kr_sect(22, krv_y1, 186, krv_h1, KRS, krv_de ? "ÜBERGANG" : "CROSSOVER");
 sprintf(#krv_v, "%.0f Hz", slider6);
-kr_small(64, 250, 13, 6, 150, 250, 200, 0x9DA2A8, krv_de ? "TIEF" : "LO SPLIT", #krv_v);
+kr_small(76, 250, 13, 6, 150, 250, 200, 0x9DA2A8, krv_de ? "TIEF" : "LO SPLIT", #krv_v);
 sprintf(#krv_v, "%.2f kHz", slider7 / 1000);
-kr_small(130, 250, 13, 7, 2000, 4000, 3000, 0x9DA2A8, krv_de ? "HOCH" : "HI SPLIT", #krv_v);
+kr_small(154, 250, 13, 7, 2000, 4000, 3000, 0x9DA2A8, krv_de ? "HOCH" : "HI SPLIT", #krv_v);
 
-kr_sect(178, krv_y1, 86, krv_h1, KRS, krv_de ? "LAUFZEIT" : "TIMING");
+kr_sect(214, krv_y1, 110, krv_h1, KRS, krv_de ? "LAUFZEIT" : "TIMING");
 sprintf(#krv_v, "%.0f%%", slider5);
-kr_small(221, 250, 13, 5, 0, 100, 0, krv_th == 0 ? 0x4E8F8C : KRI2, krv_de ? "ABGLEICH" : "ALIGN", #krv_v);
+kr_small(269, 250, 13, 5, 0, 100, 0, krv_th == 0 ? 0x4E8F8C : KRI2, krv_de ? "ABGLEICH" : "ALIGN", #krv_v);
 
-kr_sect(270, krv_y1, 118, krv_h1, KRS, "");
+kr_sect(330, krv_y1, 148, krv_h1, KRS, "");
 sprintf(#krv_v, "%.0f%%", slider8);
-kr_small(304, 245, 13, 8, 0, 100, 100, krv_th == 0 ? 0xD8B040 : KRA, krv_de ? "ANTEIL" : "MIX", #krv_v);
+kr_small(372, 245, 13, 8, 0, 100, 100, krv_th == 0 ? 0xD8B040 : KRA, krv_de ? "ANTEIL" : "MIX", #krv_v);
 sprintf(#krv_v, "%.0f%%", slider9);
-kr_small(356, 245, 13, 9, 0, 100, 50, krv_th == 0 ? 0x6F8794 : KRI2, "DRIFT", #krv_v);
+kr_small(436, 245, 13, 9, 0, 100, 50, krv_th == 0 ? 0x6F8794 : KRI2, "DRIFT", #krv_v);
 
-kr_sect(394, krv_y1, 180, krv_h1, KRS, krv_de ? "OPTIK" : "THEME");
-kr_key(401, 242, 60, 28, krv_de ? "EMAILLE" : "ENAMEL", krv_th == 0) ? ( slider11 = 0; ui_auto(11); );
-kr_key(465, 242, 42, 28, "VFD",    krv_th == 1) ? ( slider11 = 1; ui_auto(11); );
-kr_key(511, 242, 56, 28, "MATRIX", krv_th == 2) ? ( slider11 = 2; ui_auto(11); );
-
-kr_sect(580, krv_y1, 134, krv_h1, KRS, krv_de ? "AUSGANGSSTUFE" : "OUT STAGE");
-ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-krv_i = 0;
-loop(3,
-  krv_c = krv_i == 0 ? 0x3A9CFF : krv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  krv_kx = krv_i == 0 ? 587 : krv_i == 1 ? 624 : 665; krv_kw = krv_i == 0 ? 34 : krv_i == 1 ? 38 : 42;
-  ui_okey(krv_kx, 242, krv_kw, 28, (slider12 | 0) == krv_i || (krv_i == 1 && ui_okclp > 0.1), krv_c) ? ( slider12 = krv_i; ui_auto(12); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext((krv_kx + krv_kw * 0.5) * sc, (242 + 14) * sc, krv_i == 0 ? (krv_de ? "AUS" : "OFF") : krv_i == 1 ? "CLIP" : (krv_de ? "BEGR." : "LIMIT"));
-  krv_i += 1;
-);
+kr_sect(484, krv_y1, 230, krv_h1, KRS, krv_de ? "OPTIK" : "THEME");
+kr_key(493, 242, 70, 28, krv_de ? "EMAILLE" : "ENAMEL", krv_th == 0) ? ( slider11 = 0; ui_auto(11); );
+kr_key(571, 242, 56, 28, "VFD",    krv_th == 1) ? ( slider11 = 1; ui_auto(11); );
+kr_key(635, 242, 70, 28, "MATRIX", krv_th == 2) ? ( slider11 = 2; ui_auto(11); );
 
 kr_sect(720, krv_y1, 78, krv_h1, KRS, "");
 kr_big(726, 224, 66, 46, krv_de ? "DIREKT" : "BYPASS", slider10 >= 0.5) ? ( slider10 = slider10 >= 0.5 ? 0 : 1; ui_auto(10); );

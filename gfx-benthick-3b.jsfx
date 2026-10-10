@@ -25,9 +25,8 @@ desc:GFX Benthick 3B [bus processor]
 //                  ATTACK (0.1 - 30 ms) and RELEASE (0.1 - 1.2 s or AUTO: quick after a transient, slow when
 //                  it has been working a while), THRESH, MAKEUP. Its detector shares the SC HPF.
 //   5 WIDTH      - M/S width; S SAT drives the Sides into a second discrete saturation stage.
-//     MIX        - wet / dry, OUTPUT, then the house OUT stage: CLIP (the final soft-clip protection), or
-//                  the lookahead brickwall LIMIT with the LIMIT key. (3B has no IN / OUT strip: input trim, guard,
-//                  band sat and the OUT stage stay at their defaults.)
+//     MIX        - wet / dry, OUTPUT. (3B has no IN / OUT strip: input trim, guard and band sat stay at their
+//                  defaults.)
 // Every stage has an IN key. No drift: Benthick 3 is clean and repeatable.
 
 import gfx-drift.jsfx-inc
@@ -69,8 +68,8 @@ slider27:0<0,100,1>-Band sat (%)
 slider28:30<0,100,1>-Bias (%)
 slider29:120<40,400,1>-Sat low band (Hz)
 slider30:6000<2000,16000,10>-Sat high band (Hz)
-slider31:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider32:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider31:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider32:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider33:1<0,1,1{Out,In}>-Front end in
 slider34:1<0,1,1{Out,In}>-Comp 1 in
 slider35:1<0,1,1{Out,In}>-Comp 2 in
@@ -165,7 +164,7 @@ function update() local(r) (
   mix_t = slider23 / 100;
   out_t = 10 ^ (slider24 / 20);
   in_setup(slider25, slider26);
-  ost_setup(slider27 / 100, slider28 / 100, slider29, slider30, slider31, slider32);
+  ost_setup(slider27 / 100, slider28 / 100, slider29, slider30, slider31, 0);   // output stage: straight through
 );
 
 // ---------- presets ----------
@@ -324,7 +323,7 @@ wm = (dL + dR) * 0.5; ws = (dL - dR) * 0.5 * wid_s;
 ss_on ? ws = ost_tanh(ws * ss_k) / ss_k;
 dL = wm + ws; dR = wm - ws;
 
-// MIX against the (delayed) dry, OUTPUT, then the house OUT stage
+// MIX against the (delayed) dry, OUTPUT
 oL = (yL + (dL - yL) * mix_s) * out_s;
 oR = (yR + (dR - yR) * mix_s) * out_s;
 oL = ostL.ost_band(oL); oR = ostR.ost_band(oR);
@@ -378,18 +377,6 @@ function bt_sect(x, y, w, h, title, on) (
 );
 // grey the controls of a stage that is switched out
 function bt_dim(x, y, w, h) ( ui_cola(FACE2, 0.55); gfx_rect(x * sc, y * sc, w * sc, h * sc); );
-// the LIMIT key: a small square grey key with a red LED; in = the OUT stage's lookahead limiter, out = its soft clip
-function bt_limkey(x, y) local(on, hov) (
-  on = slider32 > 1.5;
-  hov = mouse_x >= x * sc && mouse_x < (x + 40) * sc && mouse_y >= y * sc && mouse_y < (y + 40) * sc;
-  pressed && hov && drag_id == 0 ? ( drag_id = -1; slider32 = on ? 1 : 2; ui_auto(32); update(); on = !on; );
-  ui_cola(0x000000, 0.5); gfx_rect((x + 1) * sc, (y + 2) * sc, 40 * sc, 40 * sc);
-  ui_col(0x0A0A0B); gfx_rect(x * sc, y * sc, 40 * sc, 40 * sc);
-  ui_col(hov ? 0x8E9496 : 0x7E8486); gfx_rect((x + 1.5) * sc, (y + 1.5) * sc, 37 * sc, 37 * sc);
-  gfx_gradrect((x + 1.5) * sc, (y + 1.5) * sc, 37 * sc, 18 * sc, 1, 1, 1, 0.18, 0, 0, 0, 0, 0, 0, 0, -0.18 / (18 * sc));
-  rd_led(x + 20, y + 12, 4, on, 0xFF3A2A);
-  gfx_setfont(6, "Trebuchet MS", 10 * sc, 'b'); ui_col(0x16191A); ui_text((x + 20) * sc, (y + 22) * sc, "LIMIT");
-);
 
 ui_col(0x050C0D); gfx_rect(0, 0, gfx_w, gfx_h);
 rd_plate(26, 0, 1128, 570, FACE, 0);
@@ -478,7 +465,7 @@ ui_col(0x071A1D); rd_rr(440 * sc, 360 * sc, 74 * sc, 26 * sc, 4 * sc);
 gfx_setfont(6, "Trebuchet MS", (dy_act ? 13 : 17) * sc, 'b'); ui_col(dy_act ? COP : INK);
 ui_text(476 * sc, (dy_act ? 366 : 363) * sc, dy_act ? #v : "TILT");
 
-// 4 PUNCH + LIMITER
+// 4 SUM + BUS COMP
 bt_sect(702, CY, 210, CH, "SUM", c2_on);
 sprintf(#v, "%.0f / %.0f", 100 - slider17, slider17); dy_knob(807, 168, 28, 17, 0, 100, 60, 0, COP, "BALANCE", #v);
 gfx_setfont(6, "Trebuchet MS", 15 * sc, 'b'); ui_col(INK); ui_text(760 * sc, 186 * sc, "1"); ui_text(854 * sc, 186 * sc, "2");
@@ -508,11 +495,10 @@ pk_lcdfont(9, 11 * sc); ui_col(pk_lcdc);
 sprintf(#gl, "COMP 1  %4.1f dB", d1_gr); gfx_x = 946 * sc; gfx_y = 358 * sc; gfx_drawstr(#gl);
 sprintf(#gl, "COMP 2  %4.1f dB", d2_gr); gfx_x = 946 * sc; gfx_y = 376 * sc; gfx_drawstr(#gl);
 sprintf(#gl, "BUS     %4.1f dB", d3_gr); gfx_x = 946 * sc; gfx_y = 394 * sc; gfx_drawstr(#gl);
-ui_col(0x061416); gfx_rect(934 * sc, 428 * sc, 128 * sc, 110 * sc);
-mI.ui_ledm(942 * sc, 434 * sc, 26 * sc, 86 * sc, pkI);
-mL.ui_ledm(988 * sc, 434 * sc, 26 * sc, 86 * sc, pkL); mR.ui_ledm(1026 * sc, 434 * sc, 26 * sc, 86 * sc, pkR);
-rd_lbl(955, 524, "IN", INK, 0.8); rd_lbl(1020, 524, "OUT", INK, 0.8);
-bt_limkey(1084, 498);
+ui_col(0x061416); gfx_rect(934 * sc, 428 * sc, 192 * sc, 110 * sc);
+mI.ui_ledm(948 * sc, 434 * sc, 26 * sc, 86 * sc, pkI);
+mL.ui_ledm(1048 * sc, 434 * sc, 26 * sc, 86 * sc, pkL); mR.ui_ledm(1086 * sc, 434 * sc, 26 * sc, 86 * sc, pkR);
+rd_lbl(961, 524, "IN", INK, 0.8); rd_lbl(1080, 524, "OUT", INK, 0.8);
 pkI *= 0.85; pkL *= 0.85; pkR *= 0.85;
 
 // the meters fall back smoothly between redraws

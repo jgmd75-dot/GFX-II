@@ -65,8 +65,8 @@ slider28:0<0,100,1>-Band sat (%)
 slider29:30<0,100,1>-Bias (%)
 slider30:120<40,400,1>-Sat low band (Hz)
 slider31:6000<2000,16000,10>-Sat high band (Hz)
-slider32:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider33:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider32:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider33:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider34:0<-6,6,0.1>-EQ: Tilt (dB at each end)
 slider35:800<100,5000,1>-EQ: Pivot (Hz)
 slider36:0<0,1,1{Gentle,Steep}>-EQ: Shape
@@ -147,7 +147,7 @@ function update() (
   linked = mode == 0 || slider24;
   mix_t = slider25 / 100;
   in_setup(0, slider27);
-  ost_setup(0, 0, 120, 6000, -0.3, -1);  // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------

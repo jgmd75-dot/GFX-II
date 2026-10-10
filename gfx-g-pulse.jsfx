@@ -23,7 +23,7 @@ desc:GFX G Pulse [drum machine]
 //               (one line per voice, e.g.  KICK  X...x...X...x...   X = accent, x = hit, . = rest).
 //   MIDI      - plays from General MIDI drum notes; MIDI OUT sends the sequence as notes (record it to an item).
 //   COMP      - stereo-linked bus compressor; MIX blends it in parallel with the dry kit.
-// IN / OUT: the strip along the bottom holds SAT, the OUT stage (OFF / CLIP / LIM) and STEREO (MONO, WIDTH).
+// IN / OUT: the strip along the bottom holds SAT and STEREO (MONO, WIDTH).
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -48,8 +48,8 @@ slider14:0<0,100,1>-Band sat (%)
 slider15:30<0,100,1>-Bias (%)
 slider16:120<40,400,1>-Sat low band (Hz)
 slider17:6000<2000,16000,10>-Sat high band (Hz)
-slider18:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider19:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider18:-0.3<-24,0,0.1>-Ceiling (dB)
+slider19:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider20:20<20,500,1>-Mono below (Hz, 20 = off)
 slider21:0<0,100,1>-Stereo width (%)
 slider22:0<-24,24,0.1>-Kick tune (st)
@@ -452,7 +452,7 @@ function update() (
   cthr = slider8; crat = max(slider9, 1);
   catc = 1 - exp(-1 / (max(slider10, 0.05) * 0.001 * srate)); crlc = 1 - exp(-1 / (slider11 * 0.001 * srate));
   cmk = 10 ^ (slider12 / 20); cmix_t = slider13 / 100;
-  ins_output_setup(14); ins_stereo_setup(20);
+  ins_output_setup(14); ins_stereo_setup(20);   // output stage: CLIP, always on
 );
 
 ext_noinit = 1;                                   // keep the voices and the playhead when playback starts

@@ -22,7 +22,7 @@ desc:GFX Compressor Q [comp + EQ]
 // MIX in MASTER = parallel compression.
 // DRIFT: threshold and timing breathe slightly, the EQ bands wander. The DRIFT dial scales the compressor and EQ
 // drift amounts (50% = the settings below, 100% = twice, 0 = none) and speeds the wander up with them.
-// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIMIT) on the panel.
+// IN / OUT: TRIM (with the GUARD key) and SAT on the panel.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -53,8 +53,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:0<-24,12,0.1>-Input trim (dB)
 slider23:1<0,1,1{Off,On}>-Input guard
 slider24:1<0,1,1{Split,SC HPF}>-Frequency mode
@@ -172,7 +172,7 @@ function update() (
   voice == 2 ? ( att_auto = 15; rel_span = 1400; kn = max(knee, 10); ) :
                ( att_auto = 10; rel_span = 1500; kn = max(knee, 12); );
   in_setup(slider22, slider23);
-  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, slider21);
+  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, 0);   // output stage: straight through
 );
 
 // ---------- presets (leave Drift speed, Output and the I/O rows alone) ----------
@@ -650,11 +650,10 @@ lz_small(588, 318, slider24 ? "HIGH-PASS" : "COMPRESSED", 0.6);
 // ---------- IN / OUT ----------
 lz_sect(642, 256, 250, 114);
 lz_head(767, 270, "IN / OUT", 220);
-lz_small(694, 286, "TRIM", 0.9); lz_small(767, 286, "SAT", 0.9); lz_small(844, 286, "OUT", 0.9);
-sprintf(#v, "%+.1f dB", slider22); lz_lw = 56; lz_knob(694, 318, 13, 22, -24, 12, 0, 0, "", #v);
-ui_guardclick(1700 + 22, 23, 694, 318, 16);   // click TRIM for GUARD
-sprintf(#v, "%.0f%%", slider16); lz_lw = 52; lz_cap = 0xD8B040; lz_knob(767, 318, 13, 16, 0, 100, 0, 0, "", #v);
-ui_outkeys(817, 300, 54, 14, 3, 21);
+lz_small(720, 286, "TRIM", 0.9); lz_small(814, 286, "SAT", 0.9);
+sprintf(#v, "%+.1f dB", slider22); lz_lw = 56; lz_knob(720, 318, 13, 22, -24, 12, 0, 0, "", #v);
+ui_guardclick(1700 + 22, 23, 720, 318, 16);   // click TRIM for GUARD
+sprintf(#v, "%.0f%%", slider16); lz_lw = 52; lz_cap = 0xD8B040; lz_knob(814, 318, 13, 16, 0, 100, 0, 0, "", #v);
 
 // ---------- OUTPUT: the DRIFT dial, the meter, the level ----------
 lz_sect(896, 12, 62, 358);

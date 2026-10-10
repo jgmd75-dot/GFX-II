@@ -83,8 +83,8 @@ slider66:0<0,100,1>-Band sat (%)
 slider67:30<0,100,1>-Bias (%)
 slider68:120<40,400,1>-Sat low band (Hz)
 slider69:6000<2000,16000,10>-Sat high band (Hz)
-slider70:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider71:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider70:-0.3<-24,0,0.1>-Ceiling (dB)
+slider71:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider72:0<-12,6,0.1>-Patch level (dB)
 slider73:0<0,100,1>-VCF velocity (%)
 slider74:0<0,5000,1>-LFO 1 delay (ms)
@@ -1423,7 +1423,7 @@ function update() (
   L2D = floor(slider75 + 0.5); PENV = slider76; PTGT = slider77 > 0.5;
   mr_update();
   vol_t = 10^((slider2 + slider72)/20);
-  ins_output_setup(66);
+  ins_output_setup(66);   // output stage: CLIP, always on
 );
 function load_patch(p) local(i, o) (
   p = min(max(floor(p + 0.5), 0), 99);

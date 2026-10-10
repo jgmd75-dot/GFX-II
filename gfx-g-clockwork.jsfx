@@ -86,8 +86,8 @@ slider57:0<0,100,1>-Band sat (%)
 slider58:30<0,100,1>-Bias (%)
 slider59:120<40,400,1>-Sat low band (Hz)
 slider60:6000<2000,16000,10>-Sat high band (Hz)
-slider61:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider62:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider61:-0.3<-24,0,0.1>-Ceiling (dB)
+slider62:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider63:25<0,100,1>-Drift (%)
 slider64:20<20,500,1>-Mono below (Hz, 20 = off)
 slider65:0<0,100,1>-Stereo width (%)
@@ -493,7 +493,7 @@ function update() local(v, b) (
   chan = slider54; width = slider55 / 100;
   out_t = 10 ^ (slider56 / 20);
   drift = slider63 / 100;
-  ins_output_setup(57); ins_stereo_setup(64);
+  ins_output_setup(57); ins_stereo_setup(64);   // output stage: CLIP, always on
   ph_on = slider66; ph_rate = slider67; ph_dep = slider68 / 100; ph_fb = slider69 / 100 * 0.8;
   ph_mix_t = ph_on ? slider70 / 100 : 0; ph_off = slider71 / 360;
 );

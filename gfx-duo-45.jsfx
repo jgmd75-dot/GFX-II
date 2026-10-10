@@ -39,9 +39,9 @@ desc:GFX Duo 45 [bitcrusher/limiter]
 //   minimum + box smoothing (the gain is always down before a peak arrives), RELEASE 0 (instant) .. 300 ms, the
 //   detector also hears the pre-emphasised copy (pushed highs clamp harder: the papery top), a pump that ducks
 //   after hits (TOKYO light, BERLIN deep), and a final clamp: no output sample exceeds the CEILING (-12 .. 0 dBFS).
-//   -> MIX (the dry input, latency matched) -> OUTPUT -> the house output stage (band SAT, OFF / CLIP / LIMIT; OFF by
-//   default, since the limiter's CEILING already is the brickwall).
-//   Latency: the 2 ms lookahead (reported; constant whether the units are on or off; LIMIT adds 3 ms).
+//   -> MIX (the dry input, latency matched) -> OUTPUT -> the house output stage (band SAT, and a soft clip that is
+//   always on; the limiter's CEILING is the brickwall before it).
+//   Latency: the 2 ms lookahead (reported; constant whether the units are on or off).
 //   ON keys: each unit fades in / out (10 ms).
 //
 // BITS  - 8 / 10 / 12 / 16 / 24 (the knob clicks into these). RATE - 8 / 11 / 16 / 22 / 26 / 32 / 40 / 48 kHz.
@@ -84,8 +84,8 @@ slider22:0<0,100,1>-Band sat (%)
 slider23:30<0,100,1>-Bias (%)
 slider24:120<40,400,1>-Sat low band (Hz)
 slider25:6000<2000,16000,10>-Sat high band (Hz)
-slider26:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider27:0<0,2,1{Off,Clip,Limit}>-Output stage
+slider26:-0.3<-24,0,0.1>-Ceiling (dB)
+slider27:0<0,1,1{Off,Clip}>-(unused, was output stage)
 slider28:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
@@ -295,9 +295,9 @@ function kx_update() local(b, rt, fq, sp, bl) (
   kx_tmix = min(max(slider19, 0), 100) / 100;
   drift_macro(slider20);
   kx_tog = 10 ^ (slider21 / 20);
-  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, slider27 | 0);
+  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, 1);   // output stage: CLIP, always on
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = kx_L - 1 + ((slider27 | 0) == 2 ? ost_N : 0);
+  pdc_delay = kx_L - 1;
 );
 
 // ---------- presets ----------
@@ -928,7 +928,7 @@ kv_scale(kv_x + 370, kv_cy, kv_kr, "0|5|10");
 kv_knob(kv_x + 370, kv_cy, kv_kr, 18, 0, 0, 100, 0, 0, kv_de ? "SÄTTIG." : "SAT", #kvv);
 
 // =====================================================================
-// The central mounting bracket: the chain's MIX, DRIFT, OUTPUT, band SAT and the output stage (x 430..550)
+// The central mounting bracket: the chain's MIX, DRIFT, OUTPUT and band SAT (x 430..550)
 // =====================================================================
 KF = 0x9DA2A8; KI = 0x1C1C1C; KI2 = 0x3A3D40; KHI = 0x8A2E00; kv_b = 1; kv_u = 0;
 ui_cola(0x000000, 0.5); kv_r(432, 62, 120, 256);
@@ -939,22 +939,13 @@ ui_cola(0x000000, 0.25); kv_r(441, 66, 1, 244); kv_r(538, 66, 1, 244);
 rd_screw(440, 72); rd_screw(540, 72); rd_screw(440, 302); rd_screw(540, 302);
 gfx_setfont(11); ui_col(0x1C1C1C); kv_ctxt(490, 76, kv_de ? "KETTE" : "CHAIN");
 sprintf(#kvv, "%.0f %%", slider19);
-kv_ticks(466, 114, 13); kv_knob(466, 114, 13, 19, 0, 0, 100, 100, 0xC7BEB3, kv_de ? "MISCH." : "MIX", #kvv);
+kv_ticks(466, 136, 13); kv_knob(466, 136, 13, 19, 0, 0, 100, 100, 0xC7BEB3, kv_de ? "MISCH." : "MIX", #kvv);
 sprintf(#kvv, "%.0f %%", slider20);
-kv_ticks(514, 114, 13); kv_knob(514, 114, 13, 20, 0, 0, 100, 50, 0x6F8794, "DRIFT", #kvv);
+kv_ticks(514, 136, 13); kv_knob(514, 136, 13, 20, 0, 0, 100, 50, 0x6F8794, "DRIFT", #kvv);
 sprintf(#kvv, "%+.1f dB", slider21);
-kv_ticks(466, 172, 13); kv_knob(466, 172, 13, 21, 0, -24, 12, 0, 0x9DA2A8, kv_de ? "AUSG." : "OUTPUT", #kvv);
+kv_ticks(466, 228, 13); kv_knob(466, 228, 13, 21, 0, -24, 12, 0, 0x9DA2A8, kv_de ? "AUSG." : "OUTPUT", #kvv);
 sprintf(#kvv, "%.0f %%", slider22);
-kv_ticks(514, 172, 13); kv_knob(514, 172, 13, 22, 0, 0, 100, 0, 0xD8B040, kv_de ? "SÄTT." : "SAT", #kvv);
-// the house output stage keys
-ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-kv_i = 0;
-loop(3,
-  kv_c = kv_i == 0 ? 0x3A9CFF : kv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  ui_okey(456, 212 + kv_i * 24, 68, 20, (slider27 | 0) == kv_i || (kv_i == 1 && ui_okclp > 0.1), kv_c) ? ( slider27 = kv_i; ui_auto(27); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext(490 * sc, (212 + kv_i * 24 + 10) * sc, kv_i == 0 ? (kv_de ? "AUS" : "OFF") : kv_i == 1 ? "CLIP" : (kv_de ? "BEGR." : "LIMIT"));
-  kv_i += 1;
-);
+kv_ticks(514, 228, 13); kv_knob(514, 228, 13, 22, 0, 0, 100, 0, 0xD8B040, kv_de ? "SÄTT." : "SAT", #kvv);
 
 pk_end();
 ui_end();

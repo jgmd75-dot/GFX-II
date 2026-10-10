@@ -35,7 +35,7 @@ desc:GFX G Tower [formant synth]
 //   AMP        ADSR, VELOCITY; POLY (8 voices) / MONO / LEGATO, GLIDE, BEND range
 //   EFFECTS    DRIVE (stone crumble: a biased soft clip that crumbles into grit at the top), stereo ping-pong
 //              DELAY (tempo divisions), a big eight-line REVERB (SIZE, TONE, MIX)
-//   MASTER     FATE, VOLUME, SAT and the OUT stage (OFF / CLIP / LIMIT)
+//   MASTER     FATE, VOLUME, SAT (the output soft clip is always on)
 // FATE (the Tarot series drift, 0-100 %): the cards reshuffle a little - the LFO rates, the phase between them and
 //   their depths wander, each corner's formant set slides a little in frequency, the pad centre drifts, the drone's
 //   voicing turns over now and then (an inner tone moves an octave); the tuning wanders gently and each note lands
@@ -123,8 +123,8 @@ slider63:0<0,100,1>-Band sat (%)
 slider64:30<0,100,1>-Bias (%)
 slider65:120<40,400,1>-Sat low band (Hz)
 slider66:6000<2000,16000,10>-Sat high band (Hz)
-slider67:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider68:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider67:-0.3<-24,0,0.1>-Ceiling (dB)
+slider68:1<0,1,1{Off,Clip}>-(unused, was output stage)
 // ---------- LAYERS: BASS and PEDAL ----------
 slider69:0<0,1,1{Off,On}>-Bass layer
 slider70:-2<-3,3,1>-Bass octave
@@ -655,7 +655,7 @@ function update() local(r, sp) (
   tw_rwg = 0.58 * (1.2 / tw_t60) ^ 0.19;            // longer rooms gather more: keep the wet level even
   r = 0; loop(8, TRG[r] = 10 ^ (-3 * TRLT[r] / (tw_t60 * srate)); r += 1; );
   tw_rdc = 1 - exp(-2 * $pi * min(1200 * 2 ^ (tw_rtone * 3.6), srate * 0.45) / srate);
-  ins_output_setup(63);
+  ins_output_setup(63);   // output stage: CLIP, always on
 );
 
 ins_drift_init();

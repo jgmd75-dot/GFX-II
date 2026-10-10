@@ -23,7 +23,7 @@ desc:GFX G Chip 48 [chiptune synth]
 //   CHANNELS        - AUTHENTIC keeps each chip's voice count (beeper 1, AY / PSG 3, FM 6, PULSE 2 - 1 on the
 //                     triangle); 6 VOICES lifts it.   LO-FI - the machine's own speaker / output filter.
 // MIDI: pitch bend +/-2, CC1 vibrato, CC64 sustain, CC123 all notes off.
-// IN / OUT: the strip along the bottom holds SAT, the OUT stage (OFF / CLIP / LIM) and STEREO (MONO, WIDTH).
+// IN / OUT: the strip along the bottom holds SAT and STEREO (MONO, WIDTH).
 
 import gfx-drift.jsfx-inc
 import gfx-output.jsfx-inc
@@ -71,8 +71,8 @@ slider35:0<0,100,1>-Band sat (%)
 slider36:30<0,100,1>-Bias (%)
 slider37:120<40,400,1>-Sat low band (Hz)
 slider38:6000<2000,16000,10>-Sat high band (Hz)
-slider39:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider40:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider39:-0.3<-24,0,0.1>-Ceiling (dB)
+slider40:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider41:20<20,500,1>-Mono below (Hz, 20 = off)
 slider42:0<0,100,1>-Stereo width (%)
 
@@ -372,7 +372,7 @@ function update() (
   fmp = FMD + fm_patch * 16; fm_sl = fmp[12]; fm_dk = max(fmp[8] * fmdec, 0.005);
   lofi = slider27 / 100; stereo = slider28 / 100; velsens = slider29 / 100;
   vol_t = 10 ^ (slider30 / 20); chan = slider31; drums = slider33;
-  ins_output_setup(35); ins_stereo_setup(41);
+  ins_output_setup(35); ins_stereo_setup(41);   // output stage: CLIP, always on
   chip != last_chip ? ( machine_set(); last_chip = chip; );
 );
 // a patch change (or DRUMS / VOICES / PANIC) while voices sound: the old sound fades out (12 ms), the change

@@ -22,7 +22,7 @@ desc:GFX Mali 120 [chorus combo amp]
 // channel with its own power amp.
 // DRIFT: the supply wanders - the chorus clock and rate drift slightly, the rails sag a touch under load. The DRIFT
 // dial scales it (50% = standard, 100% = twice, 0 = none, and no sag).
-// IN / OUT: TRIM (click it for GUARD), SAT and the OUT stage (OFF / CLIP / LIMIT) along the bottom.
+// IN / OUT: TRIM (click it for GUARD), SAT (the output soft clip is always on) along the bottom.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -60,8 +60,8 @@ slider23:0<0,100,1>-Band sat (%)
 slider24:30<0,100,1>-Bias (%)
 slider25:120<40,400,1>-Sat low band (Hz)
 slider26:6000<2000,16000,10>-Sat high band (Hz)
-slider27:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider28:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider27:-0.3<-24,0,0.1>-Ceiling (dB)
+slider28:1<0,1,1{Off,Clip}>-(unused, was output stage)
 // DRIFT dial: supply wander - the chorus clock and rate drift, the rails sag a touch
 slider29:50<0,100,1>-Drift (%)
 
@@ -204,7 +204,7 @@ function update() local(m, v, sp, cents) (
   PL.ml_pre_set(); PR.ml_pre_set();
   drift_macro(slider29);
   in_setup(slider21, slider22);
-  ins_output_setup(23);
+  ins_output_setup(23);   // output stage: CLIP, always on
 );
 
 // ---------- presets (the output stage and the I/O rows are left alone) ----------

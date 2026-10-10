@@ -19,7 +19,7 @@ desc:GFX Contour [filter]
 //               note, FREE runs at the project tempo even when stopped. LOOP or ONE-SHOT; TRIGGER restarts it.
 //   FILTER    - 4x oversampled state-variable filter: LP 6 / 12 / 18 / 24 dB, HP 12, BP 12, NOTCH. A diode-style
 //               soft clipper sits in the feedback loop: DRIVE pushes the input into it for analogue-style grit.
-// IN / OUT also holds SAT and the OUT stage (OFF / CLIP / LIM; click its name to step it).
+// IN / OUT also holds SAT.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -47,8 +47,8 @@ slider16:0<0,100,1>-Band sat (%)
 slider17:30<0,100,1>-Bias (%)
 slider18:120<40,400,1>-Sat low band (Hz)
 slider19:6000<2000,16000,10>-Sat high band (Hz)
-slider20:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider21:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider20:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider21:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider22:0<-24,12,0.1>-Input trim (dB)
 slider23:0<0,1,1{Off,On}>-Input guard
 
@@ -186,7 +186,7 @@ function update() (
   a_cut = slider10 * dep; a_res = slider11 / 100 * dep; a_vol = slider12 / 100 * dep; a_pan = slider13 / 100 * dep;
   mix_t = slider14 / 100; out_t = 10 ^ (slider15 / 20);
   in_setup(slider22, slider23);
-  ins_output_setup(16);
+  ins_output_straight(16);   // output stage: straight through
 );
 
 // everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
@@ -476,7 +476,7 @@ knob_push = 0;
 ui_section(2); C_INK = INKL;
 ui_knob(520 * sc, 498 * sc, 14, 0, 100, 100, 0, "MIX", "%.0f%%");
 ui_knob(600 * sc, 498 * sc, 15, -24, 12, 0, 0, "OUTPUT", "%+.1f dB");
-ins_io(652, 480, 16, INKL);                         // SAT and the OUT stage (OFF / CLIP / LIM)
+ins_io(652, 480, 16, INKL);                         // SAT
 mI.ui_ledm(780 * sc, 466 * sc, 12 * sc, 70 * sc, pkI);
 mO.ui_ledm(840 * sc, 466 * sc, 12 * sc, 70 * sc, pkO);
 gfx_setfont(4); ui_col(INKL); ui_text(786 * sc, 540 * sc, "IN"); ui_text(846 * sc, 540 * sc, "OUT");

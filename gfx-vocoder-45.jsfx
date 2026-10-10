@@ -53,7 +53,7 @@ desc:GFX Vocoder-45 [vocoder]
 //   sum without a phase hole. The carrier is processed in mono (EXT 3/4 summed), which keeps the cost down:
 //   about 13 % of one core at 48 kHz (24 + 16 bands), 15 % with 24 + 24 bands and all 8 synth voices.
 // BRACKET   CARRIER keys, KR / SV BALANCE, MIX (dry modulator <-> vocoder), DRIFT, OUTPUT, band SAT and the house
-//           output stage (OFF / CLIP / LIMIT).
+//           output stage (soft clip, always on).
 // DRIFT (0 - 100 %, 50 % = standard): filter-bank tolerance. Every KR-45 filter sits a little off its nominal
 //   centre (the modulator and carrier banks each with their own tolerance, about +/-1.2 % at 50 %) and wanders
 //   slowly (+/-0.8 %); the followers' release times breathe (+/-10 %). SV-45 is nearly steady (about a seventh
@@ -96,8 +96,8 @@ slider25:0<0,100,1>-Band sat (%)
 slider26:30<0,100,1>-Bias (%)
 slider27:120<40,400,1>-Sat low band (Hz)
 slider28:6000<2000,16000,10>-Sat high band (Hz)
-slider29:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider30:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider29:-0.3<-24,0,0.1>-Ceiling (dB)
+slider30:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider31:0<0,16,1>-MIDI channel (0 = omni)
 slider32:0<0,1,1{ENG,DE}>-Label language
 
@@ -343,7 +343,7 @@ function vc_update() local(w, sv) (
   vc_mixt = min(max(slider22, 0), 100) / 100;
   drift_macro(slider23);
   vc_ogt = 10 ^ (slider24 / 20);
-  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, slider30 | 0);
+  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, 1);   // output stage: CLIP, always on
 );
 
 // ---------- presets ----------
@@ -1023,7 +1023,7 @@ vg_ticks(vg_x + 382, vg_cy, vg_kr);
 vg_knob(vg_x + 382, vg_cy, vg_kr, 17, 2, 0, 1000, 0, 1, 0, vg_de ? "GLEITEN" : "GLIDE", #vgv);
 
 // =====================================================================
-// The central mounting bracket: CARRIER, BALANCE, MIX, DRIFT, OUTPUT, band SAT, output stage (x 428..572)
+// The central mounting bracket: CARRIER, BALANCE, MIX, DRIFT, OUTPUT, band SAT (x 428..572)
 // =====================================================================
 vqF = 0x9DA2A8; vqI = 0x1C1C1C; vqI2 = 0x3A3D40; vqHI = 0x8A2E00; vqA = 0xFF7900; vqL = 0x1C1C1C; vg_b = 1; vg_u = 0;
 ui_cola(0x000000, 0.5); vg_r(430, 62, 144, 274);
@@ -1046,16 +1046,7 @@ vg_ticks(472, 226, 13); vg_knob(472, 226, 13, 23, 0, 0, 100, 50, 1, 0x6F8794, "D
 sprintf(#vgv, "%+.1f dB", slider24);
 vg_ticks(528, 226, 13); vg_knob(528, 226, 13, 24, 0, -24, 12, 0, 0.1, 0x9DA2A8, vg_de ? "AUSG." : "OUTPUT", #vgv);
 sprintf(#vgv, "%.0f %%", slider25);
-vg_ticks(472, 284, 12); vg_knob(472, 284, 12, 25, 0, 0, 100, 0, 1, 0xD8B040, vg_de ? "SÄTT." : "SAT", #vgv);
-// the house output stage keys
-ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
-vg_i = 0;
-loop(3,
-  vg_c = vg_i == 0 ? 0x3A9CFF : vg_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-  ui_okey(504, 266 + vg_i * 21, 52, 18, (slider30 | 0) == vg_i || (vg_i == 1 && ui_okclp > 0.1), vg_c) ? ( slider30 = vg_i; ui_auto(30); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext(530 * sc, (266 + vg_i * 21 + 9) * sc, vg_i == 0 ? (vg_de ? "AUS" : "OFF") : vg_i == 1 ? "CLIP" : (vg_de ? "BEGR." : "LIMIT"));
-  vg_i += 1;
-);
+vg_ticks(500, 284, 12); vg_knob(500, 284, 12, 25, 0, 0, 100, 0, 1, 0xD8B040, vg_de ? "SÄTT." : "SAT", #vgv);
 
 pk_end();
 ui_end();

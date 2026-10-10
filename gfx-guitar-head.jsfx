@@ -23,7 +23,7 @@ desc:GFX Guitar Head [guitar amp]
 // both channels (for a mono guitar); off (the default), stereo sources stay stereo.
 // DRIFT: the valves' bias wanders slightly. The DRIFT dial scales it (50% = the drift amount / speed settings,
 // 100% = twice, 0 = none).
-// IN / OUT: TRIM (with the GUARD key), SAT and the OUT stage (OFF / CLIP / LIM) along the bottom of the head.
+// IN / OUT: TRIM (with the GUARD key), SAT (the output soft clip is always on) along the bottom of the head.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -58,8 +58,8 @@ slider19:0<0,100,1>-Band sat (%)
 slider20:30<0,100,1>-Bias (%)
 slider21:120<40,400,1>-Sat low band (Hz)
 slider22:6000<2000,16000,10>-Sat high band (Hz)
-slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
-slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider23:-0.3<-24,0,0.1>-Ceiling (dB)
+slider24:1<0,1,1{Off,Clip}>-(unused, was output stage)
 // DRIFT dial: scales how far the valves' bias wanders (preamp valves and the power stage) and how fast
 slider25:50<0,100,1>-Drift (%)
 slider26:0<0,1,1{Off,On}>-Mono in
@@ -140,7 +140,7 @@ function update() (
   drift_macro(slider25);
   drift = slider17 / 100 * dm_a; dspd = slider18 * dm_s;
   in_setup(slider15, slider16);
-  ins_output_setup(19);
+  ins_output_setup(19);   // output stage: CLIP, always on
 );
 
 xf_c = 2 * $pi * 40 / (2 * srate); xf_lk = 1 - 2 * $pi * 5 / (2 * srate);

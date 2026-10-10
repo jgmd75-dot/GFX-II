@@ -16,7 +16,6 @@ desc:GFX Twin Comp [VCA/Expressor comp]
 // ON          each unit has its own ON key (off = bypassed).
 // ORDER       A > B or B > A.  MIX blends in the dry signal (parallel compression).
 // DRIFT       an uneven supply under both VCAs: their gain and colour wobble very slightly (level-neutral).
-// OUT         the GFX output stage: OFF / CLIP (soft clip at -0.3 dBFS) / LIMIT (3 ms lookahead).
 //
 // GUI: drag knobs (Shift = fine), double-click / Ctrl-click = reset. Click the LCD for the preset list.
 // S / M / L / ? = size and help.
@@ -46,7 +45,7 @@ slider14:0<0,1,1{Off,On}>-B LF Cut
 slider15:0<-20,20,0.1>-B Output (dB)
 slider16:100<0,100,1>-Mix (%)
 slider17:20<0,100,1>-Drift (%)
-slider18:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider18:1<0,1,1{Off,Clip}>-(unused, was output stage)
 slider19:1<0,1,1{Off,On}>-A On
 slider20:1<0,1,1{Off,On}>-B On
 
@@ -117,7 +116,7 @@ function setup() local(s) (
   bEasy = slider11 > 0.5; bHfx = slider12/100; bSpr = slider13 > 0.5; bLcut = slider14 > 0.5;
   bOut = db2g(slider15);
   mix = slider16/100; drA = slider17/100;
-  ost_setup(0, 0, 120, 6000, -0.3, floor(slider18 + 0.5));
+  ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
 );
 aRmsC = tc(0.005);
 bEA = tc(0.008); bEF = tc(0.09); bES = tc(1.4);
@@ -236,7 +235,7 @@ function go_preset(n) ( slider1 = n; apply_preset(n); lastPreset = n; lcd_t = 0;
 ox = 0;
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
 
-// ---- top strip: name, presets, order, mix, drift, out stage, size ----
+// ---- top strip: name, presets, order, mix, drift, size ----
 ui_col(0x1E2023); R(0, 0, 1440, 76);
 gfx_gradrect(0, 0, 1440*qs, 30*qs, 1, 1, 1, 0.05, 0, 0, 0, 0, 0, 0, 0, -0.05/(30*qs));
 ui_col(0xC8402A); CIRC(40, 38, 22, 1);
