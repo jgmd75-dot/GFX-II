@@ -1,4 +1,4 @@
-desc:GFX G Pocket 70 [sound module]
+desc:GFX G PC70 [sound module]
 //tags: instrument rompler sound module piano epiano strings pad bass drums
 //author: JGWizrad / Garden FX (GFX)
 //
@@ -7,7 +7,7 @@ desc:GFX G Pocket 70 [sound module]
 //
 // A late-90s sound module: pick a patch, play it. 90 patches in ten groups, all synthesised (no samples):
 //   the G Lab80 sounds (synthetic pianos, FM and chorus e-pianos, clav, drawbar organ, bells and glass,
-//   the LA guitars, pads, choirs, brass, leads and basses) together with the pick of the Pocket 70 GM voices,
+//   the LA guitars, pads, choirs, brass, leads and basses) together with the pick of the PC70 GM voices,
 //   and a drum kit on the GM drum map.
 // EDIT        TONE (tone, filter, resonance), FILTER ENVELOPE (amount, A D S R) and AMP ENVELOPE (A D S R) move the
 //             patch from where it stands (centre = the patch as made); choosing a patch puts them back. The filter
@@ -95,7 +95,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-g-pocket-70";
+#ui_man = "gfx-g-pc70";
 NV = 16; VS = 172;
 VB = 1000;                       // voice blocks: VB + v * VS (the GM voices use VB + v * VS + 100 ..)
 // field offsets
@@ -627,7 +627,7 @@ function note_on(n, vel) local(v, b, f0, vg, h, Tn, j, k, L, x, rr, ratio, amp, 
   b[F_E1] = (rand(2) - 1) * drift * 0.35;                   // ... and slightly brighter / darker
   b[F_AST] = 0; b[F_FST] = 0; b[F_VT] = 0; !was ? b[F_FE] = 0;
   eng >= 6 ? (
-    // the GM voices and the drum kit (the Pocket 70 engine)
+    // the GM voices and the drum kit (the PC70 engine)
     p_on(v, b, n, vg);
     b[F_ATK] = eng == 7 ? 1 : 0;
   ) : eng == 0 ? (
@@ -1684,7 +1684,7 @@ ui_col(0x2A2E33); R(0, 0, 1280, 150);
 gfx_gradrect(0, 0, 1280*qs, 60*qs, 1, 1, 1, 0.05, 0, 0, 0, 0, 0, 0, 0, -0.05/(60*qs));
 ui_col(ACC); gfx_circle(48*qs, 56*qs, 22*qs, 1, 1);
 gfx_setfont(2); ui_col(0xFFFFFF); ui_text(48*qs, 49*qs, "GFX");
-gfx_setfont(12); ui_col(0xEDEDEA); TX(82, 30, "G POCKET 70");
+gfx_setfont(12); ui_col(0xEDEDEA); TX(82, 30, "G PC70");
 gfx_setfont(11); ui_col(0xA6ACB2); TX(84, 82, "SOUND MODULE  -  90 PATCHES");
 // the backlit LCD: group, patch number and name (a knob's name and value while it turns)
 ui_col(0x101214); R(360, 18, 470, 114);

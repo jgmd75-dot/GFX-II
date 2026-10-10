@@ -968,7 +968,7 @@ ui_button(532 * sc, 56 * sc, 92 * sc, 38 * sc, "EDITOR", lx_page, 1) ? lx_page =
 
 !lx_page ? (
   // ---------- SOUNDS: every sound, by group, in three columns - click a name to play it ----------
-  // (as the G M1K / G Pocket 70 patch pages: group headings as dark bars with a teal tab, zebra rows,
+  // (as the G M1K / G PC70 patch pages: group headings as dark bars with a teal tab, zebra rows,
   // the sound in use lit, hover shows where a click lands; the order and numbers are the PRESETS menu's)
   mgroup(16, 106, 608, 402, 0, "SOUNDS", SH2);
   // names and headings: the largest sizes (names 17 to 20, headings 13 to 16) at which every one fits its row -
