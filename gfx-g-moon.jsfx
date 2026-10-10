@@ -6,12 +6,15 @@ desc:GFX G Moon [drone synth]
 //
 // THE MOON (card XVIII of the GFX Tarot series): the path between two towers under a pale moon - illusion,
 // dreams, the tide pulled back and forth. An ambient drone synth in four mono oscillators: two that sound by
-// themselves (DRONE) and two that play from MIDI (FREE), every one with its own 12 dB low-pass, a bank of four
+// themselves (DRONE) and two that play from MIDI (LEAD), every one with its own 12 dB low-pass, a bank of four
 // LFOs that can be pointed at almost anything, and four effects fed by per-oscillator sends.
 //   DRONE      two mono oscillators that play by themselves: ON, ROOT (C..B), OCT; FOLLOW lets the last note
 //              played choose the root. SWELL is how slowly the drone fades in and out (and glides to a new root).
-//   FREE       two mono oscillators played from MIDI (last-note priority, legato), with the AMP envelope (ADSR,
-//              VELOCITY), a FILTER ENVELOPE amount, GLIDE and BEND.
+//   LEAD       two mono oscillators played from MIDI (last-note priority): MONO (every new note restarts the
+//              envelope) or LEGATO (notes played over a held one glide on without a new attack); the AMP envelope
+//              (ADSR, VELOCITY), a FILTER ENVELOPE amount, GLIDE and BEND. Under the hood the lead ducks the drone
+//              (a sidechain compressor: DRONE DUCK in the parameter list, 40 % by default) so it sits on top.
+//   DRIVE      one per pair, before the filters (level compensated).
 //   OSCILLATOR SINE, TRIANGLE, SAW or PULSE; TUNE (+/-24 st), FINE (+/-50 cents), PW; its own 12 dB low-pass
 //              (CUTOFF, RESO). LINK makes the second oscillator of a pair follow the first one's filter.
 //              MIX crossfades the pair, LEVEL sets the pair's level.
@@ -41,7 +44,7 @@ desc:GFX G Moon [drone synth]
 // FATE (the Tarot series drift, 0-100 %, 50 % = the standard amount): the tides - every LFO's rate, depth and
 //   phase wander slowly, and so do the tremolo, chorus and FX LFO rates; and each oscillator's tuning wanders on
 //   its own, so the pairs beat and phase against each other.
-// MIDI: pitch bend (BEND range, FREE pair), CC1 mod wheel (adds to LFO 1 depth), CC64 sustain, CC120 / CC123 all
+// MIDI: pitch bend (BEND range, LEAD pair), CC1 mod wheel (adds to LFO 1 depth), CC64 sustain, CC120 / CC123 all
 //   notes off.
 
 import gfx-drift.jsfx-inc
@@ -71,20 +74,20 @@ slider17:1400<20,20000,1>-Drone 2 cutoff (Hz)
 slider18:25<0,100,1>-Drone 2 resonance (%)
 slider19:0<0,1,1{Off,On}>-Drone filter link
 slider20:3000<10,20000,1>-Drone swell (ms)
-slider21:1<0,3,1{Sine,Triangle,Saw,Pulse}>-Free 1 wave
-slider22:12<-24,24,1>-Free 1 tune (st)
-slider23:0<-50,50,0.1>-Free 1 fine (cents)
-slider24:50<5,95,1>-Free 1 pulse width (%)
-slider25:0<0,3,1{Sine,Triangle,Saw,Pulse}>-Free 2 wave
-slider26:19<-24,24,1>-Free 2 tune (st)
-slider27:3<-50,50,0.1>-Free 2 fine (cents)
-slider28:50<5,95,1>-Free 2 pulse width (%)
+slider21:1<0,3,1{Sine,Triangle,Saw,Pulse}>-Lead 1 wave
+slider22:12<-24,24,1>-Lead 1 tune (st)
+slider23:0<-50,50,0.1>-Lead 1 fine (cents)
+slider24:50<5,95,1>-Lead 1 pulse width (%)
+slider25:0<0,3,1{Sine,Triangle,Saw,Pulse}>-Lead 2 wave
+slider26:19<-24,24,1>-Lead 2 tune (st)
+slider27:3<-50,50,0.1>-Lead 2 fine (cents)
+slider28:50<5,95,1>-Lead 2 pulse width (%)
 slider29:40<0,100,1>-Free mix (1 <> 2, %)
 slider30:60<0,100,1>-Free level (%)
-slider31:3000<20,20000,1>-Free 1 cutoff (Hz)
-slider32:10<0,100,1>-Free 1 resonance (%)
-slider33:3000<20,20000,1>-Free 2 cutoff (Hz)
-slider34:10<0,100,1>-Free 2 resonance (%)
+slider31:3000<20,20000,1>-Lead 1 cutoff (Hz)
+slider32:10<0,100,1>-Lead 1 resonance (%)
+slider33:3000<20,20000,1>-Lead 2 cutoff (Hz)
+slider34:10<0,100,1>-Lead 2 resonance (%)
 slider35:1<0,1,1{Off,On}>-Free filter link
 slider36:400<1,10000,0.1>-Amp attack (ms)
 slider37:1500<5,10000,1>-Amp decay (ms)
@@ -100,28 +103,28 @@ slider46:0<0,1,1{Free,Sync}>-LFO 1 sync
 slider47:3<0,11,1{8 bars,4 bars,2 bars,1 bar,1/2,1/2T,1/4,1/4T,1/8,1/8T,1/16,1/16T}>-LFO 1 synced rate
 slider48:40<0,100,1>-LFO 1 depth (%)
 slider49:3<0,6,1{Fine,Tune,Octave,Cutoff,Amp,PW,Mix}>-LFO 1 destination
-slider50:2<0,6,1{Drone 1,Drone 2,Drone,Free 1,Free 2,Free,All}>-LFO 1 target
+slider50:2<0,6,1{Drone 1,Drone 2,Drone,Lead 1,Lead 2,Lead,All}>-LFO 1 target
 slider51:1<0,5,1{Sine,Triangle,Saw,Square,S&H,Smooth}>-LFO 2 shape
 slider52:0.13<0.01,20,0.001>-LFO 2 rate (Hz)
 slider53:0<0,1,1{Free,Sync}>-LFO 2 sync
 slider54:3<0,11,1{8 bars,4 bars,2 bars,1 bar,1/2,1/2T,1/4,1/4T,1/8,1/8T,1/16,1/16T}>-LFO 2 synced rate
 slider55:30<0,100,1>-LFO 2 depth (%)
 slider56:6<0,6,1{Fine,Tune,Octave,Cutoff,Amp,PW,Mix}>-LFO 2 destination
-slider57:2<0,6,1{Drone 1,Drone 2,Drone,Free 1,Free 2,Free,All}>-LFO 2 target
+slider57:2<0,6,1{Drone 1,Drone 2,Drone,Lead 1,Lead 2,Lead,All}>-LFO 2 target
 slider58:5<0,5,1{Sine,Triangle,Saw,Square,S&H,Smooth}>-LFO 3 shape
 slider59:0.05<0.01,20,0.001>-LFO 3 rate (Hz)
 slider60:0<0,1,1{Free,Sync}>-LFO 3 sync
 slider61:3<0,11,1{8 bars,4 bars,2 bars,1 bar,1/2,1/2T,1/4,1/4T,1/8,1/8T,1/16,1/16T}>-LFO 3 synced rate
 slider62:25<0,100,1>-LFO 3 depth (%)
 slider63:0<0,6,1{Fine,Tune,Octave,Cutoff,Amp,PW,Mix}>-LFO 3 destination
-slider64:6<0,6,1{Drone 1,Drone 2,Drone,Free 1,Free 2,Free,All}>-LFO 3 target
+slider64:6<0,6,1{Drone 1,Drone 2,Drone,Lead 1,Lead 2,Lead,All}>-LFO 3 target
 slider65:0<0,5,1{Sine,Triangle,Saw,Square,S&H,Smooth}>-LFO 4 shape
 slider66:0.2<0.01,20,0.001>-LFO 4 rate (Hz)
 slider67:0<0,1,1{Free,Sync}>-LFO 4 sync
 slider68:3<0,11,1{8 bars,4 bars,2 bars,1 bar,1/2,1/2T,1/4,1/4T,1/8,1/8T,1/16,1/16T}>-LFO 4 synced rate
 slider69:0<0,100,1>-LFO 4 depth (%)
 slider70:5<0,6,1{Fine,Tune,Octave,Cutoff,Amp,PW,Mix}>-LFO 4 destination
-slider71:5<0,6,1{Drone 1,Drone 2,Drone,Free 1,Free 2,Free,All}>-LFO 4 target
+slider71:5<0,6,1{Drone 1,Drone 2,Drone,Lead 1,Lead 2,Lead,All}>-LFO 4 target
 slider72:0<0,5,1{Sine,Triangle,Saw,Square,S&H,Smooth}>-FX LFO shape
 slider73:0.05<0.01,10,0.001>-FX LFO rate (Hz)
 slider74:30<0,100,1>-FX LFO depth (%)
@@ -134,14 +137,14 @@ slider80:0<0,1,1{Off,On}>-Drone 2 to tremolo
 slider81:30<0,100,1>-Drone 2 chorus send (%)
 slider82:10<0,100,1>-Drone 2 delay send (%)
 slider83:50<0,100,1>-Drone 2 reverb send (%)
-slider84:0<0,1,1{Off,On}>-Free 1 to tremolo
-slider85:20<0,100,1>-Free 1 chorus send (%)
-slider86:35<0,100,1>-Free 1 delay send (%)
-slider87:60<0,100,1>-Free 1 reverb send (%)
-slider88:1<0,1,1{Off,On}>-Free 2 to tremolo
-slider89:20<0,100,1>-Free 2 chorus send (%)
-slider90:30<0,100,1>-Free 2 delay send (%)
-slider91:60<0,100,1>-Free 2 reverb send (%)
+slider84:0<0,1,1{Off,On}>-Lead 1 to tremolo
+slider85:20<0,100,1>-Lead 1 chorus send (%)
+slider86:35<0,100,1>-Lead 1 delay send (%)
+slider87:60<0,100,1>-Lead 1 reverb send (%)
+slider88:1<0,1,1{Off,On}>-Lead 2 to tremolo
+slider89:20<0,100,1>-Lead 2 chorus send (%)
+slider90:30<0,100,1>-Lead 2 delay send (%)
+slider91:60<0,100,1>-Lead 2 reverb send (%)
 slider92:0<0,2,1{Sine,Triangle,Square}>-Tremolo shape
 slider93:3<0.05,20,0.01>-Tremolo rate (Hz)
 slider94:0<0,1,1{Free,Sync}>-Tremolo sync
@@ -176,6 +179,10 @@ slider122:120<40,400,1>-Sat low band (Hz)
 slider123:6000<2000,16000,10>-Sat high band (Hz)
 slider124:-0.3<-24,0,0.1>-Ceiling (dB)
 slider125:1<0,1,1{Off,Clip}>-(unused, was output stage)
+slider126:40<0,100,1>-Drone duck under lead (%)
+slider127:0<0,100,1>-Drone drive (%)
+slider128:0<0,100,1>-Lead drive (%)
+slider129:1<0,1,1{Mono,Legato}>-Lead mode
 
 in_pin:none
 out_pin:left output
@@ -189,7 +196,7 @@ ext_noinit = 1;
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
 MQO  = 30000; MQT = 30300; MQN = 30600; MQV = 30900;       // MIDI event queue (300 each)
 MHN  = 31200;                                              // held-note stack (128)
-MDEF = 31400;                                              // the Init values of sliders 1-125
+MDEF = 31400;                                              // the Init values of sliders 1-129
 MTMP = 31600;                                              // preset parser scratch (400)
 MOP  = 32100;                                              // the four oscillators: 24 slots each (see below)
 MLF  = 32300;                                              // the four LFOs: 24 slots each
@@ -205,17 +212,18 @@ memset(MOP, 0, 96); memset(MLF, 0, 96);
 memset(MRV, 0, 8 * MRVN); memset(MAP, 0, 4 * MAPN); memset(MPD, 0, MPN); memset(MPU, 0, MPN);
 memset(MCH, 0, MCHN); memset(MDL, 0, 524288 * 2);
 
-// oscillator slots (q = MOP + 24 * i; i = 0 drone 1, 1 drone 2, 2 free 1, 3 free 2):
+// oscillator slots (q = MOP + 24 * i; i = 0 drone 1, 1 drone 2, 2 lead 1, 3 lead 2):
 //   0 wave  1 tune + fine (st)  2 pw  3 cutoff Hz  4 resonance  5 / 6 pan gains L / R  7 to tremolo
 //   8 / 9 / 10 chorus / delay / reverb send  11 glided pitch (st)  12 FATE's beating (st)  13 phase increment
 //   14 pw now  15 / 16 / 17 filter a1 a2 a3  18 gain target (level, mix, LFO amp)  19 / 20 / 21 sends now (FX LFO)
+//   22 / 23 DRIVE: gain into the soft clip, its level compensation (22 = 1: no drive)
 // LFO slots (q = MLF + 24 * k): 0 shape  1 rate Hz  2 sync  3 beats  4 depth  5 destination  6 target
 //   8 phase  9 held (S&H)  10 / 11 smooth-random end points  12 value now (for the panel)
 
 L12 = log(2) / 12; LN2 = log(2);
 
 // ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
-#mn_def = "1 2 2 0 2 0 -4 50 3 7 5 35 50 70 900 20 1400 25 0 3000 1 12 0 50 0 19 3 50 40 60 3000 10 3000 10 1 400 1500 70 2500 40 20 300 2 0 0.07 0 3 40 3 2 1 0.13 0 3 30 6 2 5 0.05 0 3 25 0 6 0 0.2 0 3 0 5 5 0 0.05 30 7 0 20 10 50 0 30 10 50 0 20 35 60 1 20 30 60 0 3 0 8 60 1 0.4 50 60 1 40 45 30 2 0 60 20 55 35 0.6 70 0 70 0 70 35 -3 0 0 30 120 6000 -0.3 1";
+#mn_def = "1 2 2 0 2 0 -4 50 3 7 5 35 50 70 900 20 1400 25 0 3000 1 12 0 50 0 19 3 50 40 60 3000 10 3000 10 1 400 1500 70 2500 40 20 300 2 0 0.07 0 3 40 3 2 1 0.13 0 3 30 6 2 5 0.05 0 3 25 0 6 0 0.2 0 3 0 5 5 0 0.05 30 7 0 20 10 50 0 30 10 50 0 20 35 60 1 20 30 60 0 3 0 8 60 1 0.4 50 60 1 40 45 30 2 0 60 20 55 35 0.6 70 0 70 0 70 35 -3 0 0 30 120 6000 -0.3 1 40 0 0 1";
 
 function mn_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
   n = 0; i = 0; inn = 0; len = strlen(s);
@@ -256,15 +264,15 @@ function mn_pstr(p) (
 );
 function load_preset(p) local(n, i) (
   // FATE, the MIDI channel and the output stage stay as they are
-  i = 0; loop(125, i != 116 && i < 118 ? slider(i + 1) = MDEF[i]; i += 1; );
+  i = 0; loop(129, (i != 116 && i < 118) || i >= 125 ? slider(i + 1) = MDEF[i]; i += 1; );
   n = mn_nums(mn_pstr(p), MTMP);
-  i = 0; loop(floor(n / 2), MTMP[i * 2] >= 1 && MTMP[i * 2] <= 125 ? slider(MTMP[i * 2]) = MTMP[i * 2 + 1]; i += 1; );
-  i = 1; loop(125, ui_auto(i); i += 1; );
+  i = 0; loop(floor(n / 2), MTMP[i * 2] >= 1 && MTMP[i * 2] <= 129 ? slider(MTMP[i * 2]) = MTMP[i * 2 + 1]; i += 1; );
+  i = 1; loop(129, ui_auto(i); i += 1; );
   pr_cur = p; mn_panic = 1;
 );
 function reset_all() local(i) (                            // "Reset all to defaults": Init, and everything else back too
   load_preset(1);
-  i = 0; loop(125, slider(i + 1) = MDEF[i]; ui_auto(i + 1); i += 1; );
+  i = 0; loop(129, slider(i + 1) = MDEF[i]; ui_auto(i + 1); i += 1; );
 );
 
 // ---------- rates ----------
@@ -276,17 +284,18 @@ function mn_lfov(sh, ph, hv, a, b) (
   sh == 0 ? sin(2 * $pi * ph) : sh == 1 ? 1 - 4 * abs(ph - 0.5) : sh == 2 ? 2 * ph - 1 :
   sh == 3 ? (ph < 0.5 ? 1 : -1) : sh == 4 ? hv : a + (b - a) * (0.5 - 0.5 * cos($pi * ph));
 );
-// which oscillators a TARGET reaches (bits: 1 drone 1, 2 drone 2, 4 free 1, 8 free 2)
+// which oscillators a TARGET reaches (bits: 1 drone 1, 2 drone 2, 4 lead 1, 8 lead 2)
 function mn_tmask(t) ( t == 0 ? 1 : t == 1 ? 2 : t == 2 ? 3 : t == 3 ? 4 : t == 4 ? 8 : t == 5 ? 12 : 15; );
 
-// ---------- the FREE pair: mono, last-note priority, legato ----------
+// ---------- the LEAD pair: mono, last-note priority; MONO retriggers, LEGATO glides on ----------
 function mn_on(n, v) local(i, f) (
   f = -1; i = 0; loop(mn_hc, MHN[i] == n ? f = i; i += 1; );
   f >= 0 ? ( i = f; loop(mn_hc - f - 1, MHN[i] = MHN[i + 1]; i += 1; ); mn_hc -= 1; );
   mn_hc < 127 ? ( MHN[mn_hc] = n; mn_hc += 1; );
   mn_fnote = n; mn_fvel = v / 127; mn_held = 1; mn_pheld = 0;
-  // a new phrase (nothing sounding): a fresh attack, straight onto the note; a held one: legato, gliding
-  mn_fst == 0 || mn_fst == 3 ? ( mn_fst = 1; mn_fvg = 1 - mn_avel + mn_avel * mn_fvel; );
+  // a new phrase (nothing sounding) or MONO: a fresh attack (from the level it is at); LEGATO over a held note: no new
+  // attack, it glides on
+  mn_fst == 0 || mn_fst == 3 || !mn_legato ? ( mn_fst = 1; mn_fvg = 1 - mn_avel + mn_avel * mn_fvel; );
   mn_fst <= 1 && mn_fl < 0.001 ? mn_fsnap = 1;
   mn_dfol ? mn_droot = n % 12;
 );
@@ -315,6 +324,8 @@ function mn_osc(q) instance(ph, s1, s2, ag) local(inc, x, t, v1, v2, v3) (
         t = ph + 1 - q[14]; t -= floor(t);
         (2 * ph - 1 - vo_blep(ph, inc)) - (2 * t - 1 - vo_blep(t, inc));
       );
+  // DRIVE (before the filter)
+  q[22] > 1.001 ? x = vo_tanh(x * q[22]) * q[23];
   // zero-delay state-variable low-pass
   v3 = x - s2; v1 = q[15] * s1 + q[16] * v3; v2 = s2 + q[16] * s1 + q[17] * v3;
   s1 = 2 * v1 - s1; s2 = 2 * v2 - s2;
@@ -381,6 +392,8 @@ function mn_lset(k) local(q, b) (
   q[1] = q[2] ? mn_tmp / 60 / q[3] : slider(b + 1);
   q[4] = slider(b + 4) / 100; q[5] = floor(slider(b + 5) + 0.5); q[6] = floor(slider(b + 6) + 0.5);
 );
+function mn_dtab(i) ( i == 0 ? 0 : i == 1 ? -1.0 : i == 2 ? -2.8 : i == 3 ? -2.3 : -2.5; );
+function mn_dtrim(d) local(f, i) ( f = d / 25; i = min(floor(f), 3); f -= i; 10 ^ ((mn_dtab(i) * (1 - f) + mn_dtab(i + 1) * f) / 20); );
 function update() local(i, sp, rain) (
   mn_tmp = tempo > 0 ? tempo : 120;
   mn_don = slider1 >= 0.5; mn_drt = floor(slider2 + 0.5); mn_doct = floor(slider3 + 0.5); mn_dfol = slider4 >= 0.5;
@@ -407,6 +420,10 @@ function update() local(i, sp, rain) (
   mn_rdec = slider107 / 100; mn_rx = slider108 / 100; mn_rflt = slider109 / 100; mn_rmd = slider110 / 100;
   mn_rmr = slider111; mn_rwid = slider112 / 50; mn_rlo = slider113 / 100; mn_rlev = slider114 / 100;
   mn_rsus = slider115 >= 0.5;
+  mn_duck = slider126 / 100; mn_legato = slider129 >= 0.5;
+  // DRIVE: up to +24 dB into the soft clip; a measured trim keeps the level even at any setting
+  MOP[22] = MOP[24 + 22] = 10 ^ (slider127 / 100 * 24 / 20); MOP[23] = MOP[24 + 23] = mn_dtrim(slider127);
+  MOP[48 + 22] = MOP[72 + 22] = 10 ^ (slider128 / 100 * 24 / 20); MOP[48 + 23] = MOP[72 + 23] = mn_dtrim(slider128);
   mn_dry = slider116 / 100; mn_fate = slider117 / 100; mn_volt = 10 ^ (slider118 / 20); mn_chan = slider119;
   mn_pis = $pi / srate; mn_440s = 440 / srate; mn_fmax = srate * 0.45;
   // reverb: lengths (ms, mutually prime-ish) grow with DECAY; RAIN spaces them out so the taps are heard
@@ -457,6 +474,7 @@ function mn_srinit() (
   mn_sgc = 1 - exp(-8 / (0.02 * srate));                // sends glide at the tick (20 ms)
   mn_rmc = 1 - exp(-8 / (0.04 * srate));                // the trail's mod wave is rounded (40 ms)
   mn_rfa = 1 - exp(-1 / (0.002 * srate)); mn_rfr = 1 - exp(-1 / (0.25 * srate));   // RISE: level followers
+  mn_sca = 1 - exp(-1 / (0.01 * srate)); mn_scr = 1 - exp(-1 / (0.35 * srate));   // the duck: 10 ms in, 350 ms out
   mn_frzc = 1 - exp(-1 / (0.05 * srate));               // DREAM latch: in / out over 50 ms
   mn_fec = 1 - exp(-1 / (0.4 * srate));
   mn_rhp = 1 - exp(-2 * $pi * 3 / srate);
@@ -598,7 +616,7 @@ mn_ct >= 8 ? (
   mn_xph += mn_xr * 8 / srate;
   mn_xph >= 1 ? ( mn_xph -= floor(mn_xph); mn_xh = rand(2) - 1; mn_xa = mn_xb; mn_xb = rand(2) - 1; );
   mn_xv = mn_lfov(mn_xs, mn_xph, mn_xh, mn_xa, mn_xb);
-  // ----- the free pair's envelope drives its filters too -----
+  // ----- the lead pair's envelope drives its filters too -----
   mn_snap = mn_first;
   mn_fsnap ? ( MOP[48 + 11] = mn_fnote + MOP[48 + 1] + MMO[2]; MOP[72 + 11] = mn_fnote + MOP[72 + 1] + MMO[3]; mn_fsnap = 0; );
   // ----- each oscillator: pitch (glided), increment, PW, filter, gain, sends -----
@@ -653,27 +671,34 @@ mn_tg += (1 - mn_td * (0.5 - 0.5 * mn_tv) - mn_tg) * mn_tgc;
 
 // ---------- the four oscillators ----------
 mn_L = mn_R = 0; mn_ci = mn_di_ = mn_ri = 0;
-mn_dg > 0.00001 ? (
-  mn_y = mn_o0.mn_osc(MOP) * mn_dg;
-  MOP[7] ? mn_y *= mn_tg;
-  mn_L += mn_y * MOP[5]; mn_R += mn_y * MOP[6];
-  mn_ci += mn_y * MOP[19]; mn_di_ += mn_y * MOP[20]; mn_ri += mn_y * MOP[21];
-  mn_y = mn_o1.mn_osc(MOP + 24) * mn_dg;
-  MOP[24 + 7] ? mn_y *= mn_tg;
-  mn_L += mn_y * MOP[24 + 5]; mn_R += mn_y * MOP[24 + 6];
-  mn_ci += mn_y * MOP[24 + 19]; mn_di_ += mn_y * MOP[24 + 20]; mn_ri += mn_y * MOP[24 + 21];
-) : ( mn_o0.ag = mn_o1.ag = 0; );
+// the LEAD pair first: its level is the duck's key
+mn_ky = 0;
 mn_fst > 0 ? (
   mn_e = mn_fl * mn_fvg;
-  mn_y = mn_o2.mn_osc(MOP + 48) * mn_e;
+  mn_y = mn_o2.mn_osc(MOP + 48) * mn_e; mn_ky += mn_y;
   MOP[48 + 7] ? mn_y *= mn_tg;
   mn_L += mn_y * MOP[48 + 5]; mn_R += mn_y * MOP[48 + 6];
   mn_ci += mn_y * MOP[48 + 19]; mn_di_ += mn_y * MOP[48 + 20]; mn_ri += mn_y * MOP[48 + 21];
-  mn_y = mn_o3.mn_osc(MOP + 72) * mn_e;
+  mn_y = mn_o3.mn_osc(MOP + 72) * mn_e; mn_ky += mn_y;
   MOP[72 + 7] ? mn_y *= mn_tg;
   mn_L += mn_y * MOP[72 + 5]; mn_R += mn_y * MOP[72 + 6];
   mn_ci += mn_y * MOP[72 + 19]; mn_di_ += mn_y * MOP[72 + 20]; mn_ri += mn_y * MOP[72 + 21];
 ) : ( mn_o2.ag = mn_o3.ag = 0; );
+// the DUCK: a sidechain compressor on the drone, keyed by the lead (up to 12 dB at full DRONE DUCK, from about
+// -42 dBFS of lead upwards, full by -12 dBFS)
+mn_t = abs(mn_ky); mn_sce += (mn_t - mn_sce) * (mn_t > mn_sce ? mn_sca : mn_scr);
+mn_dkg = mn_duck > 0.001 ? 10 ^ (-mn_duck * 12 * min(max((20 * log10(max(mn_sce, 0.0000001)) + 42) / 30, 0), 1) / 20) : 1;
+// the DRONE pair
+mn_dg > 0.00001 ? (
+  mn_y = mn_o0.mn_osc(MOP) * mn_dg * mn_dkg;
+  MOP[7] ? mn_y *= mn_tg;
+  mn_L += mn_y * MOP[5]; mn_R += mn_y * MOP[6];
+  mn_ci += mn_y * MOP[19]; mn_di_ += mn_y * MOP[20]; mn_ri += mn_y * MOP[21];
+  mn_y = mn_o1.mn_osc(MOP + 24) * mn_dg * mn_dkg;
+  MOP[24 + 7] ? mn_y *= mn_tg;
+  mn_L += mn_y * MOP[24 + 5]; mn_R += mn_y * MOP[24 + 6];
+  mn_ci += mn_y * MOP[24 + 19]; mn_di_ += mn_y * MOP[24 + 20]; mn_ri += mn_y * MOP[24 + 21];
+) : ( mn_o0.ag = mn_o1.ag = 0; );
 mn_oL = mn_L * mn_dry; mn_oR = mn_R * mn_dry;
 
 // ---------- CHORUS: two taps on one line, L / R ----------
@@ -817,7 +842,7 @@ INK = 0x070C1A; LBL = 0xDCE3EE; SILV = 0xB9C3D3; SILVH = 0xD9E0EA; SILVD = 0x8B9
 PANEL = 0x111D40; PANX = 0x0A1430; SHA = 0x172752; SHB = 0x15234C; SHC = 0x192B57;
 MOONC = 0xF1E7BE; MOONL = 0xFFF6D6; MOOND = 0xC9BE93; NIGHT = 0x0B1533;
 KEYOFF = 0x1D2C5A; KEYHOV = 0x2B3F78;
-DRC = 0x8FB8FF; FRC = 0xF0B8E0;                          // the drone / free pairs' tags
+DRC = 0x8FB8FF; FRC = 0xF0B8E0;                          // the drone / lead pairs' tags
 
 // fonts, calibrated once per scale (the house way: a reference word fills the same width everywhere)
 sc != ng_calsc ? (
@@ -1043,7 +1068,7 @@ ng_field(816, 23, 72, 24, #ng_g) ? (
   gfx_x = 816 * sc; gfx_y = 47 * sc; k_ = gfx_showmenu(#ng_m); k_ > 0 ? ng_set(119, k_ - 1);
 );
 // what is sounding
-gfx_setfont(16); ui_col(mn_dg > 0.01 ? DRC : SILVD); ng_t(900, 20, "DRONE"); ui_col(mn_fst > 0 ? FRC : SILVD); ng_t(900, 36, "FREE");
+gfx_setfont(16); ui_col(mn_dg > 0.01 ? DRC : SILVD); ng_t(900, 20, "DRONE"); ui_col(mn_fst > 0 ? FRC : SILVD); ng_t(900, 36, "LEAD");
 ui_size_picker(1018 * sc, 26 * sc);
 
 // ---------- DRONE ----------
@@ -1071,12 +1096,14 @@ ng_knob(434, 150, 14, 14, 0, 100, 70, 0, "LEVEL", "%.0f%%", 0);
 ng_knob(492, 150, 14, 20, 10, 20000, 3000, 1, "SWELL", "%.0f ms", 0);
 ng_toggle(356, 200, 62, 22, 19, "LINK");
 gfx_setfont(16); ui_cola(LBL, 0.75); ng_tc(387, 234, "FILTER 2 = 1");
-gfx_setfont(12); ui_col(LBL); ng_t(440, 196, "NOTE"); gfx_setfont(13); ui_col(MOONC); ng_t(440, 212, ng_nname(mn_dnote));
+ng_knob(450, 212, 14, 127, 0, 100, 0, 0, "DRIVE", "%.0f%%", 0);
+gfx_setfont(12); ui_col(LBL); ng_t(490, 196, "NOTE"); gfx_setfont(13); ui_col(MOONC); ng_t(490, 212, ng_nname(mn_dnote));
 
-// ---------- FREE ----------
-ng_sect(560, 66, 520, 190, SHA, "FREE");
+// ---------- LEAD ----------
+ng_sect(560, 66, 520, 190, SHA, "LEAD");
 ui_col(INK); gfx_circle(616 * sc, 76 * sc, 5.5 * sc, 1, 1); ui_col(FRC); gfx_circle(616 * sc, 76 * sc, 4.2 * sc, 1, 1);
-gfx_setfont(11); ui_cola(LBL, 0.8); ng_t(570, 95, "TWO MONO OSCILLATORS PLAYED FROM MIDI  -  LAST NOTE, LEGATO");
+ng_keys(568, 91, 64, 22, 4, 129, 2, "MONO|LEGATO");
+gfx_setfont(11); ui_cola(LBL, 0.8); ng_t(714, 95, "TWO MONO OSCILLATORS  ·  PLAYED FROM MIDI");
 ng_orow(560, 150, "1", 21, 31, 32, FRC, 0);
 ng_orow(560, 212, "2", 25, 33, 34, FRC, slider35 >= 0.5);
 ng_div(882, 122, 128);
@@ -1085,8 +1112,9 @@ ng_knob(970, 150, 14, 30, 0, 100, 60, 0, "LEVEL", "%.0f%%", 0);
 ng_knob(1030, 150, 14, 41, -100, 100, 20, 0, "ENV", "%+.0f%%", 0);
 ng_toggle(896, 200, 62, 22, 35, "LINK");
 gfx_setfont(16); ui_cola(LBL, 0.75); ng_tc(927, 234, "FILTER 2 = 1");
-gfx_setfont(12); ui_col(LBL); ng_t(980, 196, "NOTE");
-gfx_setfont(13); ui_col(mn_fst > 0 ? MOONC : SILVD); ng_t(980, 212, mn_fst > 0 ? ng_nname(mn_fnote) : "-");
+ng_knob(990, 212, 14, 128, 0, 100, 0, 0, "DRIVE", "%.0f%%", 0);
+gfx_setfont(12); ui_col(LBL); ng_t(1030, 196, "NOTE");
+gfx_setfont(13); ui_col(mn_fst > 0 ? MOONC : SILVD); ng_t(1030, 212, mn_fst > 0 ? ng_nname(mn_fnote) : "-");
 
 // ---------- LFO 1 - 4 ----------
 ng_k_ = 0;
@@ -1108,13 +1136,13 @@ loop(4,
   ng_toggle(ng_x + 104, 322, 48, 20, ng_b + 2, "SYNC");
   ng_field(ng_x + 6, 366, 72, 22, pk_pitem("FINE|TUNE|OCTAVE|CUTOFF|AMP|PW|MIX", floor(slider(ng_b + 5) + 0.5) + 1, #ng_k)) ?
     ng_menu(ng_x + 6, 388, ng_b + 5, "Fine (+/-50 cents)|Tune (+/-12 st)|Octave (stepped)|Cutoff|Amp|Pulse width|Mix (between the pair)", 7);
-  ng_field(ng_x + 82, 366, 72, 22, pk_pitem("DRONE 1|DRONE 2|DRONE|FREE 1|FREE 2|FREE|ALL", floor(slider(ng_b + 6) + 0.5) + 1, #ng_k)) ?
-    ng_menu(ng_x + 82, 388, ng_b + 6, "Drone 1|Drone 2|Drone (both)|Free 1|Free 2|Free (both)|All four", 7);
+  ng_field(ng_x + 82, 366, 72, 22, pk_pitem("DRONE 1|DRONE 2|DRONE|LEAD 1|LEAD 2|LEAD|ALL", floor(slider(ng_b + 6) + 0.5) + 1, #ng_k)) ?
+    ng_menu(ng_x + 82, 388, ng_b + 6, "Drone 1|Drone 2|Drone (both)|Lead 1|Lead 2|Lead (both)|All four", 7);
   ng_k_ += 1;
 );
 
-// ---------- FREE AMP and GLIDE ----------
-ng_sect(685, 266, 395, 130, SHB, "FREE AMP  ·  GLIDE");
+// ---------- LEAD AMP and GLIDE ----------
+ng_sect(685, 266, 395, 130, SHB, "LEAD AMP  ·  GLIDE");
 // the envelope's shape
 ui_col(INK); ng_r(694, 292, 250, 18); ui_col(NIGHT); ng_r(695, 293, 248, 16);
 ng_ea = log(1 + slider36); ng_ed = log(1 + slider37); ng_er = log(1 + slider39); ng_es = slider38 / 100;
@@ -1141,7 +1169,7 @@ gfx_setfont(11); ui_col(LBL); ng_tc(69, 438, "TREM"); ng_tc(116, 438, "CHO"); ng
 ng_i = 0;
 loop(4,
   ng_cy = 468 + ng_i * 36; ng_b = 76 + ng_i * 4;
-  gfx_setfont(12); ui_col(ng_i < 2 ? DRC : FRC); ng_tc(34, ng_cy, ng_i == 0 ? "D1" : ng_i == 1 ? "D2" : ng_i == 2 ? "F1" : "F2");
+  gfx_setfont(12); ui_col(ng_i < 2 ? DRC : FRC); ng_tc(34, ng_cy, ng_i == 0 ? "D1" : ng_i == 1 ? "D2" : ng_i == 2 ? "L1" : "L2");
   ng_toggle(50, ng_cy - 10, 38, 20, ng_b, "");
   ng_knob(116, ng_cy, 10, ng_b + 1, 0, 100, 0, 0, "", "%.0f%%", 0);
   ng_knob(158, ng_cy, 10, ng_b + 2, 0, 100, 0, 0, "", "%.0f%%", 0);
