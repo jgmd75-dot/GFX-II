@@ -4,7 +4,7 @@ GFX - free JSFX plug-ins for REAPER
 Designed by JGWizrad.
 Website: https://www.gardenfx.uk/
 
-116 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
+112 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
 space, mastering and summing - plus the CC-80 chord script. Every sound is
 synthesised: there are no samples. All plug-ins share one look, resizable
 S / M / L panels and the same output stage.
@@ -118,19 +118,17 @@ AMPS & DRIVE
   Grunt           gfx-grunt.jsfx
   Guitar Head     gfx-guitar-head.jsfx
   Mali 120        gfx-mali-120.jsfx
-  Model 15        gfx-model-15.jsfx
-  Model 44        gfx-model-44.jsfx
   PenguinDrive    gfx-penguindrive.jsfx
   Preamp Q        gfx-preamp-q.jsfx
   Ten Rack        gfx-ten-rack.jsfx
   Tuner 45        gfx-tuner-45.jsfx
 
 DYNAMICS
+  Channel 92      gfx-channel-92.jsfx
   Compressor Q    gfx-compressor-q.jsfx
   De-Ess          gfx-de-ess.jsfx
   Duplex Q        gfx-duplex-q.jsfx
   Fet 45          gfx-fet-45.jsfx
-  Field 42        gfx-field-42.jsfx
   Gate            gfx-gate.jsfx
   Headsmoother    gfx-headsmoother.jsfx
   Heft            gfx-heft.jsfx
@@ -204,12 +202,10 @@ MASTERING
 
 SUMMING
   Bern 16         gfx-bern-16.jsfx
-  Cassette 4      gfx-cassette-4.jsfx
-  Compact 12      gfx-compact-12.jsfx
-  Field 42 Mix    gfx-field-42-mix.jsfx
   Lustre          gfx-lustre.jsfx
   M-Sum           gfx-m-sum.jsfx
   Stage 8         gfx-stage-8.jsfx
+  Sum 92          gfx-sum-92.jsfx
 
 MIDI TOOLS
   CC-80           GFX_CC-80.lua            (ReaScript, needs ReaImGui)
