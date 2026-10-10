@@ -17,7 +17,8 @@ desc:GFX dynamics parts (include)
 //                                           knurled, 3 console grey, 20 small filter-style (cap = cap colour); for the
 //                                           others cap = the pointer colour; 31 laboratory (silver,
 //                                           glowing value ring in cap, no ticks), 34 flat (theme colours), 33 amp (ribbed black skirt, dimpled top, cap =
-//                                           pointer colour). dy_num = 1: ticks numbered 0 / 5 / 10
+//                                           pointer colour), 35 house white cap (flat satin cap, one soft edge highlight,
+//                                           dark pointer, thin smooth track, value arc in cap; no ticks). dy_num = 1: ticks numbered 0 / 5 / 10
 //                                           (dy_numc their colour). dy_step > 0: n positions (lo 0 .. hi n-1),
 //                                           labelled from dy_steps ("a|b|c").
 //   dy_btn(x, y, on, led, s)                LED button with its caption underneath; returns 1 when clicked
@@ -150,6 +151,26 @@ function dy_steplabels(cx, cy, r, n, labels) local(i, k, k0, len, c) (
   );
 );
 dy_ntick = 11;   // ticks round a dy_knob (a panel may print fewer)
+// house white cap: a thin smooth track, an anti-aliased value arc (col), a flat satin cap with one soft highlight on
+// its upper-left edge, a dark pointer line (pixel coordinates). No shading.
+function dy_arcw(cx, cy, r, a1, a2, w) local(k) (
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+function dy_wcap(cx, cy, r, n, col) local(rr, a, a0, ca, sa, w, i) (
+  rr = r + 6 * sc; w = 3 * sc; a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
+  ui_col(ui_mix(dy_bg, 0x000000, 0.30)); dy_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.3 * sc);
+  n > 0.004 ? (
+    ui_col(col); dy_arcw(cx, cy, rr, a0, a, w);
+    gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, w * 0.5, 1, 1); gfx_circle(cx + ca * rr, cy + sa * rr, w * 0.5, 1, 1);
+  );
+  ui_cola(0x000000, 0.25); gfx_circle(cx + 1 * sc, cy + 2 * sc, r, 1, 1);
+  ui_col(0x50565E); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0xB3B9C0); gfx_circle(cx, cy, r - 1.5 * sc, 1, 1);
+  ui_col(0xD9DDE1); dy_arcw(cx, cy, r - 3 * sc, -0.66 * $pi, 0.06 * $pi, 1.4 * sc);
+  ui_col(0x1A1E24); i = -1;
+  loop(3, gfx_line(cx + ca * r * 0.3 - sa * i * 0.7 * sc, cy + sa * r * 0.3 + ca * i * 0.7 * sc,
+                   cx + ca * (r - 3 * sc) - sa * i * 0.7 * sc, cy + sa * (r - 3 * sc) + ca * i * 0.7 * sc, 1); i += 1; );
+);
 function dy_knob(cx, cy, r, idx, lo, hi, def, lg, cap, label, val) local(v, n, dx, dy, hov, did, i) (
   did = 1600 + idx; v = slider(idx);
   dx = mouse_x - cx * sc; dy = mouse_y - cy * sc; hov = dx * dx + dy * dy <= sqr((r + 5) * sc);
@@ -175,10 +196,11 @@ function dy_knob(cx, cy, r, idx, lo, hi, def, lg, cap, label, val) local(v, n, d
   );
   v = slider(idx); n = lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo);
   dy_step > 0 ? dy_steplabels(cx, cy, r, dy_step, dy_steps) : dy_num ? dy_nums(cx, cy, r) :
-    dy_kst != 31 && dy_kst != 34 ? ( i = 0; loop(dy_ntick, dy_tick(cx, cy, r, i / (dy_ntick - 1), "", dy_ink); i += 1; ); );
+    dy_kst != 31 && dy_kst != 34 && dy_kst != 35 ? ( i = 0; loop(dy_ntick, dy_tick(cx, cy, r, i / (dy_ntick - 1), "", dy_ink); i += 1; ); );
   dy_kf ? ( strcpy(#kf_lo, ""); strcpy(#kf_hi, ""); ui_knob_filter(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, 0, dy_kf); ) :
   dy_kst == 33 ? dy_acap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, cap) :
   dy_kst == 34 ? dy_flcap(cx * sc, cy * sc, r * sc, n) :
+  dy_kst == 35 ? dy_wcap(cx * sc, cy * sc, r * sc, n, cap) :
   dy_kst == 31 ? dy_lcap(cx * sc, cy * sc, r * sc, n, cap) :
   dy_kst == 20 ? dy_fcap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, cap) : (
     pk_kstyle = dy_kst; pk_kcol = cap; pk_ptr = dy_kst == 7 ? -1 : cap; pk_ink = dy_ink;

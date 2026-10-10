@@ -401,7 +401,7 @@ ln_tr_ ? (
   ACC = 0xE07A5F; ACC2 = 0x4FA89B; KEY = 0x8A7D70; BAND = 0xE07A5F; BANDINK = 0xFFF6E6;
 );
 C_HPF = 0xF2C83E;
-dy_ink = INK; dy_bg = FACE; dy_nov = 1; dy_kst = 31;
+dy_ink = INK; dy_bg = FACE; dy_nov = 1; dy_kst = 35;
 
 function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
 function lg_rule(x) ( ui_col(RULE); gfx_rect(x * sc, 60 * sc, 1 * sc, 252 * sc); ui_cola(0xFFFFFF, 0.4); gfx_rect((x + 1) * sc, 60 * sc, 1 * sc, 252 * sc); );
@@ -467,7 +467,7 @@ lg_key(18, 196, 92, 24, slider3 < 0.5, "VALVE") ? setv(3, 0);
 lg_key(116, 196, 92, 24, slider3 >= 0.5, "CLEAN") ? setv(3, 1);
 rd_iotx = 0; rd_ioc1 = 0x2A2A2E; rd_ioc2 = 0xD8B040;
 rd_io(8, 240, 1, 2, 42, 47);
-dy_kst = 31;
+dy_kst = 35;
 lg_rule(224);
 
 // ---------- FILTERS ----------
@@ -556,7 +556,7 @@ lg_key(1270, 84, 52, 20, !ln_tr_, "IRON") ? setv(38, 0);
 lg_key(1326, 84, 52, 20, ln_tr_, "TRANS") ? setv(38, 1);
 sprintf(#v, "%.0f%%", slider39); dy_knob(1296, 146, 17, 39, 0, 100, 20, 0, ACC, "DRIVE", #v);
 sprintf(#v, "%+.1f dB", slider40); dy_knob(1296, 232, 17, 40, -24, 12, 0, 0, ACC2, "LEVEL", #v);
-dy_kst = 20; sprintf(#v, "%.0f%%", slider41); dy_knob(1282, 290, 11, 41, 0, 100, 50, 0, 0x9DA2A8, "", #v); dy_kst = 31;
+dy_kst = 20; sprintf(#v, "%.0f%%", slider41); dy_knob(1282, 290, 11, 41, 0, 100, 50, 0, 0x9DA2A8, "", #v); dy_kst = 35;
 rd_lbl(1314, 290, "DRIFT", DIM, 0.85);
 ln_ml_.ui_ledm(1342 * sc, 116 * sc, 11 * sc, 150 * sc, ln_pkl); ln_mr_.ui_ledm(1358 * sc, 116 * sc, 11 * sc, 150 * sc, ln_pkr);
 ln_pkl *= 0.85; ln_pkr *= 0.85;
