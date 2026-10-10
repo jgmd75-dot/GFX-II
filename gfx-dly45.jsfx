@@ -1,0 +1,792 @@
+desc:GFX DLY45 [delay]
+//tags: delay echo multi-tap ducking pitch time-stretch ping-pong chorus 12-bit sample hold european japanese digital
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-bdelay, gfx-bverb, gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel and gfx-lozenge (.jsfx-inc).
+//
+// DLY45: the 45 series digital delays, eight models in one - REGION (EU / JP keys at the top right) picks the
+// European or the Japanese rack, and each keeps its own panel and its own four models.
+//   EUROPEAN (80s studio and broadcast delays): CRYSTAL (ultra-clean dual delay, cross-feed), DYNAMIC (ducking: the
+//     repeats bloom when you stop), MULTI-TAP (up to 8 chorused taps), TIME STRETCH (a pitch shifter in the loop).
+//   JAPANESE (80s digital delays): VINTAGE DIGITAL (dual-phase chorus delay, gliding time), PITCH 12 (12-bit, the
+//     repeats climb or fall), COMPACT (8 kHz loop, compander breathing), SAMPLE HOLD (HOLD locks a loop).
+// The two share TIME, SYNC, FEEDBACK, cross-feed, filters, drive, modulation, ducking, clock / bits, width, drift and
+// the house input / output; TAPS belongs to the European rack and HOLD to the Japanese.
+// Switching REGION fades out, starts the other rack clean and fades back in.
+
+slider1:0<0,3,1{Crystal / Vintage Digital,Dynamic / Pitch 12,Multi-Tap / Compact,Time Stretch / Sample Hold}>-Model (European / Japanese)
+slider2:375<1,2700,1>-Time L (ms)
+slider3:500<1,2700,1>-Time R (ms)
+slider4:0<0,1,1{Off,On}>-Sync to tempo
+slider5:8<0,13,1{1/1,1/2,1/2D,1/2T,1/4,1/4D,1/4T,1/8,1/8D,1/8T,1/16,1/16D,1/16T,1/32}>-Division L
+slider6:4<0,13,1{1/1,1/2,1/2D,1/2T,1/4,1/4D,1/4T,1/8,1/8D,1/8T,1/16,1/16D,1/16T,1/32}>-Division R
+slider7:35<0,99,1>-Feedback (%)
+slider8:0<0,100,1>-Cross-feed (%)
+slider9:80<20,1000,1>-Lo cut (Hz)
+slider10:9000<1000,20000,10>-Hi cut (Hz)
+slider11:15<0,100,1>-Drive (%)
+slider12:0<0,10,0.05>-Mod depth (ms)
+slider13:0.8<0.05,10,0.01>-Mod rate (Hz)
+slider14:0<-12,12,1>-Pitch (semitones)
+slider15:0<0,100,1>-Duck depth (%)
+slider16:400<20,2000,1>-Duck recovery (ms)
+slider17:6<1,8,1>-Taps
+slider18:0<0,1,1{Modern,Vintage}>-Clock
+slider19:3<0,3,1{10,12,14,16}>-Bits (vintage)
+slider20:100<0,150,1>-Width (%)
+slider21:20<0,100,1>-Drift amount (%)
+slider22:0.2<0.02,2,0.01>-Drift speed (Hz)
+slider23:30<0,100,1>-Mix (%)
+slider24:0<-24,12,0.1>-Output (dB)
+slider25:0<0,100,1>-Band sat (%)
+slider26:30<0,100,1>-Bias (%)
+slider27:120<40,400,1>-Sat low band (Hz)
+slider28:6000<2000,16000,10>-Sat high band (Hz)
+slider29:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider30:1<0,1,1{Off,Clip}>-(unused, was output stage)
+slider31:0<-24,12,0.1>-Input trim (dB)
+slider32:0<0,1,1{Off,On}>-Input guard
+slider33:50<0,100,1>-Drift (%)
+slider34:0<0,1,1{Off,On}>-Hold (sample hold, Japanese)
+slider35:0<0,1,1{European,Japanese}>-Region
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-lozenge.jsfx-inc
+import gfx-bverb.jsfx-inc
+import gfx-bdelay.jsfx-inc
+
+@init
+ext_noinit = 1;
+
+// ======================== European: initialisation and functions ========================
+function e_update() local(e_bt) (
+  e_mdl = slider1;
+  e_bt = 60 / max(tempo, 20);
+  e_tLs = (slider4 ? bd_beats(slider5) * e_bt * 1000 : slider2) * 0.001 * srate;
+  e_tRs = (slider4 ? bd_beats(slider6) * e_bt * 1000 : slider3) * 0.001 * srate;
+  e_tLs = min(max(e_tLs, 2), DL_N - 64); e_tRs = min(max(e_tRs, 2), DL_N - 64);
+  e_fb = slider7 / 100; xf = slider8 / 100;
+  e_lc_c = 1 - exp(-2 * $pi * slider9 / srate);
+  e_hc_c = 1 - exp(-2 * $pi * min(e_JDL && e_mdl == 2 ? min(slider10, 8000) : slider10, srate * 0.45) / srate);
+  e_drv = slider11 / 100;
+  e_md_s = slider12 * 0.001 * srate; e_md_inc = slider13 / srate;
+  ratio = 2 ^ (slider14 / 12);
+  e_dk_d = slider15 / 100; e_dk_r = 1 - exp(-1 / (slider16 * 0.001 * srate));
+  e_ntap = slider17; hold = e_JDL && slider17;
+  lofi_set(slider18 || (e_JDL && e_mdl == 1),
+    e_JDL ? (e_mdl == 0 ? 36000 : e_mdl == 1 ? 32000 : e_mdl == 2 ? 25000 : 32000) : (e_mdl == 0 ? 48000 : e_mdl == 3 ? 40000 : 32000),
+    e_JDL ? (slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16) : 16);
+  bd_near = lf_on && e_JDL;
+  drift_macro(slider33);
+  e_wid = slider20 / 100; e_dft = slider21 / 100 * dm_a; e_dspd = slider22 * dm_s;
+  e_mix_t = slider23 / 100; e_out_t = 10 ^ (slider24 / 20);
+  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, 0);   // output stage: straight through
+  in_setup(slider31, slider32);
+);
+function e_setp(m, e_tl, e_tr, sy, e_dl, e_dr, e_fbk, e_xfd, lc, e_hc, e_md, e_mr, e_pt, e_dk, e_dr_, e_tp, mx) (
+  slider1 = m; slider2 = e_tl; slider3 = e_tr; slider4 = sy; slider5 = e_dl; slider6 = e_dr; slider7 = e_fbk; slider8 = e_xfd; slider9 = lc; slider10 = e_hc;
+  slider12 = e_md; slider13 = e_mr; slider14 = e_pt; slider15 = e_dk; slider16 = e_dr_; slider17 = e_tp; slider23 = mx;
+);
+function e_load_preset(p) (
+  p == 1 ? e_setp(0, 95, 110, 0, 8, 4, 10, 0, 120, 7000, 0, 0.8, 0, 0, 400, 6, 25) :          // Slapback
+  p == 2 ? e_setp(0, 375, 500, 1, 4, 4, 35, 0, 100, 8000, 0, 0.8, 0, 0, 400, 6, 25) :          // Quarter Note Echo
+  p == 3 ? e_setp(0, 250, 500, 1, 7, 4, 45, 70, 150, 7000, 0, 0.8, 0, 0, 400, 6, 30) :         // Ping-Pong Eighths
+  p == 4 ? e_setp(1, 375, 500, 1, 8, 4, 40, 20, 150, 9000, 0, 0.8, 0, 70, 500, 6, 35) :        // Dynamic Vocal Echo
+  p == 5 ? e_setp(0, 17, 29, 0, 8, 4, 0, 0, 120, 14000, 0, 0.8, 0, 0, 400, 6, 40) :            // Wide Stereo Doubler
+  p == 6 ? e_setp(2, 600, 600, 1, 4, 4, 25, 0, 150, 9000, 0.4, 0.6, 0, 0, 400, 6, 30) :        // Rhythm Taps
+  p == 7 ? e_setp(2, 120, 120, 0, 8, 4, 10, 0, 120, 12000, 3, 0.7, 0, 0, 400, 4, 40) :         // Tap Chorus
+  p == 8 ? e_setp(3, 400, 460, 0, 8, 4, 70, 30, 200, 10000, 0, 0.8, 12, 30, 600, 6, 30) :      // Shimmer Up
+  p == 9 ? e_setp(3, 330, 360, 0, 8, 4, 70, 30, 120, 7000, 0, 0.8, -5, 0, 400, 6, 30) :        // Falling Echoes
+  p == 10 ? e_setp(3, 700, 760, 0, 8, 4, 97, 40, 200, 6000, 0, 0.8, 0, 0, 400, 6, 40);         // Endless Wash
+  p >= 1 && p <= 10 ? ( e_lastp = p; i = 1; loop(17, ui_auto(i); i += 1; ); ui_auto(23); );
+  p == 11 ? (
+    e_setp(0, 375, 500, 0, 8, 4, 35, 0, 80, 9000, 0, 0.8, 0, 0, 400, 6, 30);
+    slider11 = 15; slider18 = 0; slider19 = 3; slider20 = 100; slider21 = 20; slider22 = 0.2; slider24 = 0;
+    slider25 = 0; slider26 = 30; slider27 = 120; slider28 = 6000; slider29 = -0.3; slider30 = 1; slider31 = 0; slider32 = 0; slider33 = 50; e_lastp = 0;
+    i = 1; loop(33, ui_auto(i); i += 1; );
+  );
+);
+function e_pv_time() ( slider4 ? ( pv_def(0, 5, 0, 13, 1, 8, 0, 0); pv_def(1, 6, 0, 13, 1, 4, 0, 0); ) : ( pv_def(0, 2, 1, 2700, 1, 375, 1, 0); pv_def(1, 3, 1, 2700, 1, 500, 1, 0); ); );
+function e_pv_text(k) local(v) (
+  v = pv_get(k);
+  (k == 0 || k == 1) && slider4 ? strcpy(#e_pt, bd_divname(v)) :
+  k == 5 || k == 22 ? sprintf(#e_pt, "%.1fk", v / 1000) :
+  k == 7 || k == 8 || k == 18 ? sprintf(#e_pt, "%.2f", v) :
+  k == 9 ? sprintf(#e_pt, v > 0 ? "+%d" : "%d", v) :
+  k == 16 || k == 17 || k == 23 ? sprintf(#e_pt, "%.1f", v) :
+  sprintf(#e_pt, "%d", floor(v + 0.5));
+  #e_pt;
+);
+function e_init() (
+#ui_man = "gfx-e-delay";
+e_JDL = 0;                                   // 0 = E-Delay, 1 = J-Delay (shared code below)
+bd_alloc(100000);
+xh_rate = 1 / (0.03 * srate);
+sl_c = 1 - exp(-1 / (0.09 * srate));
+cmp_c = 1 - exp(-1 / (0.02 * srate));
+ps_win = floor(0.05 * srate);
+
+
+
+// ---------- presets ----------
+
+
+
+// ---------- the parameter table ----------
+
+e_pv_time();
+pv_def(2, 7, 0, 99, 1, 35, 0, 0);      pv_def(3, 8, 0, 100, 1, 0, 0, 0);
+pv_def(4, 9, 20, 1000, 1, 80, 1, 0);   pv_def(5, 10, 1000, 20000, 10, 9000, 1, 1);
+pv_def(6, 11, 0, 100, 1, 15, 0, 0);    pv_def(7, 12, 0, 10, 0.05, 0, 0, 2);
+pv_def(8, 13, 0.05, 10, 0.01, 0.8, 1, 2); pv_def(9, 14, -12, 12, 1, 0, 0, 0);
+pv_def(10, 15, 0, 100, 1, 0, 0, 0);    pv_def(11, 16, 20, 2000, 1, 400, 1, 0);
+pv_def(12, 17, 1, 8, 1, 6, 0, 0);      pv_def(13, 20, 0, 150, 1, 100, 0, 0);
+pv_def(14, 33, 0, 100, 1, 50, 0, 0);   pv_def(15, 23, 0, 100, 1, 30, 0, 0);
+pv_def(16, 31, -24, 12, 0.1, 0, 0, 1); pv_def(17, 24, -24, 12, 0.1, 0, 0, 1);
+pv_def(18, 22, 0.02, 2, 0.01, 0.2, 1, 2); pv_def(19, 25, 0, 100, 1, 0, 0, 0);
+pv_def(20, 26, 0, 100, 1, 30, 0, 0);   pv_def(21, 27, 40, 400, 1, 120, 1, 0);
+pv_def(22, 28, 2000, 16000, 10, 6000, 1, 1); pv_def(23, 29, -24, 0, 0.1, -0.3, 0, 1);
+
+e_vsel = 0;
+
+e_drA.drift_init(0.8 + rand(0.5)); e_drB.drift_init(0.8 + rand(0.5));
+ost_init(20000); e_ostL.ost_ch_init(); e_ostR.ost_ch_init();
+in_init();
+e_sm = 1 - exp(-1 / (0.03 * srate));
+e_dk_a = 1 - exp(-1 / (0.005 * srate));
+e_pkL = e_pkR = 0; e_piL = e_piR = 0; e_dk_e = 0; e_dk_g = 1; e_lph = 0;
+e_update();
+e_mix_s = e_mix_t; e_out_s = e_out_t; e_pL = e_tLs; e_pR = e_tRs;
+0;
+);
+
+function e_slider() (
+e_update();
+0;
+);
+
+function e_block() (
+// panel edits change the sliders directly, and the tempo can move: re-apply when anything changed
+e_chk = tempo * 0.731; e_ci = 1; loop(33, e_chk += slider(e_ci) * (e_ci * 1.37 + 1); e_ci += 1; );
+e_chk != e_last_chk ? ( e_last_chk = e_chk; e_update(); );
+e_vA = e_drA.drift_tick(e_dspd * samplesblock / srate); e_vB = e_drB.drift_tick(e_dspd * samplesblock / srate);
+// drift: the clock is not quite steady - a fraction of a millisecond (E) or more (J)
+e_dof_t = e_dft * (e_JDL ? 0.0015 : 0.0003) * srate;
+0;
+);
+
+function e_sample() (
+in_process(spl0, spl1);
+e_inL = in_l; e_inR = in_r;
+e_piL = max(e_piL, abs(e_inL)); e_piR = max(e_piR, abs(e_inR));
+e_mix_s += (e_mix_t - e_mix_s) * e_sm; e_out_s += (e_out_t - e_out_s) * e_sm;
+e_dofL += (e_dof_t * e_vA - e_dofL) * 0.0005; e_dofR += (e_dof_t * e_vB - e_dofR) * 0.0005;
+
+e_xl = e_xfL.xfm_run(e_inL, e_drv, !e_JDL); e_xr = e_xfR.xfm_run(e_inR, e_drv, !e_JDL);
+// ducker: follows the input, pulls the repeats down (up to 18 dB), lets them bloom back at DUCK RECOVERY
+e_dk_x = max(abs(e_xl), abs(e_xr)); e_dk_e += (e_dk_x - e_dk_e) * (e_dk_x > e_dk_e ? e_dk_a : e_dk_r);
+e_dk_t = 1 - e_dk_d * 0.875 * min(e_dk_e * 6, 1); e_dk_g += (e_dk_t - e_dk_g) * 0.002;
+
+e_lph += e_md_inc; e_lph >= 1 ? e_lph -= 1;
+!e_JDL ? (
+  // ---------- E-Delay ----------
+  e_mdl == 2 ? (
+    // multi-tap: taps spread across the longer time, alternating sides, chorused; feedback from the last
+    e_tT = max(e_tLs, e_tRs); e_yl = e_yr = 0; k = 0;
+    loop(e_ntap,
+      e_t_ = e_tT * (k + 1) / e_ntap + e_md_s * (0.5 + 0.5 * sin(2 * $pi * (e_lph + k * 0.37)));
+      e_g_ = 1 - 0.55 * k / max(e_ntap, 1);
+      k & 1 ? e_yr += e_g_ * bd_rd(BD_R, e_t_ + e_dofR) : e_yl += e_g_ * bd_rd(BD_L, e_t_ + e_dofL);
+      e_ntap == 1 ? e_yr = e_yl;
+      k += 1; );
+    e_lastL = bd_rd(BD_L, e_tT + e_dofL); e_lastR = bd_rd(BD_R, e_tT + e_dofR);
+    e_lcL += (e_lastL - e_lcL) * e_lc_c; e_hcL += (e_lastL - e_lcL - e_hcL) * e_hc_c;
+    e_lcR += (e_lastR - e_lcR) * e_lc_c; e_hcR += (e_lastR - e_lcR - e_hcR) * e_hc_c;
+    e_wl = e_xl + e_fb * ((1 - xf) * e_hcL + xf * e_hcR); e_wr = e_xr + e_fb * ((1 - xf) * e_hcR + xf * e_hcL);
+  ) : (
+    e_yl = e_hdL.xh_run(BD_L, e_tLs + e_dofL); e_yr = e_hdR.xh_run(BD_R, e_tRs + e_dofR);
+    e_lcL += (e_yl - e_lcL) * e_lc_c; e_hcL += (e_yl - e_lcL - e_hcL) * e_hc_c;
+    e_lcR += (e_yr - e_lcR) * e_lc_c; e_hcR += (e_yr - e_lcR - e_hcR) * e_hc_c;
+    e_mdl == 3 ? (
+      // time stretch: the repeats are pitch-shifted and softly limited inside the loop
+      e_fl = e_psL.ps_run((1 - xf) * e_hcL + xf * e_hcR, ratio, 0); e_fr = e_psR.ps_run((1 - xf) * e_hcR + xf * e_hcL, ratio, 1);
+      e_wl = e_xl + bv_tanh(e_fb * 1.01 * e_fl * 1.2) / 1.2; e_wr = e_xr + bv_tanh(e_fb * 1.01 * e_fr * 1.2) / 1.2;
+    ) : (
+      e_wl = e_xl + e_fb * ((1 - xf) * e_hcL + xf * e_hcR); e_wr = e_xr + e_fb * ((1 - xf) * e_hcR + xf * e_hcL);
+      e_wl = e_wl - 0.05 * e_wl * e_wl * e_wl; e_wr = e_wr - 0.05 * e_wr * e_wr * e_wr;   // a little headroom curve in the loop
+    );
+    e_yl = e_hcL; e_yr = e_hcR;
+  );
+) : (
+  // ---------- J-Delay ----------
+  // the base time glides (pitch bends when you change it); the LFO rides on top (dual-phase: L sine, R cosine)
+  e_pL += (e_tLs - e_pL) * sl_c; e_pR += (e_tRs - e_pR) * sl_c;
+  e_mdl == 3 && hold ? (
+    // sample hold: nothing new is written; the last TIME L of audio plays round and round
+    e_hph += 1; e_hph >= e_tLs ? e_hph = 0;
+    e_env_ = min(1, min(e_hph, e_tLs - e_hph) / (0.004 * srate));
+    e_yl = bd_rd(BD_L, e_tLs - e_hph) * e_env_; e_yr = bd_rd(BD_R, e_tLs - e_hph) * e_env_;
+    e_wl = e_wr = 0;
+  ) : (
+    e_mL = e_md_s * (0.5 + 0.5 * sin(2 * $pi * e_lph)); e_mR = e_md_s * (0.5 + 0.5 * cos(2 * $pi * e_lph));
+    e_yl = bd_rd(BD_L, e_pL + e_mL + e_dofL); e_yr = bd_rd(BD_R, e_pR + e_mR + e_dofR);
+    e_mdl == 2 ? ( e_yl = e_cpoL.cmp_out(e_yl); e_yr = e_cpoR.cmp_out(e_yr); );
+    e_lcL += (e_yl - e_lcL) * e_lc_c; e_hcL += (e_yl - e_lcL - e_hcL) * e_hc_c;
+    e_lcR += (e_yr - e_lcR) * e_lc_c; e_hcR += (e_yr - e_lcR - e_hcR) * e_hc_c;
+    e_fbl = (1 - xf) * e_hcL + xf * e_hcR; e_fbr = (1 - xf) * e_hcR + xf * e_hcL;
+    e_mdl == 1 ? ( e_fbl = e_psL.ps_run(e_fbl, ratio, 0); e_fbr = e_psR.ps_run(e_fbr, ratio, 1); );   // every repeat shifts in pitch
+    e_wl = e_xl + e_fb * e_fbl; e_wr = e_xr + e_fb * e_fbr;
+    e_wl = e_wl - 0.06 * e_wl * e_wl * e_wl; e_wr = e_wr - 0.06 * e_wr * e_wr * e_wr;
+    e_mdl == 2 ? ( e_nz = (rand(2) - 1) * 0.00004; e_wl = e_cpiL.cmp_in(e_wl + e_nz); e_wr = e_cpiR.cmp_in(e_wr - e_nz); );   // compander (with its hiss)
+    e_yl = e_hcL; e_yr = e_hcR;
+    e_hph = 0;
+  );
+);
+!(e_JDL && e_mdl == 3 && hold) ? bd_put(e_lfiL.lofi_in(e_wl), e_lfiR.lofi_in(e_wr));
+e_yl = e_lfoL.lofi_out(e_yl) * e_dk_g; e_yr = e_lfoR.lofi_out(e_yr) * e_dk_g;
+e_wm = 0.5 * (e_yl + e_yr); e_ws = 0.5 * (e_yl - e_yr) * e_wid; e_yl = e_wm + e_ws; e_yr = e_wm - e_ws;
+e_rvl = max(e_rvl, max(abs(e_yl), abs(e_yr)));
+oL = e_inL * (1 - e_mix_s) + e_yl * e_mix_s;
+e_oR = e_inR * (1 - e_mix_s) + e_yr * e_mix_s;
+oL = e_ostL.ost_band(oL) * e_out_s; e_oR = e_ostR.ost_band(e_oR) * e_out_s;
+ost_out(oL, e_oR);
+spl0 = ost_l; spl1 = ost_r;
+e_pkL = max(e_pkL, abs(spl0)); e_pkR = max(e_pkR, abs(spl1));
+0;
+);
+
+function e_serialize() (
+file_var(0, ui_sz);
+file_var(0, e_vsel);
+file_var(0, e_lastp);
+0;
+);
+
+// ======================== Japanese: initialisation and functions ========================
+function j_update() local(j_bt) (
+  j_mdl = slider1;
+  j_bt = 60 / max(tempo, 20);
+  j_tLs = (slider4 ? bd_beats(slider5) * j_bt * 1000 : slider2) * 0.001 * srate;
+  j_tRs = (slider4 ? bd_beats(slider6) * j_bt * 1000 : slider3) * 0.001 * srate;
+  j_tLs = min(max(j_tLs, 2), DL_N - 64); j_tRs = min(max(j_tRs, 2), DL_N - 64);
+  j_fb = slider7 / 100; xf = slider8 / 100;
+  j_lc_c = 1 - exp(-2 * $pi * slider9 / srate);
+  j_hc_c = 1 - exp(-2 * $pi * min(j_JDL && j_mdl == 2 ? min(slider10, 8000) : slider10, srate * 0.45) / srate);
+  j_drv = slider11 / 100;
+  j_md_s = slider12 * 0.001 * srate; j_md_inc = slider13 / srate;
+  ratio = 2 ^ (slider14 / 12);
+  j_dk_d = slider15 / 100; j_dk_r = 1 - exp(-1 / (slider16 * 0.001 * srate));
+  j_ntap = slider34; hold = j_JDL && slider34;
+  lofi_set(slider18 || (j_JDL && j_mdl == 1),
+    j_JDL ? (j_mdl == 0 ? 36000 : j_mdl == 1 ? 32000 : j_mdl == 2 ? 25000 : 32000) : (j_mdl == 0 ? 48000 : j_mdl == 3 ? 40000 : 32000),
+    j_JDL ? (slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16) : 16);
+  bd_near = lf_on && j_JDL;
+  drift_macro(slider33);
+  j_wid = slider20 / 100; j_dft = slider21 / 100 * dm_a; j_dspd = slider22 * dm_s;
+  j_mix_t = slider23 / 100; j_out_t = 10 ^ (slider24 / 20);
+  ost_setup(slider25 / 100, slider26 / 100, slider27, slider28, slider29, 0);   // output stage: straight through
+  in_setup(slider31, slider32);
+);
+function j_setp(m, j_tl, j_tr, sy, j_dl, j_dr, j_fbk, j_xfd, lc, j_hc, j_md, j_mr, j_pt, j_ck, j_bt, j_hd, mx) (
+  slider1 = m; slider2 = j_tl; slider3 = j_tr; slider4 = sy; slider5 = j_dl; slider6 = j_dr; slider7 = j_fbk; slider8 = j_xfd; slider9 = lc; slider10 = j_hc;
+  slider12 = j_md; slider13 = j_mr; slider14 = j_pt; slider18 = j_ck; slider19 = j_bt; slider34 = j_hd; slider23 = mx;
+);
+function j_load_preset(p) (
+  p == 1 ? j_setp(0, 300, 390, 0, 8, 4, 30, 0, 100, 9000, 1.8, 0.7, 0, 0, 1, 0, 30) :          // 80s Chorus Delay
+  p == 2 ? j_setp(0, 375, 375, 1, 8, 8, 40, 10, 150, 6500, 0.6, 0.5, 0, 0, 1, 0, 25) :         // Lead Guitar Echo
+  p == 3 ? j_setp(0, 14, 21, 0, 8, 4, 0, 0, 120, 12000, 2.5, 0.35, 0, 0, 1, 0, 45) :           // Dimension Wide
+  p == 4 ? j_setp(1, 330, 330, 0, 8, 4, 55, 0, 150, 8000, 0, 0.8, 12, 1, 1, 0, 30) :           // Octave Cascade
+  p == 5 ? j_setp(1, 280, 420, 0, 8, 4, 60, 30, 150, 8000, 0, 0.8, 7, 1, 1, 0, 30) :           // Fifth Spiral
+  p == 6 ? j_setp(1, 360, 360, 0, 8, 4, 50, 0, 100, 7000, 0, 0.8, -12, 1, 1, 0, 30) :          // Octave Drop
+  p == 7 ? j_setp(2, 375, 500, 1, 4, 5, 35, 0, 150, 8000, 0.3, 0.4, 0, 1, 1, 0, 25) :          // Dark Vocal Echo
+  p == 8 ? j_setp(2, 120, 135, 0, 8, 4, 15, 0, 120, 8000, 0.2, 0.5, 0, 1, 1, 0, 30) :          // Compact Slap
+  p == 9 ? j_setp(3, 500, 500, 1, 4, 4, 0, 0, 40, 16000, 0, 0.8, 0, 1, 2, 0, 60) :             // Stutter Loop (press HOLD)
+  p == 10 ? j_setp(0, 250, 333, 0, 8, 4, 45, 20, 200, 6000, 1.0, 1.2, 0, 1, 0, 0, 35);         // 10-Bit Grit
+  p >= 1 && p <= 10 ? ( j_lastp = p; i = 1; loop(19, ui_auto(i); i += 1; ); ui_auto(23); );
+  p == 11 ? (
+    j_setp(0, 300, 390, 0, 8, 4, 35, 0, 80, 9000, 1.2, 0.8, 12, 0, 1, 0, 30);
+    slider11 = 0; slider15 = 0; slider16 = 400; slider20 = 100; slider21 = 20; slider22 = 0.2; slider24 = 0;
+    slider25 = 0; slider26 = 30; slider27 = 120; slider28 = 6000; slider29 = -0.3; slider30 = 1; slider31 = 0; slider32 = 0; slider33 = 50; j_lastp = 0;
+    i = 1; loop(33, ui_auto(i); i += 1; );
+  );
+);
+function j_pv_time() ( slider4 ? ( pv_def(0, 5, 0, 13, 1, 8, 0, 0); pv_def(1, 6, 0, 13, 1, 4, 0, 0); ) : ( pv_def(0, 2, 1, 2700, 1, 300, 1, 0); pv_def(1, 3, 1, 2700, 1, 390, 1, 0); ); );
+function j_pv_text(k) local(v) (
+  v = pv_get(k);
+  k == 0 ? sprintf(#j_pt, "%d", floor(j_tLs / srate * 1000 + 0.5)) : k == 1 ? sprintf(#j_pt, "%d", floor(j_tRs / srate * 1000 + 0.5)) :
+  k == 5 || k == 22 ? sprintf(#j_pt, "%.1f", v / 1000) :
+  k == 7 || k == 8 || k == 18 ? sprintf(#j_pt, "%.2f", v) :
+  k == 16 || k == 17 || k == 23 ? sprintf(#j_pt, "%.1f", v) :
+  sprintf(#j_pt, "%d", floor(v + 0.5));
+  #j_pt;
+);
+function j_init() (
+#ui_man = "gfx-j-delay";
+j_JDL = 1;                                   // 0 = E-Delay, 1 = J-Delay (shared code below)
+bd_alloc(100000);
+xh_rate = 1 / (0.03 * srate);
+sl_c = 1 - exp(-1 / (0.09 * srate));
+cmp_c = 1 - exp(-1 / (0.02 * srate));
+ps_win = floor(0.05 * srate);
+
+
+
+// ---------- presets ----------
+
+
+
+// ---------- the parameter table ----------
+
+j_pv_time();
+pv_def(2, 7, 0, 99, 1, 35, 0, 0);      pv_def(3, 8, 0, 100, 1, 0, 0, 0);
+pv_def(4, 9, 20, 1000, 1, 80, 1, 0);   pv_def(5, 10, 1000, 20000, 10, 9000, 1, 1);
+pv_def(6, 11, 0, 100, 1, 0, 0, 0);     pv_def(7, 12, 0, 10, 0.05, 1.2, 0, 2);
+pv_def(8, 13, 0.05, 10, 0.01, 0.8, 1, 2); pv_def(9, 14, -12, 12, 1, 12, 0, 0);
+pv_def(10, 15, 0, 100, 1, 0, 0, 0);    pv_def(11, 16, 20, 2000, 1, 400, 1, 0);
+pv_def(13, 20, 0, 150, 1, 100, 0, 0);  pv_def(14, 33, 0, 100, 1, 50, 0, 0);
+pv_def(15, 23, 0, 100, 1, 30, 0, 0);
+pv_def(16, 31, -24, 12, 0.1, 0, 0, 1); pv_def(17, 24, -24, 12, 0.1, 0, 0, 1);
+pv_def(18, 22, 0.02, 2, 0.01, 0.2, 1, 2); pv_def(19, 25, 0, 100, 1, 0, 0, 0);
+pv_def(20, 26, 0, 100, 1, 30, 0, 0);   pv_def(21, 27, 40, 400, 1, 120, 1, 0);
+pv_def(22, 28, 2000, 16000, 10, 6000, 1, 1); pv_def(23, 29, -24, 0, 0.1, -0.3, 0, 1);
+// what the green readout under a knob shows (seven segments: no letters beyond the basics)
+
+
+j_drA.drift_init(0.8 + rand(0.5)); j_drB.drift_init(0.8 + rand(0.5));
+ost_init(20000); j_ostL.ost_ch_init(); j_ostR.ost_ch_init();
+in_init();
+j_sm = 1 - exp(-1 / (0.03 * srate));
+j_dk_a = 1 - exp(-1 / (0.005 * srate));
+j_pkL = j_pkR = 0; j_piL = j_piR = 0; j_dk_e = 0; j_dk_g = 1; j_lph = 0;
+j_update();
+j_mix_s = j_mix_t; j_out_s = j_out_t; j_pL = j_tLs; j_pR = j_tRs;
+0;
+);
+
+function j_slider() (
+j_update();
+0;
+);
+
+function j_block() (
+// panel edits change the sliders directly, and the tempo can move: re-apply when anything changed
+j_chk = tempo * 0.731; j_ci = 1; loop(33, j_chk += slider(j_ci) * (j_ci * 1.37 + 1); j_ci += 1; );
+j_chk != j_last_chk ? ( j_last_chk = j_chk; j_update(); );
+j_vA = j_drA.drift_tick(j_dspd * samplesblock / srate); j_vB = j_drB.drift_tick(j_dspd * samplesblock / srate);
+// drift: the clock is not quite steady - a fraction of a millisecond (E) or more (J)
+j_dof_t = j_dft * (j_JDL ? 0.0015 : 0.0003) * srate;
+0;
+);
+
+function j_sample() (
+in_process(spl0, spl1);
+j_inL = in_l; j_inR = in_r;
+j_piL = max(j_piL, abs(j_inL)); j_piR = max(j_piR, abs(j_inR));
+j_mix_s += (j_mix_t - j_mix_s) * j_sm; j_out_s += (j_out_t - j_out_s) * j_sm;
+j_dofL += (j_dof_t * j_vA - j_dofL) * 0.0005; j_dofR += (j_dof_t * j_vB - j_dofR) * 0.0005;
+
+j_xl = j_xfL.xfm_run(j_inL, j_drv, !j_JDL); j_xr = j_xfR.xfm_run(j_inR, j_drv, !j_JDL);
+// ducker: follows the input, pulls the repeats down (up to 18 dB), lets them bloom back at DUCK RECOVERY
+j_dk_x = max(abs(j_xl), abs(j_xr)); j_dk_e += (j_dk_x - j_dk_e) * (j_dk_x > j_dk_e ? j_dk_a : j_dk_r);
+j_dk_t = 1 - j_dk_d * 0.875 * min(j_dk_e * 6, 1); j_dk_g += (j_dk_t - j_dk_g) * 0.002;
+
+j_lph += j_md_inc; j_lph >= 1 ? j_lph -= 1;
+!j_JDL ? (
+  // ---------- E-Delay ----------
+  j_mdl == 2 ? (
+    // multi-tap: taps spread across the longer time, alternating sides, chorused; feedback from the last
+    j_tT = max(j_tLs, j_tRs); j_yl = j_yr = 0; k = 0;
+    loop(j_ntap,
+      j_t_ = j_tT * (k + 1) / j_ntap + j_md_s * (0.5 + 0.5 * sin(2 * $pi * (j_lph + k * 0.37)));
+      j_g_ = 1 - 0.55 * k / max(j_ntap, 1);
+      k & 1 ? j_yr += j_g_ * bd_rd(BD_R, j_t_ + j_dofR) : j_yl += j_g_ * bd_rd(BD_L, j_t_ + j_dofL);
+      j_ntap == 1 ? j_yr = j_yl;
+      k += 1; );
+    j_lastL = bd_rd(BD_L, j_tT + j_dofL); j_lastR = bd_rd(BD_R, j_tT + j_dofR);
+    j_lcL += (j_lastL - j_lcL) * j_lc_c; j_hcL += (j_lastL - j_lcL - j_hcL) * j_hc_c;
+    j_lcR += (j_lastR - j_lcR) * j_lc_c; j_hcR += (j_lastR - j_lcR - j_hcR) * j_hc_c;
+    j_wl = j_xl + j_fb * ((1 - xf) * j_hcL + xf * j_hcR); j_wr = j_xr + j_fb * ((1 - xf) * j_hcR + xf * j_hcL);
+  ) : (
+    j_yl = j_hdL.xh_run(BD_L, j_tLs + j_dofL); j_yr = j_hdR.xh_run(BD_R, j_tRs + j_dofR);
+    j_lcL += (j_yl - j_lcL) * j_lc_c; j_hcL += (j_yl - j_lcL - j_hcL) * j_hc_c;
+    j_lcR += (j_yr - j_lcR) * j_lc_c; j_hcR += (j_yr - j_lcR - j_hcR) * j_hc_c;
+    j_mdl == 3 ? (
+      // time stretch: the repeats are pitch-shifted and softly limited inside the loop
+      j_fl = j_psL.ps_run((1 - xf) * j_hcL + xf * j_hcR, ratio, 0); j_fr = j_psR.ps_run((1 - xf) * j_hcR + xf * j_hcL, ratio, 1);
+      j_wl = j_xl + bv_tanh(j_fb * 1.01 * j_fl * 1.2) / 1.2; j_wr = j_xr + bv_tanh(j_fb * 1.01 * j_fr * 1.2) / 1.2;
+    ) : (
+      j_wl = j_xl + j_fb * ((1 - xf) * j_hcL + xf * j_hcR); j_wr = j_xr + j_fb * ((1 - xf) * j_hcR + xf * j_hcL);
+      j_wl = j_wl - 0.05 * j_wl * j_wl * j_wl; j_wr = j_wr - 0.05 * j_wr * j_wr * j_wr;   // a little headroom curve in the loop
+    );
+    j_yl = j_hcL; j_yr = j_hcR;
+  );
+) : (
+  // ---------- J-Delay ----------
+  // the base time glides (pitch bends when you change it); the LFO rides on top (dual-phase: L sine, R cosine)
+  j_pL += (j_tLs - j_pL) * sl_c; j_pR += (j_tRs - j_pR) * sl_c;
+  j_mdl == 3 && hold ? (
+    // sample hold: nothing new is written; the last TIME L of audio plays round and round
+    j_hph += 1; j_hph >= j_tLs ? j_hph = 0;
+    j_env_ = min(1, min(j_hph, j_tLs - j_hph) / (0.004 * srate));
+    j_yl = bd_rd(BD_L, j_tLs - j_hph) * j_env_; j_yr = bd_rd(BD_R, j_tLs - j_hph) * j_env_;
+    j_wl = j_wr = 0;
+  ) : (
+    j_mL = j_md_s * (0.5 + 0.5 * sin(2 * $pi * j_lph)); j_mR = j_md_s * (0.5 + 0.5 * cos(2 * $pi * j_lph));
+    j_yl = bd_rd(BD_L, j_pL + j_mL + j_dofL); j_yr = bd_rd(BD_R, j_pR + j_mR + j_dofR);
+    j_mdl == 2 ? ( j_yl = j_cpoL.cmp_out(j_yl); j_yr = j_cpoR.cmp_out(j_yr); );
+    j_lcL += (j_yl - j_lcL) * j_lc_c; j_hcL += (j_yl - j_lcL - j_hcL) * j_hc_c;
+    j_lcR += (j_yr - j_lcR) * j_lc_c; j_hcR += (j_yr - j_lcR - j_hcR) * j_hc_c;
+    j_fbl = (1 - xf) * j_hcL + xf * j_hcR; j_fbr = (1 - xf) * j_hcR + xf * j_hcL;
+    j_mdl == 1 ? ( j_fbl = j_psL.ps_run(j_fbl, ratio, 0); j_fbr = j_psR.ps_run(j_fbr, ratio, 1); );   // every repeat shifts in pitch
+    j_wl = j_xl + j_fb * j_fbl; j_wr = j_xr + j_fb * j_fbr;
+    j_wl = j_wl - 0.06 * j_wl * j_wl * j_wl; j_wr = j_wr - 0.06 * j_wr * j_wr * j_wr;
+    j_mdl == 2 ? ( j_nz = (rand(2) - 1) * 0.00004; j_wl = j_cpiL.cmp_in(j_wl + j_nz); j_wr = j_cpiR.cmp_in(j_wr - j_nz); );   // compander (with its hiss)
+    j_yl = j_hcL; j_yr = j_hcR;
+    j_hph = 0;
+  );
+);
+!(j_JDL && j_mdl == 3 && hold) ? bd_put(j_lfiL.lofi_in(j_wl), j_lfiR.lofi_in(j_wr));
+j_yl = j_lfoL.lofi_out(j_yl) * j_dk_g; j_yr = j_lfoR.lofi_out(j_yr) * j_dk_g;
+j_wm = 0.5 * (j_yl + j_yr); j_ws = 0.5 * (j_yl - j_yr) * j_wid; j_yl = j_wm + j_ws; j_yr = j_wm - j_ws;
+j_rvl = max(j_rvl, max(abs(j_yl), abs(j_yr)));
+oL = j_inL * (1 - j_mix_s) + j_yl * j_mix_s;
+j_oR = j_inR * (1 - j_mix_s) + j_yr * j_mix_s;
+oL = j_ostL.ost_band(oL) * j_out_s; j_oR = j_ostR.ost_band(j_oR) * j_out_s;
+ost_out(oL, j_oR);
+spl0 = ost_l; spl1 = ost_r;
+j_pkL = max(j_pkL, abs(spl0)); j_pkR = max(j_pkR, abs(spl1));
+0;
+);
+
+function j_serialize() (
+file_var(0, ui_sz);
+file_var(0, j_vsel);
+file_var(0, j_lastp);
+0;
+);
+
+// ======================== the REGION switch ========================
+rg_cur = slider35 >= 0.5; rg_g = 1; rg_f = 0;
+rg_cur ? j_init() : e_init();
+#ui_man = "gfx-dly45";
+rg_cur ? j_slider() : e_slider();
+
+@slider
+(slider35 >= 0.5) == rg_cur && !rg_f ? ( rg_cur ? j_slider() : e_slider(); );
+
+@block
+// REGION changed: fade out (10 ms), start the other engine clean at the silent point, fade back in (20 ms)
+(slider35 >= 0.5) != rg_cur && !rg_f ? rg_f = 1;
+rg_f == 2 ? ( rg_cur = slider35 >= 0.5; rg_cur ? j_init() : e_init(); #ui_man = "gfx-dly45"; rg_cur ? j_slider() : e_slider(); rg_f = 3; );
+rg_dn = 1 / (0.01 * srate); rg_up = 1 / (0.02 * srate);
+rg_cur ? j_block() : e_block();
+
+@serialize
+e_serialize(); j_serialize();
+
+@sample
+rg_cur ? j_sample() : e_sample();
+rg_f == 1 ? ( rg_g -= rg_dn; rg_g <= 0 ? ( rg_g = 0; rg_f = 2; ); ) : rg_f == 3 ? ( rg_g += rg_up; rg_g >= 1 ? ( rg_g = 1; rg_f = 0; ); );
+rg_f ? ( spl0 *= rg_g; spl1 *= rg_g; );
+
+@gfx 1440 316
+function e_txt(x, y, s, e_sz, a) ( gfx_setfont(6, "Arial", e_sz * sc, 'b'); ui_col(ui_mix(e_CRM, INK, a)); gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function e_ctxt(x, y, s, e_sz, a) local(tw, th) ( gfx_setfont(6, "Arial", e_sz * sc, 'b'); gfx_measurestr(s, tw, th); ui_col(ui_mix(e_CRM, INK, a)); gfx_x = x * sc - tw * 0.5; gfx_y = y * sc; gfx_drawstr(s); );
+function e_group(x, y, w, h, s) local(tw, th) (
+  ui_col(0x8E8C84); lz_rr(x, y, w, h, 6); ui_col(e_CRM); lz_rr(x + 1, y + 1, w - 2, h - 2, 5);
+  gfx_setfont(6, "Arial", 10 * sc, 'b'); gfx_measurestr(s, tw, th);
+  ui_col(INK); gfx_rect(x * sc, y * sc, tw + 16 * sc, 14 * sc);
+  ui_col(e_CRM); gfx_x = (x + 8) * sc; gfx_y = (y + 2) * sc; gfx_drawstr(s);
+);
+function e_lbtn(x, y, w, h, s, on) local(hit, inb, tw, th) (
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hit = pressed && drag_id == 0 && inb; hit ? drag_id = -1;
+  ui_col(0x6A6862); lz_rr(x + 1, y + 2, w, h, 3);
+  ui_col(0x2A2C30); lz_rr(x, y, w, h, 3);
+  ui_col(on ? LIT : 0x5A5650); lz_rr(x + 3, y + 3, w - 6, h - 6, 2);
+  on ? ( ui_col(ui_mix(LIT, 0xFFFFFF, 0.45)); gfx_rect((x + 5) * sc, (y + 4) * sc, (w - 10) * sc, 2 * sc); );
+  gfx_setfont(6, "Arial", 10 * sc, 'b'); gfx_measurestr(s, tw, th);
+  ui_col(on ? 0x2A1A06 : 0xD8D4CA); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y + h * 0.5) * sc - th * 0.5; gfx_drawstr(s);
+  hit;
+);
+function e_key(x, y, w, h, s, e_rep) local(hit, inb, tw, th, e_id) (
+  e_id = 100000 + x * 1000 + y;
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hit = pressed && drag_id == 0 && inb;
+  hit ? ( drag_id = e_id; e_k_tn = time_precise() + 0.4; );
+  e_rep && drag_id == e_id && inb && time_precise() > e_k_tn ? ( hit = 1; e_k_tn = time_precise() + 0.07; );
+  ui_col(0x8A8780); lz_rr(x + 1, y + 2, w, h, 3);
+  ui_col(0x3A3C42); lz_rr(x, y, w, h, 3);
+  ui_col(drag_id == e_id && inb ? 0x55585E : 0x6A6E76); lz_rr(x + 1, y + 1, w - 2, h - 3, 3);
+  gfx_setfont(6, "Arial", 15 * sc, 'b'); gfx_measurestr(s, tw, th);
+  ui_col(0xF0F0F0); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y + h * 0.5 - 1) * sc - th * 0.5; gfx_drawstr(s);
+  hit;
+);
+function e_disp(k, x, y, cap, e_unit, act) local(inb, did, tw, th, w) (
+  w = 94; did = 1900 + k;
+  e_ctxt(x + w * 0.5, y, cap, 10, act ? 0.95 : 0.45);
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= (y + 14) * sc && mouse_y < (y + 52) * sc;
+  pressed && inb && drag_id == 0 ? (
+    time_precise() - e_d_lt < 0.35 && e_d_lk == k ? ( pv_reset(k); drag_id = -1; ) : ( drag_id = did; e_d_y = mouse_y; e_d_lt = time_precise(); e_d_lk = k; );
+    e_vsel = k; );
+  drag_id == did && abs(mouse_y - e_d_y) >= 2 * sc ? ( pv_nudge(k, (e_d_y - mouse_y) / (((mouse_cap & 8) ? 1500 : 300) * sc)); e_d_y = mouse_y; );
+  inb && mouse_wheel != 0 && drag_id == 0 ? ( pv_step(k, sign(mouse_wheel)); mouse_wheel = 0; e_vsel = k; );
+  ui_col(e_vsel == k ? e_CHR : 0x5A6A78); lz_rr(x - 1, y + 13, w + 2, 40, 4);
+  ui_col(act ? e_WIN : ui_mix(e_WIN, 0x707880, 0.4)); lz_rr(x, y + 14, w, 38, 3);
+  ui_hw ? gfx_gradrect(x * sc, (y + 14) * sc, w * sc, 38 * sc, 1, 1, 1, 0.14, 0, 0, 0, 0, 0, 0, 0, -0.14 / (38 * sc));
+  gfx_setfont(6, "Courier New", 22 * sc, 'b'); gfx_measurestr(e_pv_text(k), tw, th);
+  ui_col(act ? e_CHR : ui_mix(e_CHR, e_WIN, 0.55)); gfx_x = (x + w - 8) * sc - tw; gfx_y = (y + 33) * sc - th * 0.5; gfx_drawstr(#e_pt);
+  gfx_setfont(6, "Arial", 9 * sc, 'b'); ui_col(ui_mix(e_WIN, e_CHR, 0.7)); gfx_x = (x + 4) * sc; gfx_y = (y + 17) * sc; gfx_drawstr(e_unit);
+  e_key(x, y + 58, 45, 24, "-", 1) ? ( pv_step(k, -1); e_vsel = k; );
+  e_key(x + 49, y + 58, 45, 24, "+", 1) ? ( pv_step(k, 1); e_vsel = k; );
+);
+function e_vu(x, y, w, h, e_db, s) local(cx, cy, r, i, a, d, n) (
+  ui_col(0x2A2C30); lz_rr(x - 4, y - 4, w + 8, h + 8, 6);
+  ui_col(0xF2E8C8); lz_rr(x, y, w, h, 3);
+  ui_hw ? gfx_gradrect(x * sc, y * sc, w * sc, h * sc, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, -0.2 / (h * sc));
+  cx = x + w * 0.5; cy = y + h * 1.15; r = h * 0.95;
+  i = 0; loop(9, d = i == 0 ? -20 : i == 1 ? -10 : i == 2 ? -7 : i == 3 ? -5 : i == 4 ? -3 : i == 5 ? -1 : i == 6 ? 0 : i == 7 ? 1 : 3;
+    n = (d + 20) / 23; a = -0.62 + n * 1.24; ui_col(d > 0 ? 0xB82A1E : 0x2A1C10);
+    gfx_line((cx + sin(a) * r) * sc, (cy - cos(a) * r) * sc, (cx + sin(a) * (r - 8)) * sc, (cy - cos(a) * (r - 8)) * sc, 1); i += 1; );
+  gfx_setfont(6, "Arial", 14 * sc, 'b'); ui_col(0x2A1C10); ui_text(cx * sc, (y + h * 0.42) * sc, "VU");
+  gfx_setfont(6, "Arial", 9 * sc, 'b'); gfx_x = (x + 6) * sc; gfx_y = (y + h - 14) * sc; gfx_drawstr(s);
+  n = min(max((e_db + 20) / 23, -0.05), 1.06); a = -0.62 + n * 1.24;
+  ui_col(0x141414); gfx_line(cx * sc, (cy - h * 0.3) * sc, (cx + sin(a) * (r - 3)) * sc, (cy - cos(a) * (r - 3)) * sc, 1);
+  gfx_line(cx * sc + 1, (cy - h * 0.3) * sc, (cx + sin(a) * (r - 3)) * sc + 1, (cy - cos(a) * (r - 3)) * sc, 1);
+  ui_col(0x2A2C30); gfx_rect(x * sc, (y + h - 5) * sc, w * sc, 5 * sc);
+);
+function e_gfx() (
+ui_begin(1440, 316);
+ui_thm = 5; ui_hw = 1; ui_theme(5);
+e_pv_time();
+// brushed aluminium, a cream band, dark blue print; pale displays with dark blue characters; lit push buttons
+e_ALU = 0xCDCDCA; e_CRM = 0xE9E3D2; INK = 0x1C2A5C; e_WIN = 0xB9C9D6; e_CHR = 0x14246A; LIT = 0xFFB030;
+
+
+
+// an illuminated push button: square cap, the lamp lit behind its legend when on
+
+
+// an alphanumeric display with - / + under it; act = the parameter does something on this model
+
+// the analog meter: cream face, black needle (v in dB, 0 VU = -18 dBFS)
+
+
+// ---------- the panel ----------
+fh = 308;
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(0x7A7A76); lz_rr(4, 4, 1432, fh, 8); ui_col(e_ALU); lz_rr(5, 5, 1430, fh - 2, 7);
+e_gi = 0; loop(floor(fh / 2), ui_col(ui_mix(e_ALU, e_gi % 3 ? 0xFFFFFF : 0x000000, e_gi % 2 ? 0.05 : 0.07)); gfx_rect(8 * sc, (6 + e_gi * 2) * sc, 1424 * sc, 1); e_gi += 1; );
+e_gi = 0; loop(4, pk_screw((e_gi % 2 ? 1422 : 18) * sc, (e_gi < 2 ? 18 : fh - 10) * sc); e_gi += 1; );
+// header
+ui_col(INK); gfx_circle(48 * sc, 26 * sc, 13 * sc, 1, 1); gfx_setfont(4); ui_col(e_ALU); ui_text(48 * sc, 21 * sc, "GFX");
+gfx_setfont(6, "Arial", 24 * sc, 'e_bi'); ui_col(INK); gfx_x = 70 * sc; gfx_y = 12 * sc; gfx_drawstr("DLY45");
+gfx_setfont(6, "Arial", 11 * sc, 'b'); ui_col(ui_mix(e_ALU, INK, 0.75)); gfx_x = 186 * sc; gfx_y = 21 * sc;
+gfx_drawstr(e_mdl == 0 ? "DIGITAL DELAY LINE  -  CRYSTAL" : e_mdl == 1 ? "DYNAMIC DELAY  -  DUCKING" : e_mdl == 2 ? "STEREO MULTI-TAP DELAY" : "AUDIO TIME PROCESSOR  -  PITCH LOOP");
+ui_size_picker(1360 * sc, 14 * sc);
+
+// ---------- meters, models, keys ----------
+e_group(16, 50, 290, 244, "DELAY PROCESSOR");
+e_vdi = 20 * log10(max(max(e_piL, e_piR), 0.000001)) + 18; e_vin += (e_vdi - e_vin) * 0.3;
+e_vde = 20 * log10(max(e_rvl, 0.000001)) + 18; e_vec += (e_vde - e_vec) * 0.3; e_rvl = 0; e_piL *= 0.8; e_piR *= 0.8;
+e_vu(28, 74, 126, 70, e_vin, "INPUT"); e_vu(168, 74, 126, 70, e_vec, "ECHO");
+e_lbtn(28, 156, 128, 30, "CRYSTAL", e_mdl == 0) ? ( slider1 = 0; ui_auto(1); e_update(); );
+e_lbtn(166, 156, 128, 30, "DYNAMIC", e_mdl == 1) ? ( slider1 = 1; slider15 < 1 ? ( slider15 = 60; ui_auto(15); ); ui_auto(1); e_update(); );
+e_lbtn(28, 192, 128, 30, "MULTI-TAP", e_mdl == 2) ? ( slider1 = 2; ui_auto(1); e_update(); );
+e_lbtn(166, 192, 128, 30, "TIME STRETCH", e_mdl == 3) ? ( slider1 = 3; ui_auto(1); e_update(); );
+e_lbtn(28, 230, 128, 26, "SYNC", slider4) ? ( slider4 = 1 - slider4; ui_auto(4); e_update(); );
+e_lbtn(166, 230, 128, 26, "VINTAGE", slider18) ? ( slider18 = 1 - slider18; ui_auto(18); e_update(); );
+e_lbtn(28, 262, 84, 26, "PRESETS", 0) ? (
+  gfx_x = 28 * sc; gfx_y = 288 * sc;
+  e_load_preset(gfx_showmenu("Slapback|Quarter Note Echo|Ping-Pong Eighths|Dynamic Vocal Echo|Wide Stereo Doubler|Rhythm Taps|Tap Chorus|Shimmer Up|Falling Echoes|Endless Wash|Reset all to defaults"));
+);
+// prev / next beside PRESETS: step through the ten presets (wrapping round)
+e_lbtn(116, 262, 28, 26, "", 0) ? e_load_preset(e_lastp <= 1 ? 10 : e_lastp - 1);
+e_lbtn(146, 262, 28, 26, "", 0) ? e_load_preset(e_lastp >= 10 ? 1 : e_lastp + 1);
+ui_col(0xD8D4CA); gfx_triangle(134.5 * sc, 269 * sc, 134.5 * sc, 281 * sc, 125.5 * sc, 275 * sc);
+gfx_triangle(155.5 * sc, 269 * sc, 155.5 * sc, 281 * sc, 164.5 * sc, 275 * sc);   // the arrows
+ui_col(e_WIN); lz_rr(180, 262, 114, 26, 3);
+gfx_setfont(6, "Courier New", 15 * sc, 'b'); ui_col(e_CHR); gfx_x = 187 * sc; gfx_y = 267 * sc;
+e_lastp > 0 ? gfx_printf("P%d %s", e_lastp, slider4 ? "SYNC" : "FREE") : gfx_drawstr(slider4 ? "P-- SYNC" : "P-- FREE");
+e_txt(196, 34, slider4 ? sprintf(#e_tb, "TEMPO %.1f BPM", tempo) : "TIME IN MILLISECONDS", 9, 0.7);
+
+// ---------- the displays ----------
+e_group(316, 50, 210, 116, "TIME");          e_disp(0, 324, 70, "TIME L", slider4 ? "NOTE" : "ms", 1); e_disp(1, 424, 70, "TIME R", slider4 ? "NOTE" : "ms", 1);
+e_group(534, 50, 410, 116, "FEEDBACK");      e_disp(2, 542, 70, "FEEDBACK", "%", 1); e_disp(3, 642, 70, "CROSS-FEED", "%", 1);
+                                           e_disp(4, 742, 70, "LO CUT", "Hz", 1); e_disp(5, 842, 70, "HI CUT", "Hz", 1);
+e_group(952, 50, 232, 116, "DUCK");          e_disp(10, 966, 70, "DEPTH", "%", 1); e_disp(11, 1076, 70, "RECOVERY", "ms", 1);
+e_group(316, 178, 410, 116, "MODULATION");   e_disp(7, 324, 198, "MOD DEPTH", "ms", e_mdl == 2); e_disp(8, 424, 198, "MOD RATE", "Hz", e_mdl == 2);
+                                           e_disp(9, 524, 198, "PITCH", "semi", e_mdl == 3); e_disp(12, 624, 198, "TAPS", "", e_mdl == 2);
+e_group(734, 178, 450, 116, "CHARACTER");    e_disp(6, 748, 198, "DRIVE", "%", 1); e_disp(13, 856, 198, "WIDTH", "%", 1);
+                                           e_disp(14, 964, 198, "DRIFT", "%", 1); e_disp(15, 1076, 198, "MIX", "%", 1);
+
+// ---------- IN / OUT: trim (+ guard), level, saturation ----------
+e_group(1192, 50, 232, 244, "IN / OUT");     e_disp(16, 1206, 70, "TRIM", "dB", 1);
+e_disp(17, 1312, 70, "LEVEL", "dB", 1);
+e_lbtn(1312, 225, 98, 24, "GUARD", slider32) ? ( slider32 = 1 - slider32; ui_auto(32); e_update(); );
+e_io_grd = in_grd > 0.05 ? 1 : e_io_grd * 0.85; in_grd = 0;
+e_ctxt(1361, 262, e_io_grd > 0.1 && slider32 ? "GUARD CATCHING" : "", 9, 0.7);
+e_disp(19, 1206, 198, "SAT", "%", 1);
+
+pk_end();
+ui_end();
+0;
+);
+function j_txt(x, y, s, j_sz, a) ( gfx_setfont(6, "Arial", j_sz * sc, 'b'); ui_col(ui_mix(j_PNL, INK, a)); gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function j_ctxt(x, y, s, j_sz, a) local(tw, th) ( gfx_setfont(6, "Arial", j_sz * sc, 'b'); gfx_measurestr(s, tw, th); ui_col(ui_mix(j_PNL, INK, a)); gfx_x = x * sc - tw * 0.5; gfx_y = y * sc; gfx_drawstr(s); );
+function j_sled(x, y, on, col) ( ui_col(0x050505); gfx_circle(x * sc, y * sc, 4 * sc, 1, 1); ui_col(on ? col : ui_mix(col, 0x050505, 0.78)); gfx_circle(x * sc, y * sc, 3 * sc, 1, 1);
+  on && ui_hw ? ( ui_col(ui_mix(col, 0xFFFFFF, 0.6)); gfx_circle((x - 1) * sc, (y - 1) * sc, 1 * sc, 1, 1); ); );
+function j_rkey(x, y, w, h, s, on) local(hit, inb, tw, th) (
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hit = pressed && drag_id == 0 && inb; hit ? drag_id = -1;
+  ui_col(0x0E1014); lz_rr(x + 1, y + 2, w, h, 5);
+  ui_col(0x3A3E46); lz_rr(x, y, w, h, 5);
+  ui_col(mdown && inb ? 0x30333A : 0x474B54); lz_rr(x + 1.5, y + 1.5, w - 3, h - 4, 4);
+  on >= 0 ? j_sled(x + 10, y + h * 0.5, on, RED);
+  gfx_setfont(6, "Arial", 10 * sc, 'b'); gfx_measurestr(s, tw, th);
+  ui_col(0xE8EAEE); gfx_x = (x + w * 0.5 + (on >= 0 ? 6 : 0)) * sc - tw * 0.5; gfx_y = (y + h * 0.5) * sc - th * 0.5; gfx_drawstr(s);
+  hit;
+);
+function j_rknob(k, cx, cy, r, cap, j_unit) local(v, n, a, did, hov, i, t, p) (
+  did = 1900 + k; p = PV + 8 * k;
+  hov = (mouse_x - cx * sc) ^ 2 + (mouse_y - cy * sc) ^ 2 <= ((r + 4) * sc) ^ 2;
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - j_d_lt < 0.35 && j_d_lk == k ? ( pv_reset(k); drag_id = -1; ) : ( drag_id = did; j_d_y = mouse_y; j_d_lt = time_precise(); j_d_lk = k; ); );
+  drag_id == did && abs(mouse_y - j_d_y) >= 2 * sc ? ( pv_nudge(k, (j_d_y - mouse_y) / (((mouse_cap & 8) ? 1500 : 250) * sc)); j_d_y = mouse_y; );
+  hov && mouse_wheel != 0 && drag_id == 0 ? ( pv_step(k, sign(mouse_wheel)); mouse_wheel = 0; );
+  v = pv_get(k); n = p[5] ? log(max(v, p[1]) / p[1]) / log(p[2] / p[1]) : (v - p[1]) / (p[2] - p[1]); a = -0.75 * $pi + n * 1.5 * $pi;
+  j_sled(cx - 30, cy - r - 13, abs(v - p[4]) > p[3] * 0.5, RED);
+  j_ctxt(cx + 4, cy - r - 19, cap, 10, 0.95);
+  i = 0; loop(11, t = -0.75 * $pi + i / 10 * 1.5 * $pi; ui_col(ui_mix(j_PNL, INK, 0.45));
+    gfx_line((cx + sin(t) * (r + 4)) * sc, (cy - cos(t) * (r + 4)) * sc, (cx + sin(t) * (r + 8)) * sc, (cy - cos(t) * (r + 8)) * sc, 1); i += 1; );
+  ui_col(0x0A0B0D); gfx_circle((cx + 1.5) * sc, (cy + 2.5) * sc, r * sc, 1, 1);
+  ui_col(0x16181C); gfx_circle(cx * sc, cy * sc, r * sc, 1, 1);
+  i = 0; loop(30, t = i / 30 * 2 * $pi; ui_col(0x24272D);
+    gfx_line((cx + sin(t) * r * 0.82) * sc, (cy - cos(t) * r * 0.82) * sc, (cx + sin(t) * r * 0.98) * sc, (cy - cos(t) * r * 0.98) * sc, 1); i += 1; );
+  ui_col(k == 4 ? 0xF2C21B : 0x22252B); gfx_circle(cx * sc, cy * sc, r * 0.74 * sc, 1, 1);   // LO CUT (high-pass): yellow cap
+  ui_hw && k != 4 ? ( ui_col(0x2C3038); gfx_circle((cx - r * 0.12) * sc, (cy - r * 0.16) * sc, r * 0.4 * sc, 1, 1); ui_col(0x22252B); gfx_circle(cx * sc, cy * sc, r * 0.34 * sc, 1, 1); );
+  ui_kline(cx * sc, cy * sc, a, r * 0.2 * sc, r * 0.92 * sc, 2.4, k == 4 ? 0x141416 : 0xE8EAEE);
+  (hov || drag_id == did) ? ( ui_col(ui_mix(j_PNL, INK, 0.3)); gfx_circle(cx * sc, cy * sc, (r + 2) * sc, 0, 1); );
+  ui_col(j_WIN); lz_rr(cx - 40, cy + r + 9, 80, 26, 4);
+  seg_str((cx - 22) * sc, (cy + r + 13) * sc, 9 * sc, 18 * sc, 5, (hov || drag_id == did) ? j_pv_text(k) : "", j_GRN, 0x0C2414);   // readout lit on hover / drag only
+  gfx_setfont(6, "Arial", 8 * sc, 'b'); ui_col(ui_mix(j_WIN, j_GRN, 0.7)); gfx_x = (cx - 37) * sc; gfx_y = (cy + r + 12) * sc; gfx_drawstr(j_unit);
+);
+function j_gfx() (
+ui_begin(1200, 392);
+seg_clean = 1;   // readouts as plain bold figures (easier to read than segments)
+ui_thm = 5; ui_hw = 1; ui_theme(5);
+j_pv_time();
+// midnight blue casing, a dark grey panel, orange and green LEDs, red status lights, matte rubber knobs
+j_CAS = 0x141A2E; j_PNL = 0x23262C; INK = 0xC8CEDA; j_ORN = 0xFF8A1E; j_GRN = 0x46F07A; RED = 0xFF2A20; j_WIN = 0x07090A;
+
+
+
+// a rubber key with a red status LED above its legend
+
+// a matte rubber knob with a green readout under it; the red LED lights when it is away from its default
+
+
+// ---------- the panel ----------
+fh = 384;
+ui_col(0x050608); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(0x0A0E1A); lz_rr(4, 4, 1192, fh, 8); ui_col(j_CAS); lz_rr(5, 5, 1190, fh - 2, 7);
+ui_hw ? gfx_gradrect(6 * sc, 6 * sc, 1188 * sc, 36 * sc, 1, 1, 1, 0.07, 0, 0, 0, 0, 0, 0, 0, -0.07 / (36 * sc));
+ui_col(0x0E1018); lz_rr(13, 41, 1174, fh - 48, 6); ui_col(j_PNL); lz_rr(14, 42, 1172, fh - 50, 5);
+// header on the casing
+ui_col(INK); gfx_circle(34 * sc, 22 * sc, 12 * sc, 1, 1); gfx_setfont(4); ui_col(j_CAS); ui_text(34 * sc, 17 * sc, "GFX");
+gfx_setfont(6, "Arial", 24 * sc, 'b'); ui_col(0xE8EAEE); gfx_x = 56 * sc; gfx_y = 9 * sc; gfx_drawstr("DLY45");
+gfx_setfont(6, "Arial", 11 * sc, 'b'); ui_col(ui_mix(j_CAS, INK, 0.75)); gfx_x = 172 * sc; gfx_y = 18 * sc;
+gfx_drawstr(j_mdl == 0 ? "DIGITAL DELAY  -  VINTAGE DIGITAL" : j_mdl == 1 ? "12-BIT PITCH SHIFT DELAY" : j_mdl == 2 ? "COMPACT DIGITAL DELAY" : "SAMPLING DELAY  -  14-BIT HOLD");
+ui_size_picker(1120 * sc, 12 * sc);
+
+// ---------- programs and status keys ----------
+j_rkey(26, 54, 104, 30, "VINTAGE DIG", j_mdl == 0) ? ( slider1 = 0; ui_auto(1); j_update(); );
+j_rkey(136, 54, 104, 30, "PITCH 12", j_mdl == 1) ? ( slider1 = 1; ui_auto(1); j_update(); );
+j_rkey(26, 90, 104, 30, "COMPACT", j_mdl == 2) ? ( slider1 = 2; ui_auto(1); j_update(); );
+j_rkey(136, 90, 104, 30, "SAMPLE HOLD", j_mdl == 3) ? ( slider1 = 3; ui_auto(1); j_update(); );
+j_rkey(26, 126, 68, 30, "SYNC", slider4) ? ( slider4 = 1 - slider4; ui_auto(4); j_update(); );
+j_rkey(99, 126, 68, 30, "HOLD", slider34) ? ( slider34 = 1 - slider34; slider34 && j_mdl != 3 ? slider1 = 3; ui_auto(34); ui_auto(1); j_update(); );
+j_rkey(172, 126, 68, 30, "VINT", slider18 || j_mdl == 1) ? ( slider18 = 1 - slider18; ui_auto(18); j_update(); );
+
+// ---------- the big display: delay times in orange, the status line in green ----------
+ui_col(0x0A0C10); lz_rr(252, 52, 520, 106, 6); ui_col(j_WIN); lz_rr(254, 54, 516, 102, 5);
+j_txt(266, 60, "DELAY L", 10, 0.6); j_txt(520, 60, "DELAY R", 10, 0.6);
+seg_str(270 * sc, 76 * sc, 28 * sc, 52 * sc, 4, sprintf(#j_dl, "%d", floor(j_tLs / srate * 1000 + 0.5)), j_ORN, 0x1E1004);
+seg_str(524 * sc, 76 * sc, 28 * sc, 52 * sc, 4, sprintf(#j_dr, "%d", floor(j_tRs / srate * 1000 + 0.5)), j_ORN, 0x1E1004);
+j_txt(470, 112, "mS", 11, 0.7); j_txt(724, 112, "mS", 11, 0.7);
+gfx_setfont(6, "Courier New", 12 * sc, 'b'); ui_col(j_GRN); gfx_x = 266 * sc; gfx_y = 138 * sc;
+slider4 ? gfx_printf("SYNC %s / %s  %.1f BPM", bd_divname(slider5), bd_divname(slider6), tempo) : gfx_drawstr("FREE RUNNING");
+gfx_x = 580 * sc; gfx_printf("%s %d-BIT", lf_on ? "VINTAGE" : "MODERN", lf_on ? (slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16) : 24);
+j_mdl == 3 && slider34 ? ( gfx_x = 470 * sc; gfx_y = 60 * sc; ui_col(RED); gfx_drawstr("HOLD"); );
+
+// meters (input / delay) and the bit / preset keys
+j_txt(786, 56, "INPUT", 9, 0.7); j_txt(786, 84, "DELAY", 9, 0.7);
+j_vi_ = max(j_piL, j_piR); j_vd_ = j_rvl; j_piL *= 0.8; j_piR *= 0.8; j_rvl = 0;
+j_gi = 0; loop(18, j_gd_ = -54 + j_gi * 3;
+  ui_col(20 * log10(max(j_vi_, 0.000001)) >= j_gd_ ? (j_gi >= 16 ? RED : j_gi >= 13 ? j_ORN : j_GRN) : 0x1A1C20); gfx_rect((830 + j_gi * 13) * sc, 56 * sc, 10 * sc, 10 * sc);
+  ui_col(20 * log10(max(j_vd_, 0.000001)) >= j_gd_ ? (j_gi >= 16 ? RED : j_gi >= 13 ? j_ORN : j_GRN) : 0x1A1C20); gfx_rect((830 + j_gi * 13) * sc, 84 * sc, 10 * sc, 10 * sc);
+  j_gi += 1; );
+j_rkey(786, 110, 80, 30, sprintf(#j_bt, "BITS %d", slider19 == 0 ? 10 : slider19 == 1 ? 12 : slider19 == 2 ? 14 : 16), -1) ? ( slider19 = (slider19 + 1) % 4; ui_auto(19); j_update(); );
+j_rkey(874, 110, 80, 30, "PRESETS", -1) ? (
+  gfx_x = 874 * sc; gfx_y = 140 * sc;
+  j_load_preset(gfx_showmenu("80s Chorus Delay|Lead Guitar Echo|Dimension Wide|Octave Cascade|Fifth Spiral|Octave Drop|Dark Vocal Echo|Compact Slap|Stutter Loop (press HOLD)|10-Bit Grit|Reset all to defaults"));
+);
+// prev / next beside PRESETS: step through the ten presets (wrapping round)
+j_rkey(958, 110, 28, 30, "", -1) ? j_load_preset(j_lastp <= 1 ? 10 : j_lastp - 1);
+j_rkey(990, 110, 28, 30, "", -1) ? j_load_preset(j_lastp >= 10 ? 1 : j_lastp + 1);
+ui_col(0xE8EAEE); gfx_triangle(976.5 * sc, 119 * sc, 976.5 * sc, 131 * sc, 967.5 * sc, 125 * sc);
+gfx_triangle(999.5 * sc, 119 * sc, 999.5 * sc, 131 * sc, 1008.5 * sc, 125 * sc);   // the arrows
+ui_col(j_WIN); lz_rr(1024, 110, 70, 30, 4);
+seg_str(1032 * sc, 116 * sc, 10 * sc, 18 * sc, 3, j_lastp > 0 ? sprintf(#j_pn, "P%d", j_lastp) : "P--", j_ORN, 0x1E1004);
+
+// ---------- the knobs: every parameter on the panel ----------
+ui_col(0x16181C); gfx_rect(24 * sc, 168 * sc, 1152 * sc, 1 * sc);
+j_rknob(0, 82, 214, 21, "TIME L", slider4 ? bd_divname(slider5) : "ms");
+j_rknob(1, 196, 214, 21, "TIME R", slider4 ? bd_divname(slider6) : "ms");
+j_rknob(2, 310, 214, 21, "FEEDBACK", "%");  j_rknob(3, 424, 214, 21, "CROSS", "%");
+j_rknob(4, 538, 214, 21, "LO CUT", "Hz");   j_rknob(5, 652, 214, 21, "HI CUT", "kHz");
+j_rknob(7, 766, 214, 21, "MOD DEPTH", "ms"); j_rknob(8, 880, 214, 21, "MOD RATE", "Hz");
+j_rknob(9, 82, 322, 21, j_mdl == 1 ? "PITCH" : "(PITCH)", "semi");
+j_rknob(10, 196, 322, 21, "DUCK", "%");     j_rknob(11, 310, 322, 21, "RECOVERY", "ms");
+j_rknob(6, 424, 322, 21, "DRIVE", "%");     j_rknob(13, 538, 322, 21, "WIDTH", "%");
+j_rknob(14, 652, 322, 21, "DRIFT", "%");    j_rknob(15, 766, 322, 21, "MIX", "%");
+j_rknob(17, 880, 322, 21, "LEVEL", "dB");
+
+// ---------- IN / OUT: trim (+ guard), saturation ----------
+ui_col(0x16181C); gfx_rect(937 * sc, 176 * sc, 1 * sc, 196 * sc);
+gfx_setfont(6, "Arial", 10 * sc, 'b'); gfx_measurestr("IN / OUT", j_tw_, j_th_);
+ui_col(j_PNL); gfx_rect(1051 * sc - j_tw_ * 0.5 - 6 * sc, 162 * sc, j_tw_ + 12 * sc, 12 * sc);
+j_ctxt(1051, 162, "IN / OUT", 10, 0.75);
+j_rknob(16, 994, 214, 21, "TRIM", "dB");
+j_rkey(1062, 259, 92, 30, "GUARD", slider32) ? ( slider32 = 1 - slider32; ui_auto(32); j_update(); );
+j_io_grd = in_grd > 0.05 ? 1 : j_io_grd * 0.85; in_grd = 0;
+j_io_grd > 0.1 && slider32 ? j_sled(1108, 300, 1, j_ORN);
+j_rknob(19, 994, 322, 21, "SAT", "%");
+
+pk_end();
+ui_end();
+0;
+);
+rg_cur ? j_gfx() : e_gfx();
+// the REGION keys (EUROPE / JAPAN), drawn over the panel at its top right
+function rg_key(x, y, w, h, on, s) local(hit, tw, th) (
+  hit = mouse_cap & 1 && !rg_down && mouse_x >= x && mouse_x < x + w && mouse_y >= y && mouse_y < y + h;
+  ui_col(0x101010); gfx_rect(x, y, w, h);
+  ui_col(on ? 0xE8C060 : 0x3A3A3E); gfx_rect(x + 1, y + 1, w - 2, h - 2);
+  gfx_setfont(1, "Arial", h * 0.62, 'b'); gfx_measurestr(s, tw, th); ui_col(on ? 0x101010 : 0xD8D8D8);
+  gfx_x = x + (w - tw) * 0.5; gfx_y = y + (h - th) * 0.5; gfx_drawstr(s);
+  hit;
+);
+rg_s = sc; rg_x = (ui_bw - 150) * rg_s; rg_y = 4 * rg_s;
+rg_key(rg_x, rg_y, 30 * rg_s, 16 * rg_s, slider35 < 0.5, "EU") ? ( slider35 = 0; slider_automate(2 ^ (35 - 1)); );
+rg_key(rg_x + 32 * rg_s, rg_y, 30 * rg_s, 16 * rg_s, slider35 >= 0.5, "JP") ? ( slider35 = 1; slider_automate(2 ^ (35 - 1)); );
+rg_down = mouse_cap & 1;
