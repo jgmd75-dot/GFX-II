@@ -88,12 +88,12 @@ function mu_slope(u) local(q) ( u = min(max(u, -3), 3); q = 9 - u * u; q * q / (
 // ---------- one valve channel: bias store(s), gain element, thump, DC blocker ----------
 // vf = the fast store (charged by the rectifier), vs = the slow store (charged from vf), vc = the bias in use
 // (in dB of gain reduction). Coefficients per channel (drift) in ka (attack), kf (fast release), ks (slow release).
-function mu_vca(x) instance(vc, vlp, dx, dy, gn) local(d, b, y) (
+function mu_vca(x) instance(vc, vlp, dx, dy, gn, tk) local(d, b, y) (
   d = mu_vd * (1 + vc * mu_vgd); b = mu_vb * (1 + vc * mu_vgb);
   y = (mu_sat(x * d + b) - mu_sat(b)) / (d * mu_slope(b));   // the valve's curve, unity small-signal slope
   y *= exp(-0.11512925465 * vc) * gn;                        // remote-cutoff gain: falls as the bias rises
   vlp += (vc - vlp) * mu_thc;
-  y += mu_thk * (vc - vlp);                                  // control-voltage thump (bias settling)
+  y += mu_thk * tk * (vc - vlp);                             // control-voltage thump (bias settling)
   dy = y - dx + mu_dcr * dy; dx = y;                         // DC blocker (even harmonics, thump)
   dy;
 );
@@ -114,13 +114,11 @@ function mu_cap(t, slope) instance(vc, vf, vs, ka, kf, ks) local(k) (
   vf > vs ? vs += mu_kcs * (vf - vs) : vs *= ks;
   vc = max(vf, mu_ws * vs);
 );
-// output iron: the low band saturates and gains a little weight; the vintage unit is gently band-limited
-function mu_iron(x) instance(lp, hp) local(lo, ls) (
+// output iron: the low band saturates and gains a little weight
+function mu_iron(x) instance(lp) local(lo, ls) (
   lp += (x - lp) * mu_ilc;
   lo = lp; ls = mu_sat(lo * mu_id) / mu_id;
-  x += ls - lo + lo * mu_ish;
-  mu_ihf ? ( hp += (x - hp) * mu_hfc; x = hp; );
-  x;
+  x + ls - lo + lo * mu_ish;
 );
 
 // ---------- parameters ----------
@@ -140,9 +138,9 @@ function mu_setup() local(tf, ts, tcs, rm, ta) (
               ( tf = 0.3;  mu_ws = 1; ts = 6; tcs = 0.4; );
     ta = 0.002;
     mu_hold ? ( tf = 1.6; mu_ws = 1; ts = 12; tcs = 0.35; mu_thr -= 8; ta = 0.003; );
-    mu_vd = mu_hold ? 0.42 : 0.18; mu_vgd = 0.1; mu_vb = mu_hold ? 0.16 : 0.06; mu_vgb = 0.1;
+    mu_vd = mu_hold ? 0.42 : 0.17; mu_vgd = 0.1; mu_vb = mu_hold ? 0.16 : 0.045; mu_vgb = 0.1;
     mu_thk = mu_hold ? 0.0008 : 0.0004;
-    mu_id = 1.2; mu_ish = 0.04; mu_ihf = 1;
+    mu_id = 1.2; mu_ish = 0.04;
     mu_hpa = mu_hpb = 0;
   ) : (
     mu_gin = mu_db2g(slider9); mu_thr = slider10; mu_hold = 0; mu_gout = mu_db2g(slider20);
@@ -152,12 +150,13 @@ function mu_setup() local(tf, ts, tcs, rm, ta) (
     ta = slider11 / 1000;
     mu_vd = 0.1; mu_vgd = 0.08; mu_vb = 0.03; mu_vgb = 0.08;
     mu_thk = 0.0001;
-    mu_id = 0.6 + 2 * slider18 / 100; mu_ish = 0.12 * slider18 / 100; mu_ihf = 0;
+    mu_id = 0.6 + 2 * slider18 / 100; mu_ish = 0.12 * slider18 / 100;
     mu_hpa = slider14 | 0; mu_hpb = slider15 | 0;
     mu_hpa != mu_hpal ? ( mu_hpal = mu_hpa; mu_hpa ? hpA.bq_set(1, mu_hpf(mu_hpa), 0.707, 0); );
     mu_hpb != mu_hpbl ? ( mu_hpbl = mu_hpb; mu_hpb ? hpB.bq_set(1, mu_hpf(mu_hpb), 0.707, 0); );
   );
   mu_kh = mu_kn * 0.5;
+  mA.tk = 1; mB.tk = !mu_ms;                                     // M-S: no thump on the side valve (no side from mono)
   mA.ka = mB.ka = mu_tc(ta);
   mA.kf = exp(-1 / (tf * mu_rmA * srate)); mB.kf = exp(-1 / (tf * mu_rmB * srate));
   mA.ks = mB.ks = exp(-1 / (ts * srate)); mu_kcs = mu_tc(tcs);
@@ -195,7 +194,6 @@ mu_rmA = mu_rmB = 1;
 mu_thc = 1 - exp(-2 * $pi * 15 / srate);
 mu_dcr = exp(-2 * $pi * 4 / srate);
 mu_ilc = 1 - exp(-2 * $pi * 120 / srate);
-mu_hfc = 1 - exp(-2 * $pi * 16000 / srate);
 mu_smc = 1 - exp(-1 / (0.03 * srate));
 mA.gn = mB.gn = 1;
 // drift: wandering sources, and each channel's fixed mismatch (the pair of valves never match exactly)
@@ -241,7 +239,6 @@ abs(mA.vs) < 0.0000001 ? mA.vs = 0; abs(mB.vs) < 0.0000001 ? mB.vs = 0;
 abs(mA.vlp) < 0.0000001 ? mA.vlp = 0; abs(mB.vlp) < 0.0000001 ? mB.vlp = 0;
 abs(mA.dy) < 0.000000001 ? mA.dy = 0; abs(mB.dy) < 0.000000001 ? mB.dy = 0;
 abs(iL.lp) < 0.000000001 ? iL.lp = 0; abs(iR.lp) < 0.000000001 ? iR.lp = 0;
-abs(iL.hp) < 0.000000001 ? iL.hp = 0; abs(iR.hp) < 0.000000001 ? iR.hp = 0;
 abs(hpA.y1) + abs(hpA.y2) < 0.000000001 ? hpA.y1 = hpA.y2 = 0;
 abs(hpB.y1) + abs(hpB.y2) < 0.000000001 ? hpB.y1 = hpB.y2 = 0;
 abs(mu_vy0) + abs(mu_vv0) < 0.000000001 ? mu_vy0 = mu_vv0 = 0;
