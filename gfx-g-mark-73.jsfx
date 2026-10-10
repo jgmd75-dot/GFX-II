@@ -77,7 +77,7 @@ slider22:6000<2000,16000,10>-Sat high band (Hz)
 slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
 slider25:0<0,16,1>-MIDI channel (0 = omni)
-slider26:50<0,100,1>-Bell (%)
+slider26:40<0,100,1>-Bell (%)
 
 in_pin:none
 out_pin:left output
@@ -89,13 +89,13 @@ ext_noinit = 1;
 
 // ---------- memory ----------
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // 20000 - 24095
-MKV = 30000; MKVS = 110; MKNV = 36;                         // 36 voice slots x 110 (32 playable + 4 for stolen fades)
-MKHL = 34000; MKHR = 34100;                                 // half-band decimator rings (64 each)
-MKDEF = 34200;                                              // the Init values of sliders 1-18
-MKTMP = 34300;                                              // preset parser scratch (400)
+MKV = 30000; MKVS = 124; MKNV = 36;                         // 36 voice slots x 124 (32 playable + 4 for stolen fades)
+MKHL = 35000; MKHR = 35100;                                 // half-band decimator rings (64 each)
+MKDEF = 35200;                                              // the Init values of sliders 1-18
+MKTMP = 35300;                                              // preset parser scratch (400)
 memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 
-// voice slots (p = MKV + 110 * v):
+// voice slots (p = MKV + 124 * v):
 //   0 on   1 note   2 age   3 key held   4 held by the pedal   5 dampers down   6 velocity 0..1   7 hammer samples left
 //   8 hammer position   9 hammer velocity   10 T / hammer mass   11 felt K   12 felt exponent p   13 felt loss
 //   14 gain L   15 gain R   16 cos(w) of the fundamental   17 pickup offset (rest position across the pole)   18 output norm
@@ -107,13 +107,36 @@ memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64);
 //   40 + 10 k   tine mode k (0..4): y1, y2, a1, a2, force gain, tip weight, half-step h1, h2, angle, r
 //   90 + k      mode shape at the strike point      95 + k   r while the dampers are up
 //   100 clink: last high-mode tip position   101 clink gain
+//   102 + 8 j   horizontal polarisation of mode j (0 = fundamental, 1 = bell): y1, y2, a1, a2, force gain, h1, h2, angle
+//   118 horizontal pickup offset   119 circle term 1 / (2 x tine radius)
+//   120 modes still computed (the clink and then the bell stop being computed once they have died away)
+//   121 samples since the strike   122 when the bell has died (samples)
 
 function mk_hash(n, k) local(v) ( v = sin(n * 12.9898 + k * 78.233 + 0.5) * 43758.5453; v - floor(v); );
 
 // ---------- the flux curve of the pickup and its slope ----------
-function mk_flux(z) ( 1 / (1 + z * z); );
-function mk_slope(z) ( 2 * z / sqr(1 + z * z); );            // |d flux / dz|
-function mk_curv(z) ( (6 * z * z - 2) / (1 + z * z) ^ 3; );     // d2 flux / dz2 (the octave)
+// a magnetic-monopole / cylindrical-magnet field: B = d / (rho^2 + d^2 + a^2)^1.5 for the tip at lateral offset rho
+// and distance d (a = the pole's radius, which rounds the peak; the tails are heavier than a Gaussian's)
+function mk_flux(x, y, d) local(s) ( s = 1 / (x * x + y * y + d * d + mk_a2); d * s * sqrt(s); );
+function mk_slope(x) local(c) ( c = mk_d0 * mk_d0 + mk_a2; abs(3 * mk_d0 * x * (x * x + c) ^ -2.5); );               // |d flux / dx|
+function mk_curv(x) local(c) ( c = mk_d0 * mk_d0 + mk_a2; 3 * mk_d0 * (x * x + c) ^ -3.5 * (4 * x * x - c); );       // d2 flux / dx2 (the octave)
+// clamped-free beam mode shape k (0..4) at xi along the tine (0 = clamp)
+function mk_phi(k, xi) local(b, sg, z, ch, sh) (
+  b = k == 0 ? 1.8751 : k == 1 ? 4.6941 : k == 2 ? 7.8548 : k == 3 ? 10.9955 : 14.1372;
+  ch = 0.5 * (exp(b) + exp(-b)); sh = 0.5 * (exp(b) - exp(-b));
+  sg = (ch + cos(b)) / (sh + sin(b)); z = b * xi;
+  ch = 0.5 * (exp(z) + exp(-z)); sh = 0.5 * (exp(z) - exp(-z));
+  ch - cos(z) - sg * (sh - sin(z));
+);
+// measured fundamental decay (T60, s) against the key, from the Q of a 1974 stage piano (tau = Q / (pi f0))
+function mk_t60(n) local(i, x0, x1) (
+  n = min(max(n, 28), 108);
+  i = n < 40 ? 0 : n < 52 ? 1 : n < 58 ? 2 : n < 64 ? 3 : n < 76 ? 4 : n < 88 ? 5 : n < 100 ? 6 : 7;
+  x0 = i == 0 ? 28 : i == 1 ? 40 : i == 2 ? 52 : i == 3 ? 58 : i == 4 ? 64 : i == 5 ? 76 : i == 6 ? 88 : 100;
+  x1 = i == 0 ? 40 : i == 1 ? 52 : i == 2 ? 58 : i == 3 ? 64 : i == 4 ? 76 : i == 5 ? 88 : i == 6 ? 100 : 108;
+  exp(log(i == 0 ? 40 : i == 1 ? 27 : i == 2 ? 11 : i == 3 ? 9 : i == 4 ? 10.5 : i == 5 ? 7.6 : i == 6 ? 3.1 : 1.4) * (x1 - n) / (x1 - x0)
+    + log(i == 0 ? 27 : i == 1 ? 11 : i == 2 ? 9 : i == 3 ? 10.5 : i == 4 ? 7.6 : i == 5 ? 3.1 : i == 6 ? 1.4 : 0.9) * (n - x0) / (x1 - x0));
+);
 
 // ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
 #mk_def = "50 40 50 50 50 0 0 4.5 70 30 16 0 0.5 0 0 35 25 0";
@@ -139,24 +162,24 @@ mk_nums(#mk_def, MKDEF);
 
 #mk_pm = "Init|Stage Mark|Bright Stage|Mellow Ballad|Suitcase Tremolo|Auto Pan Wide|Bark & Bite|Bell Tines|Soft Felt|Drive Amp|Gospel Bark|Lo-Fi Upright|Dyno Bright|Dark Ballad";
 function mk_pstr(p) (
-  p == 2  ? "1:55 3:55 4:55 9:72 10:25" :
-  p == 3  ? "1:45 3:78 4:56 5:42 6:4 9:78 10:35 14:6 26:62 18:-0.7" :
-  p == 4  ? "1:70 2:55 3:25 4:28 5:62 6:-3 9:62 10:30 16:25 26:40 18:-1.1" :
-  p == 5  ? "1:60 3:50 4:50 6:2 7:55 8:4.8 15:1 10:20 18:1.0" :
-  p == 6  ? "1:60 3:48 4:46 6:3 7:-85 8:3.2 15:1 10:0" :
-  p == 7  ? "1:45 2:30 3:72 4:64 5:22 9:90 14:22 6:2 18:2.2" :
-  p == 8  ? "1:55 3:88 4:36 5:55 6:5 9:72 10:45 26:85 18:-4.4" :
-  p == 9  ? "1:60 2:55 3:8 4:32 5:65 6:-5 9:55 16:20 26:30 18:-1.0" :
-  p == 10 ? "1:50 3:62 4:58 5:38 9:82 14:65 15:1 7:30 8:5.6 6:1 18:-3.1" :
-  p == 11 ? "1:58 3:65 4:62 5:28 9:88 14:30 15:1 7:20 8:6.2 6:3 18:-0.8" :
-  p == 12 ? "1:35 2:30 3:40 4:50 6:-7 7:22 8:6.8 15:1 13:6 17:70 10:10 16:60" :
-  p == 13 ? "1:50 3:68 4:90 5:48 6:3 9:78 10:35 26:70" :
+  p == 2  ? "1:60 3:40 4:42 5:55 9:72 10:25 26:35" :
+  p == 3  ? "1:50 3:65 4:52 5:45 6:4 9:78 10:35 14:6 26:50" :
+  p == 4  ? "1:70 2:55 3:22 4:18 5:62 6:-3 9:62 10:30 16:20 26:28 18:-1.7" :
+  p == 5  ? "1:66 3:35 4:30 5:56 7:55 8:4.8 15:1 10:20 26:32" :
+  p == 6  ? "1:66 3:35 4:32 5:56 6:1 7:-85 8:3.2 15:1 10:0 26:32" :
+  p == 7  ? "1:50 2:35 3:60 4:58 5:30 9:90 14:22 6:1 26:35" :
+  p == 8  ? "1:60 3:72 4:30 5:55 6:4 9:72 10:45 26:80 18:-0.7" :
+  p == 9  ? "1:66 2:55 3:8 4:24 5:65 6:-5 9:55 16:18 26:25 18:-1.5" :
+  p == 10 ? "1:55 3:50 4:48 5:42 9:82 14:65 15:1 7:30 8:5.6 26:30 18:-4" :
+  p == 11 ? "1:60 3:58 4:56 5:32 9:88 14:30 15:1 7:20 8:6.2 6:2 26:35 18:-1.9" :
+  p == 12 ? "1:40 2:30 3:30 4:35 6:-7 7:22 8:6.8 15:1 13:6 17:70 10:10 16:60 26:30" :
+  p == 13 ? "1:55 3:60 4:90 5:52 6:2 9:78 10:35 26:55 18:2.3" :
   p == 14 ? "1:72 2:58 3:22 4:6 5:58 6:-4 9:66 10:28 15:1 16:20 26:25 18:-4.6" :
   "";
 );
 function load_preset(p) local(n, i) (
   i = 0; loop(18, slider(i + 1) = MKDEF[i]; i += 1; );
-  slider26 = 50;
+  slider26 = 40;
   n = mk_nums(mk_pstr(p), MKTMP);
   i = 0; loop(floor(n / 2), (MKTMP[i * 2] >= 1 && MKTMP[i * 2] <= 18) || MKTMP[i * 2] == 26 ? slider(MKTMP[i * 2]) = MKTMP[i * 2 + 1]; i += 1; );
   i = 1; loop(18, ui_auto(i); i += 1; ); ui_auto(26);
@@ -197,14 +220,24 @@ function mk_coefs(p, pitch) local(k, q, w, r, h) (
   mk_drag(p);
   w = p[27] * pitch; r = p[28];
   p[23] = 2 * r * cos(w); p[24] = r * r;
+  // the horizontal polarisations share their vertical partner's damping
+  k = 0; q = p + 102;
+  loop(min(p[20], 2),
+    w = q[7] * pitch; r = p[49 + 10 * k];
+    q[2] = 2 * r * cos(w); q[3] = r * r;
+    h = p[45 + 10 * k] / (2 * sqrt(r) * cos(0.5 * w)); q[5] = h; q[6] = h * r;
+    q += 8; k += 1;
+  );
 );
 
 function mk_r(t60) ( exp(-6.9078 / (max(t60, 0.002) * srate)); );
 
 // ---------- note on: the hammer flies at a (re)built tine ----------
-function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, q, ph, pt, R, T, A, off, tc, pe, cmax, v0, xr, s0, g, mu, dt, cHz, Tb, J) (
+function mk_strike(p, n, vel, fresh) local(tr, kt, u, xi, mh, h1, h2, h3, h4, h5, f, w, i, q, ph, pt, R, T, A, off, tc, pe, cmax, v0, xr, s0, g, mu, dt, cHz, Tb, J, ef, dh) (
   tr = min(max((n - 21) / 87, 0), 1);              // 0 = A0 .. 1 = C8
   kt = (n - 60) / 12;                               // octaves from middle C
+  u = min(max((n - 29) / 74, 0), 1);                // 0 = the lowest F .. 1 = the top: tine length / tuning-spring weight
+  xi = 0.18 - 0.08 * tr;                            // strike point (fraction of the length): nearer the base in the treble
   h1 = mk_hash(n, 1); h2 = mk_hash(n, 2); h3 = mk_hash(n, 3); h4 = mk_hash(n, 4); h5 = mk_hash(n, 5);
   v0 = mk_vcurve(vel);
   p[6] = vel / 127;
@@ -213,23 +246,25 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
     f = 440 * 2 ^ ((n - 69 + (h1 - 0.5) * 0.006 + (rand(2) - 1) * (mk_rnd + mk_drift * 3) / 100) / 12) * mk_fine;   // key +/-0.3 ct, RANDOM, DRIFT half the house amount
     p[1] = n;
     p[20] = 0;
-    T = mk_dec * 9 * 2 ^ (-kt / 2.0) * (0.85 + 0.3 * h2);            // fundamental T60 (s)
-    T = min(max(T, 0.35), 30);
+    T = mk_dec * mk_t60(n) * (0.88 + 0.24 * h2);                       // fundamental T60 (s), measured curve
+    T = min(max(T, 0.35), 45);
     i = 0; q = p + 40;
     loop(5,
-      R = i == 0 ? 1 : i == 1 ? (6.62 + 0.42 * tr) * (1 + (h3 - 0.5) * 0.03) : i == 2 ? 18.1 * (1 + (h4 - 0.5) * 0.03) :
-          i == 3 ? 35.6 * (1 + (h5 - 0.5) * 0.03) : 58.6;
+      // measured on a real low F: 7.11 x and 20.25 x (the tuning spring lifts them off the bare beam's 6.27 / 17.55);
+      // shorter treble tines with a relatively heavier spring push them a little higher still
+      R = i == 0 ? 1 : i == 1 ? 7.11 * (1 + 0.09 * u) * (1 + (h3 - 0.5) * 0.02) : i == 2 ? 20.25 * (1 + 0.11 * u) * (1 + (h4 - 0.5) * 0.02) :
+          i == 3 ? 40.0 * (1 + 0.12 * u) * (1 + (h5 - 0.5) * 0.02) : 66.0 * (1 + 0.12 * u);
       w = 2 * $pi * f * R / srate;
       w < 0.78 * $pi && f * R < 17000 ? (
         // decay of this mode: the fundamental sings, the bell (mode 2) rings, modes 3-5 are the hammer clink
         ph = i == 0 ? T : (i == 1 ? 1.15 : i == 2 ? 0.30 : i == 3 ? 0.07 : 0.04) * 2 ^ (-kt / 1.5) * (0.8 + 0.4 * mk_hash(n, 10 + i)) * sqrt(mk_dec);
         ph = min(ph, T);
-        q[8] = w; q[9] = mk_r(ph); p[95 + i] = q[9];
+        q[8] = w; q[9] = mk_r(ph); p[95 + i] = q[9]; i == 1 ? mk_r_t60b = ph;
         // mode shape at the strike point (clamped-free cantilever struck near the clamp), key-to-key spread
-        p[90 + i] = (i == 0 ? 0.070 : i == 1 ? 0.36 : i == 2 ? 0.83 : i == 3 ? 1.25 : 1.45) * (i ? 0.85 + 0.3 * mk_hash(n, 20 + i) : 1);
+        p[90 + i] = mk_phi(i, xi) * (i ? 0.85 + 0.3 * mk_hash(n, 20 + i) : 1);
         q[4] = p[90 + i] * sin(w) / (2 * $pi * f * R * srate);                // force (one sample) -> modal displacement
-        // how much of each mode the tip shows (the tuning spring and the taper): the bell is brighter in the treble
-        pt = i == 0 ? 1 : i == 1 ? (0.2 + 0.8 * tr ^ 1.2) * (0.8 + 0.4 * mk_hash(n, 30)) * mk_bell : (i == 2 ? 0.2 : i == 3 ? 0.11 : 0.07) * mk_tclk;
+        // how much of each mode the tip shows (the tuning spring and the taper): the treble partials are weaker
+        pt = i == 0 ? 1 : i == 1 ? 1.5 * (1 + 0.3 * u) * (0.8 + 0.4 * mk_hash(n, 30)) * mk_bell : (i == 2 ? 0.2 : i == 3 ? 0.11 : 0.07) * (1 - 0.5 * u) * mk_tclk;
         q[5] = (i % 2 ? -2 : 2) * pt;                                   // (scaled by the pickup gain below)
         q[0] = q[1] = 0;
         p[20] += 1;
@@ -237,31 +272,48 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
       q += 10; i += 1;
     );
     // ----- the hammer: neoprene / felt contact -----
+    // Hunt-Crossley contact F = k x^2.8 (1 + mu dx/dt); an 11 g hammer (velocity 127 = full speed, ~4 m/s) against
+    // the tine's modal mass (a quarter of a tine of ~8 g in the bass, ~1 g at the top); the tip is stiffer in the treble
     tc = (0.95 - 0.7 * mk_hard) * 2 ^ (-kt / 1.8) * 0.001;               // contact time (s) at full speed
     tc = min(max(tc, 0.00035), 0.009);
-    pe = 2.2 + 1.2 * mk_hard;                                            // felt exponent
+    pe = 2.8;
+    mh = min(max(5.5 * 2 ^ ((n - 40) / 24), 3), 30);                     // hammer mass / tine modal mass
     J = 1.402 - 0.091 * (pe - 2);
     cmax = tc / (2 * J);
-    p[12] = pe; p[11] = (pe + 1) * 3 / (2 * cmax ^ (pe + 1)); p[10] = 1 / (3 * srate);   // hammer mass 3 (modal mass 1)
-    p[13] = 0.18 + 0.25 * (1 - mk_hard);                                 // felt loss (Hunt-Crossley)
-    p[29] = mk_mech * 0.055 * tc / 3;                                    // hammer thump (from the contact force)
+    p[12] = pe; p[11] = (pe + 1) * mh / (2 * cmax ^ (pe + 1)); p[10] = 1 / (mh * srate);
+    p[13] = 0.18 + 0.25 * (1 - mk_hard);                                 // felt loss (Hunt-Crossley mu)
+    p[29] = mk_mech * 0.055 * tc / mh;                                   // hammer thump (from the contact force)
     // ----- the pickup: swing at full speed in pole widths, rest offset, output norm -----
-    A = (2.3 - 1.55 * tr) * mk_swing * (0.92 + 0.16 * h4) * (0.79 + 0.3 * mk_vsens);
+    A = (2.3 - 1.55 * tr) * (0.92 + 0.16 * h4) * (0.79 + 0.3 * mk_vsens);
     off = mk_off0 * (1 + (h5 - 0.5) * 0.12 + (tr - 0.5) * 0.15);
     p[38] = off; p[17] = off;
-    xr = 2 * 0.070 * 2 * 3 * 0.85 / (2 * $pi * f);                         // tip swing of the fundamental at full speed
+    p[118] = (mk_hash(n, 40) - 0.5) * 0.24;                               // the tine sits a hair off the pole sideways too
+    p[119] = 1 / (2 * (9 - 4 * tr));                                      // the tip moves on a circle about the clamp
+    xr = 2 * p[90] * 2 * mh * 0.85 / (2 * $pi * f);                       // tip swing of the fundamental at full speed
     g = A / xr;
     q = p + 40; loop(p[20], q[5] *= g; q += 10; );
     // output norm: the level of the fundamental and the octave at a medium swing, so VOICING changes the colour, not the level
     xr = 0.45 * A;
-    p[18] = 0.22 * 0.45 * (1 - 0.22 * tr) * (0.94 + 0.12 * h3) / (sqrt(sqr(mk_slope(off) * xr) + sqr(mk_curv(off) * xr * xr * 0.5)) * $pi * f / srate);
-    p[19] = mk_flux(off);
+    p[18] = 0.31 * 0.45 * (1 - 0.22 * tr) * (0.94 + 0.12 * h3) / (sqrt(sqr(mk_slope(off) * xr) + sqr(mk_curv(off) * xr * xr * 0.5)) * $pi * f / srate);
+    p[18] *= (n & 1) ? -1 : 1;                                            // the pickups alternate polarity key to key (hum-cancelling)
+    p[19] = mk_flux(off, p[118], mk_d0);
+    // ----- the horizontal polarisation of the fundamental and the bell: a weaker, slightly detuned twin, so the tip
+    // traces a slowly precessing ellipse in front of the pole (the timbre turns over without any pitch change)
+    ef = (0.08 + 0.17 * mk_hash(n, 41)) * mk_thor;                         // how much of the blow goes sideways
+    dh = (0.05 + 0.25 * mk_hash(n, 42)) * (mk_hash(n, 43) > 0.5 ? 1 : -1);  // detune (Hz)
+    i = 0; q = p + 102;
+    loop(min(p[20], 2),
+      q[0] = q[1] = 0;
+      q[7] = p[48 + 10 * i] + 2 * $pi * dh * (i ? 3 : 1) / srate;
+      q[4] = p[44 + 10 * i] * ef;
+      q += 8; i += 1;
+    );
     // ----- the tonebar: a heavy resonator a fraction of a hertz off the tine, lightly coupled -----
     mu = 5;
     // designed from the beat it should give: a slow rate (0.3 - 1 Hz, slower in the bass) and a gentle 1 - 2 dB swell on
     // the fundamental, kept small enough that the two coupled modes never read as a pitch wobble (< ~0.35 cent)
     dt = 0.3 + (0.25 + 0.45 * tr) * h2;                                  // beat rate (Hz)
-    cHz = 10 ^ ((1 + h3) / 20); cHz = (cHz - 1) / (cHz + 1);             // tonebar share of the tine motion (b / a)
+    cHz = 10 ^ ((0.5 + 0.5 * h3) / 20); cHz = (cHz - 1) / (cHz + 1);     // tonebar share of the tine motion (b / a): subtle
     cHz = min(cHz, 0.35 / 1731 * f / dt);
     cHz = 0.5 * tan(2 * atan(sqrt(cHz)));                                 // coupling / detune ratio
     dt /= sqrt(1 + 4 * cHz * cHz);                                        // detune (Hz)
@@ -279,7 +331,8 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
     p[36] = 1 + 1.2 * (1 - tr);                                           // bass dampers are slower
     p[33] = mk_symk * 2 * $pi * f / srate / max(abs(p[45]), 0.000001);
     p[32] = 0; p[34] = 0;
-    p[100] = 0; p[101] = mk_ckg * p[18] * max(mk_slope(off), 0.35) * (0.3 + 2 * mk_mech) * min(max(2 ^ (1.8 * kt), 0.25), 6);   // the clink layer (hammer tick)
+    p[122] = srate * min(2 * mk_r_t60b, 6);
+    p[100] = 0; p[101] = mk_ckg * p[18] * max(mk_slope(off), 0.35 * mk_slope(0.53)) * (0.3 + 2 * mk_mech) * min(max(2 ^ (1.8 * kt), 0.25), 6);   // the clink layer (hammer tick)
   ) : (
     // the same key struck again while it rings: the dampers come up, the hammer meets the moving tine
     i = 0; q = p + 40; loop(p[20], q[9] = p[95 + i]; q += 10; i += 1; );
@@ -289,6 +342,7 @@ function mk_strike(p, n, vel, fresh) local(tr, kt, h1, h2, h3, h4, h5, f, w, i, 
   s0 = 0; i = 0; q = p + 40; loop(p[20], s0 += p[90 + i] * q[0]; q += 10; i += 1; );
   p[8] = s0; p[9] = v0 * 1; p[34] = s0;
   p[7] = floor(0.03 * srate);
+  p[120] = p[20]; p[121] = 0;
   p[0] = 1; p[3] = 1; p[4] = 0; p[5] = 0; p[31] = 0;
   mk_coefs(p, mk_ptch);
 );
@@ -314,6 +368,7 @@ function mk_alloc() local(i, p, best, ba, nact) (
 
 function mk_release(p) local(q, i) (
   p[5] = 1; p[3] = 0; p[4] = 0;
+  p[120] = p[20]; p[121] = 0.2 * srate; p[122] = 0.6 * srate;     // the damper tick rings the high modes again
   // the damper felt touches the tine: a soft tick into the tine modes
   q = p + 40; i = 0;
   loop(p[20], q[0] -= q[4] * mk_mech * 0.012 * 3 * srate * (q[0] - q[1] > 0 ? 1 : -1) * p[6] * (i ? 0.4 : 1); q += 10; i += 1; );
@@ -341,16 +396,19 @@ function mk_pedal_up() local(i, p) (
 );
 function mk_all_off() ( memset(MKV, 0, MKVS * MKNV); mk_pedal = 0; );
 
-// half-band decimator (55 taps): ring[(w - j) & 63], newest 2x sample at j = 0
+// half-band decimator (39 taps, equiripple, > 63 dB stop band): ring[(w - j) & 63], newest 2x sample at j = 0
 function mk_hb(b, w) (
-  0.4999981 * b[(w - 27) & 63]
-  + 0.3164612056 * (b[(w - 26) & 63] + b[(w - 28) & 63]) - 0.1006737700 * (b[(w - 24) & 63] + b[(w - 30) & 63])
-  + 0.0549772033 * (b[(w - 22) & 63] + b[(w - 32) & 63]) - 0.0340332202 * (b[(w - 20) & 63] + b[(w - 34) & 63])
-  + 0.0217907704 * (b[(w - 18) & 63] + b[(w - 36) & 63]) - 0.0138908563 * (b[(w - 16) & 63] + b[(w - 38) & 63])
-  + 0.0086223983 * (b[(w - 14) & 63] + b[(w - 40) & 63]) - 0.0051233702 * (b[(w - 12) & 63] + b[(w - 42) & 63])
-  + 0.0028654696 * (b[(w - 10) & 63] + b[(w - 44) & 63]) - 0.0014778311 * (b[(w - 8) & 63]  + b[(w - 46) & 63])
-  + 0.0006820495 * (b[(w - 6) & 63]  + b[(w - 48) & 63]) - 0.0002672723 * (b[(w - 4) & 63]  + b[(w - 50) & 63])
-  + 0.0000789506 * (b[(w - 2) & 63]  + b[(w - 52) & 63]) - 0.0000107803 * (b[(w - 0) & 63]  + b[(w - 54) & 63]);
+  0.5003175242 * b[(w - 19) & 63]
+  + 0.3165830275 * (b[(w - 18) & 63] + b[(w - 20) & 63])
+  - 0.1004920620 * (b[(w - 16) & 63] + b[(w - 22) & 63])
+  + 0.0546158895 * (b[(w - 14) & 63] + b[(w - 24) & 63])
+  - 0.0335169601 * (b[(w - 12) & 63] + b[(w - 26) & 63])
+  + 0.0211574377 * (b[(w - 10) & 63] + b[(w - 28) & 63])
+  - 0.0131712778 * (b[(w - 8) & 63] + b[(w - 30) & 63])
+  + 0.0078701971 * (b[(w - 6) & 63] + b[(w - 32) & 63])
+  - 0.0043811777 * (b[(w - 4) & 63] + b[(w - 34) & 63])
+  + 0.0021893628 * (b[(w - 2) & 63] + b[(w - 36) & 63])
+  - 0.0010131992 * (b[(w - 0) & 63] + b[(w - 38) & 63]);
 );
 
 // ---------- parameters ----------
@@ -360,7 +418,8 @@ function update() (
   mk_hard = slider3 / 100;
   mk_off0 = 0.015 + 1.185 * (1 - slider4 / 100) ^ 1.45;      // tine rest across the pole: far off-axis (dark) .. inline (dyno)
   mk_bell = (slider26 / 50) ^ 1.5;
-  mk_swing = 2 ^ ((0.5 - slider5 / 100) * 1.6);            // GAP: near = wider swing in pole widths
+  mk_d0 = 2 ^ ((slider5 / 100 - 0.5) * 1.4);               // GAP: the pole's distance from the tine tip (1 = standard)
+  mk_a2 = 0.12;                                              // (pole radius)^2: the magnet tip's own size
   mk_treb = slider6;
   mk_mod = slider7 / 100; mk_rate = slider8;
   mk_vsens = slider9 / 100; mk_width = slider10 / 100;
@@ -423,7 +482,7 @@ function mk_tone() local(f) (
 );
 
 ins_drift_init();
-mk_tcpl = 1; mk_tclk = 1;                                  // test hooks: tonebar coupling, clink modes (1 = as designed)
+mk_tcpl = 1; mk_tclk = 1; mk_thor = 1;                     // test hooks: tonebar coupling, clink modes, horizontal (1 = as designed)
 mk_symk = 0.00012;                                         // sympathetic coupling between undamped tines
 mk_pedal = 0; mk_age = 0; mk_kn = 0; mk_hw = 0; mk_lph = 0; mk_rail = 0; mk_pk = 0;
 mk_dcxl = mk_dcyl = mk_dcxr = mk_dcyr = 0; mk_ptch = 1; mk_bu1 = mk_bu2 = 0.5; mk_adn = 0.000000000000000001;
@@ -474,6 +533,13 @@ loop(MKNV,
         mk_q += 10; mk_k += 1;
       );
       mk_rt = mk_r(mk_p[31] ? 0.025 : mk_relt * mk_p[36] * 2.5); mk_rt < mk_p[28] ? mk_p[28] += (mk_rt - mk_p[28]) * mk_ramp;
+    );
+    // stop computing the clink modes after 0.35 s and the bell once it has died away (zeroed so they restart clean)
+    mk_p[121] += samplesblock;
+    mk_n = mk_p[121] > mk_p[122] ? 1 : mk_p[121] > 0.35 * srate ? min(mk_p[20], 2) : mk_p[20];
+    mk_n < mk_p[120] ? (
+      mk_k = mk_n; loop(mk_p[120] - mk_n, mk_p[40 + 10 * mk_k] = mk_p[41 + 10 * mk_k] = 0; mk_k < 2 ? mk_p[102 + 8 * mk_k] = mk_p[103 + 8 * mk_k] = 0; mk_k += 1; );
+      mk_p[120] = mk_n;
     );
     mk_p[17] = mk_p[38] * (1 + ins_cut * 0.05);            // the pickup alignment breathes (DRIFT)
     mk_coefs(mk_p, mk_ptch);
@@ -532,7 +598,7 @@ loop(MKNV,
     mk_xt = mk_q[5] * mk_y;
     // ----- the higher tine modes: 1 = the bell, 2 - 4 = the clink -----
     mk_xh = 0; mk_k = 0;
-    loop(mk_p[20] - 1,
+    loop(mk_p[120] - 1,
       mk_q += 10; mk_k += 1;
       mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F;
       mk_xm += mk_q[6] * mk_y + mk_q[7] * mk_q[0];
@@ -541,11 +607,23 @@ loop(MKNV,
       mk_k > 1 ? mk_xh += mk_q[5] * mk_y;
     );
     // the clink: the short bright high modes also heard directly (the hammer tick), velocity-shaped by the contact
-    mk_ck = (mk_xh - mk_p[100]) * mk_p[101] * 0.5; mk_p[100] = mk_xh;
-    // ----- the pickup at 2x: flux of the tip position, its rate of change -----
-    mk_z = mk_xm + mk_p[17]; mk_flm = 1 / (1 + mk_z * mk_z);
-    mk_z = mk_xt + mk_p[17]; mk_fl = 1 / (1 + mk_z * mk_z);
-    mk_o0 = (mk_flm - mk_p[19]) * mk_p[18]; mk_o1 = (mk_fl - mk_flm) * mk_p[18];
+    mk_p[120] > 2 ? ( mk_ck = (mk_xh - mk_p[100]) * mk_p[101] * 0.5; mk_p[100] = mk_xh; ) : mk_ck = 0;
+    // ----- the horizontal polarisations (fundamental, bell) -----
+    mk_q = mk_p + 102;
+    mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F;
+    mk_ym = mk_q[5] * mk_y + mk_q[6] * mk_q[0]; mk_q[1] = mk_q[0]; mk_q[0] = mk_y; mk_yt = mk_p[45] * mk_y;
+    mk_p[120] > 1 ? (
+      mk_q += 8;
+      mk_y = mk_q[2] * mk_q[0] - mk_q[3] * mk_q[1] + mk_q[4] * mk_F;
+      mk_ym += mk_q[5] * mk_y + mk_q[6] * mk_q[0]; mk_q[1] = mk_q[0]; mk_q[0] = mk_y; mk_yt += mk_p[55] * mk_y;
+    );
+    // ----- the pickup at 2x: the 2D tip position against the pole (on its circle about the clamp), flux, d/dt -----
+    mk_ox = mk_p[17]; mk_oy = mk_p[118]; mk_ic = mk_p[119]; mk_nr = mk_p[18];
+    mk_x = mk_xm + mk_ox; mk_yy = mk_ym + mk_oy; mk_dz = mk_d0 - (mk_xm * mk_xm + mk_ym * mk_ym) * mk_ic;
+    mk_s = 1 / (mk_x * mk_x + mk_yy * mk_yy + mk_dz * mk_dz + mk_a2); mk_flm = mk_dz * mk_s * sqrt(mk_s);
+    mk_x = mk_xt + mk_ox; mk_yy = mk_yt + mk_oy; mk_dz = mk_d0 - (mk_xt * mk_xt + mk_yt * mk_yt) * mk_ic;
+    mk_s = 1 / (mk_x * mk_x + mk_yy * mk_yy + mk_dz * mk_dz + mk_a2); mk_fl = mk_dz * mk_s * sqrt(mk_s);
+    mk_o0 = (mk_flm - mk_p[19]) * mk_nr; mk_o1 = (mk_fl - mk_flm) * mk_nr;
     mk_p[19] = mk_fl;
     mk_p[32] = mk_o1; mk_rsum += mk_o1;
     mk_o0 += mk_ck; mk_o1 += mk_ck;
@@ -688,7 +766,7 @@ ui_size_picker(1030 * sc, 21 * sc);
 mg_y = 82; mg_h = 160; mg_ky = mg_y + 84;
 mg_sect(14, mg_y, 330, mg_h, mg_s1, "HAMMER & TINES");
 mg_kn(56,  mg_ky, 24, 3, 0, 100, 50, 0, mg_cream, "HARDNESS", "%.0f%%");
-mg_kn(135, mg_ky, 24, 26, 0, 100, 50, 0, mg_acc, "BELL", "%.0f%%");
+mg_kn(135, mg_ky, 24, 26, 0, 100, 40, 0, mg_acc, "BELL", "%.0f%%");
 mg_kn(214, mg_ky, 24, 1, 0, 100, 50, 0, mg_cream, "DECAY", "%.0f%%");
 mg_kn(293, mg_ky, 24, 2, 0, 100, 40, 0, mg_cream, "RELEASE", "%.0f%%");
 
