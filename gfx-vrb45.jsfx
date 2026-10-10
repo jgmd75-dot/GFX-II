@@ -1,0 +1,954 @@
+desc:GFX VRB45 [reverb]
+//tags: reverb room plate hall gated reverse 3d early reflections broadcast 12-bit european japanese digital
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-bverb, gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel and gfx-lozenge (.jsfx-inc).
+//
+// VRB45: the 45 series digital reverbs, eight models in one - REGION (EU / JP keys at the top right) picks the
+// European or the Japanese rack, and each keeps its own panel and its own four models.
+//   EUROPEAN (80s broadcast reverbs): ROOM SIM (no modulation in the tail), BROADCAST (warm plate and hall),
+//     DIALOGUE (dense speech reverb), NON-LIN (gated / reverse).
+//   JAPANESE (80s studio and broadcast reverbs): HALL (massive modular hall), 3D (reflection engine), FLAGSHIP 40
+//     (40 reflections), 12-BIT (the pioneer).
+// The two share the reflection / reverb settings, filters, drive, clock, width, drift and the house input / output;
+// NON-LIN SHAPE belongs to the European rack and BITS to the Japanese.
+// Switching REGION fades out, starts the other rack clean and fades back in.
+
+slider1:0<0,3,1{Room Sim / Hall,Broadcast / 3D,Dialogue / Flagship 40,Non-Lin / 12-Bit}>-Model (European / Japanese)
+slider2:8<0,120,1>-1st reflection delay (ms)
+slider3:-6<-30,6,0.5>-1st reflection level (dB, -30 = off)
+slider4:24<0,250,1>-Reverb delay (ms)
+slider5:0<-30,6,0.5>-Reverb level (dB, -30 = off)
+slider6:2.4<0.1,20,0.05>-Reverb time (s)
+slider7:0.75<0.1,1.5,0.05>-Reverb time, high end (x)
+slider8:1.1<0.5,2.5,0.05>-Reverb time, low end (x)
+slider9:2000<10,12000,1>-Room size (m3)
+slider10:60<0,100,1>-Reflection density (%)
+slider11:60<0,100,1>-Diffusion (%)
+slider12:80<20,1000,1>-Lo cut (Hz)
+slider13:12000<1000,20000,10>-Hi cut (Hz)
+slider14:15<0,100,1>-Drive (%)
+slider15:0<0,1,1{Modern,Vintage}>-Clock
+slider16:1<0,2,1{Room,Gate,Reverse}>-Non-lin shape
+slider17:100<0,150,1>-Width (%)
+slider18:20<0,100,1>-Drift (%)
+slider19:0.15<0.02,2,0.01>-Drift speed (Hz)
+slider20:30<0,100,1>-Mix (%)
+slider21:0<-24,12,0.1>-Output (dB)
+slider22:0<0,100,1>-Band sat (%)
+slider23:30<0,100,1>-Bias (%)
+slider24:120<40,400,1>-Sat low band (Hz)
+slider25:6000<2000,16000,10>-Sat high band (Hz)
+slider26:-0.3<-24,0,0.1>-(unused, was output ceiling)
+slider27:1<0,1,1{Off,Clip}>-(unused, was output stage)
+slider28:0<-24,12,0.1>-Input trim (dB)
+slider29:0<0,1,1{Off,On}>-Input guard
+slider30:0<0,2,1{12,16,24}>-Bits (vintage, Japanese)
+slider31:0<0,1,1{European,Japanese}>-Region
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-lozenge.jsfx-inc
+import gfx-bverb.jsfx-inc
+
+@init
+ext_noinit = 1;
+
+// ======================== European: initialisation and functions ========================
+function e_er_room(e_sz, e_dens, e_ear) local(e_el, e_er_, Lx, Ly, e_Lz, sx, sy, e_sz_, lx, ly, e_lz, i, j, k, n, dx, dy, e_dz, d, e_d0, t, g, e_az, e_cnt, e_sw, e_tt, e_gg, a) (
+  Lx = 16 * e_sz; Ly = 11 * e_sz; e_Lz = 6 * e_sz;               // a 16 x 11 x 6 m room at 1000 m3
+  sx = 0.35 * Lx; sy = 0.62 * Ly; e_sz_ = 0.3 * e_Lz; lx = 0.7 * Lx; ly = 0.45 * Ly; e_lz = 0.32 * e_Lz;
+  e_d0 = sqrt(sqr(sx - lx) + sqr(sy - ly) + sqr(e_sz_ - e_lz));
+  n = 0;
+  i = -2; loop(5, j = -2; loop(5, k = -1; loop(3,
+    a = abs(i) + abs(j) + abs(k);
+    a > 0 && a <= 2 && n < 48 ? (
+      dx = (i & 1 ? (i + 1) * Lx - sx : i * Lx + sx) - lx;
+      dy = (j & 1 ? (j + 1) * Ly - sy : j * Ly + sy) - ly;
+      e_dz = (k & 1 ? (k + 1) * e_Lz - e_sz_ : k * e_Lz + e_sz_) - e_lz;
+      d = sqrt(dx * dx + dy * dy + e_dz * e_dz);
+      t = (d - e_d0) / 343;                                  // seconds after the direct sound
+      g = e_d0 / d * (a == 1 ? 0.8 : 0.55);                  // spreading and wall absorption
+      e_az = atan2(dy, dx);
+      er_tl[n] = t; er_gl[n] = g * (0.55 + 0.45 * cos(e_az - 0.9)); er_gr[n] = g * (0.55 + 0.45 * cos(e_az + 0.9));
+      er_tr[n] = t + 0.00025 * sin(e_az);                    // a quarter of a millisecond between the ears
+      n += 1;
+    );
+    k += 1; ); j += 1; ); i += 1; );
+  // sort by time (simple), keep the first few by density
+  e_sw = 1; while(e_sw) ( e_sw = 0; i = 0; loop(n - 1,
+    er_tl[i] > er_tl[i + 1] ? ( e_tt = er_tl[i]; er_tl[i] = er_tl[i + 1]; er_tl[i + 1] = e_tt; e_tt = er_tr[i]; er_tr[i] = er_tr[i + 1]; er_tr[i + 1] = e_tt;
+      e_gg = er_gl[i]; er_gl[i] = er_gl[i + 1]; er_gl[i + 1] = e_gg; e_gg = er_gr[i]; er_gr[i] = er_gr[i + 1]; er_gr[i + 1] = e_gg; e_sw = 1; );
+    i += 1; ); );
+  e_cnt = floor(8 + e_dens * (n - 8));
+  // even out: no single reflection jumps out, both ears get the same energy, the whole set a fixed level
+  e_el = e_er_ = 0; i = 0; loop(e_cnt, er_gl[i] = sign(er_gl[i]) * min(abs(er_gl[i]), 0.45); er_gr[i] = sign(er_gr[i]) * min(abs(er_gr[i]), 0.45);
+    e_el += sqr(er_gl[i]); e_er_ += sqr(er_gr[i]); i += 1; );
+  i = 0; loop(e_cnt, er_gl[i] *= sqrt(0.35 / max(e_el, 0.0001)); er_gr[i] *= sqrt(0.35 / max(e_er_, 0.0001));
+    er_gl[i] *= i & 1 ? -1 : 1; er_gr[i] *= i & 2 ? -1 : 1;
+    er_tl[i] = max(1, floor(er_tl[i] * srate)); er_tr[i] = max(1, floor(er_tr[i] * srate)); i += 1; );
+  e_cnt;
+);
+function e_er_pattern(m, e_sz, e_dens) local(i, n, t, g, p) (
+  bv_seed(m == 1 ? 911 : m == 2 ? 1747 : 2311);
+  n = m == 1 ? 8 : m == 2 ? 14 : 0;
+  n = floor(n * (0.5 + 0.5 * e_dens)) + 2;
+  i = 0;
+  loop(n,
+    t = m == 1 ? (5 + i * 7.5 + 4 * bv_rnd()) * (0.6 + 0.4 * e_sz) : (2 + i * 1.6 + 1.2 * bv_rnd()) * (0.5 + 0.5 * e_sz);
+    g = (m == 1 ? 0.7 : 0.45) * (1 - i / (n + 2)) * (bv_rnd() > 0.5 ? 1 : -1);
+    p = bv_rnd();
+    er_tl[i] = max(1, floor(t * 0.001 * srate)); er_tr[i] = max(1, floor(t * (1.03 + 0.05 * p) * 0.001 * srate));
+    er_gl[i] = g * (0.6 + 0.4 * p); er_gr[i] = g * (1 - 0.4 * p);
+    i += 1; );
+  n;
+);
+function e_nl_shape(len, e_shp, e_dens) local(k, t, g, e, e_s2) (
+  bv_seed(5167); e_s2 = 0; k = 0;
+  loop(nl_n,
+    t = (k + 0.3 + 0.4 * bv_rnd() * (0.4 + e_dens)) / nl_n;
+    e = e_shp == 0 ? exp(-5.5 * t) : e_shp == 1 ? (t < 0.85 ? 1 - 0.15 * t : (1 - t) / 0.15 * 0.87) : (0.08 + 0.92 * t ^ 1.6) * (t < 0.95 ? 1 : (1 - t) * 20);
+    g = e * (bv_rnd() > 0.5 ? 1 : -1) * (0.7 + 0.3 * bv_rnd());
+    nl_t[k] = max(1, floor(t * len * srate)); nl_g[k] = g; e_s2 += g * g;
+    k += 1; );
+  k = 0; loop(nl_n, nl_g[k] *= 1.4 / sqrt(max(e_s2, 0.0001)); k += 1; );
+);
+function e_update() local(k, e_sz, L, e_lens, e_er_s, e_dens) (
+  e_mdl = slider1;
+  e_sz = (slider9 / 1000) ^ (1 / 3);                         // 1000 m3 = 1
+  bv_t60 = slider6 * (e_mdl == 0 ? 1.12 : e_mdl == 2 ? 0.91 : 1); bv_rthi = slider7; bv_rtlo = slider8;   // calibrated: the measured fade matches REVERB TIME
+  e_dens = slider10 / 100; e_diff = slider11 / 100;
+  e_erd_s = slider2 * 0.001 * srate; e_revd_s = slider4 * 0.001 * srate;
+  e_er_g = slider3 <= -29.9 ? 0 : 10 ^ (slider3 / 20);
+  e_rv_g = slider5 <= -29.9 ? 0 : 10 ^ (slider5 / 20) * (e_mdl == 3 ? 1 : 1.3);
+  bv_lox = 250; bv_hix = e_mdl == 1 ? 2400 : e_mdl == 2 ? 4500 : 3500;
+  e_mdl == 0 ? (
+    er_n = e_er_room(e_sz, e_dens, 0);
+    e_lens = 2300; e_lens[0] = 31.7; e_lens[1] = 37.1; e_lens[2] = 41.3; e_lens[3] = 47.9; e_lens[4] = 53.3; e_lens[5] = 61.1; e_lens[6] = 70.7; e_lens[7] = 79.3;
+    k = 0; loop(8, L = min(e_lens[k] * 0.001 * srate * (0.25 + 0.75 * e_sz), LN_N - 4); ln_len[k] = L; bv_loss(k, L); ln_mod[k] = 0; k += 1; );
+    fdn_apg = 0;
+  ) : e_mdl == 1 ? (
+    er_n = e_er_pattern(1, e_sz, e_dens);
+    e_lens = 2300; e_lens[0] = 29.7; e_lens[1] = 37.1; e_lens[2] = 41.1; e_lens[3] = 43.7; e_lens[4] = 31.3; e_lens[5] = 39.7;
+    k = 0; loop(6, L = min(e_lens[k] * 0.001 * srate * (0.55 + 0.45 * e_sz), LN_N - 4); cb_len[k] = L; bv_loss(k, L); k += 1; );
+  ) : e_mdl == 2 ? (
+    er_n = e_er_pattern(2, e_sz, e_dens);
+    L = 0.35 + 0.5 * min(e_sz, 1.6);
+    tk_d[0] = 0.1417 * L * srate; tk_d[1] = 0.1063 * L * srate; tk_d[2] = 0.1496 * L * srate; tk_d[3] = 0.1250 * L * srate;
+    tk_a[0] = 0.0226 * L * srate; tk_a[1] = 0.0605 * L * srate; tk_a[2] = 0.0305 * L * srate; tk_a[3] = 0.0892 * L * srate;
+    bv_loss(0, tk_d[0] + tk_d[1] + tk_a[0] + tk_a[1]); bv_loss(2, tk_d[2] + tk_d[3] + tk_a[2] + tk_a[3]);
+    bv_loss(1, 1); bv_loss(3, 1); LN_G[3] = 1; LN_G[9] = 1;
+  ) : (
+    er_n = 0;
+    e_nl_len = min(0.06 + bv_t60 * 0.2, 1.25);
+    e_nl_shape(e_nl_len * (0.5 + 0.5 * min(e_sz, 2)), slider16, e_dens);
+  );
+  bv_xover();
+  e_lc_c = 1 - exp(-2 * $pi * slider12 / srate);
+  e_hc_c = 1 - exp(-2 * $pi * min(slider13, srate * 0.45) / srate);
+  e_drv = slider14 / 100 * (e_mdl == 1 ? 1.6 : 1);
+  lofi_set(slider15, e_mdl == 0 ? 34000 : e_mdl == 1 ? 32000 : e_mdl == 2 ? 40000 : 31250, e_mdl == 1 ? 14 : 16);
+  e_wid = slider17 / 100;
+  e_dft = slider18 / 100; e_dspd = slider19 * (0.5 + 0.5 * slider18 / 20);   // the wander speeds up with DRIFT (1x at its default 20%)
+  e_mix_t = slider20 / 100; e_out_t = 10 ^ (slider21 / 20);
+  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, 0);   // output stage: straight through
+  in_setup(slider28, slider29);
+);
+function e_setp(m, e_erd, e_erl, e_rvd, e_rvl, t, hi, lo, e_vol, dn, df, lc, e_hc, e_dr, e_ck, sh, e_wd, mx) (
+  slider1 = m; slider2 = e_erd; slider3 = e_erl; slider4 = e_rvd; slider5 = e_rvl; slider6 = t; slider7 = hi; slider8 = lo; slider9 = e_vol;
+  slider10 = dn; slider11 = df; slider12 = lc; slider13 = e_hc; slider14 = e_dr; slider15 = e_ck; slider16 = sh; slider17 = e_wd; slider20 = mx;
+);
+function e_load_preset(p) (
+  p == 1 ? e_setp(0, 6, -6, 18, 0, 1.4, 0.7, 1.0, 600, 70, 60, 120, 14000, 10, 0, 1, 110, 25) :      // Vocal Air
+  p == 2 ? e_setp(0, 12, -4, 30, 0, 2.2, 0.6, 1.2, 4000, 80, 70, 60, 11000, 15, 0, 1, 120, 30) :     // Concert Room
+  p == 3 ? e_setp(0, 2, -2, 8, -3, 0.8, 0.8, 1.0, 180, 90, 50, 100, 12000, 25, 0, 1, 100, 25) :      // Drum Room
+  p == 4 ? e_setp(1, 4, -12, 12, 0, 1.8, 0.5, 1.0, 900, 60, 80, 150, 9000, 30, 0, 1, 100, 25) :      // Broadcast Plate
+  p == 5 ? e_setp(1, 10, -8, 35, 0, 3.0, 0.45, 1.3, 3500, 60, 70, 80, 8000, 35, 1, 1, 110, 30) :     // Warm Hall (vintage)
+  p == 6 ? e_setp(2, 2, -10, 4, -2, 0.5, 0.8, 0.8, 60, 80, 90, 200, 10000, 10, 0, 1, 80, 20) :       // Voice-Over Booth
+  p == 7 ? e_setp(2, 6, -8, 14, 0, 1.2, 0.7, 0.9, 400, 70, 85, 150, 11000, 10, 0, 1, 100, 22) :      // Narration Space
+  p == 8 ? e_setp(3, 0, -30, 0, 0, 1.8, 1.0, 1.0, 1000, 70, 60, 120, 12000, 20, 0, 1, 120, 35) :     // Gated Snare
+  p == 9 ? e_setp(3, 0, -30, 20, 0, 3.5, 1.0, 1.0, 1500, 60, 50, 100, 10000, 10, 0, 2, 120, 40) :    // Reverse Swell
+  p == 10 ? e_setp(0, 3, -8, 5, -6, 0.4, 0.9, 1.0, 120, 60, 50, 200, 13000, 5, 0, 1, 90, 20);        // Tight Ambience
+  p >= 1 && p <= 10 ? ( e_lastp = p; ui_auto(1); i = 2; loop(16, ui_auto(i); i += 1; ); ui_auto(17); ui_auto(20); );
+  p == 11 ? (
+    e_setp(0, 8, -6, 24, 0, 2.4, 0.75, 1.1, 2000, 60, 60, 80, 12000, 15, 0, 1, 100, 30);
+    slider18 = 20; slider19 = 0.15; slider21 = 0; slider22 = 0; slider23 = 30; slider24 = 120; slider25 = 6000; slider26 = -0.3; slider27 = 1;
+    slider28 = 0; slider29 = 0; e_lastp = 0;
+    i = 1; loop(29, ui_auto(i); i += 1; );
+  );
+);
+function e_pv_text(k) local(v) (
+  v = pv_get(k);
+  k == 1 || k == 3 ? ( v <= -29.9 ? strcpy(#e_pt, "OFF") : sprintf(#e_pt, "%.1f", v); ) :
+  k == 4 || k == 6 ? sprintf(#e_pt, "%.2f", v) :
+  k == 5 ? ( v < 10 ? sprintf(#e_pt, "%.2f", v) : sprintf(#e_pt, "%.1f", v); ) :
+  k == 11 || k == 22 ? sprintf(#e_pt, "%.1f", v / 1000) :
+  k == 16 || k == 17 || k == 23 ? sprintf(#e_pt, "%.1f", v) :
+  k == 18 ? sprintf(#e_pt, "%.2f", v) :
+  sprintf(#e_pt, "%d", floor(v + 0.5));
+  #e_pt;
+);
+function e_init() (
+#ui_man = "gfx-e-verb";                                  // the ? pop-up links to this manual
+bv_alloc(100000);
+
+// room simulator reflections: images of a source in a shoebox room (first and second order), mono in, two ears out
+
+// fixed patterns (ms, gain) for the other models, stretched by size, thinned by density
+
+// the non-linear line: 40 taps over len seconds, envelope by shape
+
+
+
+
+// ---------- presets ----------
+
+
+
+// ---------- the parameters on the displays ----------
+pv_def(0, 2, 0, 120, 1, 8, 0, 0);       pv_def(1, 3, -30, 6, 0.5, -6, 0, 1);
+pv_def(2, 4, 0, 250, 1, 24, 0, 0);      pv_def(3, 5, -30, 6, 0.5, 0, 0, 1);
+pv_def(4, 7, 0.1, 1.5, 0.05, 0.75, 0, 2); pv_def(5, 6, 0.1, 20, 0.05, 2.4, 1, 2);
+pv_def(6, 8, 0.5, 2.5, 0.05, 1.1, 0, 2); pv_def(7, 9, 10, 12000, 1, 2000, 1, 0);
+pv_def(8, 10, 0, 100, 1, 60, 0, 0);     pv_def(9, 11, 0, 100, 1, 60, 0, 0);
+pv_def(10, 12, 20, 1000, 1, 80, 1, 0);  pv_def(11, 13, 1000, 20000, 10, 12000, 1, 1);
+pv_def(12, 14, 0, 100, 1, 15, 0, 0);    pv_def(13, 17, 0, 150, 1, 100, 0, 0);
+pv_def(14, 18, 0, 100, 1, 20, 0, 0);    pv_def(15, 20, 0, 100, 1, 30, 0, 0);
+pv_def(16, 28, -24, 12, 0.1, 0, 0, 1);  pv_def(17, 21, -24, 12, 0.1, 0, 0, 1);
+pv_def(18, 19, 0.02, 2, 0.01, 0.15, 1, 2); pv_def(19, 22, 0, 100, 1, 0, 0, 0);
+pv_def(20, 23, 0, 100, 1, 30, 0, 0);    pv_def(21, 24, 40, 400, 1, 120, 1, 0);
+pv_def(22, 25, 2000, 16000, 10, 6000, 1, 1); pv_def(23, 26, -24, 0, 0.1, -0.3, 0, 1);
+// the text a display shows for parameter k
+
+e_vsel = 5;   // the display the data wheel works on
+
+e_drA.drift_init(0.8 + rand(0.5)); e_drB.drift_init(0.8 + rand(0.5));
+ost_init(20000); e_ostL.ost_ch_init(); e_ostR.ost_ch_init();
+in_init();
+e_sm = 1 - exp(-1 / (0.03 * srate));
+e_pkL = e_pkR = 0; e_piL = e_piR = 0;
+e_update();
+e_mix_s = e_mix_t; e_out_s = e_out_t;
+0;
+);
+
+function e_slider() (
+e_update();
+0;
+);
+
+function e_block() (
+// panel edits change the sliders directly: re-apply them whenever any slider has moved
+e_chk = 0; e_ci = 1; loop(29, e_chk += slider(e_ci) * (e_ci * 1.37 + 1); e_ci += 1; );
+e_chk != e_last_chk ? ( e_last_chk = e_chk; e_update(); );
+e_vA = e_drA.drift_tick(e_dspd * samplesblock / srate); e_vB = e_drB.drift_tick(e_dspd * samplesblock / srate);
+// drift: the air absorption wanders (never the delay lengths - no pitch)
+bv_hdrift = 1 + 0.25 * e_dft * e_vA; bv_xover();
+e_mdl == 3 && e_dft > 0 ? ( k = 0; loop(nl_n, nl_g[k] *= 1 + 0.002 * e_dft * e_vB * (k & 1 ? 1 : -1); k += 1; ); );
+0;
+);
+
+function e_sample() (
+in_process(spl0, spl1);
+e_inL = in_l; e_inR = in_r;
+e_piL = max(e_piL, abs(e_inL)); e_piR = max(e_piR, abs(e_inR));
+e_mix_s += (e_mix_t - e_mix_s) * e_sm; e_out_s += (e_out_t - e_out_s) * e_sm;
+
+e_xl = e_xfL.xfm_run(e_inL, e_drv, 1); e_xr = e_xfR.xfm_run(e_inR, e_drv, 1);
+e_xl = e_lfiL.lofi_in(e_xl); e_xr = e_lfiR.lofi_in(e_xr);
+bv_pre(e_xl, e_xr);
+// reflections from the mono sum, at the 1st reflection delay
+er_run(0.5 * (pre_l(e_erd_s) + pre_r(e_erd_s)));
+e_tl = pre_l(e_revd_s); e_tr = pre_r(e_revd_s);
+e_mdl == 0 ? (
+  dif_run(e_tl + 0.2 * er_ol, e_tr + 0.2 * er_or, e_diff * 0.7, 1);
+  fdn_run(dif_l, dif_r); e_wl = fdn_l; e_wr = fdn_r;
+) : e_mdl == 1 ? (
+  dif_run(e_tl, e_tr, e_diff, 0.7);
+  cmb_run(dif_l * 0.5, dif_r * 0.5); e_wl = cmb_l; e_wr = cmb_r;
+) : e_mdl == 2 ? (
+  dif_run(e_tl, e_tr, 0.6 + 0.4 * e_diff, 0.6);
+  tank_run(dif_l, dif_r); e_wl = tank_l; e_wr = tank_r;
+) : (
+  dif_run(e_tl, e_tr, e_diff, 0.5);
+  nl_run(dif_l, dif_r);
+  e_wl = apr(8, nl_l, 0.0031 * srate, 0.5 * e_diff); e_wr = apr(9, nl_r, 0.0037 * srate, 0.5 * e_diff);
+);
+e_wl = e_er_g * er_ol + e_rv_g * e_wl; e_wr = e_er_g * er_or + e_rv_g * e_wr;
+e_wl = e_lfoL.lofi_out(e_wl); e_wr = e_lfoR.lofi_out(e_wr);
+// lo / hi cut on the reverb
+e_lcL += (e_wl - e_lcL) * e_lc_c; e_wl -= e_lcL; e_lcR += (e_wr - e_lcR) * e_lc_c; e_wr -= e_lcR;
+e_hcL += (e_wl - e_hcL) * e_hc_c; e_wl = e_hcL; e_hcR += (e_wr - e_hcR) * e_hc_c; e_wr = e_hcR;
+// width
+e_wm = 0.5 * (e_wl + e_wr); e_ws = 0.5 * (e_wl - e_wr) * e_wid; e_wl = e_wm + e_ws; e_wr = e_wm - e_ws;
+e_rvl = max(e_rvl, max(abs(e_wl), abs(e_wr)));
+oL = e_inL * (1 - e_mix_s) + e_wl * e_mix_s;
+e_oR = e_inR * (1 - e_mix_s) + e_wr * e_mix_s;
+oL = e_ostL.ost_band(oL) * e_out_s; e_oR = e_ostR.ost_band(e_oR) * e_out_s;
+ost_out(oL, e_oR);
+spl0 = ost_l; spl1 = ost_r;
+e_pkL = max(e_pkL, abs(spl0)); e_pkR = max(e_pkR, abs(spl1));
+0;
+);
+
+function e_serialize() (
+file_var(0, ui_sz);
+file_var(0, e_vsel);
+file_var(0, e_lastp);
+0;
+);
+
+// ======================== Japanese: initialisation and functions ========================
+function j_er_grid(j_sz, j_dens) local(Lx, Ly, j_Lz, sx, sy, j_sz_, lx, ly, j_lz, i, j, k, n, dx, dy, j_dz, d, j_d0, t, g, j_az, j_el, j_sw, j_tt, j_gg, j_cnt, a) (
+  Lx = 22 * j_sz; Ly = 15 * j_sz; j_Lz = 9 * j_sz;
+  sx = 0.5 * Lx; sy = 0.3 * Ly; j_sz_ = 0.25 * j_Lz; lx = 0.5 * Lx; ly = 0.62 * Ly; j_lz = 0.3 * j_Lz;
+  j_d0 = sqrt(sqr(sx - lx) + sqr(sy - ly) + sqr(j_sz_ - j_lz));
+  n = 0;
+  i = -2; loop(5, j = -2; loop(5, k = -2; loop(5,
+    a = abs(i) + abs(j) + abs(k);
+    a > 0 && a <= 2 && n < 48 ? (
+      dx = (i & 1 ? (i + 1) * Lx - sx : i * Lx + sx) - lx;
+      dy = (j & 1 ? (j + 1) * Ly - sy : j * Ly + sy) - ly;
+      j_dz = (k & 1 ? (k + 1) * j_Lz - j_sz_ : k * j_Lz + j_sz_) - j_lz;
+      d = sqrt(dx * dx + dy * dy + j_dz * j_dz);
+      t = (d - j_d0) / 343; g = j_d0 / d * (a == 1 ? 0.75 : 0.5) * (k != 0 ? 0.8 : 1);
+      j_az = atan2(dx, dy);
+      er_tl[n] = t; er_tr[n] = t;
+      er_gl[n] = g * sqrt(0.5 - 0.5 * sin(j_az)); er_gr[n] = g * sqrt(0.5 + 0.5 * sin(j_az));
+      n += 1;
+    );
+    k += 1; ); j += 1; ); i += 1; );
+  j_sw = 1; while(j_sw) ( j_sw = 0; i = 0; loop(n - 1,
+    er_tl[i] > er_tl[i + 1] ? ( j_tt = er_tl[i]; er_tl[i] = er_tl[i + 1]; er_tl[i + 1] = j_tt; er_tr[i] = er_tl[i]; er_tr[i + 1] = er_tl[i + 1];
+      j_gg = er_gl[i]; er_gl[i] = er_gl[i + 1]; er_gl[i + 1] = j_gg; j_gg = er_gr[i]; er_gr[i] = er_gr[i + 1]; er_gr[i + 1] = j_gg; j_sw = 1; );
+    i += 1; ); );
+  j_cnt = min(floor(8 + j_dens * 24), n);
+  i = 0; loop(j_cnt, er_tl[i] = max(1, floor(er_tl[i] * srate)); er_tr[i] = er_tl[i]; i += 1; );
+  j_cnt;
+);
+function j_er_forty(j_sz, j_dens) local(i, n, t, g, p, w) (
+  bv_seed(4093); n = floor(8 + 32 * j_dens); w = 0.3 + 0.7 * j_dens;
+  i = 0;
+  loop(n,
+    t = (3 + 95 * (i / 40) ^ 1.3 + 3 * bv_rnd()) * (0.4 + 0.6 * j_sz);
+    g = 0.8 * exp(-2.2 * i / 40) * (bv_rnd() > 0.35 ? 1 : -1);
+    p = (bv_rnd() * 2 - 1) * w;
+    er_tl[i] = max(1, floor(t * 0.001 * srate)); er_tr[i] = max(1, floor(t * (1 + 0.02 * p) * 0.001 * srate));
+    er_gl[i] = g * sqrt(0.5 - 0.5 * p); er_gr[i] = g * sqrt(0.5 + 0.5 * p);
+    i += 1; );
+  n;
+);
+function j_er_pattern(m, j_sz, j_dens) local(i, n, t, g, p) (
+  bv_seed(m == 0 ? 3301 : 6007);
+  n = m == 0 ? floor(6 + 8 * j_dens) : floor(3 + 4 * j_dens);
+  i = 0;
+  loop(n,
+    t = (m == 0 ? 12 + i * 9 + 6 * bv_rnd() : 6 + i * 11 + 3 * bv_rnd()) * (0.5 + 0.5 * j_sz);
+    g = 0.6 * (1 - i / (n + 3)) * (bv_rnd() > 0.5 ? 1 : -1); p = bv_rnd() * 2 - 1;
+    er_tl[i] = max(1, floor(t * 0.001 * srate)); er_tr[i] = max(1, floor(t * (1.05 - 0.1 * (i & 1)) * 0.001 * srate));
+    er_gl[i] = g * sqrt(0.5 - 0.45 * p); er_gr[i] = g * sqrt(0.5 + 0.45 * p);
+    i += 1; );
+  n;
+);
+function j_update() local(k, j_sz, L, j_lens, j_er_s, j_dens) (
+  j_mdl = slider1;
+  j_sz = (slider9 / 1000) ^ (1 / 3);                         // 1000 m3 = 1
+  bv_t60 = slider6 * (j_mdl == 0 ? 1.1 : j_mdl == 1 || j_mdl == 2 ? 1.12 : 1); bv_rthi = slider7; bv_rtlo = slider8;   // calibrated: the measured fade matches REVERB TIME
+  j_dens = slider10 / 100; j_diff = slider11 / 100;
+  j_erd_s = slider2 * 0.001 * srate; j_revd_s = slider4 * 0.001 * srate;
+  j_er_g = slider3 <= -29.9 ? 0 : 10 ^ (slider3 / 20);
+  j_rv_g = slider5 <= -29.9 ? 0 : 10 ^ (slider5 / 20);
+  bv_lox = 250; bv_hix = j_mdl == 3 ? 3000 : 5000;
+  j_mdl == 0 ? (
+    er_n = j_er_pattern(0, j_sz, j_dens);
+    j_lens = 2300; j_lens[0] = 43.1; j_lens[1] = 49.7; j_lens[2] = 57.3; j_lens[3] = 61.9; j_lens[4] = 71.3; j_lens[5] = 79.1; j_lens[6] = 87.7; j_lens[7] = 97.3;
+    k = 0; loop(8, L = min(j_lens[k] * 0.001 * srate * (0.3 + 0.7 * j_sz), LN_N - 40); ln_len[k] = L;
+      ln_apl[k] = (4.1 + 1.3 * k) * 0.001 * srate * (0.5 + 0.5 * min(j_sz, 1.5)); bv_loss(k, L + ln_apl[k]); k += 1; );
+    fdn_apg = 0.35 + 0.3 * j_diff;
+  ) : j_mdl == 1 || j_mdl == 2 ? (
+    er_n = j_mdl == 1 ? j_er_grid(j_sz, j_dens) : j_er_forty(j_sz, j_dens);
+    j_lens = 2300; j_lens[0] = 29.3; j_lens[1] = 34.7; j_lens[2] = 39.1; j_lens[3] = 44.9; j_lens[4] = 50.3; j_lens[5] = 57.7; j_lens[6] = 64.1; j_lens[7] = 73.9;
+    k = 0; loop(8, L = min(j_lens[k] * 0.001 * srate * (0.3 + 0.7 * j_sz), LN_N - 40); ln_len[k] = L; bv_loss(k, L); ln_mod[k] = 0; k += 1; );
+    fdn_apg = 0;
+  ) : (
+    er_n = j_er_pattern(3, j_sz, j_dens);
+    j_lens = 2300; j_lens[0] = 27.1; j_lens[1] = 33.7; j_lens[2] = 38.9; j_lens[3] = 42.3; j_lens[4] = 30.1; j_lens[5] = 36.3;
+    k = 0; loop(6, L = min(j_lens[k] * 0.001 * srate * (0.5 + 0.5 * j_sz), LN_N - 4); cb_len[k] = L; bv_loss(k, L); k += 1; );
+  );
+  bv_xover();
+  j_lc_c = 1 - exp(-2 * $pi * slider12 / srate);
+  j_hc_c = 1 - exp(-2 * $pi * min(slider13, srate * 0.45) / srate);
+  j_drv = slider14 / 100;
+  lofi_set(slider15 || j_mdl == 3, j_mdl == 3 ? 31500 : j_mdl == 1 ? 48000 : 44100, slider30 == 0 ? 12 : slider30 == 1 ? 16 : 24);
+  j_wid = slider17 / 100;
+  j_dft = slider18 / 100; j_dspd = slider19 * (0.5 + 0.5 * slider18 / 20);   // the wander speeds up with DRIFT (1x at its default 20%)
+  j_mix_t = slider20 / 100; j_out_t = 10 ^ (slider21 / 20);
+  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, 0);   // output stage: straight through
+  in_setup(slider28, slider29);
+);
+function j_setp(m, j_erd, j_erl, j_rvd, j_rvl, t, hi, lo, j_vol, dn, df, lc, j_hc, j_dr, j_ck, j_bt, j_wd, mx) (
+  slider1 = m; slider2 = j_erd; slider3 = j_erl; slider4 = j_rvd; slider5 = j_rvl; slider6 = t; slider7 = hi; slider8 = lo; slider9 = j_vol;
+  slider10 = dn; slider11 = df; slider12 = lc; slider13 = j_hc; slider14 = j_dr; slider15 = j_ck; slider30 = j_bt; slider17 = j_wd; slider20 = mx;
+);
+function j_load_preset(p) (
+  p >= 1 ? j_jv_dst = 1;                         // duck the reverb, swap the settings at silence, fade it back in
+  p == 1 ? j_setp(0, 14, -10, 40, 0, 4.5, 0.5, 1.2, 8000, 60, 80, 50, 10000, 0, 0, 1, 130, 30) :     // Massive Hall
+  p == 2 ? j_setp(0, 10, -8, 30, 0, 2.6, 0.6, 1.0, 3000, 60, 70, 100, 13000, 0, 0, 1, 120, 25) :     // Vocal Hall
+  p == 3 ? j_setp(0, 20, -12, 60, 0, 8.0, 0.5, 1.5, 12000, 50, 90, 50, 10000, 0, 0, 1, 140, 40) :    // Synth Pad Space
+  p == 4 ? j_setp(1, 8, -4, 24, -2, 2.2, 0.6, 1.0, 6000, 80, 70, 50, 13000, 0, 0, 1, 110, 30) :      // 3D Scoring Stage
+  p == 5 ? j_setp(1, 4, -2, 12, -4, 1.0, 0.7, 1.0, 900, 70, 60, 100, 13000, 0, 0, 1, 100, 25) :      // Film Room
+  p == 6 ? j_setp(2, 2, -3, 8, -6, 0.7, 0.8, 1.0, 250, 100, 50, 100, 13000, 0, 0, 1, 110, 25) :      // Studio Room 40
+  p == 7 ? j_setp(2, 4, -4, 14, -3, 1.3, 0.7, 0.9, 700, 80, 60, 100, 10000, 0, 1, 1, 120, 25) :      // Acoustic Guitar (vintage)
+  p == 8 ? j_setp(3, 6, -12, 20, 0, 2.0, 0.5, 1.0, 1200, 50, 60, 100, 10000, 0, 1, 0, 110, 30) :     // 80s Vocal Plate
+  p == 9 ? j_setp(3, 2, -8, 6, 0, 1.0, 0.6, 1.0, 400, 60, 40, 100, 10000, 20, 1, 0, 100, 30) :       // Drum Room 12-Bit
+  p == 10 ? j_setp(0, 30, -14, 80, 0, 12, 0.4, 1.3, 12000, 40, 90, 100, 10000, 0, 1, 1, 150, 45);    // Synthwave Wash
+  p >= 1 && p <= 10 ? ( j_lastp = p; i = 1; loop(17, ui_auto(i); i += 1; ); ui_auto(20); );
+  p == 11 ? (
+    j_setp(0, 8, -6, 24, 0, 2.8, 0.7, 1.0, 3000, 60, 60, 80, 12000, 0, 0, 0, 100, 30);
+    slider18 = 20; slider19 = 0.15; slider21 = 0; slider22 = 0; slider23 = 30; slider24 = 120; slider25 = 6000; slider26 = -0.3; slider27 = 1;
+    slider28 = 0; slider29 = 0; j_lastp = 0;
+    i = 1; loop(29, ui_auto(i); i += 1; );
+  );
+);
+function j_pv_text(k) local(v) (
+  v = pv_get(k);
+  k == 1 || k == 3 ? ( v <= -29.9 ? strcpy(#j_pt, "OFF") : sprintf(#j_pt, "%.1f", v); ) :
+  k == 4 || k == 6 ? sprintf(#j_pt, "%.2f", v) :
+  k == 5 ? ( v < 10 ? sprintf(#j_pt, "%.2f", v) : sprintf(#j_pt, "%.1f", v); ) :
+  k == 11 || k == 22 ? sprintf(#j_pt, "%.1f", v / 1000) :
+  k == 16 || k == 17 || k == 23 ? sprintf(#j_pt, "%.1f", v) :
+  k == 18 ? sprintf(#j_pt, "%.2f", v) :
+  sprintf(#j_pt, "%d", floor(v + 0.5));
+  #j_pt;
+);
+function j_pv_unit(k) ( k == 1 || k == 3 || k == 16 || k == 17 || k == 23 ? "dB" : k == 7 ? "m3" : k == 4 || k == 6 ? "x" : k == 5 ? "SEC" :
+  k == 0 || k == 2 ? "mSEC" : k == 10 || k == 21 ? "Hz" : k == 11 || k == 22 ? "kHz" : k == 18 ? "Hz" : "%"; );
+function j_pv_name(k) ( k == 0 ? "E.RFL DELAY" : k == 1 ? "E.RFL LEVEL" : k == 2 ? "PRE DELAY" : k == 3 ? "REV LEVEL" : k == 4 ? "RT HIGH" : k == 5 ? "REVERB TIME" :
+  k == 6 ? "RT LOW" : k == 7 ? "ROOM SIZE" : k == 8 ? "DENSITY" : k == 9 ? "DIFFUSION" : k == 10 ? "LOW CUT" : k == 11 ? "HIGH CUT" : k == 12 ? "DRIVE" :
+  k == 13 ? "WIDTH" : k == 14 ? "DRIFT" : k == 15 ? "MIX" : k == 16 ? "TRIM" : k == 17 ? "LEVEL" : k == 18 ? "DRIFT SPEED" : k == 19 ? "SAT" :
+  k == 20 ? "BIAS" : k == 21 ? "LO BAND" : k == 22 ? "HI BAND" : "CEILING"; );
+function j_init() (
+#ui_man = "gfx-j-verb";                                  // the ? pop-up links to this manual
+bv_alloc(100000);
+
+// a 3-D grid of reflections (image sources in a box, first and second order): levels only, one delay for both ears,
+// so they can never cancel in mono
+
+// up to 40 individual reflections: DENSITY sets how many and how widely they spread
+
+// sparse wide reflections for the hall, a few for the 12-bit unit
+
+
+
+
+// ---------- presets ----------
+
+
+
+// ---------- the parameters (same table as E-Verb) ----------
+pv_def(0, 2, 0, 120, 1, 8, 0, 0);       pv_def(1, 3, -30, 6, 0.5, -6, 0, 1);
+pv_def(2, 4, 0, 250, 1, 24, 0, 0);      pv_def(3, 5, -30, 6, 0.5, 0, 0, 1);
+pv_def(4, 7, 0.1, 1.5, 0.05, 0.7, 0, 2); pv_def(5, 6, 0.1, 20, 0.05, 2.8, 1, 2);
+pv_def(6, 8, 0.5, 2.5, 0.05, 1.0, 0, 2); pv_def(7, 9, 10, 12000, 1, 3000, 1, 0);
+pv_def(8, 10, 0, 100, 1, 60, 0, 0);     pv_def(9, 11, 0, 100, 1, 60, 0, 0);
+pv_def(10, 12, 20, 1000, 1, 80, 1, 0);  pv_def(11, 13, 1000, 20000, 10, 12000, 1, 1);
+pv_def(12, 14, 0, 100, 1, 0, 0, 0);     pv_def(13, 17, 0, 150, 1, 100, 0, 0);
+pv_def(14, 18, 0, 100, 1, 20, 0, 0);    pv_def(15, 20, 0, 100, 1, 30, 0, 0);
+pv_def(16, 28, -24, 12, 0.1, 0, 0, 1);  pv_def(17, 21, -24, 12, 0.1, 0, 0, 1);
+pv_def(18, 19, 0.02, 2, 0.01, 0.15, 1, 2); pv_def(19, 22, 0, 100, 1, 0, 0, 0);
+pv_def(20, 23, 0, 100, 1, 30, 0, 0);    pv_def(21, 24, 40, 400, 1, 120, 1, 0);
+pv_def(22, 25, 2000, 16000, 10, 6000, 1, 1); pv_def(23, 26, -24, 0, 0.1, -0.3, 0, 1);
+
+
+
+j_vsel = 1; j_dsel = 2; j_ksel = 5;   // the parameter on the LEVEL display / the keypad, and the one on the DELAY display
+
+j_drA.drift_init(0.8 + rand(0.5)); j_drB.drift_init(0.8 + rand(0.5));
+ost_init(20000); j_ostL.ost_ch_init(); j_ostR.ost_ch_init();
+in_init();
+j_sm = 1 - exp(-1 / (0.03 * srate));
+j_pkL = j_pkR = 0; j_piL = j_piR = 0;
+j_update();
+j_mix_s = j_mix_t; j_out_s = j_out_t;
+j_jv_dkr = 1 / (0.012 * srate); j_jv_dk = 1; j_jv_dst = 0;   // preset duck (the wet only): 12 ms out, 12 ms in
+0;
+);
+
+function j_slider() (
+j_jv_dst != 1 ? j_update();                        // during a preset duck the swap applies the new settings
+0;
+);
+
+function j_block() (
+// panel edits change the sliders directly: re-apply them whenever any slider has moved
+j_chk = 0; j_ci = 1; loop(29, j_chk += slider(j_ci) * (j_ci * 1.37 + 1); j_ci += 1; );
+j_jv_dst != 1 && j_chk != j_last_chk ? ( j_last_chk = j_chk; j_update(); );
+j_vA = j_drA.drift_tick(j_dspd * samplesblock / srate); j_vB = j_drB.drift_tick(j_dspd * samplesblock / srate);
+// drift: in the hall the read taps move by up to two samples (density, never pitch); elsewhere the air absorption wanders
+j_mdl == 0 ? ( k = 0; loop(8, ln_mod[k] = j_dft * 2 * (k & 1 ? j_vA : j_vB) * (0.5 + 0.1 * k); k += 1; ); ) : ( bv_hdrift = 1 + 0.2 * j_dft * j_vA; bv_xover(); );
+j_mdl == 3 ? ( lf_inc = 31500 * (1 + 0.0004 * j_dft * j_vB) / srate; );   // the old clock is not quite steady
+0;
+);
+
+function j_sample() (
+// preset duck-and-swap on the wet: model, size, delays and the lo-fi clock change in silence, and the reverb
+// starts clean with its feed faded in (old audio at new line lengths would come round again as a click)
+j_jv_dst == 1 ? ( j_jv_dk -= j_jv_dkr; j_jv_dk <= 0 ? (
+  j_jv_dk = 0; j_update(); j_jv_dst = 2;
+  memset(BV_PRE, 0, BV_END - BV_PRE); memset(ln_z1, 0, 30); memset(cb_z, 0, 10); memset(fdn_v, 0, 20);
+); ) :
+j_jv_dst == 2 ? ( j_jv_dk += j_jv_dkr; j_jv_dk >= 1 ? ( j_jv_dk = 1; j_jv_dst = 0; ); );
+in_process(spl0, spl1);
+j_inL = in_l; j_inR = in_r;
+j_piL = max(j_piL, abs(j_inL)); j_piR = max(j_piR, abs(j_inR));
+j_mix_s += (j_mix_t - j_mix_s) * j_sm; j_out_s += (j_out_t - j_out_s) * j_sm;
+
+j_xl = j_xfL.xfm_run(j_inL, j_drv, 0); j_xr = j_xfR.xfm_run(j_inR, j_drv, 0);
+j_xl = j_lfiL.lofi_in(j_xl); j_xr = j_lfiR.lofi_in(j_xr);
+j_jv_dst ? ( j_jv_dkg = j_jv_dk * j_jv_dk * (3 - 2 * j_jv_dk); j_xl *= j_jv_dkg; j_xr *= j_jv_dkg; );
+bv_pre(j_xl, j_xr);
+// reflections from the mono sum, at the 1st reflection delay
+er_run(0.5 * (pre_l(j_erd_s) + pre_r(j_erd_s)));
+j_tl = pre_l(j_revd_s); j_tr = pre_r(j_revd_s);
+j_mdl == 0 ? (
+  dif_run(j_tl + 0.15 * er_ol, j_tr + 0.15 * er_or, j_diff, 1.3);
+  fdn_run(dif_l, dif_r); j_wl = fdn_l; j_wr = fdn_r;
+) : j_mdl == 1 || j_mdl == 2 ? (
+  dif_run(j_tl + 0.3 * er_ol, j_tr + 0.3 * er_or, j_mdl == 1 ? 0.5 + 0.5 * j_diff : j_diff * 0.8, 1);
+  fdn_run(dif_l, dif_r); j_wl = fdn_l; j_wr = fdn_r;
+) : (
+  dif_run(j_tl, j_tr, j_diff * 0.6, 0.6);
+  cmb_run(dif_l * 0.5, dif_r * 0.5); j_wl = cmb_l; j_wr = cmb_r;
+);
+j_wl = j_er_g * er_ol + j_rv_g * j_wl; j_wr = j_er_g * er_or + j_rv_g * j_wr;
+j_wl = j_lfoL.lofi_out(j_wl); j_wr = j_lfoR.lofi_out(j_wr);
+j_jv_dst ? ( j_wl *= j_jv_dkg; j_wr *= j_jv_dkg; );
+// lo / hi cut on the reverb
+j_lcL += (j_wl - j_lcL) * j_lc_c; j_wl -= j_lcL; j_lcR += (j_wr - j_lcR) * j_lc_c; j_wr -= j_lcR;
+j_hcL += (j_wl - j_hcL) * j_hc_c; j_wl = j_hcL; j_hcR += (j_wr - j_hcR) * j_hc_c; j_wr = j_hcR;
+// width
+j_wm = 0.5 * (j_wl + j_wr); j_ws = 0.5 * (j_wl - j_wr) * j_wid; j_wl = j_wm + j_ws; j_wr = j_wm - j_ws;
+j_rvl = max(j_rvl, max(abs(j_wl), abs(j_wr)));
+oL = j_inL * (1 - j_mix_s) + j_wl * j_mix_s;
+j_oR = j_inR * (1 - j_mix_s) + j_wr * j_mix_s;
+oL = j_ostL.ost_band(oL) * j_out_s; j_oR = j_ostR.ost_band(j_oR) * j_out_s;
+ost_out(oL, j_oR);
+spl0 = ost_l; spl1 = ost_r;
+j_pkL = max(j_pkL, abs(spl0)); j_pkR = max(j_pkR, abs(spl1));
+0;
+);
+
+function j_serialize() (
+file_var(0, ui_sz);
+file_var(0, j_vsel);
+file_var(0, j_lastp);
+0;
+);
+
+// ======================== the REGION switch ========================
+rg_cur = slider31 >= 0.5; rg_g = 1; rg_f = 0;
+rg_cur ? j_init() : e_init();
+#ui_man = "gfx-vrb45";
+rg_cur ? j_slider() : e_slider();
+
+@slider
+(slider31 >= 0.5) == rg_cur && !rg_f ? ( rg_cur ? j_slider() : e_slider(); );
+
+@block
+// REGION changed: fade out (10 ms), start the other engine clean at the silent point, fade back in (20 ms)
+(slider31 >= 0.5) != rg_cur && !rg_f ? rg_f = 1;
+rg_f == 2 ? ( rg_cur = slider31 >= 0.5; rg_cur ? j_init() : e_init(); #ui_man = "gfx-vrb45"; rg_cur ? j_slider() : e_slider(); rg_f = 3; );
+rg_dn = 1 / (0.01 * srate); rg_up = 1 / (0.02 * srate);
+rg_cur ? j_block() : e_block();
+
+@serialize
+e_serialize(); j_serialize();
+
+@sample
+rg_cur ? j_sample() : e_sample();
+rg_f == 1 ? ( rg_g -= rg_dn; rg_g <= 0 ? ( rg_g = 0; rg_f = 2; ); ) : rg_f == 3 ? ( rg_g += rg_up; rg_g >= 1 ? ( rg_g = 1; rg_f = 0; ); );
+rg_f ? ( spl0 *= rg_g; spl1 *= rg_g; );
+
+@gfx 1440 320
+function e_skin(m) (
+  m == 0 ? ( e_S_FACE = 0x23253A; e_S_INK = 0xD6D8E4; e_S_LINE = 0x7A7C92; e_S_WIN = 0x0E0608; e_S_ON = 0xFF2A1C; e_S_OFF = 0x34100E;
+             e_S_KEY = 0x585C66; e_S_KT = 0xE8EAF0; e_S_KE = 0x2E3038; e_S_ACC = 0xFF3A2A; e_S_TEX = 0; e_S_WHEEL = 0; e_S_KR = 3; ) :
+  m == 1 ? ( e_S_FACE = 0xE2DCC8; e_S_INK = 0x2A2620; e_S_LINE = 0x7A7262; e_S_WIN = 0x120A08; e_S_ON = 0xFF3424; e_S_OFF = 0x3A1410;
+             e_S_KEY = 0xF0EBDD; e_S_KT = 0x2A2620; e_S_KE = 0x9A9282; e_S_ACC = 0xFF3A2A; e_S_TEX = 0; e_S_WHEEL = 1; e_S_KR = 2; ) :
+  m == 2 ? ( e_S_FACE = 0x2A2B2F; e_S_INK = 0xE4E4E6; e_S_LINE = 0x5C5E64; e_S_WIN = 0x100508; e_S_ON = 0xFF3C78; e_S_OFF = 0x34101E;
+             e_S_KEY = 0x3E4046; e_S_KT = 0xF0F0F2; e_S_KE = 0x18191C; e_S_ACC = 0xFF3C78; e_S_TEX = 0; e_S_WHEEL = 2; e_S_KR = 4; ) :
+           ( e_S_FACE = 0xC4C6C8; e_S_INK = 0x1A1C1E; e_S_LINE = 0x5A5C60; e_S_WIN = 0x061410; e_S_ON = 0x6CFFB8; e_S_OFF = 0x123028;
+             e_S_KEY = 0x4A4C52; e_S_KT = 0xF0F0F0; e_S_KE = 0x26272A; e_S_ACC = 0x46E070; e_S_TEX = 1; e_S_WHEEL = 3; e_S_KR = 3; );
+);
+function e_txt(x, y, s, e_sz, a) ( gfx_setfont(6, "Arial", e_sz * sc, 'b'); ui_col(ui_mix(e_S_FACE, e_S_INK, a)); gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function e_ctxt(x, y, s, e_sz, a) local(tw, th) ( gfx_setfont(6, "Arial", e_sz * sc, 'b'); gfx_measurestr(s, tw, th); ui_col(ui_mix(e_S_FACE, e_S_INK, a)); gfx_x = x * sc - tw * 0.5; gfx_y = y * sc; gfx_drawstr(s); );
+function e_group(x, y, w, h, s) local(tw, th) (
+  ui_col(e_S_LINE); lz_rr(x, y, w, h, 7); ui_col(e_S_FACE); lz_rr(x + 1.5, y + 1.5, w - 3, h - 3, 6);
+  e_S_TEX ? ( e_gi = 0; loop(floor(h / 3) - 1, ui_col(ui_mix(e_S_FACE, e_gi % 2 ? 0xFFFFFF : 0x000000, 0.035)); gfx_rect((x + 4) * sc, (y + 3 + e_gi * 3) * sc, (w - 8) * sc, 1); e_gi += 1; ); );
+  gfx_setfont(6, "Arial", 11 * sc, 'b'); gfx_measurestr(s, tw, th);
+  ui_col(e_S_FACE); gfx_rect((x + w * 0.5) * sc - tw * 0.5 - 6 * sc, (y - 2) * sc, tw + 12 * sc, 5 * sc);
+  ui_col(e_S_INK); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y - 6) * sc; gfx_drawstr(s);
+);
+function e_key(x, y, w, h, s, on, e_rep) local(hit, inb, tw, th, dn) (
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hit = pressed && drag_id == 0 && inb;
+  hit ? ( drag_id = 100000 + x * 1000 + y; e_k_tn = time_precise() + 0.4; );
+  e_rep && drag_id == 100000 + x * 1000 + y && inb && time_precise() > e_k_tn ? ( hit = 1; e_k_tn = time_precise() + 0.07; );
+  dn = drag_id == 100000 + x * 1000 + y && inb;
+  ui_col(ui_mix(e_S_FACE, 0x000000, 0.5)); lz_rr(x + 1, y + 2, w, h, e_S_KR);
+  ui_col(e_S_KE); lz_rr(x, y, w, h, e_S_KR);
+  ui_col(dn ? ui_mix(e_S_KEY, 0x000000, 0.2) : e_S_KEY); lz_rr(x + 1, y + 1, w - 2, h - 3, e_S_KR);
+  ui_col(ui_mix(e_S_KEY, 0xFFFFFF, 0.18)); gfx_rect((x + 3) * sc, (y + 2) * sc, (w - 6) * sc, 1 * sc + 0.5);
+  on >= 0 ? ( ui_col(on ? e_S_ACC : ui_mix(e_S_ACC, e_S_KEY, 0.75)); gfx_rect((x + w * 0.5 - 5) * sc, (y + 4) * sc, 10 * sc, 3 * sc); );
+  gfx_setfont(6, "Arial", (strlen(s) == 1 ? 16 : 10) * sc, 'b'); gfx_measurestr(s, tw, th);
+  ui_col(e_S_KT); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y + h * 0.5 + (on >= 0 ? 2 : 0)) * sc - th * 0.5; gfx_drawstr(s);
+  hit;
+);
+function e_disp(k, x, y, cap, e_unit) local(inb, did, w) (
+  w = 88; did = 1900 + k;
+  e_ctxt(x + w * 0.5, y, cap, 10, 0.85);
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= (y + 14) * sc && mouse_y < (y + 54) * sc;
+  pressed && inb && drag_id == 0 ? (
+    time_precise() - e_d_lt < 0.35 && e_d_lk == k ? ( pv_reset(k); drag_id = -1; ) : ( drag_id = did; e_d_y = mouse_y; e_d_lt = time_precise(); e_d_lk = k; );
+    e_vsel = k;
+  );
+  drag_id == did && abs(mouse_y - e_d_y) >= 2 * sc ? ( pv_nudge(k, (e_d_y - mouse_y) / (((mouse_cap & 8) ? 1500 : 300) * sc)); e_d_y = mouse_y; );
+  inb && mouse_wheel != 0 && drag_id == 0 ? ( pv_step(k, sign(mouse_wheel)); mouse_wheel = 0; e_vsel = k; );
+  ui_col(e_vsel == k ? e_S_ACC : ui_mix(e_S_FACE, 0x000000, 0.45)); lz_rr(x - 1, y + 13, w + 2, 42, 5);
+  ui_col(e_S_WIN); lz_rr(x, y + 14, w, 40, 4);
+  gfx_setfont(6, "Arial", 9 * sc, 'b'); ui_col(ui_mix(e_S_WIN, e_S_ON, 0.8)); gfx_x = (x + 4) * sc; gfx_y = (y + 18) * sc; gfx_drawstr(e_unit);
+  k == 7 ? seg_str((x + 18) * sc, (y + 22) * sc, 10.5 * sc, 24 * sc, 5, e_pv_text(k), e_S_ON, ui_mix(e_S_WIN, e_S_OFF, 0.38))
+         : seg_str((x + 22) * sc, (y + 22) * sc, 12.5 * sc, 24 * sc, 4, e_pv_text(k), e_S_ON, ui_mix(e_S_WIN, e_S_OFF, 0.38));
+  e_key(x, y + 60, 42, 26, "-", -1, 1) ? ( pv_step(k, -1); e_vsel = k; );
+  e_key(x + 46, y + 60, 42, 26, "+", -1, 1) ? ( pv_step(k, 1); e_vsel = k; );
+);
+function e_meter(x, y, v, s) local(i, d, c, lit) (
+  i = 0;
+  loop(10, d = i * 3; lit = 20 * log10(max(v, 0.000001)) >= -d - 1.5;
+    c = i == 0 ? 0xFF3A2A : i < 3 ? 0xFFC030 : 0x3AE06A;
+    e_S_WHEEL == 1 ? c = i == 0 ? 0xFF3A2A : 0x3AE06A;
+    ui_col(0x0A0A0A); gfx_circle((x + 6) * sc, (y + 6 + i * 21) * sc, 6 * sc, 1, 1);
+    ui_col(lit ? c : ui_mix(c, 0x0A0A0A, 0.75)); gfx_circle((x + 6) * sc, (y + 6 + i * 21) * sc, 4.6 * sc, 1, 1);
+    lit && ui_hw ? ( ui_col(ui_mix(c, 0xFFFFFF, 0.6)); gfx_circle((x + 5) * sc, (y + 5 + i * 21) * sc, 1.5 * sc, 1, 1); );
+    i += 1; );
+  e_ctxt(x + 6, y + 214, s, 10, 0.85);
+);
+function e_wheel(cx, cy, r) local(hov, a, i, t) (
+  hov = (mouse_x - cx * sc) ^ 2 + (mouse_y - cy * sc) ^ 2 <= (r * sc) ^ 2;
+  pressed && hov && drag_id == 0 ? ( drag_id = 1995; e_w_y = mouse_y; );
+  drag_id == 1995 ? ( e_w_a += (e_w_y - mouse_y) / (40 * sc); pv_nudge(e_vsel, (e_w_y - mouse_y) / (((mouse_cap & 8) ? 3000 : 600) * sc)); e_w_y = mouse_y; );
+  hov && mouse_wheel != 0 && drag_id == 0 ? ( pv_step(e_vsel, sign(mouse_wheel)); e_w_a += sign(mouse_wheel) * 0.3; mouse_wheel = 0; );
+  a = e_w_a;
+  ui_col(ui_mix(e_S_FACE, 0x000000, 0.55)); gfx_circle((cx + 2) * sc, (cy + 4) * sc, r * sc, 1, 1);
+  e_S_WHEEL == 1 ? (
+    // a big red pointer knob with a printed scale, as on the cream broadcast unit
+    i = 0; loop(21, t = -0.75 * $pi + i / 20 * 1.5 * $pi; ui_col(e_S_INK);
+      gfx_line((cx + sin(t) * (r + 4)) * sc, (cy - cos(t) * (r + 4)) * sc, (cx + sin(t) * (r + (i % 5 ? 8 : 12))) * sc, (cy - cos(t) * (r + (i % 5 ? 8 : 12))) * sc, 1); i += 1; );
+    ui_col(0xA8221A); gfx_circle(cx * sc, cy * sc, r * sc, 1, 1);
+    ui_col(0xE03428); gfx_circle(cx * sc, cy * sc, r * 0.86 * sc, 1, 1);
+    ui_col(0xF06050); gfx_circle((cx - r * 0.2) * sc, (cy - r * 0.25) * sc, r * 0.3 * sc, 1, 1);
+    ui_col(0xE03428); gfx_circle(cx * sc, cy * sc, r * 0.55 * sc, 1, 1);
+    ui_kline(cx * sc, cy * sc, a, r * 0.2 * sc, r * 0.95 * sc, 3, 0xFFFFFF);
+  ) : (
+    // a turned metal wheel (silver; dark on the console controller and the silver unit)
+    ui_col(e_S_WHEEL == 0 ? 0x8A8E96 : 0x1A1B1E); gfx_circle(cx * sc, cy * sc, r * sc, 1, 1);
+    i = 0; loop(48, t = i / 48 * 2 * $pi + a; ui_col(e_S_WHEEL == 0 ? (i % 2 ? 0x9EA2AA : 0x70747C) : (i % 2 ? 0x2A2B30 : 0x101114));
+      gfx_line((cx + sin(t) * r * 0.86) * sc, (cy - cos(t) * r * 0.86) * sc, (cx + sin(t) * r) * sc, (cy - cos(t) * r) * sc, 1); i += 1; );
+    i = 0; loop(8, t = i / 7; ui_col(ui_mix(e_S_WHEEL == 0 ? 0xA4A8B0 : 0x3A3C42, e_S_WHEEL == 0 ? 0xF2F4F8 : 0x8A8E96, t));
+      gfx_circle((cx - r * 0.1 * t) * sc, (cy - r * 0.14 * t) * sc, r * 0.82 * (1 - t * 0.5) * sc, 1, 1); i += 1; );
+    ui_col(e_S_WHEEL == 0 ? 0x30323A : 0xD8DADE); gfx_circle((cx + sin(a) * r * 0.62) * sc, (cy - cos(a) * r * 0.62) * sc, 3.5 * sc, 1, 1);
+  );
+  e_txt(cx - r - 18, cy - r - 2, "-", 18, 0.9); e_txt(cx + r + 8, cy - r - 2, "+", 18, 0.9);
+);
+function e_gfx() (
+ui_begin(1440, 320);
+ui_thm = 5; ui_hw = 1; ui_theme(5);
+
+// ---------- the four faceplates ----------
+// SK: face, ink, line, window, segment on, segment off, key, key text, key edge, accent (LEDs), texture (0 plain, 1 brushed)
+
+
+
+// a rounded outline round a group, its name in a tab cut into the top line
+
+// a key in the faceplate's style; returns 1 when clicked (with repeat while held if rep)
+
+// a parameter display: caption, window with the value and its unit, - / + keys underneath.
+// Click the window to give it the data wheel; drag it, or use the wheel / mouse wheel; double-click = default.
+
+// the LED meter column (dB below full scale), one per channel pair
+
+// the data wheel: drag (Shift = fine) or mouse wheel changes the display it is given
+
+
+// ---------- the panel ----------
+e_skin(e_mdl);
+fh = 312;
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(ui_mix(e_S_FACE, 0x000000, 0.45)); lz_rr(4, 4, 1432, fh, 8);
+ui_col(e_S_FACE); lz_rr(5, 5, 1430, fh - 2, 7);
+e_S_TEX ? ( e_gi = 0; loop(floor(fh / 2), ui_col(ui_mix(e_S_FACE, e_gi % 3 ? 0xFFFFFF : 0x000000, e_gi % 2 ? 0.03 : 0.05)); gfx_rect(8 * sc, (6 + e_gi * 2) * sc, 1424 * sc, 1); e_gi += 1; ); );
+ui_hw ? gfx_gradrect(6 * sc, 6 * sc, 1428 * sc, 40 * sc, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06 / (40 * sc));
+e_gi = 0; loop(4, pk_screw((e_gi % 2 ? 1422 : 18) * sc, (e_gi < 2 ? 18 : fh - 10) * sc); e_gi += 1; );
+
+// header: badge, name, the model's line, presets / size / help
+ui_col(e_S_INK); gfx_circle(48 * sc, 26 * sc, 13 * sc, 1, 1); gfx_setfont(4); ui_col(e_S_FACE); ui_text(48 * sc, 21 * sc, "GFX");
+gfx_setfont(6, "Arial", 24 * sc, 'e_bi'); ui_col(e_S_INK); gfx_x = 70 * sc; gfx_y = 12 * sc; gfx_drawstr("VRB45");
+e_txt(178, 21, e_mdl == 0 ? "DIGITAL ROOM SIMULATOR" : e_mdl == 1 ? "DIGITAL BROADCAST REVERBERATOR" : e_mdl == 2 ? "CONSOLE REVERBERATION UNIT" : "DIGITAL REVERBERATOR / PROCESSOR", 11, 0.75);
+ui_size_picker(1360 * sc, 14 * sc);
+
+// meters: input and reverb out
+e_meter(30, 56, e_piL > e_piR ? e_piL : e_piR, "IN"); e_meter(62, 56, e_rvd, "REV");
+e_rvd = max(e_rvl, e_rvd * 0.88); e_rvl = 0; e_piL *= 0.85; e_piR *= 0.85;
+
+// ---------- MODEL ----------
+e_group(96, 52, 120, 248, "MODEL");
+e_key(108, 64, 96, 30, "ROOM SIM", e_mdl == 0, 0) ? ( slider1 = 0; ui_auto(1); e_update(); );
+e_key(108, 100, 96, 30, "BROADCAST", e_mdl == 1, 0) ? ( slider1 = 1; ui_auto(1); e_update(); );
+e_key(108, 136, 96, 30, "DIALOGUE", e_mdl == 2, 0) ? ( slider1 = 2; ui_auto(1); e_update(); );
+e_key(108, 172, 96, 30, "NON-LIN", e_mdl == 3, 0) ? ( slider1 = 3; ui_auto(1); e_update(); );
+e_ctxt(156, 210, e_mdl == 3 ? "SHAPE" : "", 10, 0.85);
+e_mdl == 3 ? (
+  e_key(108, 224, 30, 22, "RM", slider16 == 0, 0) ? ( slider16 = 0; ui_auto(16); e_update(); );
+  e_key(141, 224, 30, 22, "GT", slider16 == 1, 0) ? ( slider16 = 1; ui_auto(16); e_update(); );
+  e_key(174, 224, 30, 22, "RV", slider16 == 2, 0) ? ( slider16 = 2; ui_auto(16); e_update(); );
+);
+e_key(108, 260, 96, 30, "VINTAGE", slider15, 0) ? ( slider15 = 1 - slider15; ui_auto(15); e_update(); );
+
+// ---------- displays, upper row ----------
+e_group(226, 52, 200, 108, "1st REFLECTION"); e_disp(0, 232, 62, "DELAY", "ms"); e_disp(1, 332, 62, "LEVEL", "dB");
+e_group(432, 52, 200, 108, "REVERB");         e_disp(2, 438, 62, "DELAY", "ms"); e_disp(3, 538, 62, "LEVEL", "dB");
+e_group(762, 52, 300, 108, "REVERB TIME");    e_disp(4, 768, 62, "HIGH END", "x"); e_disp(5, 868, 62, "TIME", "SEC"); e_disp(6, 968, 62, "LOW END", "x");
+e_group(1068, 52, 112, 108, "ROOM");          e_disp(7, 1080, 62, "SIZE", "m3");
+// ---------- displays, lower row ----------
+e_group(226, 192, 200, 108, "REFLECTIONS");   e_disp(8, 232, 202, "DENSITY", "%"); e_disp(9, 332, 202, "DIFFUSION", "%");
+e_group(432, 192, 200, 108, "FILTER");        e_disp(10, 438, 202, "LO CUT", "Hz"); e_disp(11, 538, 202, "HI CUT", "kHz");
+e_group(762, 192, 300, 108, "CHARACTER");     e_disp(12, 768, 202, "DRIVE", "%"); e_disp(13, 868, 202, "WIDTH", "%"); e_disp(14, 968, 202, "DRIFT", "%");
+e_group(1068, 192, 112, 108, "OUTPUT");       e_disp(15, 1080, 202, "MIX", "%");
+
+// ---------- the data wheel, the program display and the memory keys ----------
+e_group(638, 52, 118, 248, "PARAMETERS");
+e_wheel(697, 106, 34);
+e_ctxt(697, 150, "SELECTED", 9, 0.6);
+e_ctxt(697, 162, e_vsel == 0 ? "REFL DELAY" : e_vsel == 1 ? "REFL LEVEL" : e_vsel == 2 ? "REV DELAY" : e_vsel == 3 ? "REV LEVEL" : e_vsel == 4 ? "RT HIGH" :
+     e_vsel == 5 ? "RT TIME" : e_vsel == 6 ? "RT LOW" : e_vsel == 7 ? "ROOM SIZE" : e_vsel == 8 ? "DENSITY" : e_vsel == 9 ? "DIFFUSION" : e_vsel == 10 ? "LO CUT" :
+     e_vsel == 11 ? "HI CUT" : e_vsel == 12 ? "DRIVE" : e_vsel == 13 ? "WIDTH" : e_vsel == 14 ? "DRIFT" : e_vsel == 15 ? "MIX" : e_vsel == 16 ? "TRIM" : e_vsel == 17 ? "LEVEL" :
+     e_vsel == 18 ? "DRIFT SPEED" : e_vsel == 19 ? "SAT" : e_vsel == 20 ? "BIAS" : e_vsel == 21 ? "LO BAND" : e_vsel == 22 ? "HI BAND" : "CEILING", 10, 0.95);
+// program number + LIST (all presets by name), prev / next under them, then memory keys 1 - 9, 0 = 10
+ui_col(e_S_WIN); lz_rr(650, 180, 46, 30, 4);
+sprintf(#e_pn, e_lastp > 0 ? "P%d" : "P-", e_lastp); seg_str(654 * sc, 185 * sc, 8 * sc, 20 * sc, 3, e_lastp > 0 ? #e_pn : "P--", e_S_ON, e_S_OFF);
+e_key(650, 214, 47, 20, "", -1, 0) ? e_load_preset(e_lastp <= 1 ? 10 : e_lastp - 1);
+e_key(701, 214, 47, 20, "", -1, 0) ? e_load_preset(e_lastp >= 10 ? 1 : e_lastp + 1);
+ui_col(e_S_KT); gfx_triangle(677.25 * sc, 219 * sc, 677.25 * sc, 229 * sc, 669.75 * sc, 224 * sc);
+gfx_triangle(720.75 * sc, 219 * sc, 720.75 * sc, 229 * sc, 728.25 * sc, 224 * sc);   // the arrows
+e_key(700, 180, 48, 30, "LIST", -1, 0) ? (
+  gfx_x = 700 * sc; gfx_y = 210 * sc;
+  e_load_preset(gfx_showmenu("Vocal Air|Concert Room|Drum Room|Broadcast Plate|Warm Hall (vintage)|Voice-Over Booth|Narration Space|Gated Snare|Reverse Swell|Tight Ambience|Reset all to defaults"));
+);
+e_gi = 0; loop(10, e_key(650 + (e_gi % 5) * 20, 242 + floor(e_gi / 5) * 23, 18, 20, e_gi == 9 ? "0" : sprintf(#e_kn, "%d", e_gi + 1), -1, 0) ? e_load_preset(e_gi + 1); e_gi += 1; );
+// ---------- IN / OUT: trim + guard, the output level and saturation ----------
+e_group(1192, 52, 232, 248, "IN / OUT");
+e_disp(16, 1206, 64, "TRIM", "dB");
+e_disp(17, 1206, 182, "LEVEL", "dB");
+e_disp(19, 1316, 64, "SAT", "%");
+e_key(1318, 215, 84, 22, "GUARD", slider29, 0) ? ( slider29 = 1 - slider29; ui_auto(29); e_update(); );
+
+pk_end();
+ui_end();
+0;
+);
+function j_skin(m) (
+  m == 3 ? ( j_S_FACE = 0xCFD1D0; j_S_IN = 0xB4B8BA; j_S_INK = 0x1E2430; j_S_KM = 0x3A72D0; j_S_KP = 0x3A72D0; j_S_KG = 0x2EA85A; j_S_KN = 0x8E9296;
+             j_S_KE = 0xF08C1E; j_S_KC = 0xD8402E; j_S_KT = 0xFFFFFF; j_S_LCD = 0; j_S_WIN = 0x140606; j_S_ON = 0xFF3020; j_S_OFF = 0x3A1210; j_S_LED = 0xFF3020; j_S_TTL = 0x3A5ED8; ) :
+  m == 0 ? ( j_S_FACE = 0x1E1F23; j_S_IN = 0x2C2E33; j_S_INK = 0xD0D2D8; j_S_KM = 0x5E626A; j_S_KP = 0x4A4E56; j_S_KG = 0x3E7A52; j_S_KN = 0x5E626A;
+             j_S_KE = 0x8A8E96; j_S_KC = 0x8E3A34; j_S_KT = 0xF0F2F4; j_S_LCD = 1; j_S_WIN = 0x9AD06A; j_S_ON = 0x14240C; j_S_OFF = 0x8CC25E; j_S_LED = 0x5AF07A; j_S_TTL = 0xD0D2D8; ) :
+  m == 1 ? ( j_S_FACE = 0xC9B88E; j_S_IN = 0xB4A27A; j_S_INK = 0x2A2418; j_S_KM = 0x4A4438; j_S_KP = 0x5A5244; j_S_KG = 0x6A6250; j_S_KN = 0x4A4438;
+             j_S_KE = 0x8A6A30; j_S_KC = 0x7A3A2A; j_S_KT = 0xF2E8D0; j_S_LCD = 0; j_S_WIN = 0x1A1006; j_S_ON = 0xFFB030; j_S_OFF = 0x3A2808; j_S_LED = 0xFFB030; j_S_TTL = 0x2A2418; ) :
+           ( j_S_FACE = 0x2A3040; j_S_IN = 0x353C4E; j_S_INK = 0xD8DEE8; j_S_KM = 0xB8BCC4; j_S_KP = 0x9EA4AE; j_S_KG = 0x7E8896; j_S_KN = 0xB8BCC4;
+             j_S_KE = 0xD8DCE2; j_S_KC = 0x9A5048; j_S_KT = 0x1A1E26; j_S_LCD = 0; j_S_WIN = 0x041216; j_S_ON = 0x5AE8FF; j_S_OFF = 0x0E2A32; j_S_LED = 0x5AE8FF; j_S_TTL = 0xD8DEE8; );
+);
+function j_txt(x, y, s, j_sz, a) ( gfx_setfont(6, "Arial", j_sz * sc, 'b'); ui_col(ui_mix(j_S_IN, j_S_INK, a)); gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function j_ctxt(x, y, s, j_sz, a) local(tw, th) ( gfx_setfont(6, "Arial", j_sz * sc, 'b'); gfx_measurestr(s, tw, th); ui_col(ui_mix(j_S_IN, j_S_INK, a)); gfx_x = x * sc - tw * 0.5; gfx_y = y * sc; gfx_drawstr(s); );
+function cap(x, y, w, s) local(tw, th) (
+  gfx_setfont(6, "Arial", 9 * sc, 'b'); gfx_measurestr(s, tw, th);
+  ui_col(ui_mix(j_S_IN, j_S_INK, 0.55)); gfx_rect(x * sc, (y + 4) * sc, w * sc, 1 * sc + 0.5);
+  ui_col(j_S_IN); gfx_rect((x + w * 0.5) * sc - tw * 0.5 - 4 * sc, y * sc, tw + 8 * sc, 9 * sc);
+  ui_col(j_S_INK); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = y * sc; gfx_drawstr(s);
+);
+function j_key(x, y, w, h, col, s, j_s2, led, j_rep) local(hit, inb, tw, th, dn, j_id) (
+  j_id = 100000 + x * 1000 + y;
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc;
+  hit = pressed && drag_id == 0 && inb;
+  hit ? ( drag_id = j_id; j_k_tn = time_precise() + 0.4; );
+  j_rep && drag_id == j_id && inb && time_precise() > j_k_tn ? ( hit = 1; j_k_tn = time_precise() + 0.07; );
+  dn = drag_id == j_id && inb;
+  ui_col(ui_mix(j_S_IN, 0x000000, 0.45)); lz_rr(x + 1, y + 2, w, h, 3);
+  ui_col(ui_mix(col, 0x000000, 0.35)); lz_rr(x, y, w, h, 3);
+  ui_col(dn ? ui_mix(col, 0x000000, 0.18) : col); lz_rr(x + 1, y + 1, w - 2, h - 3, 3);
+  ui_hw ? ( ui_col(ui_mix(col, 0xFFFFFF, 0.22)); gfx_rect((x + 3) * sc, (y + 2) * sc, (w - 6) * sc, 1 * sc + 0.5); );
+  led >= 0 ? ( ui_col(0x0A0A0A); gfx_circle((x + 7) * sc, (y + 7) * sc, 3.2 * sc, 1, 1);
+               ui_col(led ? j_S_LED : ui_mix(j_S_LED, 0x0A0A0A, 0.75)); gfx_circle((x + 7) * sc, (y + 7) * sc, 2.4 * sc, 1, 1); );
+  gfx_setfont(6, "Arial", (strlen(s) == 1 ? 16 : strlen(s) <= 5 && !strlen(j_s2) && led < 0 && h > 30 ? 13 : h <= 30 ? 11 : 10) * sc, 'b');
+  ui_col(ui_ink(col) == 0x1A1A1C ? 0x1A1E26 : 0xFFFFFF);
+  strlen(j_s2) ? (
+    gfx_measurestr(s, tw, th); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y + h * 0.5 - 1) * sc - th; gfx_drawstr(s);
+    gfx_measurestr(j_s2, tw, th); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y + h * 0.5 + 1) * sc; gfx_drawstr(j_s2);
+  ) : ( gfx_measurestr(s, tw, th); gfx_x = (x + w * 0.5) * sc - tw * 0.5; gfx_y = (y + h * 0.5 + (led >= 0 ? 2 : 0)) * sc - th * 0.5; gfx_drawstr(s); );
+  hit;
+);
+function j_win(k, x, y, w, n, s, j_unit, j_cp) local(inb, did, j_dw) (
+  did = 1900 + k;
+  inb = mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + 44) * sc;
+  pressed && inb && drag_id == 0 ? (
+    time_precise() - j_d_lt < 0.35 && j_d_lk == k ? ( pv_reset(k); drag_id = -1; ) : ( drag_id = did; j_d_y = mouse_y; j_d_lt = time_precise(); j_d_lk = k; );
+    j_ksel = k;
+  );
+  drag_id == did && abs(mouse_y - j_d_y) >= 2 * sc ? ( pv_nudge(k, (j_d_y - mouse_y) / (((mouse_cap & 8) ? 1500 : 300) * sc)); j_d_y = mouse_y; );
+  inb && mouse_wheel != 0 && drag_id == 0 ? ( pv_step(k, sign(mouse_wheel)); mouse_wheel = 0; j_ksel = k; );
+  ui_col(j_ksel == k ? j_S_LED : ui_mix(j_S_IN, 0x000000, 0.5)); lz_rr(x - 1.5, y - 1.5, w + 3, 47, 5);
+  ui_col(j_S_WIN); lz_rr(x, y, w, 44, 4);
+  j_S_LCD && ui_hw ? gfx_gradrect(x * sc, y * sc, w * sc, 44 * sc, 1, 1, 1, 0.12, 0, 0, 0, 0, 0, 0, 0, -0.12 / (44 * sc));
+  j_dw = min(13, (w - 26) / n / 1.38);
+  seg_str((x + w - n * j_dw * 1.38 - 5) * sc, (y + 9) * sc, j_dw * sc, 27 * sc, n, s, j_S_ON, ui_mix(j_S_WIN, j_S_OFF, j_S_LCD ? 0.5 : 0.38));
+  strlen(j_cp) ? j_ctxt(x + w * 0.5, y + 50, j_cp, 9, 0.9);
+  gfx_setfont(6, "Arial", 9 * sc, 'b'); ui_col(ui_mix(j_S_WIN, j_S_ON, 0.8)); gfx_x = (x + 4) * sc; gfx_y = (y + 3) * sc; gfx_drawstr(j_unit);
+);
+function j_pmod(k, x, y, j_cp, n) (
+  cap(x, y, 110, j_cp);
+  j_win(k, x, y + 13, 110, n, j_pv_text(k), j_pv_unit(k), "");
+  j_key(x, y + 63, 53, 26, j_S_KP, "DOWN", "", -1, 1) ? ( pv_step(k, -1); j_ksel = k; );
+  j_key(x + 57, y + 63, 53, 26, j_S_KP, "UP", "", -1, 1) ? ( pv_step(k, 1); j_ksel = k; );
+);
+function j_lamps(x, y, s, k, j_v0, j_v1, j_v2, j_v3, j_l0, j_l1, j_l2, j_l3) local(i, v, j_tol) (
+  cap(x, y, 170, s);
+  i = 0;
+  loop(4, v = i == 0 ? j_v0 : i == 1 ? j_v1 : i == 2 ? j_v2 : j_v3; j_tol = abs(v) * 0.02 + 0.001;
+    j_key(x + i * 44, y + 14, 38, 30, j_S_KN, i == 0 ? j_l0 : i == 1 ? j_l1 : i == 2 ? j_l2 : j_l3, "", abs(pv_get(k) - v) < j_tol, 0) ? pv_set(k, v);
+    i += 1; );
+);
+function j_gfx() (
+ui_begin(1440, 380);
+seg_clean = 1;   // readouts as plain bold figures (easier to read than segments)
+ui_thm = 5; ui_hw = 1; ui_theme(5);
+
+// ---------- the four faceplates ----------
+// face, inset, ink, model / parameter / green / number / enter / clear keys, key text, LCD (1) or lit segments (0), window, on, off, LED
+
+
+
+// a framed caption bar over a group of keys (as on the remote)
+
+// a square key with an LED in its corner (led: -1 none, 0 off, 1 on); two lines of text allowed (s2)
+
+// a display window: lit segments (LED / fluorescent) or a backlit LCD; drag / wheel adjust k, click selects it
+
+// one parameter, all on the top level: caption bar, its display, DOWN / UP keys
+
+// a row of four lamp keys that set a parameter to fixed values
+
+// ---------- the panel ----------
+j_skin(j_mdl);
+fh = 372;
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(ui_mix(j_S_FACE, 0x000000, 0.4)); lz_rr(4, 4, 1432, fh, 9);
+ui_col(j_S_FACE); lz_rr(5, 5, 1430, fh - 2, 8);
+ui_col(ui_mix(j_S_IN, 0x000000, 0.25)); lz_rr(13, 41, 1414, fh - 48, 6);
+ui_col(j_S_IN); lz_rr(14, 42, 1412, fh - 50, 5);
+ui_hw ? gfx_gradrect(6 * sc, 6 * sc, 1428 * sc, 34 * sc, 1, 1, 1, 0.08, 0, 0, 0, 0, 0, 0, 0, -0.08 / (34 * sc));
+
+// header (on the face): badge, name in outlined letters, the model's line, size / help
+ui_col(j_S_INK); gfx_circle(34 * sc, 22 * sc, 12 * sc, 1, 1); gfx_setfont(4); ui_col(j_S_FACE); ui_text(34 * sc, 17 * sc, "GFX");
+gfx_setfont(6, "Arial Black", 24 * sc, 'j_bi');
+ui_col(j_S_TTL); j_gi = -1; loop(3, j_gj = -1; loop(3, gfx_x = (56 + j_gi) * sc; gfx_y = (8 + j_gj) * sc; gfx_drawstr("VRB45"); j_gj += 1; ); j_gi += 1; );
+ui_col(j_S_FACE); gfx_x = 56 * sc; gfx_y = 8 * sc; gfx_drawstr("VRB45");
+gfx_setfont(6, "Arial", 11 * sc, 'b'); ui_col(ui_mix(j_S_FACE, j_S_INK, 0.8)); gfx_x = 180 * sc; gfx_y = 17 * sc;
+gfx_drawstr(j_mdl == 0 ? "MODULAR DIGITAL HALL SYSTEM" : j_mdl == 1 ? "DIGITAL BROADCAST REVERBERATOR  -  3D" : j_mdl == 2 ? "DIGITAL REVERBERATOR  -  40 REFLECTIONS" : "DIGITAL REVERBERATOR  -  PCM 12-BIT");
+ui_size_picker(1360 * sc, 12 * sc);
+
+// headroom (input) and reverb LEDs
+cap(26, 52, 180, "HEADROOM");
+j_gi = 0; loop(4, j_gd_ = j_gi == 0 ? -30 : j_gi == 1 ? -20 : j_gi == 2 ? -10 : 0;
+  ui_col(0x0A0A0A); gfx_circle((44 + j_gi * 44) * sc, (74 + 0) * sc, 5 * sc, 1, 1);
+  ui_col(20 * log10(max(max(j_piL, j_piR), 0.000001)) >= j_gd_ ? (j_gi == 3 ? 0xFF3020 : j_S_LED == 0xFF3020 ? 0x3AE06A : j_S_LED) : 0x2A2A2A); gfx_circle((44 + j_gi * 44) * sc, 74 * sc, 3.8 * sc, 1, 1);
+  sprintf(#j_hl, j_gi == 3 ? "0dB" : "%d", -j_gd_); j_ctxt(44 + j_gi * 44, 82, #j_hl, 9, 0.8); j_gi += 1; );
+j_piL *= 0.85; j_piR *= 0.85;
+
+// ---------- MODEL keys (A - D), VINTAGE, BITS ----------
+cap(26, 100, 180, "PROGRAM");
+j_key(26, 114, 86, 46, j_S_KM, "A  HALL", "", j_mdl == 0, 0) ? ( slider1 = 0; ui_auto(1); j_update(); );
+j_key(120, 114, 86, 46, j_S_KM, "B  3D", "", j_mdl == 1, 0) ? ( slider1 = 1; ui_auto(1); j_update(); );
+j_key(26, 166, 86, 46, j_S_KM, "C  FLAGSHIP", "40", j_mdl == 2, 0) ? ( slider1 = 2; ui_auto(1); j_update(); );
+j_key(120, 166, 86, 46, j_S_KM, "D  12-BIT", "", j_mdl == 3, 0) ? ( slider1 = 3; ui_auto(1); j_update(); );
+j_key(26, 224, 86, 38, j_S_KG, "VINTAGE", "CLOCK", slider15 || j_mdl == 3, 0) ? ( slider15 = 1 - slider15; ui_auto(15); j_update(); );
+j_key(120, 224, 86, 38, j_S_KG, "BITS", slider30 == 0 ? "12" : slider30 == 1 ? "16" : "24", -1, 0) ? ( slider30 = (slider30 + 1) % 3; ui_auto(30); j_update(); );
+// presets and the last one recalled
+j_key(26, 274, 86, 34, j_S_KN, "READ", "PRESETS", -1, 0) ? (
+  gfx_x = 26 * sc; gfx_y = 308 * sc;
+  j_load_preset(gfx_showmenu("Massive Hall|Vocal Hall|Synth Pad Space|3D Scoring Stage|Film Room|Studio Room 40|Acoustic Guitar (vintage)|80s Vocal Plate|Drum Room 12-Bit|Synthwave Wash|Reset all to defaults"));
+);
+ui_col(j_S_WIN); lz_rr(120, 274, 86, 34, 4);
+seg_str(130 * sc, 280 * sc, 11 * sc, 22 * sc, 3, j_lastp > 0 ? sprintf(#j_pn, "P%d", j_lastp) : "P--", j_S_ON, ui_mix(j_S_WIN, j_S_OFF, 0.4));
+// prev / next under them: step through the ten presets (wrapping round)
+j_key(26, 316, 86, 26, j_S_KN, "", "", -1, 0) ? j_load_preset(j_lastp <= 1 ? 10 : j_lastp - 1);
+j_key(120, 316, 86, 26, j_S_KN, "", "", -1, 0) ? j_load_preset(j_lastp >= 10 ? 1 : j_lastp + 1);
+ui_col(ui_ink(j_S_KN) == 0x1A1A1C ? 0x1A1E26 : 0xFFFFFF); gfx_triangle(73.5 * sc, 322 * sc, 73.5 * sc, 334 * sc, 64.5 * sc, 328 * sc);
+gfx_triangle(158.5 * sc, 322 * sc, 158.5 * sc, 334 * sc, 167.5 * sc, 328 * sc);   // the arrows
+
+// ---------- the lamp rows: quick settings ----------
+j_lamps(230, 52, "LOW CUT FREQ", 10, 30, 50, 100, 200, "30", "50", "100", "200");
+j_lamps(418, 52, "HIGH CUT FREQ", 11, 2500, 5000, 10000, 13000, "2.5k", "5k", "10k", "13k");
+j_lamps(230, 104, "RT LOW FREQ RANGE", 6, 0.5, 1.0, 1.5, 2.0, "x0.5", "x1.0", "x1.5", "x2.0");
+j_lamps(418, 104, "RT HIGH FREQ RANGE", 4, 0.25, 0.35, 0.5, 1.0, "x0.25", "x0.35", "x0.5", "x1.0");
+
+// ---------- the ER grid: a dot-matrix picture of the reflections (time across 0 - 240 ms, level up) ----------
+cap(616, 52, 562, "EARLY REFLECTIONS   0 - 240 ms");
+ui_col(0x080A0C); lz_rr(616, 66, 562, 94, 4);
+j_gi = 0; loop(58, j_gj = 0; loop(9, ui_col(0x1A1E22); gfx_circle((626 + j_gi * 9.6) * sc, (74 + j_gj * 9.6) * sc, 2.4 * sc, 1, 1); j_gj += 1; ); j_gi += 1; );
+j_er_g > 0 ? ( j_gi = 0; loop(er_n,
+  j_gx_ = floor((er_tl[j_gi] / srate * 1000 + slider2) / 240 * 58); j_gh_ = floor(min(abs(er_gl[j_gi]) + abs(er_gr[j_gi]), 1.2) / 1.2 * 8 * min(j_er_g * 2, 1)) + 1;
+  j_gx_ < 58 ? ( j_gj = 0; loop(j_gh_, ui_col(j_S_LCD ? 0x5AF07A : j_S_LED); gfx_circle((626 + j_gx_ * 9.6) * sc, (74 + (8 - j_gj) * 9.6) * sc, 2.6 * sc, 1, 1); j_gj += 1; ); );
+  j_gi += 1; ); );
+// the tail starts here (reverb delay)
+j_gx_ = floor(slider4 / 240 * 58); j_gx_ < 58 ? ( j_gj = 0; loop(5, ui_col(ui_mix(j_S_LED, 0x080A0C, 0.6)); gfx_circle((626 + j_gx_ * 9.6) * sc, (74 + j_gj * 9.6) * sc, 2.6 * sc, 1, 1); j_gj += 2; ); );
+
+// ---------- every parameter on the top level ----------
+j_gi = 0;
+loop(16,
+  j_gk = j_gi == 0 ? 5 : j_gi == 1 ? 2 : j_gi == 2 ? 3 : j_gi == 3 ? 0 : j_gi == 4 ? 1 : j_gi == 5 ? 7 : j_gi == 6 ? 8 : j_gi == 7 ? 9 :
+       j_gi == 8 ? 4 : j_gi == 9 ? 6 : j_gi == 10 ? 10 : j_gi == 11 ? 11 : j_gi == 12 ? 12 : j_gi == 13 ? 13 : j_gi == 14 ? 14 : 15;
+  j_pmod(j_gk, 230 + (j_gi % 8) * 120, 172 + floor(j_gi / 8) * 98, j_pv_name(j_gk), j_gk == 7 ? 5 : 4);
+  j_gi += 1; );
+
+// ---------- IN / OUT (right column): trim + guard, the output level and saturation ----------
+cap(1196, 52, 216, "IN / OUT");
+j_win(16, 1196, 100, 104, 4, j_pv_text(16), "dB", "TRIM");
+j_key(1308, 104, 104, 36, j_S_KG, "GUARD", "", slider29, 0) ? ( slider29 = 1 - slider29; ui_auto(29); j_update(); );
+j_win(17, 1196, 212, 104, 4, j_pv_text(17), "dB", "LEVEL");
+j_win(19, 1308, 212, 104, 3, j_pv_text(19), "%", "SAT");
+
+pk_end();
+ui_end();
+0;
+);
+rg_cur ? j_gfx() : e_gfx();
+// the REGION keys (EUROPE / JAPAN), drawn over the panel at its top right
+function rg_key(x, y, w, h, on, s) local(hit, tw, th) (
+  hit = mouse_cap & 1 && !rg_down && mouse_x >= x && mouse_x < x + w && mouse_y >= y && mouse_y < y + h;
+  ui_col(0x101010); gfx_rect(x, y, w, h);
+  ui_col(on ? 0xE8C060 : 0x3A3A3E); gfx_rect(x + 1, y + 1, w - 2, h - 2);
+  gfx_setfont(1, "Arial", h * 0.62, 'b'); gfx_measurestr(s, tw, th); ui_col(on ? 0x101010 : 0xD8D8D8);
+  gfx_x = x + (w - tw) * 0.5; gfx_y = y + (h - th) * 0.5; gfx_drawstr(s);
+  hit;
+);
+rg_s = sc; rg_x = (ui_bw - 150) * rg_s; rg_y = 4 * rg_s;
+rg_key(rg_x, rg_y, 30 * rg_s, 16 * rg_s, slider31 < 0.5, "EU") ? ( slider31 = 0; slider_automate(2 ^ (31 - 1)); );
+rg_key(rg_x + 32 * rg_s, rg_y, 30 * rg_s, 16 * rg_s, slider31 >= 0.5, "JP") ? ( slider31 = 1; slider_automate(2 ^ (31 - 1)); );
+rg_down = mouse_cap & 1;

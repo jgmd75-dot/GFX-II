@@ -167,6 +167,7 @@ MODULATION & SPACE
   Autopan         gfx-autopan.jsfx
   Chopper         gfx-chopper.jsfx
   Chorus          gfx-chorus.jsfx
+  DLY45           gfx-dly45.jsfx
   DRP-45          gfx-drp-45.jsfx
   Dynatron        gfx-dynatron.jsfx
   E-Delay         gfx-e-delay.jsfx
@@ -189,6 +190,7 @@ MODULATION & SPACE
   Rotary          gfx-rotary.jsfx
   Space           gfx-space.jsfx
   Squashball      gfx-squashball.jsfx
+  VRB45           gfx-vrb45.jsfx
   Vocoder-45      gfx-vocoder-45.jsfx
 
 MASTERING
