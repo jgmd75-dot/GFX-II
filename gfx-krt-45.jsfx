@@ -81,6 +81,7 @@ slider9:50<0,100,1>-Drift (%)
 slider10:0<0,1,1{Off,On}>-Bypass
 slider11:0<0,2,1{Enamel,VFD,Matrix}>-Theme
 slider12:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider13:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -384,6 +385,7 @@ krv_th == 0 ? (                                         // ENAMEL: light industr
   KRM  = 0x4A4E4A;
 );
 KRGRN = 0x1E5631; KROLV = 0x2C302E; KRGH = 0x0D0E0F;    // forest-green blocks, olive-drab cells, VFD ghosts
+krv_de = slider13 >= 0.5;                               // the language key: ENG / DE labels
 
 gfx_setfont(6,  "Trebuchet MS", 27 * sc, 'b');          // title
 gfx_setfont(10, "Trebuchet MS", 14 * sc, 'b');          // scale numbers
@@ -518,11 +520,10 @@ function kr_bake(cx, cy, r, a) local(i, t, ca, sa, k) (
     ui_col(0x0E0D0B); gfx_circle(cx + sin(t + 0.196) * r * 0.9, cy - cos(t + 0.196) * r * 0.9, r * 0.075, 1, 1);
     i += 1;
   );
-  // the domed cap
+  // the cap: flat (45-series rule: no banded shading), a fine smooth edge
   ui_col(0x0A0908); gfx_circle(cx, cy, r * 0.70 + 1 * sc, 1, 1);
   ui_col(0x24211D); gfx_circle(cx, cy, r * 0.70, 1, 1);
-  i = 0; loop(6, ui_cola(0xFFFFFF, 0.025); gfx_circle(cx - r * 0.12 * i / 5, cy - r * 0.14 * i / 5, r * (0.66 - i * 0.09), 1, 1); i += 1; );
-  ui_cola(0xFFFFFF, 0.10); gfx_circle(cx - r * 0.26, cy - r * 0.30, r * 0.13, 1, 1);
+  ui_cola(0xFFFFFF, 0.08); gfx_circle(cx, cy, r * 0.70, 0, 1);
   // the pointer: a broad line, engraved and filled, from near the centre to the skirt edge
   ui_col(0x080706); i = -2;
   loop(5, gfx_line(cx + ca * r * 0.18 - sa * i * 0.8 * sc, cy + sa * r * 0.18 + ca * i * 0.8 * sc,
@@ -531,6 +532,21 @@ function kr_bake(cx, cy, r, a) local(i, t, ca, sa, k) (
   loop(3, gfx_line(cx + ca * r * 0.22 - sa * i * 0.75 * sc, cy + sa * r * 0.22 + ca * i * 0.75 * sc,
                    cx + ca * r * 0.95 - sa * i * 0.75 * sc, cy + sa * r * 0.95 + ca * i * 0.75 * sc, 1); i += 1; );
 );
+// the small knob's cap (pixels): a flat coloured cap on a plain dark skirt, contrasting pointer (no knurl, no shading)
+function kr_scap(cx, cy, r, a, cap) local(i, ca, sa, k, pc) (
+  ca = sin(a); sa = -cos(a);
+  ui_cola(0x000000, krv_th == 0 ? 0.3 : 0.5); gfx_circle(cx + 1.5 * sc, cy + 2.5 * sc, r, 1, 1);
+  ui_col(0x141416); gfx_circle(cx, cy, r, 1, 1);
+  ui_cola(0xFFFFFF, 0.12); gfx_circle(cx, cy, r, 0, 1);
+  k = r * 0.74;
+  ui_col(cap); gfx_circle(cx, cy, k, 1, 1);
+  ui_col(ui_mix(cap, 0x000000, 0.35)); gfx_circle(cx, cy, k, 0, 1);
+  pc = (cap & 255) + ((cap >> 8) & 255) + ((cap >> 16) & 255) > 380 ? 0x141416 : 0xF4F0E6;
+  ui_col(pc); i = -1;
+  loop(3, gfx_line(cx + ca * k * 0.2 - sa * i * 0.8 * sc, cy + sa * k * 0.2 + ca * i * 0.8 * sc,
+                   cx + ca * r * 0.94 - sa * i * 0.8 * sc, cy + sa * r * 0.94 + ca * i * 0.8 * sc, 1); i += 1; );
+);
+krv_kc = -1;                                            // -1: kr_knob draws the bakelite main knob; else a small cap
 // a main knob: drag (shift = fine), double-click = default, wheel; returns 1 while touched
 function kr_knob(cx, cy, r, idx, lo, hi, def) local(v, n, dx, dy, hov, did) (
   did = 1700 + idx; v = slider(idx);
@@ -551,7 +567,7 @@ function kr_knob(cx, cy, r, idx, lo, hi, def) local(v, n, dx, dy, hov, did) (
     slider(idx) = lo + n * (hi - lo); ui_auto(idx); mouse_wheel = 0;
   );
   v = slider(idx); n = min(max((v - lo) / (hi - lo), 0), 1);
-  kr_bake(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi);
+  krv_kc < 0 ? kr_bake(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi) : kr_scap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, krv_kc);
   hov || drag_id == did ? ( ui_cola(0xFFFFFF, 0.07); gfx_circle(cx * sc, cy * sc, (r + 2) * sc, 1, 1); );
   hov || drag_id == did;
 );
@@ -560,10 +576,12 @@ function kr_name(cx, cy, act, name, val) (
   gfx_setfont(14); ui_col(act ? (krv_th == 0 ? 0xB24A00 : KRA) : KRI); kr_ctxt(cx, cy, act ? val : name);
 );
 // a small house knob (ALIGN, the splits, MIX, DRIFT)
-function kr_small(cx, cy, r, idx, lo, hi, def, cap, name, val) (
-  dy_ink = KRI; dy_bg = KRF; dy_ntick = 11; dy_kst = 20;
-  dy_knob(cx, cy, r, idx, lo, hi, def, 0, cap, "", "");
-  gfx_setfont(11); ui_col(dy_act ? (krv_th == 0 ? 0xB24A00 : KRA) : KRI); kr_ctxt(cx, cy + r + 15, dy_act ? val : name);
+function kr_small(cx, cy, r, idx, lo, hi, def, cap, name, val) local(i, t, act) (
+  ui_cola(KRI, 0.85); i = 0;
+  loop(11, t = -0.75 * $pi + i / 10 * 1.5 * $pi;
+    gfx_line((cx + sin(t) * (r + 4)) * sc, (cy - cos(t) * (r + 4)) * sc, (cx + sin(t) * (r + 9)) * sc, (cy - cos(t) * (r + 9)) * sc, 1); i += 1; );
+  krv_kc = cap; act = kr_knob(cx, cy, r, idx, lo, hi, def); krv_kc = -1;
+  gfx_setfont(11); ui_col(act ? (krv_th == 0 ? 0xB24A00 : KRA) : KRI); kr_ctxt(cx, cy + r + 15, act ? val : name);
 );
 
 // ---------- ladder cells in the theme's manner ----------
@@ -650,11 +668,17 @@ ui_col(krv_th == 0 ? KRI : KRA); kr_r(13.5, 64, 793, 2);
 ui_col(krv_th == 2 ? KRA : KRI); gfx_circle(45 * sc, 39 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(krv_th == 0 ? KRF : 0x111213); ui_text(45 * sc, 33.5 * sc, "GFX");
 gfx_setfont(6); ui_col(KRI); kr_txt(72, 24, "KRT-45");
-gfx_setfont(11); ui_col(KRI2); kr_txt(182, 25, "PHASEN- UND"); kr_txt(182, 40, "FREQUENZKORREKTOR");
+gfx_setfont(11); ui_col(KRI2); kr_txt(182, 25, krv_de ? "PHASEN- UND" : "PHASE & FREQUENCY"); kr_txt(182, 40, krv_de ? "FREQUENZKORREKTOR" : "CORRECTOR");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
-k_ = pk_preset(352 * sc, 22 * sc, 384 * sc, 34 * sc, pr_cur,
+k_ = pk_preset(352 * sc, 22 * sc, 344 * sc, 34 * sc, pr_cur,
   "Init|Mix Clarity|Vocal Presence|Kick & Bass Tight|Dull Tape Fix|Acoustic Air|Broadcast Bright|Labor Neutral|Ost Punch|Mastering Touch");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 10 ? 1 : k_; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(716 * sc, 30 * sc, 27 * sc, 18 * sc, krv_de ? "DE" : "ENG", 0, 1) ? ( slider13 = krv_de ? 0 : 1; ui_auto(13); krv_de = slider13 >= 0.5; );
+ui_col(0x060607); gfx_circle(707 * sc, 39 * sc, 4.5 * sc, 1, 1);
+krv_de ? ( ui_cola(0xFFA126, 0.22); gfx_circle(707 * sc, 39 * sc, 7 * sc, 1, 1); ui_col(0xFFA126); ) : ui_col(ui_mix(0xFFA126, 0x000000, 0.78));
+gfx_circle(707 * sc, 39 * sc, 3 * sc, 1, 1);
+ui_cola(0xFFFFFF, krv_de ? 0.6 : 0.15); gfx_circle(706.1 * sc, 37.95 * sc, 1.05 * sc, 1, 1);
 ui_size_picker(744 * sc, 30 * sc);
 
 // =====================================================================
@@ -662,20 +686,20 @@ ui_size_picker(744 * sc, 30 * sc);
 // =====================================================================
 krv_y0 = 72; krv_h0 = 134;
 // ---------- INPUT DRIVE ----------
-kr_sect(22, krv_y0, 112, krv_h0, KRF, "INPUT");
-kr_scale(78, 142, 26, 7, 19, "0|3|6|9|12|15|18", 2);
-krv_a = kr_knob(78, 142, 26, 1, 0, 18, 0);
-sprintf(#krv_v, "+%.1f dB", slider1); kr_name(78, 188, krv_a, "DRIVE", #krv_v);
+kr_sect(22, krv_y0, 112, krv_h0, KRF, krv_de ? "EINGANG" : "INPUT");
+kr_scale(78, 146, 26, 7, 19, "0|3|6|9|12|15|18", 2);
+krv_a = kr_knob(78, 146, 26, 1, 0, 18, 0);
+sprintf(#krv_v, "+%.1f dB", slider1); kr_name(78, 192, krv_a, krv_de ? "ANTRIEB" : "DRIVE", #krv_v);
 // ---------- LO-CONTOUR ----------
-kr_sect(140, krv_y0, 160, krv_h0, KRF, "TIEFEN");
+kr_sect(140, krv_y0, 160, krv_h0, KRF, krv_de ? "TIEFEN" : "LOWS");
 kr_scale(206, 144, 34, 11, 16, "0|1|2|3|4|5|6|7|8|9|10", 0);
 krv_a = kr_knob(206, 144, 34, 2, 0, 10, 0);
-sprintf(#krv_v, "%.1f  +%.1f dB", slider2, slider2 * 1.2); kr_name(206, 194, krv_a, "LO-CONTOUR", #krv_v);
+sprintf(#krv_v, "%.1f  +%.1f dB", slider2, slider2 * 1.2); kr_name(206, 194, krv_a, krv_de ? "KONTUR" : "LO-CONTOUR", #krv_v);
 // ---------- HI-PROCESS ----------
-kr_sect(520, krv_y0, 160, krv_h0, KRF, "HÖHEN");
+kr_sect(520, krv_y0, 160, krv_h0, KRF, krv_de ? "HÖHEN" : "HIGHS");
 kr_scale(586, 144, 34, 11, 16, "0|1|2|3|4|5|6|7|8|9|10", 0);
 krv_a = kr_knob(586, 144, 34, 3, 0, 10, 0);
-sprintf(#krv_v, "%.1f  +%.1f dB", slider3, slider3 * 1.2); kr_name(586, 194, krv_a, "HI-PROCESS", #krv_v);
+sprintf(#krv_v, "%.1f  +%.1f dB", slider3, slider3 * 1.2); kr_name(586, 194, krv_a, krv_de ? "AUFHELLUNG" : "HI-PROCESS", #krv_v);
 // ---------- the lift ladders beside the two knobs (L / R) ----------
 function kr_lift(x, v0, v1) (
   kr_window(x, 88, 32, 100);
@@ -686,24 +710,24 @@ kr_lift(262, kra_a0, kra_a1);
 kr_lift(642, kra_b0, kra_b1);
 gfx_setfont(13); ui_col(KRI2); kr_ctxt(278, 197, "dB"); kr_ctxt(658, 197, "dB");
 // ---------- OUTPUT TRIM ----------
-kr_sect(686, krv_y0, 112, krv_h0, KRF, "OUTPUT");
-kr_scale(742, 142, 26, 5, 20, "-12|-6|0|+6|+12", 2);
-krv_a = kr_knob(742, 142, 26, 4, -12, 12, 0);
-sprintf(#krv_v, "%+.1f dB", slider4); kr_name(742, 188, krv_a, "TRIM", #krv_v);
+kr_sect(686, krv_y0, 112, krv_h0, KRF, krv_de ? "AUSGANG" : "OUTPUT");
+kr_scale(742, 146, 26, 5, 20, "-12|-6|0|+6|+12", 2);
+krv_a = kr_knob(742, 146, 26, 4, -12, 12, 0);
+sprintf(#krv_v, "%+.1f dB", slider4); kr_name(742, 192, krv_a, krv_de ? "TRIMM" : "TRIM", #krv_v);
 
 // ---------- BANDPEGEL (x 306..514) ----------
 kr_sect(306, krv_y0, 208, krv_h0, KRF, "");
 kr_window(312, 78, 196, 122);
-gfx_setfont(11); ui_col(KRI); kr_txt(320, 83, "BANDPEGEL"); ui_col(KRI2); kr_txt(408, 83, "L / R");
+gfx_setfont(11); ui_col(KRI); kr_txt(320, 83, krv_de ? "BANDPEGEL" : "BAND LEVEL"); ui_col(KRI2); kr_txt(408, 83, "L / R");
 ui_col(KRI2); kr_rtxt(500, 90, "dBFS");
-krv_bx = 352; krv_bw = 148;
+krv_bx = 360; krv_bw = 140;
 function kr_pair(y, nm, v0, v1) (
-  gfx_setfont(11); ui_col(KRI); kr_rtxt(345, y + 10, nm);
+  gfx_setfont(11); ui_col(KRI); kr_rtxt(354, y + 10, nm);
   kr_hbar(krv_bx, y, krv_bw, 9, v0); kr_hbar(krv_bx, y + 11, krv_bw, 9, v1);
 );
-kr_pair(102, "LO",  kra_l0, kra_l1);
-kr_pair(128, "MID", kra_m0, kra_m1);
-kr_pair(154, "HI",  kra_h0, kra_h1);
+kr_pair(102, krv_de ? "TIEF" : "LO",   kra_l0, kra_l1);
+kr_pair(128, krv_de ? "MITTE" : "MID", kra_m0, kra_m1);
+kr_pair(154, krv_de ? "HOCH" : "HI",   kra_h0, kra_h1);
 // scale band
 gfx_setfont(13);
 krv_i = 0;
@@ -719,40 +743,40 @@ loop(5,
 // Lower row (y 212..278): ÜBERGANG, LAUFZEIT, MIX / DRIFT, THEME, OUT STAGE, BYPASS
 // =====================================================================
 krv_y1 = 212; krv_h1 = 72;
-kr_sect(22, krv_y1, 150, krv_h1, KRS, "ÜBERGANG");
+kr_sect(22, krv_y1, 150, krv_h1, KRS, krv_de ? "ÜBERGANG" : "CROSSOVER");
 sprintf(#krv_v, "%.0f Hz", slider6);
-kr_small(64, 250, 13, 6, 150, 250, 200, 0x9DA2A8, "LO SPLIT", #krv_v);
+kr_small(64, 250, 13, 6, 150, 250, 200, 0x9DA2A8, krv_de ? "TIEF" : "LO SPLIT", #krv_v);
 sprintf(#krv_v, "%.2f kHz", slider7 / 1000);
-kr_small(130, 250, 13, 7, 2000, 4000, 3000, 0x9DA2A8, "HI SPLIT", #krv_v);
+kr_small(130, 250, 13, 7, 2000, 4000, 3000, 0x9DA2A8, krv_de ? "HOCH" : "HI SPLIT", #krv_v);
 
-kr_sect(178, krv_y1, 86, krv_h1, KRS, "LAUFZEIT");
+kr_sect(178, krv_y1, 86, krv_h1, KRS, krv_de ? "LAUFZEIT" : "TIMING");
 sprintf(#krv_v, "%.0f%%", slider5);
-kr_small(221, 250, 13, 5, 0, 100, 0, krv_th == 0 ? 0x4E8F8C : KRI2, "ALIGN", #krv_v);
+kr_small(221, 250, 13, 5, 0, 100, 0, krv_th == 0 ? 0x4E8F8C : KRI2, krv_de ? "ABGLEICH" : "ALIGN", #krv_v);
 
 kr_sect(270, krv_y1, 118, krv_h1, KRS, "");
 sprintf(#krv_v, "%.0f%%", slider8);
-kr_small(304, 245, 13, 8, 0, 100, 100, krv_th == 0 ? 0xD8B040 : KRA, "MIX", #krv_v);
+kr_small(304, 245, 13, 8, 0, 100, 100, krv_th == 0 ? 0xD8B040 : KRA, krv_de ? "ANTEIL" : "MIX", #krv_v);
 sprintf(#krv_v, "%.0f%%", slider9);
 kr_small(356, 245, 13, 9, 0, 100, 50, krv_th == 0 ? 0x6F8794 : KRI2, "DRIFT", #krv_v);
 
-kr_sect(394, krv_y1, 180, krv_h1, KRS, "THEME");
-kr_key(401, 242, 60, 28, "ENAMEL", krv_th == 0) ? ( slider11 = 0; ui_auto(11); );
+kr_sect(394, krv_y1, 180, krv_h1, KRS, krv_de ? "OPTIK" : "THEME");
+kr_key(401, 242, 60, 28, krv_de ? "EMAILLE" : "ENAMEL", krv_th == 0) ? ( slider11 = 0; ui_auto(11); );
 kr_key(465, 242, 42, 28, "VFD",    krv_th == 1) ? ( slider11 = 1; ui_auto(11); );
 kr_key(511, 242, 56, 28, "MATRIX", krv_th == 2) ? ( slider11 = 2; ui_auto(11); );
 
-kr_sect(580, krv_y1, 134, krv_h1, KRS, "OUT STAGE");
+kr_sect(580, krv_y1, 134, krv_h1, KRS, krv_de ? "AUSGANGSSTUFE" : "OUT STAGE");
 ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
 krv_i = 0;
 loop(3,
   krv_c = krv_i == 0 ? 0x3A9CFF : krv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
   krv_kx = krv_i == 0 ? 587 : krv_i == 1 ? 624 : 665; krv_kw = krv_i == 0 ? 34 : krv_i == 1 ? 38 : 42;
   ui_okey(krv_kx, 242, krv_kw, 28, (slider12 | 0) == krv_i || (krv_i == 1 && ui_okclp > 0.1), krv_c) ? ( slider12 = krv_i; ui_auto(12); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext((krv_kx + krv_kw * 0.5) * sc, (242 + 14) * sc, krv_i == 0 ? "OFF" : krv_i == 1 ? "CLIP" : "LIMIT");
+  gfx_setfont(12); ui_col(0x141414); ui_keytext((krv_kx + krv_kw * 0.5) * sc, (242 + 14) * sc, krv_i == 0 ? (krv_de ? "AUS" : "OFF") : krv_i == 1 ? "CLIP" : (krv_de ? "BEGR." : "LIMIT"));
   krv_i += 1;
 );
 
 kr_sect(720, krv_y1, 78, krv_h1, KRS, "");
-kr_big(726, 224, 66, 46, "BYPASS", slider10 >= 0.5) ? ( slider10 = slider10 >= 0.5 ? 0 : 1; ui_auto(10); );
+kr_big(726, 224, 66, 46, krv_de ? "DIREKT" : "BYPASS", slider10 >= 0.5) ? ( slider10 = slider10 >= 0.5 ? 0 : 1; ui_auto(10); );
 
 // corner brackets last: they sit on top of the rim
 kr_bracket(0, 0, 1, 1); kr_bracket(820, 0, -1, 1); kr_bracket(0, 306, 1, -1); kr_bracket(820, 306, -1, -1);
