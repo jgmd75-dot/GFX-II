@@ -19,7 +19,7 @@ desc:GFX G Tower
 //              8 voices, their coefficients worked out every 8 samples.
 //   LFO X / Y  sine, triangle, saw, S&H, smooth random; RATE free or synced; DEPTH; PHASE between them.
 //              PATH: FREE (the two LFOs as set), CIRCLE (Y follows X at the PHASE offset: circles and ellipses,
-//              diamonds with the triangle), FIGURE-8 (Y at twice X), SPIRAL (a circle that breathes in and out over
+//              diamonds with the triangle), FIGURE-8 (Y at twice X; PHASE 90 draws the 8), SPIRAL (a circle that breathes in and out over
 //              eight turns), WALK (a smooth random walk). Drag the pad to move the centre the LFOs orbit.
 //   MOD        mod WHEEL and VELOCITY to X and Y; a formant ENVELOPE (attack / decay) to Y
 //   LIGHTNING  the big lit key, a MIDI note or a hard velocity: the point is jolted towards a random corner (STRIKE
@@ -200,7 +200,7 @@ tw_nums(#tw_def, TDEF);
 function tw_pstr(p) (
   p == 2  ? "1:0 2:1 3:12 5:30 10:0 11:1 12:2 13:3 16:55 21:1 22:3 26:1 27:3 23:45 28:45 38:85 39:900 40:50 41:25 42:2 44:112 48:5 49:600 50:70 51:400 54:4 55:35 56:18 59:30 61:2" :
   p == 3  ? "1:0 2:0 3:-12 5:45 8:50 10:5 11:4 12:3 13:5 30:4 20:0.15 25:0.11 23:60 28:60 16:65 53:62 38:90 39:4000 40:70 41:35 57:85 59:35 48:400 49:2000 50:80 51:2500 18:-3" :
-  p == 4  ? "1:2 2:2 3:-12 4:-5 7:30 5:45 10:7 11:0 12:7 13:3 30:2 20:0.35 23:50 28:40 29:0 16:70 35:40 36:80 37:1200 34:30 38:60 57:75 59:40 56:15 54:2" :
+  p == 4  ? "1:2 2:2 3:-12 4:-5 7:30 5:45 10:7 11:0 12:7 13:3 30:2 20:0.35 23:50 28:40 16:70 35:40 36:80 37:1200 34:30 38:60 57:75 59:40 56:15 54:2" :
   p == 5  ? "1:1 2:0 3:12 5:35 6:30 10:6 11:2 12:1 13:6 18:5 30:3 20:0.6 23:70 28:70 16:60 54:5 55:45 56:22 57:80 58:85 59:40 51:1800 8:0 61:1.5" :
   p == 6  ? "45:2 46:90 1:0 2:1 3:-12 5:40 8:60 10:5 11:3 12:4 13:0 14:30 15:30 23:15 28:15 32:70 34:40 35:50 36:5 37:400 16:75 53:35 59:15 48:3 49:500 50:75 51:250 52:60 61:2" :
   p == 7  ? "1:0 2:1 3:7 5:45 6:40 10:0 11:6 12:7 13:1 19:3 24:3 21:1 22:8 26:1 27:7 30:0 23:60 28:60 16:80 53:70 38:100 39:600 40:80 42:2 44:120 54:5 56:20 59:20 48:2 49:400 50:60 51:300 61:1.5" :
@@ -652,7 +652,7 @@ tw_tick ? (
       tw_ywr = tw_t < tw_yph; tw_yph = tw_t;
     );
     tw_ywr ? ( tw_yh = rand(2) - 1; tw_ya = tw_yb2; tw_yb2 = rand(2) - 1; );
-    tw_t = tw_yph + tw_phs + tw_dph; tw_t -= floor(tw_t);
+    tw_t = tw_yph + tw_phs + tw_dph - (tw_path == 2 ? 0.25 : 0); tw_t -= floor(tw_t);   // FIGURE-8: 90 degrees draws the 8
     tw_ly = tw_lfov(tw_ys, tw_t, tw_yh, tw_ya, tw_yb2);
     tw_path == 3 ? (
       // SPIRAL: the radius breathes in and out over eight turns
@@ -1027,7 +1027,7 @@ function tg_path() local(n, i, t, lx, ly, rad, cx0, cy0, xd, yd, sx, sy, ph, tt)
         lx = tg_shape(sx, 8 * t); ly = tg_shape(sy, 8 * t + ph); rad = 0.12 + 0.88 * (1 - abs(2 * t - 1));
         lx *= rad; ly *= rad;
       ) : (
-        lx = tg_shape(sx, t); ly = tg_shape(sy, (slider30 == 2 ? 2 : 1) * t + ph);
+        lx = tg_shape(sx, t); ly = tg_shape(sy, (slider30 == 2 ? 2 : 1) * t + ph - (slider30 == 2 ? 0.25 : 0));
       );
       TGPX[i] = min(max(cx0 + lx * xd, 0), 1); TGPY[i] = min(max(cy0 + ly * yd, 0), 1);
       i += 1;
@@ -1142,7 +1142,7 @@ k_ > 0 ? load_preset(k_);
 gfx_setfont(12); ui_col(LBL); tg_t(650, 19, "QUADRANT FORMANT"); ui_cola(LBL, 0.75); tg_t(650, 35, "SYNTHESIZER");
 // MIDI: activity LED and channel
 pk_led(816 * sc, 35 * sc, 4.5 * sc, ins_midi_lit() || tw_sseen != tg_lastseen, FLAMEL);
-gfx_setfont(16); ui_col(LBL); tg_tc(816, 22, "MIDI");
+gfx_setfont(11); ui_col(LBL); tg_tc(816, 22, "MIDI");
 sprintf(#tg_g, slider62 < 0.5 ? "OMNI" : "CH %.0f", slider62);
 tg_field(832, 23, 70, 24, #tg_g) ? (
   strcpy(#tg_m, ""); k_ = 0;
@@ -1150,7 +1150,7 @@ tg_field(832, 23, 70, 24, #tg_g) ? (
   gfx_x = 832 * sc; gfx_y = 47 * sc; k_ = gfx_showmenu(#tg_m); k_ > 0 ? tg_set(62, k_ - 1);
 );
 tg_n = 0; k_ = 0; loop(8, TV[k_ * 64 + 8] > 0 ? tg_n += 1; k_ += 1; );
-gfx_setfont(16); ui_col(LBL); sprintf(#tg_g, "VOICES %d/8", tg_n); tg_t(918, 29, #tg_g);
+gfx_setfont(12); ui_col(LBL); sprintf(#tg_g, "VOICES %d/8", tg_n); tg_t(914, 27, #tg_g);
 ui_size_picker(1018 * sc, 26 * sc);
 
 // ---------- OSCILLATORS ----------
@@ -1199,7 +1199,6 @@ tg_knob(358, 365, 16, 37, 10, 8000, 600, 1, "DECAY", "%.0f ms", 0);
 
 // ---------- FORMANT: the XY pad ----------
 tg_sect(398, 66, 304, 354, SHB, "FORMANT  ·  XY");
-gfx_setfont(16); ui_col(INK); tg_t(560, 69, "drag the centre");
 tg_pad(410, 96, 280, 222);
 gfx_setfont(12); ui_col(LBL);
 tg_keys(410, 330, 52.8, 22, 4, 30, 5, "FREE|CIRCLE|FIG 8|SPIRAL|WALK");
@@ -1283,9 +1282,9 @@ ui_col(OCHRE); tg_r(240, 446.5, 146, 2); tg_r(714, 446.5, 120, 2);
 // IN / OUT and a level bar
 ins_io(852, 429, 63, LBL);
 tg_lv = min(max((20 * log10(max(tw_pk, 0.00001)) + 48) / 48, 0), 1); tw_pk *= 0.8;
-ui_col(INK); tg_r(960, 440, 112, 14); ui_col(0x0E1A3C); tg_r(961.5, 441.5, 109, 11);
-tg_i = 0; loop(18, tg_on = tg_i / 18 < tg_lv; ui_col(tg_on ? (tg_i >= 16 ? 0xFF3A2A : tg_i >= 13 ? FLAMEL : OCHRE) : 0x1E2C55); tg_r(963 + tg_i * 6, 443, 4.6, 8); tg_i += 1; );
-gfx_setfont(16); ui_col(LBL); tg_t(960, 428.5, "LEVEL");
+ui_col(INK); tg_r(960, 443, 112, 14); ui_col(0x0E1A3C); tg_r(961.5, 444.5, 109, 11);
+tg_i = 0; loop(18, tg_on = tg_i / 18 < tg_lv; ui_col(tg_on ? (tg_i >= 16 ? 0xFF3A2A : tg_i >= 13 ? FLAMEL : OCHRE) : 0x1E2C55); tg_r(963 + tg_i * 6, 446, 4.6, 8); tg_i += 1; );
+gfx_setfont(11); ui_col(LBL); tg_t(960, 428, "LEVEL");
 tg_lastseen = tw_sseen;
 
 pk_end();
