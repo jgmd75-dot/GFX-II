@@ -20,7 +20,8 @@ desc:GFX Tony Q 550 [stepped console EQ]
 //
 // SIGNAL FLOW (per channel; the whole engine runs at 2x, 95-tap Kaiser half-band up / down, latency 47 samples,
 // reported to the host)
-//   input -> INPUT DRIVE (0 .. +24 dB of gain into the engine, taken off again at its end, so DRIVE changes the
+//   input -> INPUT TRIM (-18 .. +18 dB, gliding about 20 ms: gain-staging, so hot sources sit at 0 VU; presets leave
+//   it alone) -> the input VU -> INPUT DRIVE (0 .. +24 dB of gain into the engine, taken off again at its end, so DRIVE changes the
 //   character, not the loudness: like turning the mic amp up and the fader down) -> the discrete preamp
 //   (asymmetric biased curve: mostly 2nd harmonic, peaks tightened; switched out at 0 dB, faded in over the
 //   first 2 dB) -> HPF -> LOW / MID / HIGH -> LPF -> the output stage (TOKYO: the mid-focused transformer;
@@ -57,7 +58,7 @@ desc:GFX Tony Q 550 [stepped console EQ]
 //   about +/-1.2 % and its gain by +/-2 %, the op-amp / preamp bias wanders, the transformer's saturation point
 //   by +/-4 %; with a small fixed L / R mismatch (+/-0.4 % frequency, +/-1 % gain), as between two hand-built
 //   channels. 0 % = both channels identical and steady.
-// METERS: VU on the input (a sine peaking at -18 dBFS = 0 VU), the LED ladder on the output (L / R, peak).
+// METERS: VU on the input, after the INPUT TRIM (a sine peaking at -18 dBFS = 0 VU), the LED ladder on the output (L / R, peak).
 // GUI: drag a knob (shift = fine, double-click = default, wheel = one step); click a key; click the LCD (or
 //   PRESETS) for the preset list. S / M / L / ? = size and help.
 
@@ -100,6 +101,7 @@ slider29:0<0,1,1{12 dB/oct,18 dB/oct}>-New York HPF slope
 slider30:22000<3000,22000,10>-New York LPF (Hz, 22000 = off)
 slider31:0<0,1,1{12 dB/oct,18 dB/oct}>-New York LPF slope
 slider32:0<-12,12,0.1>-New York output (dB)
+slider33:0<-18,18,0.1>-Input trim (dB)
 
 in_pin:left input
 in_pin:right input
@@ -469,6 +471,7 @@ function tq_srinit() local(c, i) (
   tq_kS = tq_N / (0.008 * srate); tq_kX = tq_N / (0.020 * srate); tq_kfw = tq_N / (0.030 * srate);
   tq_xs = 1 / (0.030 * srate); tq_nwarm = floor(0.040 * srate);   // CITY: 40 ms settle, 30 ms crossfade
   tq_vdt = 1 / srate;
+  tq_kI = 1 - exp(-1 / (0.005 * srate));                // INPUT TRIM glide: two 5 ms poles (about 20 ms)
   i = 0;
   loop(4,
     c = i == 0 ? tq_CTL : i == 1 ? tq_CTR : i == 2 ? tq_CNL : tq_CNR;
@@ -491,6 +494,7 @@ function tq_update() (
   pdc_bot_ch = 0; pdc_top_ch = 2;
   pdc_delay = tq_LAT;
   tq_tgt = slider1 >= 0.5;
+  tq_itt = exp(min(max(slider33, -18), 18) * 0.115129255);   // INPUT TRIM target gain (exactly 1 at 0 dB)
 );
 
 // ---------- presets ----------
@@ -526,7 +530,7 @@ function load_preset(p) (
   p == 13 ? tq_pn(12, 2,  4, 0,  3,  7, 1,  6, 0, 100, 1, 14000, 0, -2.0) :     // New York Guitar
   p == 14 ? tq_pn(2,  1,  5, 1,  2,  5, 4,  8, 1,  20, 0, 22000, 0,  0.0) :     // New York Air
   p == 15 ? (                                                                   // Reset all to defaults
-    tq_pinit(); slider3 = 50; slider4 = 1;
+    tq_pinit(); slider3 = 50; slider4 = 1; slider33 = 0; ui_auto(33);   // (INPUT TRIM: only here, not in presets)
   );
   p >= 1 ? slider_automate(4294967295);                 // sliders 1-32
 );
@@ -541,6 +545,7 @@ dKL.drift_init(0.6 + rand(0.4));  dKR.drift_init(0.6 + rand(0.4));
 tq_mm1 = rand(2) - 1; tq_mm2 = rand(2) - 1; tq_mm3 = rand(2) - 1; tq_mm4 = rand(2) - 1;   // fixed L / R mismatch
 tq_i = 0; loop(12, tq_D[tq_i] = 1; tq_i += 1; ); tq_D[8] = tq_D[9] = 0;
 tq_update();
+tq_it1 = tq_it2 = tq_itt;                               // INPUT TRIM glide starts on its value
 tq_tg = tq_tgt; tq_w = tq_tgt; tq_wc = 0; tq_cc = 0;
 tq_vy = tq_vv = 0; tqa_pl = tqa_pr = 0;
 
@@ -581,7 +586,12 @@ file_var(0, ui_sz);
 file_var(0, pr_cur);
 
 @sample
-tq_il = spl0; tq_ir = spl1;
+// ---------- INPUT TRIM (-18 .. +18 dB, gliding): first in the path, so the VU and DRIVE see the trimmed level ----------
+tq_it2 !== tq_itt ? (                                  // (!== : exact; EEL != has a 0.00001 tolerance)
+  tq_it1 += (tq_itt - tq_it1) * tq_kI; tq_it2 += (tq_it1 - tq_it2) * tq_kI;
+  abs(tq_it2 - tq_itt) < 0.000001 * tq_itt && abs(tq_it1 - tq_itt) < 0.000001 * tq_itt ? tq_it1 = tq_it2 = tq_itt;
+);
+tq_il = spl0 * tq_it2; tq_ir = spl1 * tq_it2;
 // ---------- control rate (every 8 samples): glides, flags, coefficients ----------
 (tq_cc -= 1) <= 0 ? (
   tq_cc = tq_N;
@@ -897,10 +907,31 @@ gfx_line((tgv_cx + tgv_sa * tgv_r1) * sc, (tgv_py - tgv_ca * tgv_r1) * sc, (tgv_
 gfx_line((tgv_cx + tgv_sa * tgv_r1) * sc + 0.8, (tgv_py - tgv_ca * tgv_r1) * sc, (tgv_cx + tgv_sa * (tgv_r2 - 12)) * sc + 0.8, (tgv_py - tgv_ca * (tgv_r2 - 12)) * sc, 1);
 ui_col(tgv_ny ? 0x2A2116 : 0x26292D); tg_r(tgv_mx, tgv_py + 3, tgv_mw, tgv_my + tgv_mh - tgv_py - 3);
 gfx_setfont(13); ui_col(tgv_ny ? TGW : 0xC9CDD2); tg_ctxt(tgv_cx, tgv_py + 8, "0 VU = -18 dBFS");
+// TRIM (the input trim, before the VU and DRIVE; shared by both cities): a small silver cap on a bipolar ring
+tgv_tx = 40; tgv_ty = 262; tgv_tr = 13;
+ui_col(!tgv_ny ? 0x1C1D20 : ui_mix(TGF, 0x000000, 0.35));
+tg_arcw(tgv_tx * sc, tgv_ty * sc, (tgv_tr + 5) * sc, -0.75 * $pi, 0.75 * $pi, 1.3 * sc);
+tgv_n = (min(max(slider33, -18), 18) + 18) / 36; tgv_a = -0.75 * $pi + tgv_n * 1.5 * $pi;
+abs(tgv_a) > 0.01 ? ( ui_col(TGA); tg_arcw(tgv_tx * sc, tgv_ty * sc, (tgv_tr + 5) * sc, min(0, tgv_a), max(0, tgv_a), 2.5 * sc); );
+tgv_i = 0;
+loop(7,                                                 // marks every 6 dB, the centre (0 dB) long and bright
+  tgv_a = -0.75 * $pi + tgv_i / 6 * 1.5 * $pi; tgv_ca = sin(tgv_a); tgv_sa = -cos(tgv_a);
+  ui_cola(TGI, tgv_i == 3 ? 1 : tgv_i == 0 || tgv_i == 6 ? 0.9 : 0.6);
+  tgv_r1 = tgv_tr + 8; tgv_r2 = tgv_tr + (tgv_i == 3 ? 14 : tgv_i == 0 || tgv_i == 6 ? 12 : 11);
+  gfx_line((tgv_tx + tgv_ca * tgv_r1) * sc, (tgv_ty + tgv_sa * tgv_r1) * sc, (tgv_tx + tgv_ca * tgv_r2) * sc, (tgv_ty + tgv_sa * tgv_r2) * sc, 1);
+  tgv_i == 3 ? gfx_line((tgv_tx + tgv_ca * tgv_r1) * sc + 0.8, (tgv_ty + tgv_sa * tgv_r1) * sc, (tgv_tx + tgv_ca * tgv_r2) * sc + 0.8, (tgv_ty + tgv_sa * tgv_r2) * sc, 1);
+  tgv_i += 1;
+);
+gfx_setfont(13); ui_col(TGI);
+tg_ctxt(tgv_tx, tgv_ty - tgv_tr - 22, "0");
+tg_ctxt(tgv_tx - 17, tgv_ty + tgv_tr + 16, "-18"); tg_ctxt(tgv_tx + 17, tgv_ty + tgv_tr + 16, "+18");
+tgv_cap = 0x9DA2A8; tgv_q = 0.1; tgv_a = tg_kn(tgv_tx, tgv_ty, tgv_tr, 33, -18, 18, 0, 0, 0);
+abs(slider33) < 0.05 ? strcpy(#tgv_v, "0 dB") : sprintf(#tgv_v, "%+.1f", slider33);
+gfx_setfont(11); ui_col(tgv_a ? TGA : TGI); tg_ctxt(tgv_tx, 312, tgv_a ? #tgv_v : "TRIM");
 // DRIVE (the preamp, level-compensated)
-tg_scale(80, 266, 26, 5, "0|6|12|18|24", 25);
-tgv_q = 0.1; tgv_a = tg_kn(80, 266, 26, tgv_b, 0, 24, 0, 0, 0);
-sprintf(#tgv_v, "+%.1f dB", slider(tgv_b)); tg_name(80, 312, tgv_a, "DRIVE", #tgv_v);
+tg_scale(107, 266, 22, 5, "0||12||24", 21);   // 6 / 18 as plain ticks: room for TRIM
+tgv_q = 0.1; tgv_a = tg_kn(107, 266, 22, tgv_b, 0, 24, 0, 0, 0);
+sprintf(#tgv_v, "+%.1f dB", slider(tgv_b)); tg_name(107, 312, tgv_a, "DRIVE", #tgv_v);
 
 // =====================================================================
 // FILTERS (x 158..288): HPF (yellow cap) and LPF (black cap), each with its 12 / 18 dB slope keys
