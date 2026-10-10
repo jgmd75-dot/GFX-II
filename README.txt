@@ -131,6 +131,7 @@ DYNAMICS
   Gate            gfx-gate.jsfx
   Headsmoother    gfx-headsmoother.jsfx
   Heft            gfx-heft.jsfx
+  Linea 78        gfx-linea-78.jsfx
   MK3             gfx-mk3.jsfx
   MUTO            gfx-muto.jsfx
   OB Q            gfx-ob-q.jsfx

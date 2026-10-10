@@ -1,0 +1,565 @@
+desc:GFX Linea 78 [channel strip]
+//tags: channel strip valve tube preamp filter saturation eq compressor opto vca gate expander transformer
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// LINEA 78 (the 78 series, Havana side): a full valve channel strip - the large-desk channel's way of working,
+// with a valve front end and a choice of output stage.
+//   INPUT      TRIM (click it for GUARD), and the input amp: VALVE (a triode-style stage that warms and thickens
+//              as it is pushed; its headroom follows the supply) or CLEAN. VU on the input.
+//   FILTERS    HPF 20 - 400 Hz (fully left = off) and LPF 3 - 20 kHz (fully right = off), each 12 or 24 dB/oct.
+//   SAT        DRIVE (0 - +24 dB into the stage, level compensated) and TONE: even and warm at the left, odd and
+//              edgy at the right.
+//   EQ         LOW shelf 35 / 60 / 100 / 220 Hz; LO-MID 150 Hz - 2 kHz and HI-MID 800 Hz - 8 kHz bells, each with
+//              HI-Q; HIGH shelf 8 / 12 / 16 kHz; +/-15 dB. Broad, gentle valve-desk curves (HI-Q narrows the mids).
+//   COMP       OPTO: smooth, about 3:1 with a wide knee, its release program-dependent (quick after short peaks,
+//              slow after long squeezes; RATIO, ATTACK and RELEASE are not used). VCA: feed-forward, RATIO,
+//              ATTACK, RELEASE, a 6 dB knee. Both: THRESHOLD, MAKEUP, MIX (parallel compression).
+//   ORDER      EQ > COMP or COMP > EQ.
+//   GATE       GATE (hold, then close to RANGE) or EXPAND (2:1 below the threshold, down to RANGE); THRESHOLD
+//              (4 dB hysteresis), RANGE, HOLD, RELEASE, KEY HPF (keeps low bleed from opening it), FIRST (after
+//              the filters, before SAT) or LAST (after EQ and COMP).
+//   OUTPUT     IRON: a transformer - the low end saturates first and blooms, the top softens as it is driven.
+//              TRANSISTOR: a brighter, harder clip. DRIVE into it (level compensated), LEVEL after it. The house
+//              output stage follows (SAT; its soft clip is always on in a character unit).
+//   The faceplate follows the output: IRON in Malecon Sunset, TRANSISTOR in Habana Vieja.
+// Chain: TRIM / GUARD -> input amp -> FILTERS -> [GATE first] -> SAT -> EQ / COMP (ORDER) -> [GATE last]
+//        -> OUTPUT (IRON / TRANSISTOR) -> LEVEL -> house output stage
+// DRIFT (50 % = standard): the supply voltage wanders, so the headroom of the input amp, SAT and the output stage
+//   breathes slowly; and the supply sags under load - loud passages pull the headroom down a little more, so the
+//   saturation thickens as the music swells.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<-24,12,0.1>-Input trim (dB)
+slider2:1<0,1,1{Off,On}>-Input guard
+slider3:0<0,1,1{Valve,Clean}>-Input amp
+slider4:20<20,400,1>-HPF (Hz, 20 = off)
+slider5:0<0,1,1{12 dB/oct,24 dB/oct}>-HPF slope
+slider6:20000<3000,20000,1>-LPF (Hz, 20000 = off)
+slider7:0<0,1,1{12 dB/oct,24 dB/oct}>-LPF slope
+slider8:0<0,100,1>-Sat drive (%)
+slider9:30<0,100,1>-Sat tone (%)
+slider10:1<0,1,1{Off,On}>-EQ
+slider11:1<0,3,1{35 Hz,60 Hz,100 Hz,220 Hz}>-Low freq
+slider12:0<-15,15,0.1>-Low gain (dB)
+slider13:400<150,2000,1>-Lo-mid freq (Hz)
+slider14:0<-15,15,0.1>-Lo-mid gain (dB)
+slider15:0<0,1,1{Normal,High}>-Lo-mid Q
+slider16:2500<800,8000,1>-Hi-mid freq (Hz)
+slider17:0<-15,15,0.1>-Hi-mid gain (dB)
+slider18:0<0,1,1{Normal,High}>-Hi-mid Q
+slider19:1<0,2,1{8 kHz,12 kHz,16 kHz}>-High freq
+slider20:0<-15,15,0.1>-High gain (dB)
+slider21:1<0,1,1{Off,On}>-Comp
+slider22:0<0,1,1{Opto,VCA}>-Comp mode
+slider23:0<-40,0,0.1>-Comp threshold (dB)
+slider24:4<1,20,0.1>-Comp ratio
+slider25:10<0.1,100,0.1>-Comp attack (ms)
+slider26:200<20,2000,1>-Comp release (ms)
+slider27:0<0,24,0.1>-Comp makeup (dB)
+slider28:100<0,100,1>-Comp mix (%)
+slider29:0<0,1,1{EQ > Comp,Comp > EQ}>-Order
+slider30:0<0,1,1{Off,On}>-Gate
+slider31:0<0,1,1{Gate,Expand}>-Gate mode
+slider32:-50<-80,0,0.1>-Gate threshold (dB)
+slider33:40<0,80,0.1>-Gate range (dB)
+slider34:50<0,500,1>-Gate hold (ms)
+slider35:150<5,2000,1>-Gate release (ms)
+slider36:20<20,2000,1>-Gate key HPF (Hz, 20 = off)
+slider37:0<0,1,1{First,Last}>-Gate position
+slider38:0<0,1,1{Iron,Transistor}>-Output stage
+slider39:20<0,100,1>-Output drive (%)
+slider40:0<-24,12,0.1>-Output level (dB)
+slider41:50<0,100,1>-Drift (%)
+slider42:0<0,100,1>-Band sat (%)
+slider43:30<0,100,1>-Bias (%)
+slider44:120<40,400,1>-Sat low band (Hz)
+slider45:6000<2000,16000,10>-Sat high band (Hz)
+slider46:-0.3<-24,0,0.1>-Ceiling (dB)
+slider47:1<0,1,1{Off,Clip}>-(unused, was output stage)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+ext_noinit = 1;
+#ui_man = "gfx-linea-78";
+
+LDEF = 30000; LTMP = 30100;                               // the Init values of sliders 1-47; preset parser scratch
+
+// ---------- presets: the Init values, and each preset as "slider:value" changes from Init ----------
+#ln_def = "0 1 0 20 0 20000 0 0 30 1 1 0 400 0 0 2500 0 0 1 0 1 0 0 4 10 200 0 100 0 0 0 -50 40 50 150 20 0 0 20 0 50 0 30 120 6000 -0.3 1";
+function ln_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
+  n = 0; i = 0; inn = 0; len = strlen(s);
+  loop(len + 1,
+    c = i < len ? str_getchar(s, i) : 32;
+    c >= 48 && c <= 57 ? (
+      !inn ? ( inn = 1; acc = 0; fr = 0; scl = 1; neg = 0; );
+      fr ? ( scl *= 0.1; acc += (c - 48) * scl; ) : acc = acc * 10 + c - 48;
+    ) : c == 46 ? (
+      !inn ? ( inn = 1; acc = 0; scl = 1; neg = 0; ); fr = 1;
+    ) : c == 45 ? (
+      inn = 1; acc = 0; fr = 0; scl = 1; neg = 1;
+    ) : (
+      inn ? ( dst[n] = neg ? -acc : acc; n += 1; inn = 0; );
+    );
+    i += 1;
+  );
+  n;
+);
+ln_nums(#ln_def, LDEF);
+#ln_pm = "Init|Vocal|Vocal Opto|Acoustic Guitar|Bass DI|Kick|Snare|Drum Room|Drum Bus|Piano|Electric Guitar|Synth Pad|Warm Master|Transistor Crush";
+function ln_pstr(p) (
+  p == 2  ? "4:80 8:15 9:25 12:-1.5 13:300 14:-2 16:3200 17:2.5 19:1 20:3 22:1 23:-18 24:3 25:5 26:120 27:4 30:1 31:1 32:-55 33:15 36:120 39:25 40:-3.3" :
+  p == 3  ? "4:90 5:1 8:20 9:20 12:-1 13:250 14:-2.5 16:4000 17:2 20:2.5 22:0 23:-20 27:5 39:30 40:-1.4" :
+  p == 4  ? "4:70 8:10 11:2 12:-2 13:350 14:-3 16:5000 17:2 20:3.5 22:1 23:-16 24:3 25:15 26:200 27:3 39:20 40:-3.9" :
+  p == 5  ? "3:0 4:30 6:9000 8:35 9:15 11:1 12:3 13:700 14:-3 16:2200 17:2 22:0 23:-20 27:5 39:45" :
+  p == 6  ? "4:30 6:12000 8:25 9:40 11:1 12:5 13:400 14:-6 15:1 16:3500 17:3 20:2 22:1 23:-14 24:4 25:20 26:120 27:3 30:1 32:-38 33:60 34:30 35:120 36:80 39:35 40:-2.5" :
+  p == 7  ? "4:90 8:30 9:55 12:2 13:500 14:-3 16:5000 17:3 19:1 20:4 22:1 23:-16 24:5 25:5 26:150 27:4 30:1 32:-36 33:30 34:20 35:180 36:150 38:1 39:30 40:-6.7" :
+  p == 8  ? "4:40 8:40 9:60 12:3 13:400 14:-4 20:3 22:1 23:-30 24:10 25:1 26:300 27:12 28:60 38:1 39:55 40:-2.9" :
+  p == 9  ? "4:30 8:20 9:35 11:1 12:2 14:-1.5 13:350 20:2 22:1 23:-14 24:2 25:30 26:300 27:2 29:1 39:35 40:-2.9" :
+  p == 10 ? "4:40 8:10 9:20 11:0 12:1.5 13:300 14:-2 16:4000 17:1.5 19:2 20:2 22:0 23:-14 27:2 39:15 40:-1.2" :
+  p == 11 ? "4:80 6:9000 7:1 8:45 9:50 12:-2 13:800 14:-2 16:2500 17:3 22:1 23:-12 24:3 25:20 26:150 27:2 39:40 40:-0.7" :
+  p == 12 ? "4:40 8:15 9:10 12:1 14:-1 13:300 16:6000 17:-1.5 19:2 20:2.5 22:0 23:-10 27:1.5 28:70 39:20" :
+  p == 13 ? "4:25 8:10 9:15 11:0 12:1 20:1.5 19:2 22:0 23:-8 27:1 39:30 40:-1" :
+  p == 14 ? "4:60 8:70 9:85 12:2 13:900 14:3 20:4 22:1 23:-28 24:12 25:0.5 26:80 27:10 28:80 38:1 39:80 40:-4" :
+  "";
+);
+function load_preset(p) local(n, i) (
+  // TRIM, GUARD, DRIFT and the output stage stay as they are
+  i = 2; loop(38, slider(i + 1) = LDEF[i]; i += 1; );
+  n = ln_nums(ln_pstr(p), LTMP);
+  i = 0; loop(floor(n / 2), LTMP[i * 2] >= 3 && LTMP[i * 2] <= 40 ? slider(LTMP[i * 2]) = LTMP[i * 2 + 1]; i += 1; );
+  i = 3; loop(38, ui_auto(i); i += 1; );
+  pr_cur = p; ln_pcq = 1;
+);
+function reset_all() local(i) (
+  load_preset(1);
+  i = 0; loop(47, slider(i + 1) = LDEF[i]; ui_auto(i + 1); i += 1; );
+);
+
+// ---------- curves ----------
+// the shaper: x / (1 + |x|^p)^(1/p) - p small = soft, large = hard
+function ln_shp(x, p) ( x / (1 + abs(x) ^ p) ^ (1 / p); );
+function ln_dB(x) ( 20 * log10(max(x, 0.0000000001)); );
+function ln_ms(ms) ( 1 - exp(-1 / (max(ms, 0.01) * 0.001 * srate)); );
+
+// ---------- parameters ----------
+function ln_stab(i) ( i == 0 ? 0 : i == 1 ? -0.42 : i == 2 ? -0.83 : i == 3 ? 0.31 : 3.65; );
+function update() local(f, q, p, b) (
+  in_setup(slider1, slider2 >= 0.5);
+  ln_valve = slider3 < 0.5;
+  // filters (20 Hz = off, 20 kHz = off)
+  ln_hpon = slider4 > 20.5; ln_hp24 = slider5 >= 0.5;
+  ln_lpon = slider6 < 19990; ln_lp24 = slider7 >= 0.5;
+  q = ln_hp24 ? 0.5412 : 0.7071;
+  ln_h1l.bq_set(1, slider4, q, 0); ln_h1r.bq_set(1, slider4, q, 0); ln_h2l.bq_set(1, slider4, 1.3066, 0); ln_h2r.bq_set(1, slider4, 1.3066, 0);
+  q = ln_lp24 ? 0.5412 : 0.7071;
+  ln_l1l.bq_set(0, slider6, q, 0); ln_l1r.bq_set(0, slider6, q, 0); ln_l2l.bq_set(0, slider6, 1.3066, 0); ln_l2r.bq_set(0, slider6, 1.3066, 0);
+  // SAT: drive (level compensated), tone = bias (evenness) and hardness
+  ln_son = slider8 > 0.5;
+  ln_sdr = 10 ^ (slider8 / 100 * 24 / 20); ln_sco = 1 / ln_sdr ^ 0.82;
+  // (and a measured trim, so a -18 dBFS signal comes out at about its own level at any DRIVE)
+  f = slider8 / 25; p = min(floor(f), 3); f -= p;
+  ln_sco *= 10 ^ ((ln_stab(p) * (1 - f) + ln_stab(p + 1) * f) / 20);
+  b = slider9 / 100; ln_sb = 0.42 * (1 - b); ln_sp = 1.6 + 4.4 * b;
+  ln_sbo = ln_shp(ln_sb, ln_sp);
+  // EQ: broad valve-desk curves; HI-Q narrows the mids
+  ln_eqon = slider10 >= 0.5;
+  f = slider11 < 0.5 ? 35 : slider11 < 1.5 ? 60 : slider11 < 2.5 ? 100 : 220;
+  ln_e1l.bq_set(4, f, 0.6, slider12); ln_e1r.bq_set(4, f, 0.6, slider12);
+  q = slider15 >= 0.5 ? 2.2 : 0.65;
+  ln_e2l.bq_set(2, slider13, q, slider14); ln_e2r.bq_set(2, slider13, q, slider14);
+  q = slider18 >= 0.5 ? 2.2 : 0.65;
+  ln_e3l.bq_set(2, slider16, q, slider17); ln_e3r.bq_set(2, slider16, q, slider17);
+  f = slider19 < 0.5 ? 8000 : slider19 < 1.5 ? 12000 : 16000;
+  ln_e4l.bq_set(3, min(f, srate * 0.45), 0.6, slider20); ln_e4r.bq_set(3, min(f, srate * 0.45), 0.6, slider20);
+  // COMP
+  ln_con = slider21 >= 0.5; ln_vca = slider22 >= 0.5;
+  ln_thr = slider23; ln_rat = slider24; ln_mk = 10 ^ (slider27 / 20); ln_mix = slider28 / 100;
+  ln_ca = ln_ms(slider25); ln_cr = ln_ms(slider26);
+  ln_order = slider29 >= 0.5;
+  // GATE
+  ln_gon = slider30 >= 0.5; ln_gexp = slider31 >= 0.5; ln_gthr = slider32; ln_grng = slider33;
+  ln_ghold = floor(slider34 * 0.001 * srate); ln_grel = ln_ms(slider35);
+  ln_gkon = slider36 > 20.5; ln_gk.bq_set(1, slider36, 0.7071, 0);
+  ln_glast = slider37 >= 0.5;
+  // OUTPUT
+  ln_tr = slider38 >= 0.5;
+  ln_odr = 10 ^ (slider39 / 100 * 15 / 20); ln_oco = 1 / ln_odr ^ 0.85; ln_od = slider39 / 100;
+  ln_bl.bq_set(4, 70, 0.7, ln_tr ? 0 : 0.6 + 0.8 * ln_od); ln_br.bq_set(4, 70, 0.7, ln_tr ? 0 : 0.6 + 0.8 * ln_od);
+  ln_pl.bq_set(3, min(7000, srate * 0.45), 0.7, ln_tr ? 0.8 + 0.8 * ln_od : 0); ln_pr.bq_set(3, min(7000, srate * 0.45), 0.7, ln_tr ? 0.8 + 0.8 * ln_od : 0);
+  ln_ilc = 1 - exp(-2 * $pi * 150 / srate);                 // IRON: the low band that saturates first
+  ln_isc = 1 - exp(-2 * $pi * min(19000 - 7000 * ln_od, srate * 0.45) / srate);   // IRON: the top softens as it is driven
+  ln_lev = 10 ^ (slider40 / 20);
+  drift_macro(slider41);
+  ost_setup(slider42 / 100, slider43 / 100, slider44, slider45, slider46, 1);   // character unit: CLIP always on
+);
+
+// ---------- the input amp: a triode-style stage, normalised to unity at low level ----------
+// hv = headroom (follows the supply); asymmetric, so it adds even harmonics as it is pushed
+ln_vb = 0.18; ln_vp = 2.2; ln_vn = (1 + ln_vb ^ ln_vp) ^ (1 + 1 / ln_vp);   // 1 / the slope at the bias point
+function ln_valve_amp(x, hv) ( (ln_shp(x / hv + ln_vb, ln_vp) - ln_shp(ln_vb, ln_vp)) * hv * ln_vn; );
+
+function ln_tanh(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
+
+// ---------- GATE: FIRST (after the filters) or LAST (after EQ / COMP) ----------
+function ln_gate() local(k, kd, tgt, ov) (
+  k = (ln_l + ln_r) * 0.5;
+  ln_gkon ? k = ln_gk.bq_run(k);
+  k = abs(k);
+  ln_kenv += (k - ln_kenv) * (k > ln_kenv ? ln_kat : ln_krl);
+  kd = ln_dB(ln_kenv);
+  ln_gexp ? (
+    // EXPAND: 2:1 below the threshold, down to RANGE
+    ov = kd - ln_gthr;
+    tgt = ov >= 0 ? 1 : 10 ^ (max(ov, -ln_grng) / 20);
+    ln_gg += (tgt - ln_gg) * (tgt > ln_gg ? ln_eat : ln_grel);
+    ln_gopen = ov >= 0;
+  ) : (
+    // GATE: open above the threshold, held, then closed to RANGE below it (4 dB hysteresis)
+    kd > ln_gthr ? ( ln_gopen = 1; ln_gh = ln_ghold; ) :
+    kd < ln_gthr - 4 ? ( ln_gh > 0 ? ln_gh -= 1 : ln_gopen = 0; );
+    tgt = ln_gopen ? 1 : 10 ^ (-ln_grng / 20);
+    ln_gg += (tgt - ln_gg) * (tgt > ln_gg ? ln_gat : ln_grel);
+  );
+  ln_l *= ln_gg; ln_r *= ln_gg;
+  ln_gmin = min(ln_gmin, ln_gg);
+);
+
+// ---------- EQ, and COMP (OPTO / VCA) ----------
+function ln_eq() (
+  ln_eqon ? (
+    ln_l = ln_e4l.bq_run(ln_e3l.bq_run(ln_e2l.bq_run(ln_e1l.bq_run(ln_l))));
+    ln_r = ln_e4r.bq_run(ln_e3r.bq_run(ln_e2r.bq_run(ln_e1r.bq_run(ln_r))));
+  );
+);
+function ln_comp() local(x, lv, ov, gr, rel, g) (
+  ln_con ? (
+    x = max(abs(ln_l), abs(ln_r));
+    ln_vca ? (
+      // VCA: feed-forward peak detector, RATIO, a 6 dB knee, ATTACK / RELEASE
+      ln_cenv += (x - ln_cenv) * (x > ln_cenv ? ln_ca : ln_cr);
+      ov = ln_dB(ln_cenv) - ln_thr;
+      gr = ov <= -3 ? 0 : ov >= 3 ? ov * (1 - 1 / ln_rat) : (1 - 1 / ln_rat) * sqr(ov + 3) / 12;
+      ln_cgr += (gr - ln_cgr) * ln_gsm;
+    ) : (
+      // OPTO: a smoothed (RMS-like) level, about 3:1 with a 12 dB knee; the release slows the longer it squeezes
+      ln_cenv += (x * x - ln_cenv) * (x * x > ln_cenv ? ln_oa : ln_oc60);
+      ov = 10 * log10(max(ln_cenv, 0.0000000001)) + 3 - ln_thr;
+      gr = ov <= -6 ? 0 : ov >= 6 ? ov * (2 / 3) : (2 / 3) * sqr(ov + 6) / 24;
+      ln_cmem += (min(ln_cgr / 6, 1) - ln_cmem) * ln_mem;
+      rel = ln_orc + (ln_orl - ln_orc) * ln_cmem;
+      ln_cgr += (gr - ln_cgr) * (gr > ln_cgr ? ln_oa : rel);
+    );
+    g = 10 ^ (-ln_cgr / 20) * ln_mk;
+    g = 1 + (g - 1) * ln_mix;                              // MIX: parallel compression
+    ln_l *= g; ln_r *= g;
+    ln_grm = max(ln_grm, ln_cgr);
+  ) : ln_cgr = 0;
+);
+
+drV.drift_init(0.8 + rand(0.5)); drS.drift_init(0.8 + rand(0.5));
+function ln_srinit() (
+  ln_sr = srate;
+  in_init();
+  ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+  ln_dcc = 1 - 2 * $pi * 8 / srate;                        // DC blocks after the asymmetric stages (8 Hz)
+  ln_sga = ln_ms(80); ln_sgr = ln_ms(400);                 // the supply's sag follower
+  ln_oa = ln_ms(10);                                       // OPTO: attack
+  ln_mem = ln_ms(2000);                                    // OPTO: how long it has been squeezing
+  ln_oc60 = ln_ms(60); ln_orc = ln_ms(80); ln_orl = ln_ms(1500);   // OPTO: level follower; release quick / slow
+  ln_gsm = ln_ms(2);                                       // comp gain smoothing
+  ln_kat = ln_ms(0.5); ln_krl = ln_ms(30);                 // gate key: peak follower
+  ln_gat = ln_ms(0.3);                                     // gate opens in 0.3 ms
+  ln_eat = ln_ms(5);                                       // expander gain smoothing
+  ln_pdn = 1 / (0.012 * srate); ln_pup = 1 / (0.02 * srate);   // preset change: 12 ms out, 20 ms in
+  update();
+);
+ln_srinit();
+ln_pcf = 0; ln_pcg = 1; ln_sag = 0; ln_cenv = 0; ln_cgr = 0; ln_cmem = 0; ln_kenv = 0; ln_gg = 1; ln_gopen = 0; ln_gh = 0; ln_gmin = 1;
+!ui_dflt ? ( ui_sz = 1; pr_cur = 1; );
+ui_dflt = 1;
+
+@slider
+!ln_pcf && !ln_pcq ? update();                            // (during a preset change the old settings hold until it is silent)
+
+@block
+srate != ln_sr ? ln_srinit();
+// a preset change: fade out (12 ms), the new settings apply at the silent point (the filters and the dynamics start
+// clean), fade back in (20 ms): no click
+ln_pcq && !ln_pcf ? ( ln_pcf = 1; ln_pcq = 0; );
+ln_pcf == 2 ? (
+  update();
+  ln_cenv = 0; ln_cgr = 0; ln_cmem = 0; ln_kenv = 0; ln_gg = 1; ln_gopen = 0; ln_gh = 0;
+  ln_pcf = 3;
+);
+ln_pcf != 1 && !ln_pcq ? update();
+// DRIFT: the supply voltage (headroom) and the saturation's evenness wander slowly
+ln_vv = drV.drift_tick(0.12 * dm_s * samplesblock / srate);
+ln_vs = drS.drift_tick(0.10 * dm_s * samplesblock / srate);
+ln_volt = 1 + 0.06 * dm_a * ln_vv;
+ln_sbd = ln_sb * (1 + 0.25 * dm_a * ln_vs);
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+// ---------- INPUT: TRIM / GUARD, the input amp ----------
+in_process(spl0, spl1); ln_l = in_l; ln_r = in_r;
+ln_vum += (0.5 * (ln_l * ln_l + ln_r * ln_r) - ln_vum) * 0.0006;      // (the VU's level)
+// the supply sags under load: a slow follower of the level pulls every headroom down a little
+ln_t = max(abs(ln_l), abs(ln_r));
+ln_sag += (ln_t - ln_sag) * (ln_t > ln_sag ? ln_sga : ln_sgr);
+ln_hd = ln_volt * (1 - 0.12 * dm_a * min(ln_sag, 1.5));
+ln_valve ? (
+  ln_l = ln_valve_amp(ln_l, 1.5 * ln_hd); ln_r = ln_valve_amp(ln_r, 1.5 * ln_hd);
+  ln_t = ln_l - ln_d1xl + ln_dcc * ln_d1yl; ln_d1xl = ln_l; ln_d1yl = ln_t; ln_l = ln_t;
+  ln_t = ln_r - ln_d1xr + ln_dcc * ln_d1yr; ln_d1xr = ln_r; ln_d1yr = ln_t; ln_r = ln_t;
+);
+
+// ---------- FILTERS ----------
+ln_hpon ? (
+  ln_l = ln_h1l.bq_run(ln_l); ln_r = ln_h1r.bq_run(ln_r);
+  ln_hp24 ? ( ln_l = ln_h2l.bq_run(ln_l); ln_r = ln_h2r.bq_run(ln_r); );
+);
+ln_lpon ? (
+  ln_l = ln_l1l.bq_run(ln_l); ln_r = ln_l1r.bq_run(ln_r);
+  ln_lp24 ? ( ln_l = ln_l2l.bq_run(ln_l); ln_r = ln_l2r.bq_run(ln_r); );
+);
+
+// GATE first
+ln_gon && !ln_glast ? ln_gate();
+
+// ---------- SAT ----------
+ln_son ? (
+  ln_t = ln_hd * 0.9;
+  ln_l = (ln_shp(ln_l * ln_sdr / ln_t + ln_sbd, ln_sp) - ln_shp(ln_sbd, ln_sp)) * ln_t * ln_sco;
+  ln_r = (ln_shp(ln_r * ln_sdr / ln_t + ln_sbd, ln_sp) - ln_shp(ln_sbd, ln_sp)) * ln_t * ln_sco;
+  ln_t = ln_l - ln_d2xl + ln_dcc * ln_d2yl; ln_d2xl = ln_l; ln_d2yl = ln_t; ln_l = ln_t;
+  ln_t = ln_r - ln_d2xr + ln_dcc * ln_d2yr; ln_d2xr = ln_r; ln_d2yr = ln_t; ln_r = ln_t;
+);
+
+// ---------- EQ and COMP (ORDER) ----------
+ln_order ? ( ln_comp(); ln_eq(); ) : ( ln_eq(); ln_comp(); );
+ln_gon && ln_glast ? ln_gate();
+
+// ---------- OUTPUT: IRON or TRANSISTOR, LEVEL ----------
+ln_t = ln_hd * 1.1;
+ln_tr ? (
+  // TRANSISTOR: a harder knee, a touch of asymmetry, a little brighter
+  ln_l = ln_pl.bq_run(ln_l); ln_r = ln_pr.bq_run(ln_r);
+  ln_l = (ln_shp(ln_l * ln_odr / ln_t + 0.04, 5) - ln_shp(0.04, 5)) * ln_t * ln_oco;
+  ln_r = (ln_shp(ln_r * ln_odr / ln_t + 0.04, 5) - ln_shp(0.04, 5)) * ln_t * ln_oco;
+  ln_u = ln_l - ln_d3xl + ln_dcc * ln_d3yl; ln_d3xl = ln_l; ln_d3yl = ln_u; ln_l = ln_u;
+  ln_u = ln_r - ln_d3xr + ln_dcc * ln_d3yr; ln_d3xr = ln_r; ln_d3yr = ln_u; ln_r = ln_u;
+) : (
+  // IRON: the low band saturates first (the core), the whole wave rounds softly, the top softens with DRIVE
+  ln_l = ln_bl.bq_run(ln_l); ln_r = ln_br.bq_run(ln_r);
+  ln_lol += (ln_l - ln_lol) * ln_ilc; ln_lor += (ln_r - ln_lor) * ln_ilc;
+  ln_k = 1 + 3 * ln_od;
+  ln_l += (ln_tanh(ln_lol * ln_k / ln_t) * ln_t / ln_k - ln_lol) * ln_od;
+  ln_r += (ln_tanh(ln_lor * ln_k / ln_t) * ln_t / ln_k - ln_lor) * ln_od;
+  ln_l = ln_shp(ln_l * ln_odr / ln_t, 2.2) * ln_t * ln_oco;
+  ln_r = ln_shp(ln_r * ln_odr / ln_t, 2.2) * ln_t * ln_oco;
+  ln_isl += (ln_l - ln_isl) * ln_isc; ln_isr += (ln_r - ln_isr) * ln_isc; ln_l = ln_isl; ln_r = ln_isr;
+);
+ln_l *= ln_lev; ln_r *= ln_lev;
+
+// the preset change's fade
+ln_pcf == 1 ? ( ln_pcg -= ln_pdn; ln_pcg <= 0 ? ( ln_pcg = 0; ln_pcf = 2; ); ) :
+ln_pcf == 3 ? ( ln_pcg += ln_pup; ln_pcg >= 1 ? ( ln_pcg = 1; ln_pcf = 0; ); );
+ln_pcf ? ( ln_l *= ln_pcg; ln_r *= ln_pcg; );
+
+// ---------- the house output stage ----------
+ln_l = ostL.ost_band(ln_l); ln_r = ostR.ost_band(ln_r);
+ost_out(ln_l, ln_r);
+spl0 = ost_l; spl1 = ost_r;
+ln_pkl = max(ln_pkl, abs(spl0)); ln_pkr = max(ln_pkr, abs(spl1));
+
+@gfx 1390 320
+ui_begin(1390, 320);
+
+// ---------- the faceplate follows the output: IRON = Malecon Sunset, TRANSISTOR = Habana Vieja ----------
+ln_tr_ = slider38 >= 0.5;
+ln_tr_ ? (
+  FACE = 0xE6D3A3; FACE2 = 0xD9C28A; INK = 0x1E2A38; DIM = 0x4B5664; RULE = 0xB9A472;
+  ACC = 0x2F5D8A; ACC2 = 0xB5523B; KEY = 0x6A7684; BAND = 0x2F5D8A; BANDINK = 0xF3E8CC;
+) : (
+  FACE = 0xEFE4CC; FACE2 = 0xE5D6B6; INK = 0x2B2420; DIM = 0x6A5D52; RULE = 0xCDBFA4;
+  ACC = 0xE07A5F; ACC2 = 0x4FA89B; KEY = 0x8A7D70; BAND = 0xE07A5F; BANDINK = 0xFFF6E6;
+);
+C_HPF = 0xF2C83E;
+dy_ink = INK; dy_bg = FACE; dy_nov = 1; dy_kst = 31;
+
+function setv(idx, v) ( slider(idx) = v; ui_auto(idx); );
+function lg_rule(x) ( ui_col(RULE); gfx_rect(x * sc, 60 * sc, 1 * sc, 252 * sc); ui_cola(0xFFFFFF, 0.4); gfx_rect((x + 1) * sc, 60 * sc, 1 * sc, 252 * sc); );
+// a section's title on a coloured band, an optional IN key at its right end
+function lg_band(x, w, s) (
+  ui_col(BAND); gfx_rect(x * sc, 60 * sc, w * sc, 18 * sc);
+  ui_cola(0xFFFFFF, 0.25); gfx_rect(x * sc, 60 * sc, w * sc, 1 * sc);
+  rd_sub(x + 7, 61, s, BANDINK, 1);
+);
+function lg_in(x, idx) ( rd_sq(x, 61, 30, 16, slider(idx) >= 0.5, ACC2, "IN") ? setv(idx, slider(idx) >= 0.5 ? 0 : 1); );
+function lg_key(x, y, w, h, on, s) ( rd_sq(x, y, w, h, on, ACC, s); );
+// a compact 8-LED reduction row (1 2 3 4 6 9 12 20 dB), 168 wide: green, then amber, then red
+function lg_gr(x, y, gr) local(i, d, c) (
+  rd_lbl(x - 2, y, "GR", DIM, 0.8);
+  i = 0;
+  loop(8,
+    d = i == 0 ? 1 : i == 1 ? 2 : i == 2 ? 3 : i == 3 ? 4 : i == 4 ? 6 : i == 5 ? 9 : i == 6 ? 12 : 20;
+    c = i < 4 ? 0x4CD06A : i < 6 ? 0xFFB020 : 0xFF3A22;
+    ui_col(0x1A1A1C); gfx_rect((x + 14 + i * 19) * sc, (y - 5) * sc, 15 * sc, 10 * sc);
+    ui_col(gr >= d ? c : ui_mix(c, 0x1A1A1C, 0.8)); gfx_rect((x + 15 + i * 19) * sc, (y - 4) * sc, 13 * sc, 8 * sc);
+    i += 1;
+  );
+);
+// the Morro lighthouse on its point, with its flag
+function lg_lighthouse(cx, by, s) (
+  ui_col(INK); gfx_triangle((cx - 4 * s) * sc, by * sc, (cx + 4 * s) * sc, by * sc, (cx + 2.6 * s) * sc, (by - 18 * s) * sc, (cx - 2.6 * s) * sc, (by - 18 * s) * sc);
+  ui_col(FACE); gfx_rect((cx - 2.2 * s) * sc, (by - 12 * s) * sc, 4.4 * s * sc, 1.2 * s * sc); gfx_rect((cx - 2.4 * s) * sc, (by - 6 * s) * sc, 4.8 * s * sc, 1.2 * s * sc);
+  ui_col(INK); gfx_rect((cx - 3.2 * s) * sc, (by - 20 * s) * sc, 6.4 * s * sc, 2 * s * sc);
+  ui_col(0xFFD45A); gfx_rect((cx - 1.8 * s) * sc, (by - 24 * s) * sc, 3.6 * s * sc, 4 * s * sc);
+  ui_col(INK); gfx_triangle((cx - 2.6 * s) * sc, (by - 24 * s) * sc, (cx + 2.6 * s) * sc, (by - 24 * s) * sc, cx * sc, (by - 27 * s) * sc);
+  gfx_line(cx * sc, (by - 27 * s) * sc, cx * sc, (by - 33 * s) * sc, 1);
+  ui_col(ACC2); gfx_triangle(cx * sc, (by - 33 * s) * sc, (cx + 5 * s) * sc, (by - 31.5 * s) * sc, cx * sc, (by - 30 * s) * sc);
+  ui_cola(0xFFD45A, 0.35); gfx_triangle((cx + 2 * s) * sc, (by - 22 * s) * sc, (cx + 16 * s) * sc, (by - 26 * s) * sc, (cx + 16 * s) * sc, (by - 18 * s) * sc);
+  ui_col(INK); gfx_rect((cx - 9 * s) * sc, by * sc, 18 * s * sc, 1.5 * s * sc);
+);
+
+// ---------- the panel ----------
+ui_col(0x0A0A0B); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(FACE); gfx_rect(0, 0, 1390 * sc, 320 * sc);
+gfx_gradrect(0, 0, 1390 * sc, 160 * sc, 1, 1, 1, 0.12, 0, 0, 0, 0, 0, 0, 0, -0.12 / (160 * sc));
+ui_col(FACE2); gfx_rect(0, 0, 1390 * sc, 52 * sc);
+ui_cola(0x000000, 0.22); gfx_rect(0, 52 * sc, 1390 * sc, 2 * sc); gfx_rect(0, 317 * sc, 1390 * sc, 3 * sc);
+
+// ---------- header: badge, name, the 78 / Havana plate, presets, size ----------
+rd_badge(26, 26, 15, INK, FACE2);
+rd_title(50, 9, "LINEA 78", 24, INK);
+rd_sub(52, 36, "VALVE CHANNEL STRIP", DIM, 1);
+// the 78 series plate: HAVANA, the lighthouse
+ui_col(INK); ui_rrect(222 * sc, 9 * sc, 108 * sc, 34 * sc, 5 * sc); ui_col(ACC); ui_rrect(224 * sc, 11 * sc, 104 * sc, 30 * sc, 4 * sc);
+lg_lighthouse(246, 37, 0.85);
+rd_title(266, 12, "78", 18, BANDINK); rd_sub(266, 30, "HAVANA", BANDINK, 0.95);
+pk_pextra = "Reset all to defaults";
+k_ = pk_preset(346 * sc, 9 * sc, 430 * sc, 34 * sc, pr_cur, #ln_pm);
+k_ > 0 ? ( k_ > 14 ? reset_all() : load_preset(k_); );
+rd_sub(800, 12, ln_tr_ ? "HABANA VIEJA" : "MALECON SUNSET", DIM, 1);
+rd_sub(800, 28, ln_tr_ ? "TRANSISTOR OUTPUT" : "IRON OUTPUT", DIM, 0.8);
+ui_size_picker(1290 * sc, 16 * sc);
+
+// ---------- INPUT: VU, VALVE / CLEAN, TRIM (GUARD) ----------
+lg_band(8, 210, "INPUT");
+ln_vu_.ui_vu(18 * sc, 84 * sc, 190 * sc, 104 * sc, 10 * log10(ln_vum + 0.0000000001) + 18 + 10 * log10(2), "IN");
+lg_key(18, 196, 92, 24, slider3 < 0.5, "VALVE") ? setv(3, 0);
+lg_key(116, 196, 92, 24, slider3 >= 0.5, "CLEAN") ? setv(3, 1);
+rd_iotx = 0; rd_ioc1 = 0x2A2A2E; rd_ioc2 = 0xD8B040;
+rd_io(8, 240, 1, 2, 42, 47);
+dy_kst = 31;
+lg_rule(224);
+
+// ---------- FILTERS ----------
+lg_band(230, 110, "FILTERS");
+slider4 <= 20.5 ? strcpy(#v, "OFF") : sprintf(#v, "%.0f Hz", slider4);
+dy_kf = 1; dy_knob(268, 130, 20, 4, 20, 400, 20, 1, C_HPF, "HPF", #v);
+lg_key(298, 100, 36, 18, slider5 < 0.5, "12") ? setv(5, 0); lg_key(298, 122, 36, 18, slider5 >= 0.5, "24") ? setv(5, 1);
+slider6 >= 19990 ? strcpy(#v, "OFF") : sprintf(#v, "%.1f kHz", slider6 / 1000);
+dy_kf = 2; dy_knob(268, 238, 20, 6, 3000, 20000, 20000, 1, 0x2A2A2E, "LPF", #v);
+lg_key(298, 208, 36, 18, slider7 < 0.5, "12") ? setv(7, 0); lg_key(298, 230, 36, 18, slider7 >= 0.5, "24") ? setv(7, 1);
+rd_lbl(316, 152, "dB/OCT", DIM, 0.8); rd_lbl(316, 260, "dB/OCT", DIM, 0.8);
+lg_rule(346);
+
+// ---------- SAT ----------
+lg_band(352, 92, "SAT");
+sprintf(#v, "%.0f%%", slider8); dy_knob(398, 130, 20, 8, 0, 100, 0, 0, ACC, "DRIVE", #v);
+sprintf(#v, "%.0f%%", slider9); dy_knob(398, 238, 20, 9, 0, 100, 30, 0, ACC2, "TONE", #v);
+rd_lbl(372, 290, "EVEN", DIM, 0.8); rd_lbl(424, 290, "ODD", DIM, 0.8);
+lg_rule(450);
+
+// ---------- EQ ----------
+lg_band(456, 334, "EQ"); lg_in(756, 10);
+// LOW
+dy_step = 4; dy_steps = "35|60|100|220";
+sprintf(#v, "%s Hz", pk_pitem("35|60|100|220", floor(slider11 + 0.5) + 1, #k)); dy_knob(500, 126, 17, 11, 0, 3, 1, 0, ACC, "LOW", #v);
+rd_stepclick(500, 126, 17, 11, 4);
+sprintf(#v, "%+.1f dB", slider12); dy_knob(500, 238, 20, 12, -15, 15, 0, 0, ACC, "GAIN", #v);
+// LO-MID
+sprintf(#v, "%.0f Hz", slider13); dy_knob(582, 126, 17, 13, 150, 2000, 400, 1, ACC2, "LO-MID", #v);
+sprintf(#v, "%+.1f dB", slider14); dy_knob(582, 238, 20, 14, -15, 15, 0, 0, ACC2, "GAIN", #v);
+lg_key(562, 168, 40, 18, slider15 >= 0.5, "HI-Q") ? setv(15, slider15 >= 0.5 ? 0 : 1);
+// HI-MID
+sprintf(#v, "%.2f kHz", slider16 / 1000); dy_knob(664, 126, 17, 16, 800, 8000, 2500, 1, ACC2, "HI-MID", #v);
+sprintf(#v, "%+.1f dB", slider17); dy_knob(664, 238, 20, 17, -15, 15, 0, 0, ACC2, "GAIN", #v);
+lg_key(644, 168, 40, 18, slider18 >= 0.5, "HI-Q") ? setv(18, slider18 >= 0.5 ? 0 : 1);
+// HIGH
+dy_step = 3; dy_steps = "8K|12K|16K";
+sprintf(#v, "%s", pk_pitem("8 kHz|12 kHz|16 kHz", floor(slider19 + 0.5) + 1, #k)); dy_knob(746, 126, 17, 19, 0, 2, 1, 0, ACC, "HIGH", #v);
+rd_stepclick(746, 126, 17, 19, 3);
+sprintf(#v, "%+.1f dB", slider20); dy_knob(746, 238, 20, 20, -15, 15, 0, 0, ACC, "GAIN", #v);
+lg_rule(796);
+
+// ---------- ORDER ----------
+rd_lbl(819, 150, "ORDER", DIM, 0.9);
+lg_key(802, 162, 34, 30, slider29 < 0.5, "EQ") ? setv(29, 0);
+rd_lbl(819, 198, "▼", DIM, 0.9);
+lg_key(802, 206, 34, 30, slider29 >= 0.5, "CMP") ? setv(29, 1);
+rd_lbl(819, 244, slider29 < 0.5 ? "EQ > COMP" : "COMP > EQ", DIM, 0.7);
+lg_rule(842);
+
+// ---------- COMP ----------
+lg_band(848, 196, "COMP"); lg_in(1010, 21);
+lg_key(856, 84, 56, 20, slider22 < 0.5, "OPTO") ? setv(22, 0);
+lg_key(916, 84, 56, 20, slider22 >= 0.5, "VCA") ? setv(22, 1);
+lg_gr(860, 292, ln_grm); ln_grm *= 0.8;
+sprintf(#v, "%.1f dB", slider23); dy_knob(882, 146, 17, 23, -40, 0, 0, 0, ACC, "THRESH", #v);
+ln_dim_ = slider22 < 0.5;
+sprintf(#v, "%.1f:1", slider24); dy_knob(946, 146, 17, 24, 1, 20, 4, 1, ln_dim_ ? RULE : ACC2, ln_dim_ ? "(3:1)" : "RATIO", #v);
+sprintf(#v, "%.1f ms", slider25); dy_knob(1010, 146, 17, 25, 0.1, 100, 10, 1, ln_dim_ ? RULE : ACC2, ln_dim_ ? "-" : "ATTACK", #v);
+sprintf(#v, "%.0f ms", slider26); dy_knob(882, 232, 17, 26, 20, 2000, 200, 1, ln_dim_ ? RULE : ACC2, ln_dim_ ? "AUTO" : "RELEASE", #v);
+sprintf(#v, "%+.1f dB", slider27); dy_knob(946, 232, 17, 27, 0, 24, 0, 0, ACC, "MAKEUP", #v);
+sprintf(#v, "%.0f%%", slider28); dy_knob(1010, 232, 17, 28, 0, 100, 100, 0, ACC, "MIX", #v);
+lg_rule(1050);
+
+// ---------- GATE ----------
+lg_band(1056, 196, "GATE"); lg_in(1218, 30);
+lg_key(1064, 84, 56, 20, slider31 < 0.5, "GATE") ? setv(31, 0);
+lg_key(1124, 84, 60, 20, slider31 >= 0.5, "EXPAND") ? setv(31, 1);
+rd_led(1232, 94, 5, ln_gon && ln_gopen, 0x4CD06A);
+sprintf(#v, "%.1f dB", slider32); dy_knob(1090, 146, 17, 32, -80, 0, -50, 0, ACC, "THRESH", #v);
+sprintf(#v, "%.0f dB", slider33); dy_knob(1154, 146, 17, 33, 0, 80, 40, 0, ACC, "RANGE", #v);
+sprintf(#v, "%.0f ms", slider34); dy_knob(1218, 146, 17, 34, 0, 500, 50, 0, ACC2, "HOLD", #v);
+sprintf(#v, "%.0f ms", slider35); dy_knob(1090, 232, 17, 35, 5, 2000, 150, 1, ACC2, "RELEASE", #v);
+slider36 <= 20.5 ? strcpy(#v, "OFF") : sprintf(#v, "%.0f Hz", slider36);
+dy_kf = 1; dy_knob(1154, 232, 17, 36, 20, 2000, 20, 1, C_HPF, "KEY HPF", #v);
+lg_key(1196, 212, 44, 18, slider37 < 0.5, "FIRST") ? setv(37, 0);
+lg_key(1196, 234, 44, 18, slider37 >= 0.5, "LAST") ? setv(37, 1);
+// the gate's own reduction (worst since the last frame)
+ln_gr_ = -20 * log10(max(ln_gmin, 0.00001)); ln_gmin = 1;
+lg_gr(1068, 292, ln_gon ? ln_gr_ : 0);
+lg_rule(1258);
+
+// ---------- OUTPUT: IRON / TRANSISTOR, DRIVE, LEVEL, DRIFT, meters ----------
+lg_band(1264, 120, "OUTPUT");
+lg_key(1270, 84, 52, 20, !ln_tr_, "IRON") ? setv(38, 0);
+lg_key(1326, 84, 52, 20, ln_tr_, "TRANS") ? setv(38, 1);
+sprintf(#v, "%.0f%%", slider39); dy_knob(1296, 146, 17, 39, 0, 100, 20, 0, ACC, "DRIVE", #v);
+sprintf(#v, "%+.1f dB", slider40); dy_knob(1296, 232, 17, 40, -24, 12, 0, 0, ACC2, "LEVEL", #v);
+dy_kst = 20; sprintf(#v, "%.0f%%", slider41); dy_knob(1282, 290, 11, 41, 0, 100, 50, 0, 0x9DA2A8, "", #v); dy_kst = 31;
+rd_lbl(1314, 290, "DRIFT", DIM, 0.85);
+ln_ml_.ui_ledm(1342 * sc, 116 * sc, 11 * sc, 150 * sc, ln_pkl); ln_mr_.ui_ledm(1358 * sc, 116 * sc, 11 * sc, 150 * sc, ln_pkr);
+ln_pkl *= 0.85; ln_pkr *= 0.85;
+
+pk_end();
+ui_end();
