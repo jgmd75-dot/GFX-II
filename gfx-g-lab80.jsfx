@@ -481,6 +481,8 @@ function rv_update() local(i, sz, L, gl, gh, a, t60) (
 
 function update() (
   slider1 != snd ? (
+    snd >= 0 && nact > 0 && !lx_pgo ? ( lx_pcf = 1; ) : (     // voices sounding: they fade out under the old sound first
+    lx_pgo = 0;
     snd >= 0 ? (
       // a new sound starts from its own settings: the sound-shaping knobs go back to neutral
       slider17 = 0; slider18 = 0; slider2 = 50; slider3 = 100; slider4 = 100; slider5 = 100;
@@ -488,6 +490,7 @@ function update() (
       sliderchange(slider17); sliderchange(slider18);
     );
     kill_all(); patch_set(slider1);
+    );
   );
   tone = slider2 / 100;
   atk_k = slider3 / 100; rel_k = slider4 / 100; dec_k = 1;
@@ -613,6 +616,38 @@ function mgroup(x, y, w, h, sec, title, shade) (
   ui_section(sec == 0 ? 2 : sec); C_INK = INKL;
 );
 snd = -1;
+// the per-block coefficients of the sound (also run at once when a sound change applies in @sample)
+function lx_coefs() (
+  // envelope coefficients (with the ATTACK / RELEASE macros)
+  a_inc = 1 / max(max(aA * atk_k, 0.003) * srate, 1);      // never faster than 3 ms (no click)
+  fi_step = 1 / ((eng == 1 ? 0.003 : 0.002) * srate); dc_k = exp(-1 / (0.002 * srate));
+  f_inc = 1 / max(max(fA * atk_k, 0.002) * srate, 1);
+  a_dec = tc(aD); a_rel = tc(aR * rel_k);
+  f_dec = tc(fD);
+  gl_c = glide > 0 ? 1 - exp(-1 / (glide * srate)) : 1;
+  fm_rel = tc(0.28 * rel_k); ks_damp = 0.6; gl_rel = tc(1.5 * rel_k); chf_d = tc(0.03);
+  tone_oct = (tone - 0.5) * 3;                     // TONE: +/- 1.5 octaves on filters / brightness
+  // output filter for the FM / string / bar sounds (FILTER 0 and no RESONANCE = bypassed)
+  gf_on = eng != 0 && (filt_oct < -0.01 || reso > 0.005);
+  gf_g = tan($pi * min(18000 * 2 ^ filt_oct, srate * 0.45) / srate); gf_k = 2 - 1.9 * reso;
+  gf_a1 = 1 / (1 + gf_g * (gf_g + gf_k)); gf_a2 = gf_g * gf_a1; gf_a3 = gf_g * gf_a2;
+  // analogue sounds: the knobs move each note's filter
+  va_res = fres + reso * (1.02 - fres);
+  pe_c = tc(pe_t); pn_damp = tc(0.18 * rel_k) ^ 0.5; pn_kd = tc(0.012); org_rel = tc(0.03 * rel_k); org_ck = tc(0.004);
+  (eng == 4 || eng == 5) ? ( pv = 0; loop(NV, VB[pv * VS + F_ACT] ? pn_norm(VB + pv * VS); pv += 1; ); );
+);
+// a sound change while voices sound: the old sound fades out (12 ms), the new one applies at the silent point and
+// the output fades back in (12 ms), so nothing is cut dead; notes played during the fade start at that point
+LXP = 7000; lx_pcf = 0; lx_pck = lx_pcg = 1; lx_pcn = 0; lx_pgo = 0;
+function lx_hold(n, v) ( lx_pcn < 32 ? ( LXP[lx_pcn * 2] = n; LXP[lx_pcn * 2 + 1] = v; lx_pcn += 1; ); );
+function lx_unhold(n) local(i, j) (
+  i = j = 0; loop(lx_pcn, LXP[i * 2] != n ? ( LXP[j * 2] = LXP[i * 2]; LXP[j * 2 + 1] = LXP[i * 2 + 1]; j += 1; ); i += 1; ); lx_pcn = j;
+);
+function lx_pcapply() local(i) (
+  lx_pgo = 1; update(); lx_coefs(); lx_pcf = 0;
+  dl_len = min(floor(dl_bt * 60 / tempo * srate), 131000);       // (the echo time moves here too, while it is silent)
+  i = 0; loop(lx_pcn, note_on(LXP[i * 2], LXP[i * 2 + 1]); i += 1; ); lx_pcn = 0;
+);
 update();
 out_s = out_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
@@ -631,26 +666,11 @@ while (midirecv(mofs, m1, m2, m3)) (
 );
 evi = 0; spos = 0;
 panic_req ? ( all_off(); panic_req = 0; );
+lx_pcr = 1 / (0.012 * srate);
 update();
 ins_drift_block(drift, samplesblock);            // GFX instrument drift
 pdrift = ins_pitch;
-// envelope coefficients (with the ATTACK / RELEASE macros)
-a_inc = 1 / max(max(aA * atk_k, 0.003) * srate, 1);      // never faster than 3 ms (no click)
-fi_step = 1 / ((eng == 1 ? 0.003 : 0.002) * srate); dc_k = exp(-1 / (0.002 * srate));
-f_inc = 1 / max(max(fA * atk_k, 0.002) * srate, 1);
-a_dec = tc(aD); a_rel = tc(aR * rel_k);
-f_dec = tc(fD);
-gl_c = glide > 0 ? 1 - exp(-1 / (glide * srate)) : 1;
-fm_rel = tc(0.28 * rel_k); ks_damp = 0.6; gl_rel = tc(1.5 * rel_k); chf_d = tc(0.03);
-tone_oct = (tone - 0.5) * 3;                     // TONE: +/- 1.5 octaves on filters / brightness
-// output filter for the FM / string / bar sounds (FILTER 0 and no RESONANCE = bypassed)
-gf_on = eng != 0 && (filt_oct < -0.01 || reso > 0.005);
-gf_g = tan($pi * min(18000 * 2 ^ filt_oct, srate * 0.45) / srate); gf_k = 2 - 1.9 * reso;
-gf_a1 = 1 / (1 + gf_g * (gf_g + gf_k)); gf_a2 = gf_g * gf_a1; gf_a3 = gf_g * gf_a2;
-// analogue sounds: the knobs move each note's filter
-va_res = fres + reso * (1.02 - fres);
-pe_c = tc(pe_t); pn_damp = tc(0.18 * rel_k) ^ 0.5; pn_kd = tc(0.012); org_rel = tc(0.03 * rel_k); org_ck = tc(0.004);
-(eng == 4 || eng == 5) ? ( pv = 0; loop(NV, VB[pv * VS + F_ACT] ? pn_norm(VB + pv * VS); pv += 1; ); );
+lx_coefs();
 // tempo: the host's when playing, else free-running at its tempo
 bt_inc = tempo / 60 / srate;
 (play_state & 1) ? bt_pos = beat_position;
@@ -663,16 +683,18 @@ file_var(0, ui_sz);
 @sample
 while (evi < evn && evq[evi * 4] <= spos) (
   e1 = evq[evi * 4 + 1]; e2 = evq[evi * 4 + 2]; e3 = evq[evi * 4 + 3];
-  e1 == 0x90 && e3 > 0 ? ( note_on(e2, e3); midi_led = 1; ins_midi_hit(); ) :
-  e1 == 0x80 || e1 == 0x90 ? note_off(e2) :
+  e1 == 0x90 && e3 > 0 ? ( lx_pcf ? lx_hold(e2, e3) : note_on(e2, e3); midi_led = 1; ins_midi_hit(); ) :
+  e1 == 0x80 || e1 == 0x90 ? ( lx_unhold(e2); note_off(e2); ) :
   e1 == 0xB0 ? (
     e2 == 64 ? pedal_set(e3 >= 64);
     e2 == 1 ? modw = e3 / 127;
-    e2 == 120 || e2 == 123 ? all_off();
+    e2 == 120 || e2 == 123 ? ( all_off(); lx_pcn = 0; );
   );
   evi += 1;
 );
 spos += 1;
+lx_pcf ? ( lx_pck -= lx_pcr; lx_pck <= 0 ? ( lx_pck = 0; lx_pcapply(); ); lx_pcg = 0.5 - 0.5 * cos($pi * lx_pck); ) :
+lx_pck < 1 ? ( lx_pck = min(lx_pck + lx_pcr, 1); lx_pcg = 0.5 - 0.5 * cos($pi * lx_pck); );
 
 nz = rand(2) - 1;
 vph += (vib > 0 ? vib : 5.5) / srate; vph >= 1 ? vph -= 1;
@@ -815,6 +837,7 @@ gf_on ? (
   mix = gv2;
 ) : ( gf1 = 0; gf2 = 0; );
 
+mix *= lx_pcg;                                   // (a sound change: the effects' inputs fade too, so no cut reaches them)
 // chorus / three-phase ensemble
 cbuf[cwp] = mix;
 ca = chor * chor_k;
@@ -894,30 +917,30 @@ rv_on || rv_tail > 0.00001 ? (
 );
 
 out_s += (out_t - out_s) * sm;
-ptr_s = patch_trim(slider1);                    // follows the patch at once (a patch change is a discrete event)
-oL = ostL.ost_band((oL) * ptr_s) * out_s;
-oR = ostR.ost_band((oR) * ptr_s) * out_s;
+ptr_s = patch_trim(snd);                        // follows the sound in use at once (a sound change is a discrete event)
+oL = ostL.ost_band((oL) * ptr_s * lx_pcg) * out_s;
+oR = ostR.ost_band((oR) * ptr_s * lx_pcg) * out_s;
 ins_stereo(oL, oR); ost_out(ins_sl, ins_sr);           // mono-maker / widener, then the output stage
 spl0 = ost_l;
 spl1 = ost_r;
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
-@gfx 640 420
+@gfx 1160 420
 ui_thm = 10; ui_hw = 1;
-ui_begin(640, 420);
+ui_begin(1160, 420);
 
 // ---------- chassis: dark brown workstation with teal accents ----------
 ui_col(0x0B0C0D); gfx_rect(0, 0, gfx_w, gfx_h);
 fh = 412;                                              // the panel, with the IN / OUT strip along the bottom
-pk_chassis(8 * sc, 4 * sc, 624 * sc, fh * sc, BRW);
-ui_col(TEAL); gfx_rect(8 * sc, 42 * sc, 624 * sc, 2 * sc);
+pk_chassis(8 * sc, 4 * sc, 1144 * sc, fh * sc, BRW);
+ui_col(TEAL); gfx_rect(8 * sc, 42 * sc, 1144 * sc, 2 * sc);
 ui_col(TEAL); gfx_circle(36 * sc, 24 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(BRW); ui_text(36 * sc, 19 * sc, "GFX");
 gfx_setfont(6, "Trebuchet MS", 20 * sc, 'b'); ui_col(INKL); gfx_x = 58 * sc; gfx_y = 12 * sc; gfx_drawstr("G-LAB80");
 gfx_setfont(4); ui_cola(INKL, 0.6); gfx_x = 152 * sc; gfx_y = 20 * sc; gfx_drawstr("DIGITAL SOUND WORKSTATION");
-ui_size_picker(448 * sc, 13 * sc);
-pk_ledbtn(520 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;
-gfx_setfont(4); ui_col(INKL); gfx_x = 558 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
+ui_size_picker(968 * sc, 13 * sc);
+pk_ledbtn(1040 * sc, 8 * sc, 32 * sc, 28 * sc, 0, REDL) ? panic_req = 1;
+gfx_setfont(4); ui_col(INKL); gfx_x = 1078 * sc; gfx_y = 17 * sc; gfx_drawstr("PANIC");
 
 // ---------- SOUND: PRESETS | < > | green LCD (click it for the list) ----------
 cur_pos = snd_pos(slider1); cur_grp = pos_grp(cur_pos);
@@ -981,6 +1004,60 @@ mL.ui_ledm(570 * sc, 326 * sc, 16 * sc, 70 * sc, pkL);
 mR.ui_ledm(592 * sc, 326 * sc, 16 * sc, 70 * sc, pkR);
 pkL *= 0.85; pkR *= 0.85;
 gfx_setfont(4); ui_col(INKL); ui_text(590 * sc, 398 * sc, "OUT");
+
+// ---------- SOUNDS: every sound, by group, in three columns - click a name to play it ----------
+// (as the G M1K / G Pocket 70 patch pages: group headings as dark bars with a coloured tab, zebra rows,
+// the sound in use lit, hover shows where a click lands; the order is the PRESETS menu's)
+mgroup(648, 52, 496, 356, 0, "SOUNDS", SH2);
+// names and headings: the largest sizes (names 13 to 16, headings 11 to 14) at which every one fits its row -
+// worked out once per window size
+sc != lb_lsc ? (
+  lb_lsc = sc; lb_lfs = 16; lb_fit = 0;
+  loop(4,
+    !lb_fit ? (
+      gfx_setfont(9, "Trebuchet MS", lb_lfs * sc, 'b');
+      lb_mw = 0; i = 0; loop(NSND, gfx_measurestr(sname(i), lb_w, lb_h); lb_mw = max(lb_mw, lb_w); i += 1; );
+      lb_mw <= 124 * sc ? lb_fit = 1 : lb_lfs -= 1;
+    );
+  );
+  lb_hfs = 14; lb_fit = 0;
+  loop(4,
+    !lb_fit ? (
+      gfx_setfont(11, "Trebuchet MS", lb_hfs * sc, 'b');
+      lb_mw = 0; i = 0; loop(NGRP, gfx_measurestr(grp_name(i), lb_w, lb_h); lb_mw = max(lb_mw, lb_w); i += 1; );
+      lb_mw <= 140 * sc ? lb_fit = 1 : lb_hfs -= 1;
+    );
+  );
+);
+gfx_setfont(9, "Trebuchet MS", lb_lfs * sc, 'b');
+gfx_setfont(10, "Courier New", 14 * sc, 'b');
+gfx_setfont(11, "Trebuchet MS", lb_hfs * sc, 'b');
+lb_e = 0; lb_q = 0; lb_g = 0;
+loop(NSND + NGRP,
+  lb_col = floor(lb_e / 17); lb_row = lb_e % 17;
+  lb_x = 656 + lb_col * 162; lb_y = 58 + lb_row * 20.4;
+  lb_g < NGRP && lb_q == GST[lb_g] ? (
+    // group heading: a dark label bar with a teal tab
+    ui_col(0x1E1814); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc, 3 * sc);
+    ui_col(TEAL); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 4 * sc, 18.5 * sc, 1.5 * sc);
+    gfx_setfont(11); ui_col(INKL); gfx_measurestr(grp_name(lb_g), lb_w, lb_h);
+    gfx_x = (lb_x + 12) * sc; gfx_y = (lb_y + 10.25) * sc - lb_h * 0.5; gfx_drawstr(grp_name(lb_g));
+    lb_g += 1;
+  ) : (
+    lb_on = mord[lb_q] == slider1;
+    lb_hv = mouse_x >= lb_x * sc && mouse_x < (lb_x + 158) * sc && mouse_y >= lb_y * sc && mouse_y < (lb_y + 20.5) * sc;
+    lb_on ? ( ui_col(TEAL); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc, 3 * sc); )
+          : lb_hv ? ( ui_col(0x5A4A40); ui_rrect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc, 3 * sc); )
+          : lb_row % 2 ? ( ui_cola(0xFFFFFF, 0.05); gfx_rect((lb_x + 2) * sc, (lb_y + 1) * sc, 154 * sc, 18.5 * sc); );
+    gfx_setfont(10); ui_col(lb_on ? 0x14100D : ui_mix(INKL, BRW, 0.4)); sprintf(#lb_n, "%02d", lb_q + 1);
+    gfx_measurestr(#lb_n, lb_w, lb_h); gfx_x = (lb_x + 7) * sc; gfx_y = (lb_y + 10.25) * sc - lb_h * 0.5; gfx_drawstr(#lb_n);
+    gfx_setfont(9); ui_col(lb_on ? 0x14100D : INKL);
+    gfx_measurestr(sname(mord[lb_q]), lb_w, lb_h); gfx_x = (lb_x + 30) * sc; gfx_y = (lb_y + 10.25) * sc - lb_h * 0.5; gfx_drawstr(sname(mord[lb_q]));
+    pressed && drag_id == 0 && lb_hv ? ( drag_id = -1; slider1 = mord[lb_q]; slider_automate(1); );
+    lb_q += 1;
+  );
+  lb_e += 1;
+);
 
 // ---------- IN / OUT strip: SAT, OUT, STEREO ----------
 // ins_strip(16, 414, 608, 11, 24, TEAL, SH3);

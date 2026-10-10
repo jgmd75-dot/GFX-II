@@ -569,6 +569,9 @@ function mk_srinit() (
   mf_dts = 1 - exp(-1 / (0.25 * srate)); mf_gsm = 1 - exp(-1 / (0.02 * srate));
   mf_ghl = floor(0.3 * srate); mf_grl = 1 - exp(-1 / (0.025 * srate));
   memset(MFDA, 0, MFDN); memset(MFDB, 0, MFDN); mf_dw = 0;
+  // (a new rate: the voices' tine / tonebar / hammer coefficients were built for the old one, and a key struck again
+  // re-uses its ringing voice, so every voice and line is cleared: the next notes are built fresh at the new rate)
+  memset(MKV, 0, MKVS * MKNV); memset(MKHL, 0, 64); memset(MKHR, 0, 64); memset(MFCA, 0, 2 * 4100); memset(MFR, 0, 4 * MFRN); memset(MFVA, 0, 80);
   mk_kq.bq_set(5, 320, 0.9, 0);                             // key-off knock: a dull felt bump, not a click
   mk_bh = 1 - exp(-1 / (0.014 * srate)); mk_bc = 1 - exp(-1 / (0.045 * srate));   // bulb: heats ~14 ms, cools ~45 ms
   mk_tset = -1;

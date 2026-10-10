@@ -99,6 +99,7 @@ function settrv(hp, lp, rs, eg, mg) ( slider10 = hp; slider11 = lp; slider12 = r
 function setenv(a, d, s, r) ( slider15 = a; slider16 = d; slider17 = s; slider18 = r; );
 function setperf(bd, bt, pt, vl) ( slider19 = bd; slider20 = bt; slider21 = pt; slider22 = vl; );
 function load_patch(p) (
+  sv_preq = 1;                                   // (first: the audio thread holds the old sound until it has faded)
   p == 0  ? ( setvco(1, 3, 0, 0.12, 35); setmod(5, 50, 5.5, 12);  settrv(20, 1800, 1, 1, 0);  setenv(5, 700, 70, 300);   setperf(0, 200, 40, 0);   ) :   // Seventy Lead
   p == 1  ? ( setvco(2, 1, 0, 12.05, 30);setmod(5, 50, 5.5, 0);   settrv(20, 700, 1, 1, 0);   setenv(2, 450, 40, 120);   setperf(0, 200, 0, 30);   ) :   // 64' Bass (32' + VCO 2 an octave up)
   p == 2  ? ( setvco(1, 2, 0, 0.2, 50);  setmod(0.25, 50, 5, 0);  settrv(60, 900, 2, 0, 2);   setenv(10, 1000, 100, 600);setperf(0, 200, 0, 0);    ) :   // Filter Sweep
@@ -160,6 +161,7 @@ function update() (
   velsens = slider22 / 100;
   drift = slider23 / 100 * 1.6;                   // heavy: the universal drift pushed further
   vol_t = 10 ^ (slider24 / 20);
+  sv_ptr = patch_trim(slider25);
   ins_output_setup(26);
 );
 // recessed front-panel section (the GFX instrument inset): sloped walls, corner creases, light from the top left
@@ -175,6 +177,9 @@ function inset(x, y, w, h, col) local(b, ox, oy, ow, oh) (
   ui_cola(0x000000, 0.30); gfx_line(ox, oy, x, y, 1); gfx_line(ox + ow, oy, x + w, y, 1);
   ui_cola(0xFFFFFF, 0.35); gfx_line(ox, oy + oh, x, y + h, 1); gfx_line(ox + ow, oy + oh, x + w, y + h, 1);
 );
+// a patch loaded while a note sounds: the old sound fades out (12 ms), the new patch applies at the silent point
+// and the note fades back in with it (12 ms), so the change never clicks
+sv_preq = 0; sv_pcf = 0; sv_pck = sv_pcg = 1;
 update();
 vol_s = vol_t;
 env_times();
@@ -182,10 +187,12 @@ ui_dflt = 1;
 
 @slider
 last_patch < 0 ? ( last_patch = slider25; ) : ( slider25 != last_patch ? load_patch(slider25); );
-update();
+!sv_preq && !sv_pcf ? update();
 
 @block
-update();
+sv_pcr = 1 / (0.012 * srate);
+sv_preq && !sv_pcf ? ( ae > 0.0001 ? sv_pcf = 1 : sv_preq = 0; );   // a note sounding: fade first
+!sv_pcf ? update();
 while (midirecv(mofs, m1, m2, m3)) (
   st = m1 & 0xF0;
   st == 0x90 && m3 > 0 ? note_on(m2, m3) :
@@ -198,6 +205,8 @@ ins_drift_block(drift, samplesblock);              // GFX instrument drift (heav
 sv_ew = sv_dE.drift_tick(0.3 * samplesblock / srate);
 
 @sample
+sv_pcf ? ( sv_pck -= sv_pcr; sv_pck <= 0 ? ( sv_pck = 0; sv_pcf = 0; sv_preq = 0; update(); ); sv_pcg = 0.5 - 0.5 * cos($pi * sv_pck); ) :
+sv_pck < 1 ? ( sv_pck = min(sv_pck + sv_pcr, 1); sv_pcg = 0.5 - 0.5 * cos($pi * sv_pck); );
 // pitch: portamento, auto bend, vibrato, drift
 cur += (tgt - cur) * porta_c;
 ab_v -= ab_v * ab_c;
@@ -239,7 +248,7 @@ y *= ae * (1 - velsens + velsens * vel);
 // DC block, volume, the GFX output stage
 dy = y - dxp + 0.9995 * dyp; dxp = y; dyp = dy; y = dy;      // DC block low enough for 64' notes
 vol_s += (vol_t - vol_s) * sm;
-y *= patch_trim(slider25) * vol_s;
+y *= sv_ptr * vol_s * sv_pcg;
 oL = ostL.ost_band(y); oR = ostR.ost_band(y);
 ost_out(oL, oR);
 spl0 = ost_l; spl1 = ost_r;

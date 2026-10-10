@@ -89,8 +89,16 @@ while (midirecv(mofs, m1, m2, m3)) (
   ) : (
     midisend(mofs, m1, m2, m3);
     st == 0x90 && m3 > 0 ? midi_t = time_precise();
+    // All Notes Off / All Sound Off (passed on above): clear the held and latched keys, stop at once
+    on && st == 0xB0 && (m2 == 123 || m2 == 120) ? (
+      arp_outn = 0; arp_flush(); arp_sn = 0; arp_pn = 0; arp_step = -1;
+      bi = 0; loop(arp_outn, midisend(mofs, 0x80 | arp_out_ch[bi], arp_out_note[bi], 0); bi += 1; );
+    );
   );
 );
+// transport stopped: a latched chord keeps only the keys still held (none, once the host has sent its note-offs)
+on && slider7 && ap_play && !(play_state & 1) ? arp_relatch = 1;
+ap_play = play_state & 1;
 
 // switching the arp off: stop what it was playing, release its note set
 !on && was_on ? (

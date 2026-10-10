@@ -682,6 +682,7 @@ function tw_srinit() local(i) (
   tw_lgc = 1 - exp(-8 / (0.04 * srate));               // and its make-up gain's glide
 );
 tw_srinit();
+tw_lastmode = tw_mode;                               // (so the first block does not queue an all-off over its own notes)
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );               // a new instance opens Large, on Init
 tw_corners();
 tw_vol = tw_volt;

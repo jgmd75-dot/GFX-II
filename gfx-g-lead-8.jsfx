@@ -272,6 +272,7 @@ function mgroup(x, y, w, h, sec, title, shade) (
   ui_section(sec == 0 ? 2 : sec); C_INK = INKL;
 );
 update(); env_update();
+last_vm = vmode; was_arp = was_arp_on = slider30;   // (so the first block does not queue an all-off over its own notes)
 vol_s = vol_t;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
