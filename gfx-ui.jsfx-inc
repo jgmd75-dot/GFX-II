@@ -242,15 +242,40 @@ function ui_section(n) (
 );
 
 // ---------- hardware look: basic helpers ----------
+// rounded rect on whole pixels (x, y, w, h, r already integers), drawn as one non-overlapping shape: the
+// straight body, then the corner rows (one span across the full width per row) and their anti-aliased edge
+// pixels. Every pixel is painted once, so translucent fills and shadows never double up at the corners.
+function ui_rrpx(x, y, w, h, r) local(x2, y2, a0, i, j, f, dy, d) (
+  x2 = x + w; y2 = y + h;
+  r = min(r, floor(min(w, h) * 0.5));
+  w > 0 && h > 0 ? (
+    r < 1 ? gfx_rect(x, y, w, h) : (
+      a0 = gfx_a;
+      h > 2 * r ? gfx_rect(x, y + r, w, h - 2 * r);
+      j = 0;
+      loop(r,
+        dy = r - j; f = ceil(r - sqrt(max(r * r - dy * dy, 0)) - 0.000001);
+        gfx_a = a0; w > 2 * f ? ( gfx_rect(x + f, y + j, w - 2 * f, 1); gfx_rect(x + f, y2 - 1 - j, w - 2 * f, 1); );
+        i = max(floor(r - sqrt((r + 1) * (r + 1) - dy * dy)), 0);
+        loop(f - i,
+          d = r + 1 - sqrt((r - i) * (r - i) + dy * dy);
+          d > 0 ? (
+            gfx_a = a0 * min(d, 1);
+            gfx_rect(x + i, y + j, 1, 1); gfx_rect(x2 - 1 - i, y + j, 1, 1);
+            gfx_rect(x + i, y2 - 1 - j, 1, 1); gfx_rect(x2 - 1 - i, y2 - 1 - j, 1, 1);
+          );
+          i += 1;
+        );
+        j += 1;
+      );
+      gfx_a = a0;
+    );
+  );
+);
+// rounded rect: each edge snapped down to a whole pixel (the extent the old four-strip drawing covered),
+// corner radius rounded to whole pixels
 function ui_rrect(x, y, w, h, r) (
-  r = min(r, min(w, h) * 0.5);
-  gfx_rect(x + r, y, w - 2 * r, h);
-  gfx_rect(x, y + r, r, h - 2 * r);
-  gfx_rect(x + w - r, y + r, r, h - 2 * r);
-  gfx_circle(x + r, y + r, r, 1, 1);
-  gfx_circle(x + w - r - 1, y + r, r, 1, 1);
-  gfx_circle(x + r, y + h - r - 1, r, 1, 1);
-  gfx_circle(x + w - r - 1, y + h - r - 1, r, 1, 1);
+  ui_rrpx(floor(x), floor(y), floor(x + w) - floor(x), floor(y + h) - floor(y), floor(r + 0.5));
 );
 
 // dark or light print colour, whichever reads on background c

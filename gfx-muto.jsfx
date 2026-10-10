@@ -362,7 +362,7 @@ function mg_knob(cx, cy, r, idx, lo, hi, def, lg, ns, sty, cap) local(v, n, dx, 
     slider(idx) = v; ui_auto(idx); mouse_wheel = 0;
   );
   v = slider(idx); n = min(max(lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo), 0), 1);
-  mg_u ? mg_wcap(cx * sc, cy * sc, r * sc, n, cap == 0xF2C21B) :
+  mg_u && !(sty == 20 && cap == 0x9DA2A8) ? mg_wcap(cx * sc, cy * sc, r * sc, n, cap == 0xF2C21B) :
   sty == 20 ? dy_fcap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, cap) : (
     pk_kstyle = sty; pk_kcol = cap; pk_ptr = sty == 1 ? -1 : 0xF2EEE4; pk_ink = 0xF2EEE4;
     sty == 1 ? pk_ptr = 0x141416;
