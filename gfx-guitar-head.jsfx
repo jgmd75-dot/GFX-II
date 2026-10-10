@@ -78,7 +78,7 @@ function xf_run(x, k) instance(ph, sp) local(s, y) (
   ph = ph * xf_lk + x * xf_c; s = am_tanh(ph * k) / k; y = (s - sp * xf_lk) / xf_c; sp = s; y;
 );
 // one amp channel (instance: ghL / ghR), in two halves: the preamp and its spring tank, then (after the two tank
-// returns are blended, see gh_rvx) the power stage. The power supply (sup) is shared by both channels.
+// returns are blended, see GH_RVX) the power stage. The power supply (sup) is shared by both channels.
 function amp_pre(x) instance(ihp, brt, mil, d2hp, d2lp, tb, tm, tt, rv, py, ry) local(y) (
   y = ihp.am_run(x);
   y = brt.am_run(y);                                // bright cap
@@ -134,8 +134,8 @@ function update() (
   pm = 10 ^ ((slider8 * 3.2 - 14) / 20); mk = 0.5 / (pm ^ 0.55);       // -14 .. +18 dB into the power stage
   ghL.amp_set(); ghR.amp_set();
   rvw = (slider9 / 10) ^ 1.5 * 0.9;
-  ghcabL.am_cab_set(slider11 == 1 ? 2 : slider11 == 2 ? 3 : 0, slider12 - 0.3);   // the two mics a hair apart
-  ghcabR.am_cab_set(slider11 == 1 ? 2 : slider11 == 2 ? 3 : 0, slider12 + 0.3);
+  ghcabL.am_cab_set(slider11 == 1 ? 2 : slider11 == 2 ? 3 : 0, max(slider12 - 0.15, 0));    // the two mics a hair apart
+  ghcabR.am_cab_set(slider11 == 1 ? 2 : slider11 == 2 ? 3 : 0, min(slider12 + 0.15, 10));
   out_t = 10 ^ (slider13 / 20);
   drift_macro(slider25);
   drift = slider17 / 100 * dm_a; dspd = slider18 * dm_s;
@@ -152,7 +152,7 @@ ghR.rv.am_spring_init(300000, 2 * srate); ghR.rv.gh_tank(300000, 2 * srate, 1.04
 gh_mono = slider26;
 // the two tank returns are cross-blended a little, so the tanks stay decorrelated (width) but the centre
 // (L + R) keeps the old mono reverb level
-GH_RVX = 0.4; GH_RVG = 1;
+GH_RVX = 0.4;
 dB1.drift_init(0.8 + rand(0.5)); dB2.drift_init(0.8 + rand(0.5));
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 in_init();
@@ -190,11 +190,11 @@ gh_xl *= gh_g; gh_xr *= gh_g;
 // two amp channels at 2x, one shared supply
 z = ghupL.am_aa_run(gh_xl * 2); gh_w = ghupR.am_aa_run(gh_xr * 2);
 ghL.amp_pre(z); ghR.amp_pre(gh_w);
-ghdnL.am_aa_run(ghL.amp_post((ghL.ry + ghR.ry * GH_RVX) * GH_RVG)); ghdnR.am_aa_run(ghR.amp_post((ghR.ry + ghL.ry * GH_RVX) * GH_RVG)); amp_sag();
+ghdnL.am_aa_run(ghL.amp_post(ghL.ry + ghR.ry * GH_RVX)); ghdnR.am_aa_run(ghR.amp_post(ghR.ry + ghL.ry * GH_RVX)); amp_sag();
 z = ghupL.am_aa_run(0); gh_w = ghupR.am_aa_run(0);
 ghL.amp_pre(z); ghR.amp_pre(gh_w);
-y = ghdnL.am_aa_run(ghL.amp_post((ghL.ry + ghR.ry * GH_RVX) * GH_RVG)) * 2;
-gh_yr = ghdnR.am_aa_run(ghR.amp_post((ghR.ry + ghL.ry * GH_RVX) * GH_RVG)) * 2; amp_sag();
+y = ghdnL.am_aa_run(ghL.amp_post(ghL.ry + ghR.ry * GH_RVX)) * 2;
+gh_yr = ghdnR.am_aa_run(ghR.amp_post(ghR.ry + ghL.ry * GH_RVX)) * 2; amp_sag();
 y = ghcabL.am_cab_run(y); gh_yr = ghcabR.am_cab_run(gh_yr);
 out_s += (out_t - out_s) * sm;
 mute_s += ((slider14 ? 0 : 1) - mute_s) * sm;
