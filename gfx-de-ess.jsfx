@@ -196,7 +196,7 @@ ui_col(0x050505); R(270, 10, 290, 56);
 ui_col(0x061412); R(274, 14, 282, 48);
 ui_col(0x5FE0D2);
 time_precise() - lcd_t < 1.5 ? ( gfx_setfont(10); TX(286, 18, #lcdn); gfx_setfont(9); TX(286, 34, #lcdv); )
-  : ( gfx_setfont(10); sprintf(#l1, "PRESET %02d/08", slider1 + 1); TX(286, 18, #l1); gfx_setfont(9); TX(286, 34, pname(slider1)); );
+  : ( pk_lcdfont(9, 29*qs); gfx_measurestr(pname(slider1), ltw_, lth_); pk_fitstr(pname(slider1), 286*qs, 38*qs - lth_*0.5, 29*qs, 262*qs); );
 hitbox(270, 10, 290, 56) ? (
   #pm = ""; k = 0; loop(8, slider1 == k ? strcat(#pm, "!"); strcat(#pm, pname(k)); k < 7 ? strcat(#pm, "|"); k += 1; );
   gfx_x = mouse_x; gfx_y = mouse_y; k = gfx_showmenu(#pm); k > 0 ? go_preset(k - 1);

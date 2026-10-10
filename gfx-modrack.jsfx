@@ -649,8 +649,9 @@ time_precise() - lcd_t < 1.5 ? (
   gfx_setfont(8); TX(80, 130, #lcdn);
   gfx_setfont(7); TX(80, 160, #lcdv);
 ) : (
-  gfx_setfont(8); sprintf(#lcd1, "PRESET %02d/08", slider1 + 1); TX(80, 130, #lcd1);
-  gfx_setfont(7); TX(80, 160, pname(slider1));
+  lcf_ = 50*S; gfx_setfont(10, "Courier New", lcf_, 'b'); gfx_measurestr(pname(slider1), lcw_, lch_);
+  lcw_ > 230*S ? ( gfx_setfont(10, "Courier New", lcf_*230*S/lcw_, 'b'); gfx_measurestr(pname(slider1), lcw_, lch_); );
+  gfx_x = ox + 80*S; gfx_y = oy + 163*S - lch_*0.5; gfx_drawstr(pname(slider1));
 );
 
 // PRESETS key or a click on the LCD: every preset in a drop-down (current one ticked)

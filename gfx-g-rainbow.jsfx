@@ -593,8 +593,9 @@ col(0.55, 0.95, 0.82);
 time_precise() - lcd_t < 1.5 ? (
   gfx_setfont(15); TX(432, 24, #lcdn); gfx_setfont(14); TX(432, 44, #lcdv);
 ) : (
-  gfx_setfont(15); sprintf(#lcd1, "PRESET %02d/16", slider1 + 1); TX(432, 24, #lcd1);
-  gfx_setfont(14); TX(432, 44, pname(slider1));
+  lcf_ = 38*S; gfx_setfont(17, "Courier New", lcf_, 'b'); gfx_measurestr(pname(slider1), lcw_, lch_);
+  lcw_ > 276*S ? ( gfx_setfont(17, "Courier New", lcf_*276*S/lcw_, 'b'); gfx_measurestr(pname(slider1), lcw_, lch_); );
+  gfx_x = ox + 432*S; gfx_y = oy + 47*S - lch_*0.5; gfx_drawstr(pname(slider1));
 );
 btn(376, 16, 36, 62, "◄", 0, 16) ? step_preset(-1);
 btn(728, 16, 36, 62, "►", 0, 16) ? step_preset(1);

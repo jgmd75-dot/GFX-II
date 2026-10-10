@@ -1096,13 +1096,13 @@ function s92_gui44() (
   m44_LPK = max(max(m44_pkL, m44_pkR), m44_LPK * 0.9); m44_pkL = 0; m44_pkR = 0;
   pk_led(338 * sc, 87 * sc, 3.5 * sc, m44_LPK > 0.001, dy_grn);
   sprintf(#v, "%+.1f dB", slider14); dy_knob(62, 146, 20, 14, -6, 24, 6, 0, m44_ACC, "GAIN", #v);
-  sprintf(#v, "%.0f Hz", slider15); dy_knob(142, 146, 16, 15, 200, 5000, 1000, 1, 0xB8BCC2, "MID FREQ", #v);
-  sprintf(#v, "%+.1f dB", slider16); dy_knob(222, 146, 16, 16, -12, 12, 0, 0, 0xB8BCC2, "MID GAIN", #v);
-  sprintf(#v, "%+.1f dB", slider17); dy_knob(302, 146, 16, 17, -10, 10, 0, 0, 0xB8BCC2, "TREBLE", #v);
+  sprintf(#v, "%+.1f dB", slider24); dy_knob(142, 146, 16, 24, -24, 12, 0, 0, 0xB8BCC2, "TRIM", #v);
+  dy_btn(202, 130, slider25, dy_grn, "GUARD") ? ( slider25 = 1 - slider25; ui_auto(25); );
+  sprintf(#v, "%.0f%%", slider22); dy_knob(302, 146, 16, 22, 0, 100, 100, 0, 0xF2F2EE, "MIX", #v);
   sprintf(#v, "%+.1f dB", slider18); dy_knob(62, 242, 16, 18, -10, 10, 0, 0, 0xB8BCC2, "BASS", #v);
-  sprintf(#v, "%+.1f dB", slider24); dy_knob(142, 242, 16, 24, -24, 12, 0, 0, 0xB8BCC2, "TRIM", #v);
-  dy_btn(202, 226, slider25, dy_grn, "GUARD") ? ( slider25 = 1 - slider25; ui_auto(25); );
-  sprintf(#v, "%.0f%%", slider22); dy_knob(302, 242, 16, 22, 0, 100, 100, 0, 0xF2F2EE, "MIX", #v);
+  sprintf(#v, "%.0f Hz", slider15); dy_knob(142, 242, 16, 15, 200, 5000, 1000, 1, 0xB8BCC2, "MID FREQ", #v);
+  sprintf(#v, "%+.1f dB", slider16); dy_knob(222, 242, 16, 16, -12, 12, 0, 0, 0xB8BCC2, "MID GAIN", #v);
+  sprintf(#v, "%+.1f dB", slider17); dy_knob(302, 242, 16, 17, -10, 10, 0, 0, 0xB8BCC2, "TREBLE", #v);
   // one VU: the louder side (house calibration: a sine peaking at -18 dBFS reads 0 VU)
   s92_sec(368, 74, 170, 216, m44_INK, m44_ACC, "OUTPUT");
   m44_vu.ui_vu(368 * sc, 108 * sc, 170 * sc, 104 * sc, 10 * log10(max(m44_vmL, m44_vmR) + 0.0000000001) + 18 + m44_vu_sine, "L / R");

@@ -343,9 +343,8 @@ rd_sq(674, 20, 30, 30, 0, 0x6A7484, "►") ? (
   load_preset(cur_preset);
 );
 pk_lcd(712 * sc, 12 * sc, 232 * sc, 46 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-sprintf(#plcd, "PRESET %02d/%02d", cur_preset, PRESET_N); gfx_x = 724 * sc; gfx_y = 18 * sc; gfx_drawstr(#plcd);
-pk_lcdfont(9, 15 * sc); gfx_x = 724 * sc; gfx_y = 33 * sc; gfx_drawstr(pname(cur_preset));
+ui_col(pk_lcdc);
+pk_lcdfont(9, 27 * sc); gfx_measurestr(pname(cur_preset), ltw_, lth_); pk_fitstr(pname(cur_preset), 724 * sc, 35 * sc - lth_ * 0.5, 27 * sc, 212 * sc);
 pm_ || (pressed && drag_id == 0 && mouse_x >= 712 * sc && mouse_x < 944 * sc && mouse_y >= 12 * sc && mouse_y < 58 * sc) ? (
   drag_id = -1;
   strcpy(#pmenu, ""); k_ = 1;

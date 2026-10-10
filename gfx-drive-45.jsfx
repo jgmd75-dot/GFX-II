@@ -1027,19 +1027,21 @@ dv_v0 = dv_vu(dqa_vu0); dv_v1 = dv_vu(dqa_vu1); dv_v2 = dv_vu(dqa_vu2); dv_v3 = 
 dqa_pkA >= 1 ? dv_ckA = dv_now; dqa_pkA = 0;
 dqa_pkB >= 1 ? dv_ckB = dv_now; dqa_pkB = 0;
 
+// The two units trade places with the ORDER key: the first in the chain sits on the left
+dv_xa = slider21 >= 0.5 ? 600 : 8; dv_xb = 608 - dv_xa;
 // =====================================================================
-// LEFT UNIT: DRIVE 45 (x 8..500)
+// DRIVE 45 (left x 8..500, or right x 600..1092 when JDM-45 is first)
 // =====================================================================
 dv_style(0, slider2 >= 0.5);
-dv_unit(8, 60, 492, 274, "DRIVE 45", dv_de ? "STUDIO-" : "STUDIO", dv_de ? "VERZERRER" : "DRIVE UNIT", 2, 1);
-dv_face(0, 8, 1, dv_v0, dv_v1, dv_ckA);
+dv_unit(dv_xa, 60, 492, 274, "DRIVE 45", dv_de ? "STUDIO-" : "STUDIO", dv_de ? "VERZERRER" : "DRIVE UNIT", 2, 1);
+dv_face(0, dv_xa, 1, dv_v0, dv_v1, dv_ckA);
 
 // =====================================================================
-// RIGHT UNIT: JDM-45 (x 600..1092)
+// JDM-45 (right x 600..1092, or left x 8..500 when JDM-45 is first)
 // =====================================================================
 dv_style(1, slider12 >= 0.5);
-dv_unit(600, 60, 492, 274, "JDM-45", dv_de ? "RUNDFUNK-" : "BROADCAST", dv_de ? "SÄTTIGUNGSEINHEIT" : "SATURATION UNIT", 12, 11);
-dv_face(1, 600, 11, dv_v2, dv_v3, dv_ckB);
+dv_unit(dv_xb, 60, 492, 274, "JDM-45", dv_de ? "RUNDFUNK-" : "BROADCAST", dv_de ? "SÄTTIGUNGSEINHEIT" : "SATURATION UNIT", 12, 11);
+dv_face(1, dv_xb, 11, dv_v2, dv_v3, dv_ckB);
 
 // =====================================================================
 // The central mounting bracket: ORDER, INPUT, DRIFT, OUTPUT and band SAT (x 490..610)
