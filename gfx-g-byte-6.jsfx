@@ -84,7 +84,7 @@ B6PRE = 2810;          // per voice: gain into the converter (the voice's raw pe
 B6TRIM = 2820;         // per voice: gain after the converter (balances the kit)
 G6FMAP = 2900;         // LCD font: character code -> glyph (128)
 G6GLY = 3100;          // LCD font: 7 rows of 5 dots per glyph
-ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+ostL.ost_ch_init(); ostR.ost_ch_init();          // the output stage itself: b6_srinit() below
 
 memset(B6NMAP, -1, 128);
 B6NMAP[35] = B6NMAP[36] = 0; B6NMAP[38] = B6NMAP[40] = 1; B6NMAP[42] = B6NMAP[44] = 2;
@@ -205,7 +205,6 @@ function b6_update() local(fc, g) (
   b6_fc = fc;
   ins_output_setup(8); ins_stereo_setup(14);
 );
-b6_chk = exp(-1 / (0.004 * srate));                          // the open-hat choke: a 4 ms fade
 
 // ---------- presets (BITS, RATE, FILTER and the six voices; volume, velocity, drift, MIDI and IN / OUT stay) ----------
 function b6_pv(k, tu, de, lv, pn) local(b) ( b = 16 + k * 4; slider(b) = tu; slider(b + 1) = de; slider(b + 2) = lv; slider(b + 3) = pn; );
@@ -268,7 +267,15 @@ gi = 0; loop(strlen(#b6fnt), G6GLY[gi] = str_getchar(#b6fnt, gi) - 48; gi += 1; 
 
 // ---------- state, panel colours ----------
 b6_vs_s = 1; b6_pkL = b6_pkR = 0;
-sm6 = 1 - exp(-1 / (0.03 * srate));
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function b6_srinit() (
+  b6_sr = srate;
+  ost_init(20000);
+  b6_chk = exp(-1 / (0.004 * srate));                        // the open-hat choke: a 4 ms fade
+  sm6 = 1 - exp(-1 / (0.03 * srate));
+);
+b6_srinit();
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1; !ui_dflt ? ui_kstyle = 0;
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; b6_last = 0; b6_lvel = -1; );      // a new instance opens Large, on Init
 G6BODY = 0xDCD8D0; G6INK = 0x2A2A2E; G6STRIP = 0x2B2C30; G6SILK = 0xE8E4DA;
@@ -285,6 +292,7 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 b6_update();
 
 @block
+srate != b6_sr ? ( b6_sr = srate; b6_srinit(); );
 b6_update();                                       // knobs moved on the panel do not run @slider, so read them here
 b6_en = 0;
 while (midirecv(b6_mo, b6_m1, b6_m2, b6_m3)) (

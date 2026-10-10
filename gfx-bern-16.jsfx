@@ -212,13 +212,24 @@ function load_preset(p) local(i) (
   i = 1; loop(77, ui_auto(i); i += 1; );
 );
 
-bz_sm = 1 - exp(-1 / (0.02 * srate));                 // 20 ms parameter smoothing
-bz_lpc = 1 - exp(-2 * $pi * 100 / srate);             // transformer split: the lows below ~100 Hz
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function bz_bqclr() instance(x1, x2, y1, y2) ( x1 = x2 = y1 = y2 = 0; );
+function bz_srinit() (
+  bz_sr = srate;
+  bz_sm = 1 - exp(-1 / (0.02 * srate));               // 20 ms parameter smoothing
+  bz_lpc = 1 - exp(-2 * $pi * 100 / srate);           // transformer split: the lows below ~100 Hz
+  bz_rc = 1 - exp(-1 / (0.3 * srate));                // RMS meter: 300 ms
+  bz_tone_set(bz_tt);                                 // the console response filters
+  // their states start clean: old-rate states under new coefficients thump
+  bzHPl.bz_bqclr(); bzHPr.bz_bqclr(); bzBMl.bz_bqclr(); bzBMr.bz_bqclr(); bzLSl.bz_bqclr();
+  bzLSr.bz_bqclr(); bzHSl.bz_bqclr(); bzHSr.bz_bqclr(); bzTPl.bz_bqclr(); bzTPr.bz_bqclr();
+  ost_init(ost_buf);                                  // the output stage again, on its own buffer
+);
 bz_dcc = 0.9993;                                      // DC blocker after the amp (~5 Hz)
-bz_rc = 1 - exp(-1 / (0.3 * srate));                  // RMS meter: 300 ms
 bz_svl = 0; bz_svr = 0;
 ostL.ost_ch_init(); ostR.ost_ch_init();
-bz_tt = slider66 / 100; bz_tone_set(bz_tt);
+bz_tt = slider66 / 100; bz_srinit();
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                 // a new instance opens in Large, on Init
 ui_dflt = 1;
 update();
@@ -229,6 +240,7 @@ bz_ds = bz_dt; bz_cm = bz_ct; bz_im = bz_it; bz_mm = bz_mt; bz_vs = bz_vt;
 update();
 
 @block
+srate != bz_sr ? ( bz_sr = srate; bz_srinit(); );
 // DRIFT: an uneven supply - slow random walks, eased so they never step; every channel and each side of the amp its own
 bz_k = 0;
 loop(16,

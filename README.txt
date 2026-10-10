@@ -107,10 +107,10 @@ DRUM MACHINES
   G Pulse         gfx-g-pulse.jsfx
 
 AMPS & DRIVE
-  AK-MD 45        gfx-ak-md-45.jsfx
   Bass Head       gfx-bass-head.jsfx
   Desert Ten      gfx-desert-ten.jsfx
   Drive-45        gfx-drive-45.jsfx
+  Duo 45          gfx-duo-45.jsfx
   Grunt           gfx-grunt.jsfx
   Guitar Head     gfx-guitar-head.jsfx
   Head            gfx-head.jsfx

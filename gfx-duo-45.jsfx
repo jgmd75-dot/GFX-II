@@ -1,22 +1,22 @@
-desc:GFX AK-MD 45
+desc:GFX Duo 45
 //tags: lo-fi sampler bitcrusher decimator 12-bit limiter brickwall data-reduction digital vintage
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
 //
-// AK-MD 45. Two half-rack units bolted side by side by a central mounting bracket (the 45 family):
+// Duo 45. Two half-rack units bolted side by side by a central mounting bracket (the 45 family):
 //   LEFT  - a sampler engine in the spirit of the late-80s 12-bit studio samplers (punchy low-bit converters,
 //           sample-rate reduction, steep analogue input / output filters).
-//   RIGHT - a data-reduction limiter in the spirit of the 90s consumer digital disc recorders (brickwall digital
+//   RIGHT - a limiter in the spirit of early consumer digital data-reduction (brickwall digital
 //           clamping, the high-frequency management of early psychoacoustic coding, hard digital saturation).
 // Each unit has its own TOKYO / BERLIN key, which changes that unit's sound and its faceplate:
-//   AK-45 (TOKYO sampler)  crisp and punchy: a light input transformer, rounded 12-bit steps, clean filters.
+//   DS-45 (TOKYO sampler)  crisp and punchy: a light input transformer, rounded 12-bit steps, clean filters.
 //   ZA-45 (BERLIN sampler) darker: a heavier transformer (the lows saturate first, even harmonics, a softer top),
 //                          a slightly noisier converter (hiss about -80 dBFS), coarser rounding (sign-magnitude
 //                          truncation: a dead zone round zero), a darker, driven output ladder, more clock jitter.
-//   MD-45 (TOKYO limiter)  glassy and precise: a soft digital clip, 5.8 ms coding frames with smooth band changes,
+//   DL-45 (TOKYO limiter)  glassy and precise: a soft digital clip, 5.8 ms coding frames with smooth band changes,
 //                          a light pump.
-//   JD-45 (BERLIN limiter) grittier: a hard digital clip, 11.6 ms frames with abrupt band switching, coarser band
+//   BG-45 (BERLIN limiter) grittier: a hard digital clip, 11.6 ms frames with abrupt band switching, coarser band
 //                          quantising, more emphasis in the detector and a deeper pump after every hit.
 //
 // SIGNAL FLOW (fixed order, as on the recipe: the sampler feeds the limiter)
@@ -93,7 +93,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-ak-md-45";                               // the ? pop-up links to this manual
+#ui_man = "gfx-duo-45";                                  // the ? pop-up links to this manual
 ext_noinit = 1;
 
 // ---------- memory ----------
@@ -265,7 +265,7 @@ function kx_update() local(b, rt, fq, sp, bl) (
   kx_bl ? (                                             // ZA-45
     kx_kT = 0.7; kx_td = 0.65; kx_tb = 0.16; kx_ck = 0.6; kx_nz = 0.00012; kx_tr = 1; kx_mu = 16;
     kx_lk = 1.0; kx_fsc = 0.84; kx_jsc = 1.6;
-  ) : (                                                 // AK-45
+  ) : (                                                 // DS-45
     kx_kT = 0.25; kx_td = 0.3; kx_tb = 0.05; kx_ck = 0.8; kx_nz = 0; kx_tr = 0; kx_mu = 10;
     kx_lk = 0.35; kx_fsc = 1; kx_jsc = 1;
   );
@@ -280,10 +280,10 @@ function kx_update() local(b, rt, fq, sp, bl) (
   kx_satv = min(max(slider18, 0), 100) / 100;
   kx_sat = kx_satv > 0.001;
   kx_cl = 10 ^ ((4 - 7 * kx_satv) / 20) * kx_ct; kx_cli = 1 / kx_cl; kx_satw = min(kx_satv * 4, 1);
-  bl ? (                                                // JD-45
+  bl ? (                                                // BG-45
     kx_pump = 0.45; kx_F = floor(0.0116 * srate); kx_gc = 1 - exp(-1 / (0.0003 * srate)); kx_bb = 1;
     kx_sk = 0.88; kx_eg = 0.7 * sp; kx_pdb = 11 * sp;
-  ) : (                                                 // MD-45
+  ) : (                                                 // DL-45
     kx_pump = 0.12; kx_F = floor(0.0058 * srate); kx_gc = 1 - exp(-1 / (0.002 * srate)); kx_bb = 3;
     kx_sk = 0.55; kx_eg = 0.5 * sp; kx_pdb = 9 * sp;
   );
@@ -316,7 +316,7 @@ function load_preset(p) (
   p == 4  ? ( kx_setL(1, 0,  3,  8, 0, 0, 16000, 0,   0, 75,  -2); kx_setR(1, 0,  3,  -1,    15,  10, 20, 100, 40); ) : // 8-Bit Grit
   p == 5  ? ( kx_setL(1, 1,  8, 12, 0, 0, 32000, 1,  90, 65,  -6); kx_setR(1, 0,  2,  -0.5,  80,  10,  0, 100, 70); ) : // Tape-Fed Sampler
   p == 6  ? ( kx_setL(1, 1,  5, 10, 0, 1, 22050, 1,  60, 60,  -4); kx_setR(1, 1,  4,  -1,    50,  30, 20, 100, 65); ) : // Berlin Dust
-  p == 7  ? ( kx_setL(0, 0,  0, 24, 0, 0, 48000, 1, 100, 100,  0); kx_setR(1, 0, 10,  -0.3,   8,  45, 25, 100, 50); ) : // Disc Squash
+  p == 7  ? ( kx_setL(0, 0,  0, 24, 0, 0, 48000, 1, 100, 100,  0); kx_setR(1, 0, 10,  -0.3,   8,  45, 25, 100, 50); ) : // Data Squash
   p == 8  ? ( kx_setL(1, 0,  0, 16, 0, 0, 48000, 1, 100, 100,  0); kx_setR(1, 0,  4,  -0.5,  25,  85,  0, 100, 40); ) : // Glassy Highs
   p == 9  ? ( kx_setL(1, 0,  2, 16, 0, 0, 40000, 1, 100, 90,   0); kx_setR(1, 1,  9,  -1,   120,  20, 20, 100, 50); ) : // Pump Bus
   p == 10 ? ( kx_setL(0, 1,  0, 24, 0, 0, 48000, 1, 100, 100,  0); kx_setR(1, 1,  8,  -1,     5,  35, 40, 100, 50); ) : // Broadcast Brick
@@ -512,12 +512,12 @@ function kv_style(u, b) (
       KF  = 0xD6D2C4; KS = ui_mix(KF, 0x000000, 0.07); KT = ui_mix(KF, 0x000000, 0.14);
       KI  = 0x1C1C1C; KI2 = 0x4A4842; KA = 0xFF7900; KL = 0x1C1C1C; KHI = 0xB24A00;
       KD  = 0xFF8C00; KW = 0x141414; KG = 0x2A1C12; KLW = 2;
-    ) : (                                               // JD-45: battleship grey, black linework, mustard lamps
+    ) : (                                               // BG-45: battleship grey, black linework, mustard lamps
       KF  = 0x222528; KS = ui_mix(KF, 0x000000, 0.28); KT = ui_mix(KF, 0x000000, 0.42);
       KI  = 0xC7BEB3; KI2 = ui_mix(0xC7BEB3, KF, 0.38); KA = 0xD4A373; KL = 0x0B0C0D; KHI = 0xD4A373;
       KD  = 0xD4A373; KW = 0x0E0F10; KG = 0x2C302E; KLW = 2;
     );
-  ) : (                                                 // AK-45 / MD-45: charcoal, VFD glow
+  ) : (                                                 // DS-45 / DL-45: charcoal, VFD glow
     KF  = 0x181A1B; KS = 0x131516; KT = 0x0F1112;
     KI  = 0xD5DCDE; KI2 = 0x7D888C; KA = u == 0 ? 0x4EE1DC : 0xFF8C00; KL = 0x2E3235; KHI = KA;
     KD  = KA; KW = 0x070808; KG = ui_mix(KA, 0x070808, 0.92); KLW = 1;
@@ -753,11 +753,11 @@ ui_cola(0xFFFFFF, 0.06); kv_r(0, 0, 980, 1);
 ui_col(0x111213); kv_r(0, 54, 980, 2);
 ui_col(KHI_); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(KH); ui_text(31 * sc, 21.5 * sc, "GFX");
-gfx_setfont(6); ui_col(KHI_); kv_txt(58, 12, "AK-MD 45");
+gfx_setfont(6); ui_col(KHI_); kv_txt(58, 12, "DUO 45");
 gfx_setfont(11); ui_col(0xA99999); kv_txt(206, 14, "SAMPLER ENGINE"); kv_txt(206, 29, "+ DIGITAL LIMITER");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
 k_ = pk_preset(358 * sc, 10 * sc, 520 * sc, 34 * sc, pr_cur,
-  "Init|12-Bit Drums|Hip-Hop Crunch|8-Bit Grit|Tape-Fed Sampler|Berlin Dust|Disc Squash|Glassy Highs|Pump Bus|Broadcast Brick|Warsaw Lab|Full Crush");
+  "Init|12-Bit Drums|Hip-Hop Crunch|8-Bit Grit|Tape-Fed Sampler|Berlin Dust|Data Squash|Glassy Highs|Pump Bus|Broadcast Brick|Warsaw Lab|Full Crush");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 12 ? 1 : k_; );
 ui_size_picker(912 * sc, 18 * sc);
 
@@ -770,11 +770,11 @@ kv_opd = max(20 * log10(max(kxa_opk, 0.000001)), kv_opd - 30 * kv_dt); kxa_opk =
 kxa_ovp >= 1 ? kv_ovt = kv_now; kxa_ovp = 0;
 
 // =====================================================================
-// LEFT UNIT: AK-45 / ZA-45 sampler engine (x 8..440)
+// LEFT UNIT: DS-45 / ZA-45 sampler engine (x 8..440)
 // =====================================================================
 kv_style(0, slider2 >= 0.5);
 kv_x = 8;
-kv_unit(kv_x, 60, 432, 254, kv_b ? "ZA-45" : "AK-45", kv_b ? "DIGITALE" : "DIGITAL SAMPLER", kv_b ? "ABTASTEINHEIT" : "ENGINE", 2, 1);
+kv_unit(kv_x, 60, 432, 254, kv_b ? "ZA-45" : "DS-45", kv_b ? "DIGITALE" : "DIGITAL SAMPLER", kv_b ? "ABTASTEINHEIT" : "ENGINE", 2, 1);
 kv_on = slider1 >= 0.5;
 // ---------- the display ----------
 kv_sect(kv_x + 12, 108, 268, 86);
@@ -839,11 +839,11 @@ kv_scale(kv_x + 370, kv_cy, kv_kr - 2, "0|5|10");
 kv_knob(kv_x + 370, kv_cy, kv_kr - 2, 10, 0, 0, 100, 85, 1, "FILTER", #kvv);
 
 // =====================================================================
-// RIGHT UNIT: MD-45 / JD-45 digital limiter (x 540..972)
+// RIGHT UNIT: DL-45 / BG-45 digital limiter (x 540..972)
 // =====================================================================
 kv_style(1, slider13 >= 0.5);
 kv_x = 540;
-kv_unit(kv_x, 60, 432, 254, kv_b ? "JD-45" : "MD-45", kv_b ? "DIGITALER" : "DIGITAL LIMITER", kv_b ? "BEGRENZER" : "UNIT", 13, 12);
+kv_unit(kv_x, 60, 432, 254, kv_b ? "BG-45" : "DL-45", kv_b ? "DIGITALER" : "DIGITAL LIMITER", kv_b ? "BEGRENZER" : "UNIT", 13, 12);
 kv_on = slider12 >= 0.5;
 kv_sect(kv_x + 12, 108, 408, 86);
 kv_glass(kv_x + 20, 115, 392, 72);

@@ -225,8 +225,15 @@ function update() local(m) (
 ext_noinit = 1;                                   // keep the voices and the playhead when playback starts
 !an_pinit ? ( an_pinit = 1; an_row(0, "X...X...X...X..."); an_row(1, "....X.......X..."); );
 ins_drift_init();
-ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
-an_vs = 1 - exp(-1 / (0.03 * srate)); an_vols = 1;
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function an_srinit() (
+  an_sr = srate;
+  ost_init(20000);
+  an_vs = 1 - exp(-1 / (0.03 * srate));
+);
+an_srinit(); ostL.ost_ch_init(); ostR.ost_ch_init();
+an_vols = 1;
 an_lastg = -1; an_cur = -1; pkL = pkR = 0; LT[0] = LT[1] = 0;
 kk_on = 0; sn_on = 0; kk_out = sn_out = kk_tl = sn_tl = 0;
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );            // a new instance opens Large, on Init
@@ -242,6 +249,7 @@ ui_dflt = 1;   // the defaults above apply once: @init re-runs (device reset) mu
 update();
 
 @block
+srate != an_sr ? ( an_sr = srate; an_srinit(); );
 update();                                         // knobs moved on the panel do not run @slider, so read them here
 ins_drift_block(an_drift, samplesblock);          // GFX instrument drift
 kk_dm = ins_pitch;

@@ -128,12 +128,19 @@ function update() local(k, th) (
 !ui_dflt ? ui_thm = 0;
 lastp = slider10;                                  // adopt the saved preset without re-applying it
 drV.drift_init(0.8 + rand(0.5)); drS.drift_init(0.8 + rand(0.5));
-s2_ca = 1 - exp(-1 / (0.005 * srate));             // detector attack
-s2_cr = 1 - exp(-1 / (0.150 * srate));             // detector release
-s2_gs = 1 - exp(-1 / (0.002 * srate));             // gain smoothing
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function s2_srinit() (
+  s2_sr = srate;
+  s2_ca = 1 - exp(-1 / (0.005 * srate));           // detector attack
+  s2_cr = 1 - exp(-1 / (0.150 * srate));           // detector release
+  s2_gs = 1 - exp(-1 / (0.002 * srate));           // gain smoothing
+  ost_init(20000);                                 // the GFX output stage
+);
+s2_srinit();
 update();
 s2_env = 0; s2_grs = 0;
-ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();   // the GFX output stage
+ostL.ost_ch_init(); ostR.ost_ch_init();
 ui_dflt = 1;
 
 @slider
@@ -141,6 +148,7 @@ slider10 != lastp ? ( apply_preset(slider10); lastp = slider10; );
 update();
 
 @block
+srate != s2_sr ? ( s2_sr = srate; s2_srinit(); );
 update();                                          // the panel's knobs change the sliders directly, so read them every block
 // DRIFT: the supply voltage (headroom and gain) and the saturation wander slowly
 vV = drV.drift_tick(0.12 * dm_s * samplesblock / srate);

@@ -462,8 +462,14 @@ ext_noinit = 1;                                   // keep the voices and the pla
   load_slot(0); memset(MUTE, 0, 8);
 );
 gi = 0; loop(8, CUR[gi] = -1; NOFF[gi] = 0; gi += 1; );
-ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
-sm = 1 - exp(-1 / (0.03 * srate));
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then; each voice works out its own rate-dependent values on every hit)
+function pu_srinit() (
+  pu_sr = srate;
+  ost_init(20000);
+  sm = 1 - exp(-1 / (0.03 * srate));
+);
+pu_srinit(); ostL.ost_ch_init(); ostR.ost_ch_init();
 lastg = -1; qslot = -1; cenv = 0; cgrm = 0; pkL = pkR = 0;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1; !ui_dflt ? ui_kstyle = 0;
 PNL = 0x26272B; INKL = 0xE8E6E0; ACC = 0xE0603A; REDL = 0xFF3A2A; AMBL = 0xFFB030; GRNL = 0x3ADF6A;
@@ -486,6 +492,7 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 update();
 
 @block
+srate != pu_sr ? ( pu_sr = srate; pu_srinit(); );
 update();                                         // knobs moved on the panel do not run @slider, so read them here
 // MIDI in: queue the drum notes for @sample, pass everything through
 evn = 0;

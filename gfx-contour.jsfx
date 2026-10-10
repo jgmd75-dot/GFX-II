@@ -188,11 +188,17 @@ function update() (
   ins_output_setup(16);
 );
 
-in_init();
-ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function cn_srinit() (
+  cn_sr = srate;
+  in_init();
+  ost_init(20000);
+  sm = 1 - exp(-1 / (0.03 * srate));
+  msm = 1 - exp(-1 / (0.0015 * srate));          // 1.5 ms smoothing on the modulation (no zipper, no clicks)
+);
+cn_srinit(); ostL.ost_ch_init(); ostR.ost_ch_init();
 osL.os_init(); osR.os_init();
-sm = 1 - exp(-1 / (0.03 * srate));
-msm = 1 - exp(-1 / (0.0015 * srate));            // 1.5 ms smoothing on the modulation (no zipper, no clicks)
 iph = 0; toff = 0; ended = 0; pkI = pkO = 0;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1; !ui_dflt ? ui_kstyle = 0;
 PNL = 0x26272B; INKL = 0xE8E6E0; ACC = 0xE8892C; REDL = 0xFF3A2A; AMBL = 0xFFB030;
@@ -213,6 +219,7 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 update();
 
 @block
+srate != cn_sr ? ( cn_sr = srate; cn_srinit(); );
 update();                                          // knobs moved on the panel do not run @slider, so read them here
 lut_req ? ( lut_req = 0; build_lut(0); build_lut(1); build_lut(2); build_lut(3); );
 // MIDI: every note-on restarts the curve (in MIDI mode); everything passes through
