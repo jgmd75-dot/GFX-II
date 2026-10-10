@@ -132,6 +132,7 @@ function pg(fz, ft, gi, gt, gr, grl, gm, hp, lk, mx) (
   slider16 = hp; slider17 = lk; slider18 = mx;
 );
 function load_preset(p) (
+  vb_dst = 1;                                       // duck the output, swap the settings at silence, fade back in
   p == 1  ? ( pl(-24, 20, 0.2, 120, 70, 70, 10); pg(1, -50, 0, -60, 15, 250, 1, 90, 1, 100); ) :   // Room Mic Smash
   p == 2  ? ( pl(-28, 12, 0.5, 250, 80, 60, 12); pg(1, -45, 0, -60, 15, 250, 1, 120, 1, 40); ) :  // Parallel Drum Crush
   p == 3  ? ( pl(-20, 6, 1.5, 180, 50, 45, 6); pg(1, -55, 1, -55, 12, 300, 1, 60, 1, 100); ) :    // Shouty Vocal
@@ -165,19 +166,25 @@ L.ch_init(); R.ch_init();
 PNL = 0x3A3E41; RAIL = 0x2A2D2F; OWH = 0xE2DDCE; BLKC = 0x101112; SORG = 0xF26B1D; NEON = 0xFF6A2A; PTR = 0xE4542A; AORG = 0xF0702A;
 update();
 mix_s = mix_t;
+vb_dkr = 1 / (0.012 * srate); vb_dk = 1; vb_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+vb_dst != 1 ? update();                           // during a preset duck the swap applies the new settings
 
 @block
-update();
+vb_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+vb_dst ? (                                         // preset duck-and-swap: limiter, gate and makeup change in silence
+  vb_dst == 1 ? ( vb_dk -= vb_dkr; vb_dk <= 0 ? ( vb_dk = 0; update(); vb_dst = 2; mix_s = mix_t; ); ) :
+  ( vb_dk += vb_dkr; vb_dk >= 1 ? ( vb_dk = 1; vb_dst = 0; ); );
+  vb_dkg = vb_dk * vb_dk * (3 - 2 * vb_dk);
+);
 in_process(spl0, spl1);
 dl = in_l; dr = in_r;
 sl_ = hp_on ? hpL.bq_run(dl) : dl; sr_ = hp_on ? hpR.bq_run(dr) : dr;
@@ -205,6 +212,7 @@ frzm = max(frzm, frz);
 // mix + output stage
 mix_s += (mix_t - mix_s) * sm;
 oL = dl + (yl - dl) * mix_s; oR = dr + (yr - dr) * mix_s;
+vb_dst ? ( oL *= vb_dkg; oR *= vb_dkg; );
 oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
 ost_out(oL, oR);
 spl0 = ost_l; spl1 = ost_r;

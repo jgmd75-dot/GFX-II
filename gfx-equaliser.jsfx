@@ -177,6 +177,7 @@ function pHm(f, g, w, t)    ( slider11 = f; slider12 = g; slider13 = w; slider14
 function pHi(f, g, w, s, t) ( slider15 = f; slider16 = g; slider17 = w; slider18 = s; slider19 = t; );
 function pCut(hpf, lpf, m)  ( slider20 = hpf; slider21 = lpf; slider1 = m; slider34 = 0; slider35 = 0; );
 function load_preset(p) (
+  eq_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? ( pLo(120, -2, 1, 1, 0);  pLm(300, -2, 1.2, 0); pHm(3000, 3, 1.2, 0);  pHi(10000, 3, 1, 1, 0);  pCut(80, 20000, 0); ) :   // Vocal Presence
   p == 2 ? ( pLo(60, 4, 1, 0, 0);    pLm(350, -4, 1.5, 0); pHm(3500, 3, 1, 0);    pHi(10000, 0, 1, 1, 0);  pCut(30, 20000, 0); ) :   // Kick Weight
   p == 3 ? ( pLo(80, 2, 1, 1, 0);    pLm(250, -3, 1.5, 0); pHm(800, 2, 1, 0);     pHi(5000, -2, 1, 1, 0);  pCut(35, 20000, 0); ) :   // Bass Clarity
@@ -266,14 +267,14 @@ hm_s = slider12; hm_k = 1 - exp(-16 / (0.02 * srate)); hm_n = 0;   // hi-mid gai
 hcw = lp_on; hcxs = 1 / (0.02 * srate);                              // high cut fades in / out over 20 ms
 band_coefs(0);
 out_s = out_t;
+eq_dkr = 1 / (0.012 * srate); eq_dk = 1; eq_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+eq_dst != 1 ? update();                        // during a preset duck the swap applies the new settings
 
 @block
-update();
-band_coefs(dspd * samplesblock / srate);
+eq_dst != 1 ? ( update(); band_coefs(dspd * samplesblock / srate); );
 
 @serialize
 file_var(0, ui_thm);
@@ -282,6 +283,14 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+eq_dst ? (                                     // preset duck-and-swap: bands, shapes and filters change in silence
+  eq_dst == 1 ? ( eq_dk -= eq_dkr; eq_dk <= 0 ? (
+    eq_dk = 0; update(); eq_dst = 2;
+    hm_s = slider12; hc_f = min(slider21, srate * 0.45); hc_coef(); hcw = lp_on; band_coefs(0);
+  ); ) :
+  ( eq_dk += eq_dkr; eq_dk >= 1 ? ( eq_dk = 1; eq_dst = 0; ); );
+  eq_dkg = eq_dk * eq_dk * (3 - 2 * eq_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
@@ -297,9 +306,9 @@ hp_on ? (
   hpn > 2 ? ( a = hsA3.svf_run(a, hp3.a1, hp3.a2, hp3.a3, hp3.m0, hp3.m1, hp3.m2); b = hsB3.svf_run(b, hp3.a1, hp3.a2, hp3.a3, hp3.m0, hp3.m1, hp3.m2); );
   hpn > 3 ? ( a = hsA4.svf_run(a, hp4.a1, hp4.a2, hp4.a3, hp4.m0, hp4.m1, hp4.m2); b = hsB4.svf_run(b, hp4.a1, hp4.a2, hp4.a3, hp4.m0, hp4.m1, hp4.m2); );
 );
-hm_s != slider12 ? ( (hm_n += 1) >= 16 ? ( hm_n = 0; hm_s += (slider12 - hm_s) * hm_k; abs(slider12 - hm_s) < 0.001 ? hm_s = slider12; hm_coef(); ); );
+eq_dst != 1 && hm_s != slider12 ? ( (hm_n += 1) >= 16 ? ( hm_n = 0; hm_s += (slider12 - hm_s) * hm_k; abs(slider12 - hm_s) < 0.001 ? hm_s = slider12; hm_coef(); ); );
 // high cut: always running (its state stays primed), faded in / out rather than switched; its frequency glides
-hc_t = min(slider21, srate * 0.45);
+eq_dst != 1 ? hc_t = min(slider21, srate * 0.45);
 hc_f != hc_t ? ( (hc_n += 1) >= 16 ? ( hc_n = 0; hc_f *= (hc_t / hc_f) ^ hm_k; abs(hc_f - hc_t) < 0.0005 * hc_t ? hc_f = hc_t; hc_coef(); ); );
 hcw = lp_on ? min(hcw + hcxs, 1) : max(hcw - hcxs, 0);
 hca = a; hcb = b;
@@ -322,6 +331,7 @@ hcw < 1 ? ( a = hca + (a - hca) * hcw; b = hcb + (b - hcb) * hcw; );
 
 ms ? ( oL = a + b; oR = a - b; ) : ( oL = a; oR = b; );
 
+eq_dst ? ( oL *= eq_dkg; oR *= eq_dkg; );
 // output stage
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;

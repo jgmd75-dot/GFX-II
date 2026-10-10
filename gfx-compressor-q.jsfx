@@ -181,6 +181,7 @@ function setp(v, th, rsl, at, re, au, kne, mk_, hp, lk, mx, fm) (
   slider7 = kne; slider8 = mk_; slider9 = hp; slider10 = lk; slider14 = mx; slider24 = fm;
 );
 function load_preset(p) (
+  cq_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? setp(2, -20, 0.67, 15,  250, 1, 12, 3, 100, 1, 100, 1) :   // Vocal Ride
   p == 2 ? setp(0, -28, 0.83, 3,   80,  0, 2,  6, 60,  1, 100, 1) :   // Drum Smash
   p == 3 ? setp(0, -22, 0.75, 10,  150, 1, 6,  4, 120, 1, 100, 0) :   // Bass Glue
@@ -219,6 +220,7 @@ pkL = 0; pkR = 0; vu_ms = 0; dispGr = 0; dispLdb = -60; grPk = 0;
 
 update();
 mix_s = mix_t; out_s = out_t;
+cq_dkr = 1 / (0.012 * srate); cq_dk = 1; cq_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 
 // ================= EQ (the Equaliser engine, names q_..., sliders 25 - 51) =================
@@ -471,13 +473,13 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 @slider
 q_update();
 q_ord = slider52;
-update();
+cq_dst != 1 ? update();                        // during a preset duck the swap applies the new settings
 
 @block
 q_update();
 q_band_coefs(q_dspd * samplesblock / srate);
 q_ord = slider52;
-update();
+cq_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_thm);
@@ -486,6 +488,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+cq_dst ? (                                         // preset duck-and-swap
+  cq_dst == 1 ? ( cq_dk -= cq_dkr; cq_dk <= 0 ? ( cq_dk = 0; update(); cq_dst = 2; mix_s = mix_t; ); ) :
+  ( cq_dk += cq_dkr; cq_dk >= 1 ? ( cq_dk = 1; cq_dst = 0; ); );
+  cq_dkg = cq_dk * cq_dk * (3 - 2 * cq_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 !q_ord ? ( q_proc(in_l, in_r); in_l = q_out_l; in_r = q_out_r; );   // EQ first
@@ -534,6 +541,7 @@ oR = inR * (1 - mix_s) + cR * mix_s;
 
 // output stage
 q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
+cq_dst ? ( oL *= cq_dkg; oR *= cq_dkg; );
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;
 ost_out(oL, oR);

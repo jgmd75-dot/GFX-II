@@ -158,6 +158,7 @@ ppmF = exp(-8.5714*0.11512925465/srate);     // PPM fall: 24 dB in 2.8 s
 grS = 0; pkE = 0; msE = 0; relSc = 1;
 mPL = mPR = 0; mGR = 0; mClip = 0;
 lastEq = -1;
+mk_dkr = 1/(0.012*srate); mk_dk = 1; mk_dst = 0;     // preset duck: 12 ms out, 12 ms in
 
 // EQ and the compressor work on the globals ch0 / ch1
 // FIZZ (parallel): only the NEW harmonics of the top are added to the untouched signal. The band above
@@ -212,6 +213,7 @@ function pcp(on, th, ra, at, re, md, mk, pr, od) (
   slider13 = on; slider14 = th; slider15 = ra; slider16 = at; slider17 = re; slider18 = md; slider19 = mk; slider20 = pr; slider21 = od;
 );
 function apply_preset(n) (
+  mk_dst = 1;                                        // duck the output, swap the settings at silence, fade back in
   pin(0, 0, 1, 0); peq(1, 1, 0, 3, 0, 1, 0); pcp(0, -12, 4, 2, 250, 0, 0, 1, 0); slider22 = 0; slider23 = 0; slider25 = 0;
   n == 1  ? ( pin(6, 0, 1, 2);  peq(1, 1, -2, 4, 3, 1, 2);   pcp(1, -20, 4, 1, 180, 0, 4, 1, 0); ) :
   n == 2  ? ( pin(4, 0, 1, 1);  peq(1, 0, 2, 2, -2, 2, 3);   pcp(1, -22, 3, 3, 300, 0, 5, 1, 0); ) :
@@ -242,6 +244,8 @@ file_var(0, mk_thm);
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
 
 @block
+mk_dst == 3 ? mk_dst = 2;                          // at silence: the new settings are applied below, then fade in
+mk_dst != 1 ? (
 inG = db2g(slider2)*(slider3 > 0.5 ? -1 : 1);
 ironOn = slider4 > 0.5;
 hpI = floor(slider5 + 0.5);
@@ -273,8 +277,14 @@ eqs != lastEq ? (
   cPK(cMf, mfHz(floor(slider9 + 0.5)), slider10, 1.0);
   cHS(cHf, hfHz(floor(slider11 + 0.5)), slider12, 0.7071);
 );
+);   // mk_dst != 1
 
 @sample
+mk_dst ? (                                          // preset duck-and-swap
+  mk_dst == 1 ? ( mk_dk -= mk_dkr; mk_dk <= 0 ? ( mk_dk = 0; mk_dst = 3; ); ) :
+  mk_dst == 2 ? ( mk_dk += mk_dkr; mk_dk >= 1 ? ( mk_dk = 1; mk_dst = 0; ); );
+  mk_dkg = mk_dk*mk_dk*(3 - 2*mk_dk);
+);
 ch0 = spl0*inG; ch1 = spl1*inG;
 ironOn ? ( ch0 = irIL.iron(ch0, 0.8); ch1 = irIR.iron(ch1, 0.8); );
 max(abs(ch0), abs(ch1)) > 0.708 ? mClip = 1;            // -3 dBFS peak lamp
@@ -290,6 +300,7 @@ hpI > 0 ? ( ch0 = bqf(ch0, cHp, sHpL); ch1 = bqf(ch1, cHp, sHpR); );
 !cmpOn ? ( grS = 0; prc0 = prc1 = 0; );
 
 ironOn ? ( ch0 = irOL.iron(ch0, 0.6); ch1 = irOR.iron(ch1, 0.6); );
+mk_dst ? ( ch0 *= mk_dkg; ch1 *= mk_dkg; );
 ost_out(ch0*outG, ch1*outG);
 spl0 = ost_l; spl1 = ost_r;
 

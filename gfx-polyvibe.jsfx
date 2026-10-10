@@ -122,6 +122,7 @@ function setp(m, rm, fr, dv, it, th, sp, pa, mx, r_, i_, l_) (
   slider7 = sp; slider8 = pa; slider9 = mx; slider10 = r_; slider11 = i_; slider12 = l_;
 );
 function load_preset(p) (
+  pv_dst = 1;                                       // duck the output, swap the settings at silence, fade back in
   p == 1 ? setp(0, 0, 2.0, 6, 70, 70,  0, 40, 100,  5, 10, 10) :   // Classic Chorus
   p == 2 ? setp(0, 0, 0.6, 6, 85, 90,  0, 45, 100,  8, 10, 15) :   // Slow Throb
   p == 3 ? setp(0, 0, 6.5, 6, 60, 60,  0, 40, 100,  5,  5, 10) :   // Fast Swirl
@@ -164,13 +165,14 @@ dispLight = 0.5;
 
 update();
 int_s = int_t; thr_s = thr_t; mix_s = mix_t; out_s = out_t;
+pv_dkr = 1 / (0.012 * srate); pv_dk = 1; pv_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+pv_dst != 1 ? update();                           // during a preset duck the swap applies the new settings
 
 @block
-update();
+pv_dst != 1 ? update();
 lfoL.lfo_block(ratemode, div, frate);
 lfoR.lfo_block(ratemode, div, frate);
 
@@ -181,6 +183,13 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+pv_dst ? (                                         // preset duck-and-swap: mode and preamp change in silence
+  pv_dst == 1 ? ( pv_dk -= pv_dkr; pv_dk <= 0 ? (
+    pv_dk = 0; update(); pv_dst = 2; int_s = int_t; thr_s = thr_t; mix_s = mix_t; out_s = out_t;
+  ); ) :
+  ( pv_dk += pv_dkr; pv_dk >= 1 ? ( pv_dk = 1; pv_dst = 0; ); );
+  pv_dkg = pv_dk * pv_dk * (3 - 2 * pv_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
@@ -230,6 +239,7 @@ mode == 2 ? (
 oL = inL * (1 - mix_s) + yL * mix_s;
 oR = inR * (1 - mix_s) + yR * mix_s;
 
+pv_dst ? ( oL *= pv_dkg; oR *= pv_dkg; );
 // output stage: band saturation -> output gain (no clip: straight through)
 oL = ostL.ost_band(oL) * in_comp * out_s;
 oR = ostR.ost_band(oR) * in_comp * out_s;

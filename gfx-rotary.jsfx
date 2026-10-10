@@ -131,6 +131,7 @@ function setp(hs, hf, ha, ds, df, da, drv_p, ba, di, sp) (
   slider8 = drv_p; slider9 = ba; slider10 = di; slider11 = sp;
 );
 function load_preset(p) (
+  ro_dst = 1;                                      // duck the output, swap the settings at silence, fade back in
   p == 1 ? setp(0.83, 6.75, 0.6, 0.67, 5.8, 4.5, 20, 0,  50, 70) :    // Classic Cabinet
   p == 2 ? setp(0.8,  6.9,  0.5, 0.66, 6.0, 4.0, 40, 1,  40, 75) :    // Soul Jazz Trio
   p == 3 ? setp(0.75, 6.6,  0.7, 0.6,  5.6, 5.0, 10, 0,  60, 85) :    // Modern Jazz Combo
@@ -205,10 +206,11 @@ update();
 rtH = spd == 2 ? h_fast : spd == 1 ? h_slow : 0;
 rtD = spd == 2 ? d_fast : spd == 1 ? d_slow : 0;
 mix_s = mix_t; out_s = out_t;
+ro_dkr = 1 / (0.012 * srate); ro_dk = 1; ro_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+ro_dst != 1 ? update();                          // during a preset duck the swap applies the new settings
 
 @block
 // MIDI speed switching (everything is passed on)
@@ -226,7 +228,7 @@ while (midirecv(mofs, m1, m2, m3)) (
   );
   midisend(mofs, m1, m2, m3);
 );
-update();
+ro_dst != 1 ? update();
 dinc = dspd * samplesblock / srate;
 vH = drH.drift_tick(dinc); vD = drD.drift_tick(dinc);
 // target speeds (with motor drift); rotors chase them with their own inertia
@@ -245,6 +247,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+ro_dst ? (                                        // preset duck-and-swap: drive, balance and the mics change in silence
+  ro_dst == 1 ? ( ro_dk -= ro_dkr; ro_dk <= 0 ? ( ro_dk = 0; update(); ro_dst = 2; mix_s = mix_t; ); ) :
+  ( ro_dk += ro_dkr; ro_dk >= 1 ? ( ro_dk = 1; ro_dst = 0; ); );
+  ro_dkg = ro_dk * ro_dk * (3 - 2 * ro_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
@@ -279,6 +286,7 @@ rwp = (rwp + 1) & rmask;
 oL = inL * (1 - mix_s) + wL * mix_s;
 oR = inR * (1 - mix_s) + wR * mix_s;
 
+ro_dst ? ( oL *= ro_dkg; oR *= ro_dkg; );
 // output stage
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;

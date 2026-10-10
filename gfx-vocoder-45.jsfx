@@ -361,6 +361,7 @@ function vc_setM(bal, mix, dr) (
   slider_automate(8388607);                             // sliders 1-23 (the output section stays)
 );
 function load_preset(p) (
+  vc_dst = 1;                                           // duck the output, swap the settings at silence, fade back in
   p == 1  ? ( vc_setK(1, 1, 50,  0,    25,  4,  0); vc_setS(1, 0, 0, 0, 50,  0); vc_setC(  0, 0,  0,   0, 0, 0, 0); vc_setM( 50, 100,  50); ) : // Init
   p == 2  ? ( vc_setK(1, 1, 72,  0,    40,  6,  0); vc_setS(1, 0, 0, 0, 40,  2); vc_setC(  0, 0, -1,   0, 1, 1, 0); vc_setM( 35, 100,  25); ) : // Robot Voice
   p == 3  ? ( vc_setK(1, 1, 38,  0,    10,  3,  0); vc_setS(1, 0, 1, 1, 45, -2); vc_setC( -2, 0,  0,  60, 2, 1, 0); vc_setM( 70, 100,  45); ) : // Choir Pad (Synth)
@@ -415,19 +416,25 @@ vcoL.ost_ch_init(); vcoR.ost_ch_init();
 vca_uv = 0; vca_cpk = 0; vca_kpk = 0; vca_mpk = 0;
 vc_rst = 1;                                             // the first block clears every band's state
 vc_cen = vc_uv = 0;
+vc_dkr = 1 / (0.012 * srate); vc_dk = 1; vc_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                  // new instances open in Large, on Init
 ui_dflt = 1;
 
 @slider
-vc_update();
+vc_dst != 1 ? vc_update();                              // during a preset duck the swap applies the new settings
 
 @block
 srate != vc_fs ? vc_srinit();
-vc_update();                                            // knobs moved on the panel do not run @slider
+vc_dst != 1 ? vc_update();                              // knobs moved on the panel do not run @slider
 // block-rate glides for everything that sets coefficients
 vc_bk = 1 - exp(-samplesblock / (0.03 * srate));
+vc_dst == 3 ? (                                         // at the preset swap (in silence) the glides and fades jump to the new
+  vc_dst = 2; vc_bk = 1; vc_rst = 1;                    // settings, every band starts clean, and a new SV-45 band count is built at once
+  vc_kdi = vc_kdit; vc_bal = vc_balt; vc_mix = vc_mixt; vc_lev = vc_levt;
+  vc_kw = vc_kon; vc_vw = vc_von; vc_srw = vc_src; vc_kbw = vc_kbt; vc_vbw = vc_vbt; vc_sxf = vc_svn == vc_svt;
+);
 vc_kq  += (vc_kqt * 0.6436 * (vc_kbt ? 1.15 : 1) - vc_kq) * vc_bk;
 vc_ksm += (vc_ksht - vc_ksm) * vc_bk;
 vc_kdg += (vc_kdgt - vc_kdg) * vc_bk;
@@ -508,6 +515,12 @@ while (vc_qr < vc_qn && vc_MQ[vc_qr * 4] <= vc_spos) (
   vc_qr += 1;
 );
 vc_spos += 1;
+// ---------- preset duck-and-swap: out, the new settings at the next block (in silence), in ----------
+vc_dst ? (
+  vc_dst == 1 ? ( vc_dk -= vc_dkr; vc_dk <= 0 ? ( vc_dk = 0; vc_dst = 3; ); ) :
+  vc_dst == 2 ? ( vc_dk += vc_dkr; vc_dk >= 1 ? ( vc_dk = 1; vc_dst = 0; ); );
+  vc_dkg = vc_dk * vc_dk * (3 - 2 * vc_dk);
+);
 // ---------- glides ----------
 vc_kdi += (vc_kdit - vc_kdi) * vc_sm;
 vc_bal += (vc_balt - vc_bal) * vc_sm;
@@ -616,6 +629,7 @@ vc_wn = 1 / max(vc_wk + vc_ws, 0.5);
 vc_a = max(vc_kw, vc_vw) * vc_mix;
 vc_ol = vc_ml + ((vc_wk * vc_kl + vc_ws * vc_sl) * vc_wn - vc_ml) * vc_a;
 vc_or = vc_mr + ((vc_wk * vc_kr + vc_ws * vc_sr) * vc_wn - vc_mr) * vc_a;
+vc_dst ? ( vc_ol *= vc_dkg; vc_or *= vc_dkg; );
 vc_ol = vcoL.ost_band(vc_ol) * vc_og;
 vc_or = vcoR.ost_band(vc_or) * vc_og;
 ost_out(vc_ol, vc_or);

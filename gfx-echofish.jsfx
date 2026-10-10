@@ -122,7 +122,7 @@ function ps(md, ft, f, d, pk, dr, rg, sn, rs, rt, ml, gl, lp, dv) (
   slider10 = rt; slider11 = ml; slider12 = gl; slider13 = lp; slider14 = dv; slider15 = 100; slider16 = 0; slider17 = 1; slider18 = 0;
 );
 function load_preset(p) (
-  ef_dst = 1;                                       // fade the filter out, swap the settings, fade it back in
+  ef_dst = 1;                                       // duck the output, swap the settings at silence, fade back in
   p == 1  ? ps(0, 1, 250, 3.5, 4, 1, 0, 60, 40, 2, 0, 15, 1, 20) :     // Init (the defaults)
   p == 2  ? ps(0, 1, 250, 3.5, 5, 1, 0, 60, 30, 2, 0, 15, 1, 20) :     // Funk Up
   p == 3  ? ps(0, 0, 900, 3, 6, 0, 0, 65, 35, 2, 0, 15, 1, 30) :       // Bass Quack (down)
@@ -152,7 +152,8 @@ sm = 1 - exp(-1 / (0.03 * srate));
 BLU = 0x1D3BC4; BLUD = 0x142A8C; SKYB = 0x46B2EE; REDP = 0xD43A2C; WHT = 0xF2F4FA; CHR = 0xC9CDD2;
 update();
 mix_s = mix_t; ef_og = fx_on ? og : 1; fc = fbase;
-ef_dkr = 1 / (0.012 * srate); ef_dk = 1; ef_dst = 0;   // preset crossfade: 12 ms to dry, 12 ms back stv = 0; stg = 0; lstep = -1; bpos = 0;
+stv = 0; stg = 0; lstep = -1; bpos = 0;
+ef_dkr = 1 / (0.012 * srate); ef_dk = 1; ef_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 
 // ================= EQ (the Echo engine, names q_..., sliders 27 - 44) =================
@@ -345,7 +346,7 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 @slider
 q_update();
 q_ord = slider45;
-ef_dst != 1 ? update();                             // during a preset fade the swap applies the new settings
+ef_dst != 1 ? update();                             // during a preset duck the swap applies the new settings
 
 @block
 q_update();
@@ -365,7 +366,8 @@ file_avail(0) != 0 ? (                           // the preset in use (older pro
   file_avail(0) != 0 ? file_var(0, pr_ver) : pr_cur >= 1 ? pr_cur += 1;   // saved before INIT became preset 1
 ) : pr_cur = 0;
 @sample
-// preset crossfade: filter type, mode and the rest change while only the dry signal plays
+// preset duck-and-swap: filter type, mode and the rest change in silence (a fade through the dry would flash the
+// unfiltered signal between two filtered presets)
 ef_dst == 1 ? ( ef_dk -= ef_dkr; ef_dk <= 0 ? ( ef_dk = 0; update(); ef_dst = 2; ); ) :
 ef_dst == 2 ? ( ef_dk += ef_dkr; ef_dk >= 1 ? ( ef_dk = 1; ef_dst = 0; ); );
 in_process(spl0, spl1);
@@ -393,8 +395,8 @@ yl = FL.svf(xl); yr = FR.svf(xr);
 yl = th(yl * 0.7) / 0.7; yr = th(yr * 0.7) / 0.7;
 mix_s += ((fx_on ? mix_t : 0) - mix_s) * sm;
 ef_og += ((fx_on ? og : 1) - ef_og) * sm;          // OUTPUT glides (the presets set it)
-ef_mx = ef_dst ? mix_s * ef_dk * ef_dk * (3 - 2 * ef_dk) : mix_s;
-oL = (dl + (yl - dl) * ef_mx) * ef_og; oR = (dr + (yr - dr) * ef_mx) * ef_og;
+oL = (dl + (yl - dl) * mix_s) * ef_og; oR = (dr + (yr - dr) * mix_s) * ef_og;
+ef_dst ? ( ef_dkg = ef_dk * ef_dk * (3 - 2 * ef_dk); oL *= ef_dkg; oR *= ef_dkg; );
 q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
 oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
 ost_out(oL, oR);

@@ -183,6 +183,7 @@ function phs(f, g, sh, t) ( slider25 = f; slider26 = g; slider27 = sh; slider28 
 function pair(f, g, t) ( slider29 = f; slider30 = g; slider31 = t; );
 function load_preset(p) (
   p > 0 ? (
+    mq_dst = 1;                                // duck the output, swap the settings at silence, fade back in
     // a clean slate first: everything flat, the dynamic bands at rest
     pf(20, 20000); pls(1, 0, 0, 0); pd(0, 120, 0, 1, -20, 0, 0); pd(1, 1000, 0, 1, -20, 0, 0); pd(2, 4000, 0, 1, -20, 0, 0);
     phs(2, 0, 0, 0); pair(1, 0, 0); slider32 = 1; slider34 = 1;
@@ -245,15 +246,17 @@ update();
 ls_g = slider4; hs_g = slider26; ar_g = slider30; d1.sta = slider8; d2.sta = slider14; d3.sta = slider20; eq_on = slider34;
 d1.gs = d1.sta; d2.gs = d2.sta; d3.gs = d3.sta;
 out_s = out_t;
+mq_dkr = 1 / (0.012 * srate); mq_dk = 1; mq_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-eq_on_t = slider34;
-update();
+mq_dst != 1 ? ( eq_on_t = slider34; update(); );   // during a preset duck the swap applies the new settings
 
 @block
+mq_dst == 3 ? ( mq_dst = 2; eq_on_t = slider34; );   // at silence: the new settings land below (no glide), then fade in
+mq_dst != 1 ? (
 update();
-bs = 1 - exp(-samplesblock / (0.03 * srate));
+bs = mq_dst == 2 && mq_dk == 0 ? 1 : 1 - exp(-samplesblock / (0.03 * srate));
 eq_on += (slider34 - eq_on) * bs;
 ls_g += (slider4 * eq_on - ls_g) * bs; hs_g += (slider26 * eq_on - hs_g) * bs; ar_g += (slider30 * eq_on - ar_g) * bs;
 d1.sta += (slider8 * eq_on - d1.sta) * bs; d2.sta += (slider14 * eq_on - d2.sta) * bs; d3.sta += (slider20 * eq_on - d3.sta) * bs;
@@ -270,6 +273,7 @@ bAR.fa.bq_set(3, arf, 0.5, ar_g); bAR.fb.bq_set(3, arf, 0.5, ar_g);
 d1.pa.ap_set(slider7 * f1m, slider9, d1.gs); d1.pb.ap_set(slider7 * f1m, slider9, d1.gs);
 d2.pa.ap_set(slider13 * f2m, slider15, d2.gs); d2.pb.ap_set(slider13 * f2m, slider15, d2.gs);
 d3.pa.ap_set(slider19 * f3m, slider21, d3.gs); d3.pb.ap_set(slider19 * f3m, slider21, d3.gs);
+);   // mq_dst != 1
 
 @serialize
 file_var(0, ui_sz);
@@ -277,6 +281,11 @@ file_var(0, ui_thm);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+mq_dst ? (                                     // preset duck-and-swap
+  mq_dst == 1 ? ( mq_dk -= mq_dkr; mq_dk <= 0 ? ( mq_dk = 0; mq_dst = 3; ); ) :
+  mq_dst == 2 ? ( mq_dk += mq_dkr; mq_dk >= 1 ? ( mq_dk = 1; mq_dst = 0; ); );
+  mq_dkg = mq_dk * mq_dk * (3 - 2 * mq_dk);
+);
 in_process(spl0, spl1);
 bl = hcL.bq_run(lcL.bq_run(in_l)); br = hcR.bq_run(lcR.bq_run(in_r));
 bLS.st_band();
@@ -284,6 +293,7 @@ d1.dy_band(); d2.dy_band(); d3.dy_band();
 bHS.st_band();
 bAR.st_band();
 out_s += (out_t - out_s) * sm;
+mq_dst ? ( bl *= mq_dkg; br *= mq_dkg; );
 oL = ostL.ost_band(bl * out_s); oR = ostR.ost_band(br * out_s);
 ost_out(oL, oR);
 spl0 = ost_l;

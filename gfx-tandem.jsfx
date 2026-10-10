@@ -127,6 +127,7 @@ function p1(on, t, c, o, hd, dc, ky) ( slider1 = on; slider2 = t; slider3 = c; s
 // stage 2: in, threshold, compression, output, hard, grit; then SC HPF and MIX
 function p2(on, t, c, o, hd, gr, hp, mx) ( slider8 = on; slider9 = t; slider10 = c; slider11 = o; slider12 = hd; slider13 = gr; slider14 = hp; slider15 = mx; );
 function load_preset(p) (
+  td_dst = 1;                                       // duck the output, swap the settings at silence, fade back in
   p == 1  ? ( p1(1, -24, 0.33, 1, 0, 0, 0); p2(1, -14, 0.5,  1, 0, 0, 0,   100); ) :   // Gentle Glue
   p == 2  ? ( p1(1, -30, 0.5,  3, 0, 0, 0); p2(1, -16, 0.8,  2, 0, 0, 80,  100); ) :   // Vocal Leveller
   p == 3  ? ( p1(1, -32, 0.67, 3, 0, 0, 0); p2(1, -18, 0.9,  2, 1, 1, 100, 100); ) :   // Vocal Upfront
@@ -168,19 +169,25 @@ CAP_T = 0xD8392B; CAP_R = 0xE8C22E; CAP_O = 0x2F7FD0; CAP_M = 0xB8BCC2;   // kno
 REDL = 0xFF3A2A; AMBL = 0xFFB030; GRNL = 0x46D86A; BLUL = 0x4AA8FF;
 update();
 mix_s = mix_t;
+td_dkr = 1 / (0.012 * srate); td_dk = 1; td_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+td_dst != 1 ? update();                           // during a preset duck the swap applies the new settings
 
 @block
-update();                                          // panel knobs do not run @slider
+td_dst != 1 ? update();                            // panel knobs do not run @slider
 
 @serialize
 file_var(0, ui_sz);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+td_dst ? (                                         // preset duck-and-swap
+  td_dst == 1 ? ( td_dk -= td_dkr; td_dk <= 0 ? ( td_dk = 0; update(); td_dst = 2; ); ) :
+  ( td_dk += td_dkr; td_dk >= 1 ? ( td_dk = 1; td_dst = 0; ); );
+  td_dkg = td_dk * td_dk * (3 - 2 * td_dk);
+);
 in_process(spl0, spl1);
 dl = in_l; dr = in_r;
 key_pk = max(key_pk, max(abs(spl2), abs(spl3)));
@@ -194,6 +201,7 @@ grit_on && s2.on ? ( wl = gL.grit(wl, s2.eL); wr = gR.grit(wr, s2.eR); );
 // parallel mix
 mix_s += (mix_t - mix_s) * sm;
 oL = dl + (wl - dl) * mix_s; oR = dr + (wr - dr) * mix_s;
+td_dst ? ( oL *= td_dkg; oR *= td_dkg; );
 oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
 ost_out(oL, oR);
 spl0 = ost_l; spl1 = ost_r;

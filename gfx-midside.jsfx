@@ -105,6 +105,7 @@ function setp(ms, ss, w, bm, ai, fo, inf, outf, w_, a_, b_) (
   slider8 = inf; slider9 = outf; slider10 = w_; slider11 = a_; slider12 = b_;
 );
 function load_preset(p) (
+  ms_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? setp(0,  0,   120, 0,   1.5, 0, 0, 0, 10, 10, 5) :   // Subtle Widen
   p == 2 ? setp(0,  0.5, 140, 120, 2.5, 0, 0, 0,  8, 10, 3) :   // Wide Master
   p == 3 ? setp(0,  0,   100, 150, 0,   0, 0, 0,  0,  0, 0) :   // Mono Bass
@@ -145,13 +146,14 @@ lastfoc = -1; lastair = -99;
 
 update();
 mid_s = mid_t; side_s = side_t; wid_s = wid_t; out_s = out_t; bal_s = bal_t;
+ms_dkr = 1 / (0.012 * srate); ms_dk = 1; ms_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+ms_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+ms_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_thm);
@@ -160,6 +162,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+ms_dst ? (                                         // preset duck-and-swap
+  ms_dst == 1 ? ( ms_dk -= ms_dkr; ms_dk <= 0 ? ( ms_dk = 0; update(); ms_dst = 2; mid_s = mid_t; side_s = side_t; wid_s = wid_t; bal_s = bal_t; ); ) :
+  ( ms_dk += ms_dkr; ms_dk >= 1 ? ( ms_dk = 1; ms_dst = 0; ); );
+  ms_dkg = ms_dk * ms_dk * (3 - 2 * ms_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
@@ -206,6 +213,7 @@ bal = min(max(bal_s + bd * 0.3 * vB, -1), 1);
 oL *= min(1, 1 - bal); oR *= min(1, 1 + bal);
 
 // output stage
+ms_dst ? ( oL *= ms_dkg; oR *= ms_dkg; );
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;
 ost_out(oL, oR);

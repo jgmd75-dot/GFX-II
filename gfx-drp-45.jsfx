@@ -383,6 +383,7 @@ function dp_set(v, ta, ba, dec, gt, gs, pd, dmp, lc, drv, sz, dif, gr, et, mx, d
   slider_automate(65535);                               // sliders 1-16
 );
 function load_preset(p) (
+  dp_pst = 1;                                           // the return fades out, the settings swap at silence, it fades back in
   //                v  ta ba  dec   gt  gs  pd  dmp  lc  drv  sz dif  gr   et   mx dft
   p == 1  ? dp_set(0, 0, 0, 2.4, 300, 30, 20, 40,  80, 20, 100, 70, 50, 300,  30, 50) :   // Init
   p == 2  ? dp_set(0, 4, 0, 2.4, 280, 15,  8, 30, 150, 25, 100, 85, 50, 300,  25, 50) :   // Tokyo Snare Gate
@@ -436,7 +437,7 @@ dp_key = dp_ktar; dp_ver = dp_vtar; dp_setup(dp_key); dp_clear(); dp_vf = 1;
 update();
 dp_ts = dp_tt; dp_szs = dp_szt; dp_ddv = 0; dp_ctl(); dp_cc = 0;
 dp_mx = dp_mxt; dp_o_ = dp_ot; dp_pre = dp_pret; dp_et = dp_ett;
-dp_w = 0; dp_aw = 0; dp_pw = 0; dp_tw = 0; dp_hph = 0;
+dp_w = 0; dp_aw = 0; dp_pw = 0; dp_tw = 0; dp_hph = 0; dp_pst = 0;
 dp_ipk = 0; dp_ovl = 0; dp_hpk = 0; dp_opkL = 0; dp_opkR = 0; dp_ovt = 0; dp_env = 0;
 
 ui_thm = 5; ui_hw = 1;
@@ -444,7 +445,7 @@ ui_thm = 5; ui_hw = 1;
 ui_dflt = 1;
 
 @slider
-update();
+dp_pst != 1 ? update();                                 // during a preset fade the swap applies the new settings
 
 @block
 srate != dp_sr ? (                                      // a new rate: lay the memory out again and rebuild the machine
@@ -453,7 +454,7 @@ srate != dp_sr ? (                                      // a new rate: lay the m
   dp_ctl(); dp_cc = 0; dp_pre = dp_pret; dp_et = dp_ett;
   dp_w = 0; dp_aw = 0; dp_pw = 0; dp_tw = 0;
 );
-update();
+dp_pst != 1 ? update();
 // DRIFT: BERLIN - every tank line's clock wanders on its own, hiss and hum; TOKYO - only the decay wanders a little
 dp_di = 0.15 * dm_s * samplesblock / srate;
 dp_ddv = (dp_ber ? 0.02 : 0.015) * dm_a * drD.drift_tick(dp_di);
@@ -474,10 +475,14 @@ dp_mx += (dp_mxt - dp_mx) * dp_smk;
 dp_o_ += (dp_ot - dp_o_) * dp_smk;
 dp_pre += (dp_pret - dp_pre) * 0.0004;
 dp_et += (dp_ett - dp_et) * 0.0002;
-// a change of machine: fade the return out, swap, clear, fade back in
-dp_ktar != dp_key ? (
+// a change of machine or a preset: fade the return and the feed out, swap, clear, fade back in
+dp_ktar != dp_key || dp_pst ? (
   dp_vf -= dp_vfs;
-  dp_vf <= 0 ? ( dp_vf = 0; dp_key = dp_ktar; dp_ver = dp_vtar; dp_setup(dp_key); update(); dp_clear(); dp_cc = 0; );
+  dp_vf <= 0 ? (
+    dp_vf = 0;
+    dp_pst ? ( dp_pst = 0; update(); dp_ts = dp_tt; dp_szs = dp_szt; dp_pre = dp_pret; dp_et = dp_ett; );   // the glides land in silence
+    dp_key = dp_ktar; dp_ver = dp_vtar; dp_setup(dp_key); update(); dp_clear(); dp_cc = 0;
+  );
 ) : dp_vf < 1 ? dp_vf = min(dp_vf + dp_vfs, 1);
 (dp_cc -= 1) <= 0 ? ( dp_cc = 32; dp_ctl(); );
 dp_dn = -dp_dn;
@@ -500,6 +505,7 @@ dp_i0 = dp_ri & dp_pm; dp_i1 = (dp_ri + 1) & dp_pm;
 dp_xa = dp_pb[dp_i0] + (dp_pb[dp_i1] - dp_pb[dp_i0]) * dp_rf;
 dp_xb = dp_pb[dp_psz + dp_i0] + (dp_pb[dp_psz + dp_i1] - dp_pb[dp_psz + dp_i0]) * dp_rf;
 dp_pw = (dp_pw + 1) & dp_pm;
+dp_vf < 1 ? ( dp_xa *= dp_vf; dp_xb *= dp_vf; );       // the feed fades with the return: the cleared tank starts from silence
 
 dp_wl = 0; dp_wr = 0;
 dp_mode == 0 ? (

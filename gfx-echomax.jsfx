@@ -155,6 +155,7 @@ function setp(m, sy, tm, dv, f, drp, lc, hc, dk, pp, w, flp, mx, drf) (
   slider9 = dk; slider10 = pp; slider12 = w; slider13 = flp; slider15 = mx; slider27 = drf; slider11 = 0;
 );
 function load_preset(p) (
+  em_dst = 1;                                       // duck the repeats, swap the settings at silence, fade them back in
   p == 1  ? setp(0, 1, 375, 10, 50, 50, 120, 6000, 0,  0, 45, 30, 40, 70) :  // 1. TAPE: Worn Tape Echo
   p == 2  ? setp(0, 0, 110, 10, 30, 60, 150, 5000, 0,  0, 25, 20, 35, 50) :  // 2. TAPE: Slapback Saturation
   p == 3  ? setp(0, 1, 500, 6,  85, 75, 200, 3500, 0,  0, 60, 40, 45, 85) :  // 3. TAPE: Dub Siren Oscillation
@@ -196,13 +197,14 @@ cur_preset = 1;
 update();
 t_s = t_ms * 0.001 * srate;
 mix_s = mix_t; out_s = out_t;
+em_dkr = 1 / (0.012 * srate); em_dk = 1; em_dst = 0;   // preset duck (the echo path only): 12 ms out, 12 ms in
 ui_dflt = 1;
 
 @slider
-update();
+em_dst != 1 ? update();                           // during a preset duck the swap applies the new settings
 
 @block
-update();
+em_dst != 1 ? update();
 dinc = dspd * samplesblock / srate;
 vW = drW.drift_tick(dinc); vF = drF.drift_tick(dinc * 3);
 
@@ -213,8 +215,17 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+// preset duck-and-swap on the echo path: type, time and loop change in silence, and the line starts clean with its
+// feed faded in (old audio at the new time would come round again as a click)
+em_dst == 1 ? ( em_dk -= em_dkr; em_dk <= 0 ? (
+  em_dk = 0; update(); em_dst = 2;
+  memset(bufL, 0, dlen * 2); t_s = t_ms * 0.001 * srate;
+  lpL.hz = lpL.lz = lpL.lz2 = lpL.bz = lpR.hz = lpR.lz = lpR.lz2 = lpR.bz = 0;
+); ) :
+em_dst == 2 ? ( em_dk += em_dkr; em_dk >= 1 ? ( em_dk = 1; em_dst = 0; ); );
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
+em_dst ? ( em_dkg = em_dk * em_dk * (3 - 2 * em_dk); fiL = inL * em_dkg; fiR = inR * em_dkg; ) : ( fiL = inL; fiR = inR; );
 vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
 mix_s += (mix_t - mix_s) * sm;
 out_s += (out_t - out_s) * sm;
@@ -253,11 +264,11 @@ frz ? (
 ) : (
   fL = lpL.loopproc(eL) * fb; fR = lpR.loopproc(eR) * fb;
   ping ? (
-    bufL[wp] = 0.5 * (inL + inR) + fR;
+    bufL[wp] = 0.5 * (fiL + fiR) + fR;
     bufR[wp] = fL;
   ) : (
-    bufL[wp] = inL + fL;
-    bufR[wp] = inR + fR;
+    bufL[wp] = fiL + fL;
+    bufR[wp] = fiR + fR;
   );
 );
 wp += 1; wp >= dlen ? wp = 0;
@@ -270,6 +281,7 @@ vt_on ? ( eL = vtL.vt_proc(eL); eR = vtR.vt_proc(eR); );
 
 em = 0.5 * (eL + eR); es = 0.5 * (eL - eR) * wid;
 wL = (em + es) * dg; wR = (em - es) * dg;
+em_dst ? ( wL *= em_dkg; wR *= em_dkg; );
 dry_g = min(2 * (1 - mix_s), 1); wet_g = min(2 * mix_s, 1);
 oL = inL * dry_g + wL * wet_g;
 oR = inR * dry_g + wR * wet_g;

@@ -172,6 +172,7 @@ function pname(p) (
   "Reset all to defaults";
 );
 function load_preset(p) (
+  dy_dst = 1;                                   // duck the output, swap the settings at silence, fade back in
   p == 1  ? setp(0, 1, 0, 0.25, 2, 40, 70,  50,   0, 50, 0, 50, 1) :    // Classic Bubble Flange
   p == 2  ? setp(0, 1, 0, 0.12, 2, 35, 90,  80,  90, 55, 0, 50, 1) :    // Dyna Flange
   p == 3  ? setp(1, 0, 0, 0.3,  2, 50, 80,  30,   0, 50, 0, 50, 1) :    // Smooth Phase Sweep
@@ -221,13 +222,14 @@ PRESET_N = 10;
 update();
 cent_s = cent_t; depth_s = depth_t; fb_s = fb_t; mix_s = mix_t; out_s = out_t;
 fL = 0; fR = 0; apfbL = 0; apfbR = 0; lpL = 0; lpR = 0;
+dy_dkr = 1 / (0.012 * srate); dy_dk = 1; dy_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;
 
 @slider
-update();
+dy_dst != 1 ? update();                       // during a preset duck the swap applies the new settings
 
 @block
-update();
+dy_dst != 1 ? update();
 lfoL.lfo_block(syncmode, div, frate);
 lfoR.lfo_block(syncmode, div, frate);
 
@@ -237,9 +239,22 @@ file_var(0, ui_sz);
 file_var(0, ui_hw);
 
 @sample
+// preset duck-and-swap: fade the output out, swap the settings and start the lines, stages and filters clean,
+// then fade the input back in (old audio in the flange lines would otherwise come back as a click)
+dy_dst ? (
+  dy_dst == 1 ? ( dy_dk -= dy_dkr; dy_dk <= 0 ? (
+    dy_dk = 0; update(); dy_dst = 2;
+    cent_s = cent_t; depth_s = depth_t; fb_s = fb_t; mix_s = mix_t; out_s = out_t;
+    memset(0, 0, fbR_b + tsize); fL = fR = apfbL = apfbR = lpL = lpR = 0;
+    svfL.ic1eq = svfL.ic2eq = svfR.ic1eq = svfR.ic2eq = 0;
+  ); ) :
+  ( dy_dk += dy_dkr; dy_dk >= 1 ? ( dy_dk = 1; dy_dst = 0; ); );
+  dy_dkg = dy_dk * dy_dk * (3 - 2 * dy_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
+dy_dst == 2 ? ( inL *= dy_dkg; inR *= dy_dkg; );
 vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
 
 // drift
@@ -307,6 +322,7 @@ mode == 0 ? (
 oL = wl_on ? inL + mix_s * (WLL.wlc(wetL * fbc) - WDL.wlc(inL)) : (1 - mix_s) * inL + mix_s * wetL * fbc;
 oR = wl_on ? inR + mix_s * (WLR.wlc(wetR * fbc) - WDR.wlc(inR)) : (1 - mix_s) * inR + mix_s * wetR * fbc;
 
+dy_dst == 1 ? ( oL *= dy_dkg; oR *= dy_dkg; );
 // output stage: band saturation -> output gain (no clip: straight through)
 oL = ostL.ost_band(oL) * in_comp * out_s;
 oR = ostR.ost_band(oR) * in_comp * out_s;

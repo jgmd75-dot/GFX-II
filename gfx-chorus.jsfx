@@ -136,6 +136,7 @@ function setp(m, rm, fr, dv, dp, ce, wd, tn, hs, mx, r_, d_, t_) (
   slider7 = wd; slider8 = tn; slider9 = hs; slider10 = mx; slider11 = r_; slider12 = d_; slider13 = t_;
 );
 function load_preset(p) (
+  ch_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? setp(0, 0, 0.513, 3, 1.85, 3.5, 100, 60,  0, 50,  5, 10, 10) :   // Classic I
   p == 2 ? setp(1, 0, 0.863, 3, 1.85, 3.5, 100, 60,  0, 50,  5, 10, 10) :   // Classic II
   p == 3 ? setp(2, 0, 0.513, 3, 1.85, 3.5, 100, 60,  0, 50,  5, 10, 10) :   // Classic I+II
@@ -180,13 +181,14 @@ ui_ovt = 1; ui_ovbg = 0x4C545E; ui_ovink = 0xE4EBF2;   // Ice on a darker brushe
 
 update();
 dep_s = dep_t; cen_s = cen_t; wid_s = wid_t; mix_s = mix_t; out_s = out_t;
+ch_dkr = 1 / (0.012 * srate); ch_dk = 1; ch_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+ch_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+ch_dst != 1 ? update();
 lfoA.lfo_block(ratemode, div, frate);
 // I+II: the second sweep runs at II's speed relative to I (0.863 / 0.513). In SYNC it runs on freely at the
 // scaled tempo rate (as in FLOW), since its phase can't lock to the bar at a non-musical ratio.
@@ -199,6 +201,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+ch_dst ? (                                         // preset duck-and-swap
+  ch_dst == 1 ? ( ch_dk -= ch_dkr; ch_dk <= 0 ? ( ch_dk = 0; update(); ch_dst = 2; dep_s = dep_t; cen_s = cen_t; wid_s = wid_t; mix_s = mix_t; ); ) :
+  ( ch_dk += ch_dkr; ch_dk >= 1 ? ( ch_dk = 1; ch_dst = 0; ); );
+  ch_dkg = ch_dk * ch_dk * (3 - 2 * ch_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
@@ -239,6 +246,7 @@ mode == 3 ? (
 );
 
 // output stage: band saturation -> output gain (no clip: straight through)
+ch_dst ? ( oL *= ch_dkg; oR *= ch_dkg; );
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;
 ost_out(oL, oR);

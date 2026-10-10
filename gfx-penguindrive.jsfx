@@ -113,6 +113,7 @@ function update() (
 );
 
 function load_preset(p) (
+  pd_dst = 1;                                      // duck the output, swap the settings at silence, fade back in
   p == 1 ? ( slider1 = 0; slider2 = 4.5; slider3 = 65; slider4 = 1200; slider5 = 75; slider6 = 45; slider7 = 0.35; slider8 = 60; slider9 = 85; ) : // Art-Rock Lead
   p == 2 ? ( slider1 = 0; slider2 = 2.0; slider3 = 80; slider4 = 800;  slider5 = 85; slider6 = 20; slider7 = 0.20; slider8 = 80; slider9 = 75; ) : // Funk Envelope
   p == 3 ? ( slider1 = 1; slider2 = 6.0; slider3 = 0;  slider4 = 1400; slider5 = 60; slider6 = 50; slider7 = 0.50; slider8 = 30; slider9 = 100; ) : // Cocked Wah
@@ -135,14 +136,15 @@ p_phase = 0;
 
 update();
 mix_s = mix_t; out_s = out_t;
+pd_dkr = 1 / (0.012 * srate); pd_dk = 1; pd_dst = 0;   // preset duck: 12 ms out, 12 ms in
 !ui_dflt ? ui_thm = 0; !ui_dflt ? ui_hw = 0;
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+pd_dst != 1 ? update();                          // during a preset duck the swap applies the new settings
 
 @block
-update();
+pd_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_thm);
@@ -151,6 +153,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+pd_dst ? (                                        // preset duck-and-swap: mode, drive and the filter change in silence
+  pd_dst == 1 ? ( pd_dk -= pd_dkr; pd_dk <= 0 ? ( pd_dk = 0; update(); pd_dst = 2; mix_s = mix_t; ); ) :
+  ( pd_dk += pd_dkr; pd_dk >= 1 ? ( pd_dk = 1; pd_dst = 0; ); );
+  pd_dkg = pd_dk * pd_dk * (3 - 2 * pd_dk);
+);
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
 vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
@@ -214,6 +221,7 @@ mode == 2 ? (
 
 dispF = eff_fL; 
 
+pd_dst ? ( oL *= pd_dkg; oR *= pd_dkg; );
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;
 ost_out(oL, oR);
@@ -361,4 +369,5 @@ pkL *= 0.85; pkR *= 0.85;
 rd_lbl(750, 286, " LEVEL ", ORANGE, 0.8);
 
 pk_end();
-ui_end();
+ui_end();
+

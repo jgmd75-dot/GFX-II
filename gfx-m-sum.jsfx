@@ -140,6 +140,7 @@ function pp(dv, ir, sg, ct, t, r, a, rl, mu, au, ci, tr) (
   slider8 = mu; slider12 = au; slider11 = ci; slider10 = tr;
 );
 function load_preset(p) (
+  mu_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? pp(0, 0.1, 0.03, -60, -12, 2, 5, 200, 0, 0, 0, 0) :        // Clean Sum
   p == 2 ? pp(3, 0.3, 0.06, -54, -14, 2, 10, 250, 1, 0, 1, -1) :       // Warm Console
   p == 3 ? pp(8, 0.55, 0.1, -50, -16, 3, 3, 150, 2, 0, 1, -4) :        // Driven Desk
@@ -169,13 +170,14 @@ vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at t
 PNL = 0x74777C; INKW = 0xF4F2EA; YEL = 0xF2D04A; KDK = 0x3A3C40;
 update();
 i = 0; loop(8, SG[i] = SGT[i]; i += 1; );
+mu_dkr = 1 / (0.012 * srate); mu_dk = 1; mu_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+mu_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+mu_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
@@ -183,6 +185,11 @@ gn = 0; loop(8, file_avail(0) != 0 ? file_string(0, UI_NM + gn); gn += 1; );   /
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+mu_dst ? (                                         // preset duck-and-swap
+  mu_dst == 1 ? ( mu_dk -= mu_dkr; mu_dk <= 0 ? ( mu_dk = 0; update(); mu_dst = 2; i = 0; loop(8, SG[i] = SGT[i]; i += 1; ); ); ) :
+  ( mu_dk += mu_dkr; mu_dk >= 1 ? ( mu_dk = 1; mu_dst = 0; ); );
+  mu_dkg = mu_dk * mu_dk * (3 - 2 * mu_dk);
+);
 // ---------- A: stems, bus stress + rail sag, sum ----------
 sl = 0; sr = 0; ab = 0; k = 0;
 loop(8,
@@ -219,6 +226,7 @@ bl *= cg * trim; br *= cg * trim;
 grm = min(grm, e_);
 
 // ---------- output stage ----------
+mu_dst ? ( bl *= mu_dkg; br *= mu_dkg; );
 bl = ostL.ost_band(bl); br = ostR.ost_band(br);
 ost_out(bl, br);
 spl0 = ost_l; spl1 = ost_r;

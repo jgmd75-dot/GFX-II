@@ -215,6 +215,7 @@ function ml_set(md, ic, mo, nv, nt, nm, nb, nr, ev, et, em, eb, er, ds, rv, mm, 
   slider_automate(524287);                                // sliders 1-19
 );
 function load_preset(p) (
+  ml_dst = 1;                                             // duck the output, swap the settings at silence, fade back in
   //                     model inp mono  N: vol tre mid bas brt   E: vol tre mid bas brt  dist rev  mod spd dep  wid
   p == 1  ? ml_set(0, 1, 1,  5,   5,   5,   5,   0,  5,   5,   5,   5,   0,  0,   2,   0, 5,   5,   100) :   // Init Clean
   p == 2  ? ml_set(0, 1, 1,  5,   6.5, 5.5, 4.5, 1,  5,   6.5, 5.5, 4.5, 1,  0,   2.5, 0, 5,   5,   100) :   // Glass Clean
@@ -259,15 +260,16 @@ ml_m0 = -1; ml_mk = 0.8; ml_bias = 0.1; ml_rail = 1; ml_sag = 0; ml_ph = 0; ml_p
 update();
 ml_cs = ml_cent; ml_ds = ml_dept; ml_mL = ml_tL; ml_mR = ml_tR; ml_ws = ml_wid; ml_os = ml_out;
 ml_pkL = ml_pkR = 0;
+ml_dkr = 1 / (0.012 * srate); ml_dk = 1; ml_dst = 0;     // preset duck: 12 ms out, 12 ms in
 ui_thm = 5; ui_hw = 0;
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                    // new instances open in Large, on Init
 ui_dflt = 1;
 
 @slider
-update();
+ml_dst != 1 ? update();                                 // during a preset duck the swap applies the new settings
 
 @block
-update();
+ml_dst != 1 ? update();
 // DRIFT: the supply wanders - chorus rate and BBD clock drift, the rails move and sag a touch
 ml_di = 0.25 * dm_s * samplesblock / srate;
 ml_rate_d = ml_rate * (1 + 0.05 * dm_a * drR.drift_tick(ml_di));
@@ -282,6 +284,14 @@ file_var(0, ui_sz);
 file_var(0, pr_cur);
 
 @sample
+ml_dst ? (                                              // preset duck-and-swap: model, channels and modulation change in silence
+  ml_dst == 1 ? ( ml_dk -= ml_dkr; ml_dk <= 0 ? (
+    ml_dk = 0; update(); ml_dst = 2;
+    ml_cs = ml_cent * ml_clk; ml_ds = ml_dept * ml_clk; ml_mL = ml_tL; ml_mR = ml_tR; ml_ws = ml_wid;
+  ); ) :
+  ( ml_dk += ml_dkr; ml_dk >= 1 ? ( ml_dk = 1; ml_dst = 0; ); );
+  ml_dkg = ml_dk * ml_dk * (3 - 2 * ml_dk);
+);
 in_process(spl0, spl1);
 ml_mono ? (
   PL.ml_pre((in_l + in_r) * 0.5);
@@ -312,6 +322,7 @@ ml_os += (ml_out - ml_os) * ml_sm;
 ml_a = 0.5 + 0.5 * ml_ws; ml_b = 0.5 - 0.5 * ml_ws;
 ml_yL = (ml_oL * ml_a + ml_oR * ml_b) * ml_os;
 ml_yR = (ml_oR * ml_a + ml_oL * ml_b) * ml_os;
+ml_dst ? ( ml_yL *= ml_dkg; ml_yR *= ml_dkg; );
 ost_out(ostL.ost_band(ml_yL), ostR.ost_band(ml_yR));
 spl0 = abs(ost_l) < 0.00000000000000000001 ? 0 : ost_l;
 spl1 = abs(ost_r) < 0.00000000000000000001 ? 0 : ost_r;

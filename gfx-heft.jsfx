@@ -102,6 +102,7 @@ function pp(t, a, r, rl, kn, th, ty, lk, lf, mu, mx) (
   slider10 = lk; slider11 = lf; slider12 = mu; slider13 = mx;
 );
 function load_preset(p) (
+  hf_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1  ? pp(-14, 4, 1, 4, 2, 1, 0, 100, 1, 2, 100) :      // Mix Bus Glue
   p == 2  ? pp(-18, 4, 3, 3, 1, 2, 0, 100, 1, 4, 100) :      // Big Mix (loud)
   p == 3  ? pp(-22, 3, 4, 2, 0, 1, 0, 80, 0, 6, 100) :       // Drum Bus Punch
@@ -130,19 +131,25 @@ vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at t
 PNL = 0x141416; INKW = 0xF2F2EE; YEL = 0xF2C21B; BLU = 0x2F7FE0; LGRY = 0xD2D4D8; DGRY = 0x6C6F76;   // knob caps
 update();
 mix_s = mix_t;
+hf_dkr = 1 / (0.012 * srate); hf_dk = 1; hf_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+hf_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+hf_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+hf_dst ? (                                         // preset duck-and-swap
+  hf_dst == 1 ? ( hf_dk -= hf_dkr; hf_dk <= 0 ? ( hf_dk = 0; update(); hf_dst = 2; mix_s = mix_t; ); ) :
+  ( hf_dk += hf_dkr; hf_dk >= 1 ? ( hf_dk = 1; hf_dst = 0; ); );
+  hf_dkg = hf_dk * hf_dk * (3 - 2 * hf_dk);
+);
 in_process(spl0, spl1);
 dl = in_l; dr = in_r;
 // detector input: the input (NEW) or the last output (OLD, feedback)
@@ -158,6 +165,7 @@ on ? (
 grmL = min(grmL, gL.e); grmR = min(grmR, gR.e);
 mix_s += (mix_t - mix_s) * sm;
 oL = dl + (wl - dl) * mix_s; oR = dr + (wr - dr) * mix_s;
+hf_dst ? ( oL *= hf_dkg; oR *= hf_dkg; );
 oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
 ost_out(oL, oR);
 spl0 = ost_l; spl1 = ost_r;

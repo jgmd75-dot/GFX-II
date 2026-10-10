@@ -195,6 +195,7 @@ function setp(v, d, t, eo, eg, ea, b_, c_, mx) (
   slider7 = b_; slider8 = c_; slider10 = mx;
 );
 function load_preset(p) (
+  pq_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? setp(1, 35, 50, 0, 1, 1, 10, 10, 100) :   // Vibe Warm
   p == 2 ? setp(1, 85, 50, 0, 1, 1, 15, 15, 100) :   // Vibe Driven
   p == 3 ? setp(2, 35, 55, 0, 1, 1, 10, 10, 100) :   // Zen Edge
@@ -233,6 +234,7 @@ dispBias = 0;
 
 update();
 mix_s = mix_t; out_s = out_t;
+pq_dkr = 1 / (0.012 * srate); pq_dk = 1; pq_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 
 // ================= EQ (the Board EQ engine, names q_..., sliders 20 - 37) =================
@@ -339,12 +341,12 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 @slider
 q_update();
 q_ord = slider38;
-update();
+pq_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
 q_update();
 q_ord = slider38;
-update();
+pq_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_thm);
@@ -353,6 +355,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+pq_dst ? (                                         // preset duck-and-swap
+  pq_dst == 1 ? ( pq_dk -= pq_dkr; pq_dk <= 0 ? ( pq_dk = 0; update(); pq_dst = 2; mix_s = mix_t; ); ) :
+  ( pq_dk += pq_dkr; pq_dk >= 1 ? ( pq_dk = 1; pq_dst = 0; ); );
+  pq_dkg = pq_dk * pq_dk * (3 - 2 * pq_dk);
+);
 // input stage: DC block, trim, guard
 in_process(spl0, spl1);
 !q_ord ? ( q_proc(in_l, in_r); in_l = q_out_l; in_r = q_out_r; );   // EQ first
@@ -377,6 +384,7 @@ oR = inR * (1 - mix_s) + yR * mix_s;
 
 // output stage: band saturation -> output gain -> clipper
 q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
+pq_dst ? ( oL *= pq_dkg; oR *= pq_dkg; );
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;
 ost_out(oL, oR);

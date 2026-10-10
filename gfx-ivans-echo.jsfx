@@ -81,6 +81,7 @@ function setp(ip, vo, ba, re, ti, sy, dr) (
   slider1 = ip; slider2 = vo; slider3 = ba; slider4 = re; slider5 = ti; slider6 = sy; slider8 = dr;
 );
 function apply_preset(n) (
+  ie_dst = 1;                                    // duck, swap the settings at silence, start the line clean, fade back in
   n == 0 ? setp(0,  0, 35, 35, 180, 0, 50) :     // Init
   n == 1 ? setp(0,  2, 30,  6, 110, 0, 40) :     // Slapback
   n == 2 ? setp(0,  0, 45,  0,  28, 0, 70) :     // ADT Double
@@ -123,17 +124,28 @@ ie_ca = 1 - exp(-1 / (0.004 * srate)); cr = 1 - exp(-1 / (0.040 * srate));   // 
 sga = 1 - exp(-1 / (0.25 * srate));               // supply sag follows the level slowly
 update();
 t_sm = t_s; envC = envE = 0.1;
+ie_dkr = 1 / (0.012 * srate); ie_dk = 1; ie_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 @slider
 slider10 != lastp ? ( apply_preset(slider10); lastp = slider10; );
-update();
+ie_dst != 1 ? update();                        // during a preset duck the swap applies the new settings
 
 @block
-update();
+ie_dst != 1 ? update();
 // DRIFT: the supply voltage wanders slowly (a few per cent), setting the preamp's headroom and gain
 vV = drV.drift_tick(0.15 * dm_s * samplesblock / srate);
 
 @sample
+// preset duck-and-swap: volume, balance, time and the mic input change in silence; the line starts clean and its
+// feed fades back in (old audio at the new time would come round again as a click)
+ie_dst ? (
+  ie_dst == 1 ? ( ie_dk -= ie_dkr; ie_dk <= 0 ? (
+    ie_dk = 0; update(); ie_dst = 2;
+    memset(buf, 0, dlen); t_sm = t_s; f1 = f2 = wf = hps = mcs = 0;
+  ); ) :
+  ( ie_dk += ie_dkr; ie_dk >= 1 ? ( ie_dk = 1; ie_dst = 0; ); );
+  ie_dkg = ie_dk * ie_dk * (3 - 2 * ie_dk);
+);
 dL = spl0; dR = spl1;
 
 // input socket and VOLUME (the box is mono)
@@ -149,6 +161,7 @@ pkIn = max(pkIn, abs(ie_x) / hv);
 
 // send: with the echo off (or paused by MOMENTARY) no new signal goes in; the repeats carry on
 snd = fsw ? ie_x : 0;
+ie_dst ? snd *= ie_dkg;
 
 // the clock (DRIFT: it breathes) and the delay time glide
 vT = drT.drift_tick(0.35 * dm_s / srate);
@@ -181,6 +194,7 @@ wp += 1; wp >= dlen ? wp = 0;
 dry_g = min(2 * (1 - bal), 1); wet_g = min(2 * bal, 1);
 spl0 = (dL * dry_g + ie_e * wet_g) * out_g;
 spl1 = (dR * dry_g + ie_e * wet_g) * out_g;
+ie_dst ? ( spl0 *= ie_dkg; spl1 *= ie_dkg; );
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
 
 @gfx 900 300

@@ -158,6 +158,7 @@ function pc(base, t, r, a, rl, au, g, de, f, sp, lm) (
 );
 function pm(md, lk, mx) ( slider23 = md; slider24 = lk; slider25 = mx; );
 function load_preset(p) (
+  dq_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1  ? ( pm(0, 1, 100); pc(1, -24, 2, 10, 300, 1, 3, 0, 6000, 1, 0);  pc(12, -24, 2, 10, 300, 1, 3, 0, 6000, 1, 0); ) :      // Gentle Stereo Bus
   p == 2  ? ( pm(0, 1, 100); pc(1, -28, 3, 5, 180, 0, 5, 0, 6000, 1, -3);  pc(12, -28, 3, 5, 180, 0, 5, 0, 6000, 1, -3); ) :      // Vocal Compressor
   p == 3  ? ( pm(0, 1, 100); pc(1, -30, 6, 0.5, 80, 0, 0, 1, 6500, 1, 0);  pc(12, -30, 6, 0.5, 80, 0, 0, 1, 6500, 1, 0); ) :      // De-esser (split)
@@ -187,6 +188,7 @@ PNL = 0xA9ACA7; INKD = 0x1C201E; GRN = 0x2E7A4C; GRND = 0x1E5A36;          // gr
 CAP_C = 0xF2F2EE; CAP_G = 0xF2F2EE; CAP_D = 0x2FC46A; CAP_L = 0xE8402E;   // pointer colours: compressor, gain, de-ess, limit
 update();
 mix_s = mix_t;
+dq_dkr = 1 / (0.012 * srate); dq_dk = 1; dq_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 
 // ================= EQ (the Tilt EQ engine, names q_..., sliders 34 - 43) =================
@@ -315,18 +317,23 @@ ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start
 @slider
 q_update();
 q_ord = slider44;
-update();
+dq_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
 q_update();
 q_ord = slider44;
-update();
+dq_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+dq_dst ? (                                         // preset duck-and-swap
+  dq_dst == 1 ? ( dq_dk -= dq_dkr; dq_dk <= 0 ? ( dq_dk = 0; update(); dq_dst = 2; mix_s = mix_t; ); ) :
+  ( dq_dk += dq_dkr; dq_dk >= 1 ? ( dq_dk = 1; dq_dst = 0; ); );
+  dq_dkg = dq_dk * dq_dk * (3 - 2 * dq_dk);
+);
 in_process(spl0, spl1);
 !q_ord ? ( q_proc(in_l, in_r); in_l = q_out_l; in_r = q_out_r; );   // EQ first
 dl = in_l; dr = in_r;
@@ -358,6 +365,7 @@ lm1 = max(lm1, g1 < 0.999); lm2 = max(lm2, g2 < 0.999);
 mix_s += (mix_t - mix_s) * sm;
 oL = dl + (wl - dl) * mix_s; oR = dr + (wr - dr) * mix_s;
 q_ord ? ( q_proc(oL, oR); oL = q_out_l; oR = q_out_r; );   // EQ after
+dq_dst ? ( oL *= dq_dkg; oR *= dq_dkg; );
 oL = ostL.ost_band(oL * in_comp); oR = ostR.ost_band(oR * in_comp);
 ost_out(oL, oR);
 spl0 = ost_l; spl1 = ost_r;

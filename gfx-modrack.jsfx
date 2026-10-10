@@ -144,6 +144,9 @@ vbAt  = 1 - exp(-1/(0.008*srate));             // lamp heats fast
 dlLc = opc(3500); dlHc = opc(70);
 dlTs = 1 - exp(-1/(0.25*srate));               // tape-style time glide (pitch bends on time moves)
 dlT = slider40;
+dlMixS = slider42/100;                         // the delay mix glides (30 ms): the delay path fades, it never steps
+mrSm = 1 - exp(-1/(0.03*srate));
+mr_dkr = 1/(0.012*srate); mr_dk = 1; mr_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 // Limiter
 limRel = exp(-1/(0.15*srate));
@@ -230,6 +233,7 @@ function pv(rate, dep, md, rt)      ( slider30 = rate; slider31 = dep; slider32 
 function pd(tm, fb, mix, md, rt)    ( slider40 = tm; slider41 = fb; slider42 = mix; slider43 = md; setrt(40, rt); );
 function pm(dr, outdb)              ( slider2 = dr; slider3 = outdb; );
 function apply_preset(n) (
+  mr_dst = 1;                                   // duck the output, swap the settings at silence, fade back in
   // start from Init, then each preset changes only what it uses
   pc(0.8, 50, 0, 0, 0); pt(4, 0, 0, 0); pv(1.5, 0, 0, 0); pd(350, 30, 0, 0, 0); pm(20, 0); slider5 = 100;
   slider18 = 0; slider28 = 0; slider38 = 0; slider48 = 0;            // sync off
@@ -261,6 +265,8 @@ file_var(0, lastPreset);
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
 
 @block
+mr_dst == 3 ? mr_dst = 2;                     // at silence: the new settings are applied below, then fade in
+mr_dst != 1 ? (
 // ---- Control-rate parameters ----
 dr = slider2/100;
 outG = db2g(slider3);
@@ -312,11 +318,24 @@ vbWet = min(1, 2*slider31/100);
 run  = slider43/100;
 fbE  = 0.95*slider41/95 + 0.30*run;
 dlMix = slider42/100;
+);   // mr_dst != 1
+mr_dst == 2 && mr_dk == 0 ? (                 // the swap: every line and voice starts clean, the delay time is at its target
+  memset(chA, 0, CHN*3); memset(dlA, 0, DLN*3); memset(vsC, 0, 48); memset(vsV, 0, 48); memset(chPre, 0, 3); memset(dls, 0, 6);
+  dlT = dlTgt; dlMixS = dlMix;
+);
 
 @sample
 spl0 != spl0 ? spl0 = 0;
 spl1 != spl1 ? spl1 = 0;
 xL = spl0; xR = spl1;
+// preset duck-and-swap: fade the output out, swap the settings in @block and start the lines clean, fade the input in
+mr_dst ? (
+  mr_dst == 1 ? ( mr_dk -= mr_dkr; mr_dk <= 0 ? ( mr_dk = 0; mr_dst = 3; ); ) :
+  mr_dst == 2 ? ( mr_dk += mr_dkr; mr_dk >= 1 ? ( mr_dk = 1; mr_dst = 0; ); );
+  mr_dkg = mr_dk*mr_dk*(3 - 2*mr_dk);
+  mr_dst == 2 ? ( xL *= mr_dkg; xR *= mr_dkg; );
+);
+dlMixS += (dlMix - dlMixS)*mrSm;
 m  = 0.5*(xL + xR);
 dL = 0; dR = 0;
 
@@ -374,17 +393,17 @@ kc = (dlLo || dlRo) ? 0.707 : 1;
 dlLo ? (
   yA = hread(dlA, DLN, dlW - dsm*(sp ? 0.75 : 1));
   dlA[dlW] = xL + dlloop(yA, dls);
-  dL += dlMix*yA;
+  dL += dlMixS*yA;
 ) : dlA[dlW] = 0;
 dlRo ? (
   yB = hread(dlB, DLN, dlW - dsm*(sp ? 1.25 : 1));
   dlB[dlW] = xR + dlloop(yB, dls + 2);
-  dR += dlMix*yB;
+  dR += dlMixS*yB;
 ) : dlB[dlW] = 0;
 dlCo ? (
   yC = hread(dlC, DLN, dlW - dsm);
   dlC[dlW] = m + dlloop(yC, dls + 4);
-  y = dlMix*kc*yC; dL += y; dR += y;
+  y = dlMixS*kc*yC; dL += y; dR += y;
 ) : dlC[dlW] = 0;
 
 // ---- advance write heads ----
@@ -394,6 +413,7 @@ dlW += 1; dlW >= DLN ? dlW = 0;
 // ===================== MASTER =====================
 oL = (xL + mixM*dL)*outG;
 oR = (xR + mixM*dR)*outG;
+mr_dst & 1 ? ( oL *= mr_dkg; oR *= mr_dkg; );
 pk = max(abs(oL), abs(oR));
 limEnv = pk > limEnv ? pk : limEnv*limRel;
 lg = limEnv > 0.966 ? 0.966/limEnv : 1;

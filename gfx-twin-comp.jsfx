@@ -124,6 +124,7 @@ bLcC = 1 - exp(-2*$pi*150/srate); bHfC = 1 - exp(-2*$pi*3500/srate);
 t_ = tan($pi*180/srate); bAp = (t_ - 1)/(t_ + 1);
 dGa = dGb = dCa = 1; dwA = dwB = 0; dtA = dtB = 0; dsA = dsB = 0;
 mGrA = mGrB = 0; mOut = 0; aLamp = 0;
+tc_dkr = 1/(0.012*srate); tc_dk = 1; tc_dst = 0;     // preset duck: 12 ms out, 12 ms in
 
 // ---------- presets: order, A thr / comp / OE / out, B drive / ratio / att / rel / auto / hfx / spr / lfcut / out, mix ----------
 // o: 0 A only, 1 B only, 2 A > B, 3 B > A
@@ -132,6 +133,7 @@ function pb(bd, br, ba, bl, be, bh, bs, bc, bo, m) (
   slider7 = -bd; slider8 = br; slider9 = ba; slider10 = bl; slider11 = be; slider12 = bh; slider13 = bs; slider14 = bc; slider15 = bo; slider16 = m;
 );
 function apply_preset(n) (
+  tc_dst = 1;                                          // duck the output, swap the settings at silence, fade back in
   n == 0 ? ( pa(2, -20, 40, 1, 0);   pb(-20, 3, 5, 300, 0, 30, 0, 0, 0, 100); ) :     // Init
   n == 1 ? ( pa(0, -18, 60, 1, 4);   pb(-20, 3, 5, 300, 0, 30, 0, 0, 0, 100); ) :     // Drum Bus
   n == 2 ? ( pa(1, -20, 40, 1, 0);   pb(-24, 4, 3, 250, 1, 40, 0, 1, 5, 100); ) :     // Vocal Expressor
@@ -151,10 +153,10 @@ file_var(0, lastPreset);
 
 @slider
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
-setup();
+tc_dst != 1 ? setup();                                // during a preset duck the swap applies the new settings
 
 @block
-setup();
+tc_dst != 1 ? setup();
 // DRIFT: an uneven supply under both VCAs - slow random walks of gain (+/-0.15 dB at 100%) and colour
 dwA -= samplesblock; dwA <= 0 ? ( dwA = srate*(0.5 + rand(1.5)); dtA = rand(2) - 1; );
 dwB -= samplesblock; dwB <= 0 ? ( dwB = srate*(0.4 + rand(1.2)); dtB = rand(2) - 1; );
@@ -162,10 +164,16 @@ dsA += (dtA - dsA)*min(1, samplesblock/(0.6*srate)); dsB += (dtB - dsB)*min(1, s
 dGa = db2g(0.15*drA*dsA); dGb = db2g(0.15*drA*dsB); dCa = 1 + 0.8*drA*dsA;
 
 @sample
+tc_dst ? (                                            // preset duck-and-swap
+  tc_dst == 1 ? ( tc_dk -= tc_dkr; tc_dk <= 0 ? ( tc_dk = 0; setup(); tc_dst = 2; ); ) :
+  ( tc_dk += tc_dkr; tc_dk >= 1 ? ( tc_dk = 1; tc_dst = 0; ); );
+  tc_dkg = tc_dk*tc_dk*(3 - 2*tc_dk);
+);
 inL = spl0; inR = spl1;
 xL = inL; xR = inR;
 ord == 0 ? ( aOn ? engA(); bOn ? engB(); ) : ( bOn ? engB(); aOn ? engA(); );
 yL = inL + (xL - inL)*mix; yR = inR + (xR - inR)*mix;
+tc_dst ? ( yL *= tc_dkg; yR *= tc_dkg; );
 ost_out(yL, yR);
 spl0 = ost_l; spl1 = ost_r;
 a_ = max(abs(spl0), abs(spl1)); mOut = a_ > mOut ? a_ : mOut*0.9997;

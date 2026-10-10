@@ -120,6 +120,7 @@ function pt(t, pv, sh, hp, hs, lp, ls, md) (
   slider1 = t; slider2 = pv; slider3 = sh; slider4 = hp; slider5 = hs; slider6 = lp; slider7 = ls; slider8 = md; slider9 = 0; slider10 = 1;
 );
 function load_preset(p) (
+  te_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1  ? pt(1.5, 1000, 0, 25, 3, 22000, 1, 0) :          // Mix Bus Lift
   p == 2  ? pt(-1.5, 800, 0, 10, 1, 18000, 1, 0) :          // Warm It Up
   p == 3  ? pt(3, 1500, 1, 80, 2, 22000, 1, 0) :            // Vocal Forward
@@ -145,13 +146,14 @@ WIN = 0x161412; GOLD = 0xE2B24A; SKY = 0x7EA6CB; HAZE = 0xCFD9DD; SEA = 0x617487
 te_lpf = min(slider6, srate * 0.45); te_lpk = 1 - exp(-16 / (0.02 * srate)); te_lpn = 0;   // low-pass glide (~20 ms)
 update();
 te_lpw = lp_on; te_lpxs = 1 / (0.02 * srate);   // low-pass on / off fade: 20 ms
+te_dkr = 1 / (0.012 * srate); te_dk = 1; te_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+te_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+te_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
@@ -161,9 +163,16 @@ ui_hw = 1;
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+te_dst ? (                                         // preset duck-and-swap
+  te_dst == 1 ? ( te_dk -= te_dkr; te_dk <= 0 ? ( te_dk = 0; update(); te_dst = 2;
+    te_lpf = te_lpt = min(slider6, srate * 0.45); LPL.bw_set(0, te_lpf, ordr(slider7)); LPR.bw_set(0, te_lpf, ordr(slider7)); te_lpw = lp_on;
+  ); ) :
+  ( te_dk += te_dkr; te_dk >= 1 ? ( te_dk = 1; te_dst = 0; ); );
+  te_dkg = te_dk * te_dk * (3 - 2 * te_dk);
+);
 in_process(spl0, spl1);
 te_lpw = lp_on ? min(te_lpw + te_lpxs, 1) : max(te_lpw - te_lpxs, 0);
-te_lpt = min(slider6, srate * 0.45);
+te_dst != 1 ? te_lpt = min(slider6, srate * 0.45);   // (held during a preset duck: the swap lands it)
 te_lpf != te_lpt ? ( (te_lpn += 1) >= 16 ? ( te_lpn = 0; te_lpf *= (te_lpt / te_lpf) ^ te_lpk; abs(te_lpf - te_lpt) < 0.0005 * te_lpt ? te_lpf = te_lpt;
   LPL.bw_set(0, te_lpf, ordr(slider7)); LPR.bw_set(0, te_lpf, ordr(slider7)); ); );
 xl = in_l; xr = in_r;
@@ -179,6 +188,7 @@ eq_on ? (
     );
   );
 );
+te_dst ? ( xl *= te_dkg; xr *= te_dkg; );
 xl *= og; xr *= og;
 oL = ostL.ost_band(xl * in_comp); oR = ostR.ost_band(xr * in_comp);
 ost_out(oL, oR);

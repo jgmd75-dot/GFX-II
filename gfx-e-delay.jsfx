@@ -109,6 +109,7 @@ function setp(m, tl, tr, sy, dl, dr, fbk, xfd, lc, hc, md, mr, pt, dk, dr_, tp, 
   slider12 = md; slider13 = mr; slider14 = pt; slider15 = dk; slider16 = dr_; slider17 = tp; slider23 = mx;
 );
 function load_preset(p) (
+  p >= 1 ? ed_dst = 1;                       // duck the repeats, swap the settings at silence, fade them back in
   p == 1 ? setp(0, 95, 110, 0, 8, 4, 10, 0, 120, 7000, 0, 0.8, 0, 0, 400, 6, 25) :          // Slapback
   p == 2 ? setp(0, 375, 500, 1, 4, 4, 35, 0, 100, 8000, 0, 0.8, 0, 0, 400, 6, 25) :          // Quarter Note Echo
   p == 3 ? setp(0, 250, 500, 1, 7, 4, 45, 70, 150, 7000, 0, 0.8, 0, 0, 400, 6, 30) :         // Ping-Pong Eighths
@@ -162,14 +163,15 @@ dk_a = 1 - exp(-1 / (0.005 * srate));
 pkL = pkR = 0; piL = piR = 0; dk_e = 0; dk_g = 1; lph = 0;
 update();
 mix_s = mix_t; out_s = out_t; pL = tLs; pR = tRs;
+ed_dkr = 1 / (0.012 * srate); ed_dk = 1; ed_dst = 0;   // preset duck (the delay path only): 12 ms out, 12 ms in
 
 @slider
-update();
+ed_dst != 1 ? update();                      // during a preset duck the swap applies the new settings
 
 @block
 // panel edits change the sliders directly, and the tempo can move: re-apply when anything changed
 chk = tempo * 0.731; ci = 1; loop(33, chk += slider(ci) * (ci * 1.37 + 1); ci += 1; );
-chk != last_chk ? ( last_chk = chk; update(); );
+ed_dst != 1 && chk != last_chk ? ( last_chk = chk; update(); );
 vA = drA.drift_tick(dspd * samplesblock / srate); vB = drB.drift_tick(dspd * samplesblock / srate);
 // drift: the clock is not quite steady - a fraction of a millisecond (E) or more (J)
 dof_t = dft * (JDL ? 0.0015 : 0.0003) * srate;
@@ -180,6 +182,14 @@ file_var(0, vsel);
 file_var(0, lastp);
 
 @sample
+// preset duck-and-swap on the delay path: model, times and pitch change in silence, and the lines start clean with
+// their feed faded in (old audio at the new times would come round again as a click)
+ed_dst == 1 ? ( ed_dk -= ed_dkr; ed_dk <= 0 ? (
+  ed_dk = 0; update(); ed_dst = 2;
+  memset(BD_L, 0, BD_END - BD_L); lcL = hcL = lcR = hcR = 0;
+  hdL.cur = tLs; hdL.xf = 0; hdR.cur = tRs; hdR.xf = 0; pL = tLs; pR = tRs;
+); ) :
+ed_dst == 2 ? ( ed_dk += ed_dkr; ed_dk >= 1 ? ( ed_dk = 1; ed_dst = 0; ); );
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
 piL = max(piL, abs(inL)); piR = max(piR, abs(inR));
@@ -187,6 +197,7 @@ mix_s += (mix_t - mix_s) * sm; out_s += (out_t - out_s) * sm;
 dofL += (dof_t * vA - dofL) * 0.0005; dofR += (dof_t * vB - dofR) * 0.0005;
 
 xl = xfL.xfm_run(inL, drv, !JDL); xr = xfR.xfm_run(inR, drv, !JDL);
+ed_dst ? ( ed_dkg = ed_dk * ed_dk * (3 - 2 * ed_dk); xl *= ed_dkg; xr *= ed_dkg; );
 // ducker: follows the input, pulls the repeats down (up to 18 dB), lets them bloom back at DUCK RECOVERY
 dk_x = max(abs(xl), abs(xr)); dk_e += (dk_x - dk_e) * (dk_x > dk_e ? dk_a : dk_r);
 dk_t = 1 - dk_d * 0.875 * min(dk_e * 6, 1); dk_g += (dk_t - dk_g) * 0.002;
@@ -248,6 +259,7 @@ lph += md_inc; lph >= 1 ? lph -= 1;
 );
 !(JDL && mdl == 3 && hold) ? bd_put(lfiL.lofi_in(wl), lfiR.lofi_in(wr));
 yl = lfoL.lofi_out(yl) * dk_g; yr = lfoR.lofi_out(yr) * dk_g;
+ed_dst ? ( yl *= ed_dkg; yr *= ed_dkg; );
 wm = 0.5 * (yl + yr); ws = 0.5 * (yl - yr) * wid; yl = wm + ws; yr = wm - ws;
 rvl = max(rvl, max(abs(yl), abs(yr)));
 oL = inL * (1 - mix_s) + yl * mix_s;

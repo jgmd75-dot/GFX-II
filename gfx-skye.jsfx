@@ -117,6 +117,7 @@ dV = 0; dT = 0; dW = 0; mOut = 0;
 // ---------- presets: four bands (freq, bw, gain), output ----------
 function pb(k, f, b, g) ( slider(2 + k*4) = f; slider(3 + k*4) = b; slider(4 + k*4) = g; slider(5 + k*4) = 1; );
 function apply_preset(n) (
+  sk_dst = 1;                                              // duck the output, swap the settings at silence, fade back in
   slider24 = 0; slider27 = 0; slider28 = 0; slider29 = 0;   // every preset: filters out, BAND 1 and 4 as bells
   n == 0 ? ( pb(0, 100, 1, 0);    pb(1, 500, 1, 0);    pb(2, 2500, 1, 0);   pb(3, 8000, 1, 0);    slider18 = 0; ) :   // Flat
   n == 1 ? ( pb(0, 120, 1.5, -2); pb(1, 350, 1.2, -2); pb(2, 3200, 1.2, 3); pb(3, 10000, 1.5, 2); slider18 = 0; ) :   // Vocal Presence
@@ -130,6 +131,7 @@ function apply_preset(n) (
 !ui_dflt ? ( ui_sz = 2; lastPreset = slider1; );
 ui_dflt = 1;
 setup(); bands();
+sk_dkr = 1/(0.012*srate); sk_dk = 1; sk_dst = 0;          // preset duck: 12 ms out, 12 ms in
 
 @serialize
 file_var(0, ui_sz);
@@ -137,16 +139,22 @@ file_var(0, lastPreset);
 
 @slider
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
-setup();
+sk_dst != 1 ? setup();                                  // during a preset duck the swap applies the new settings
 
 @block
-setup();
+sk_dst == 3 ? sk_dst = 2;                                // at silence: the new settings are applied below, then fade in
+sk_dst != 1 ? setup();
 // DRIFT: the supply voltage - a slow random walk, eased so it never steps
 dW -= samplesblock; dW <= 0 ? ( dW = srate*(0.7 + rand(2.3)); dT = rand(2) - 1; );
 dV += (dT - dV)*min(1, samplesblock/(1.2*srate));
-bands();
+sk_dst != 1 ? bands();
 
 @sample
+sk_dst ? (                                                // preset duck-and-swap
+  sk_dst == 1 ? ( sk_dk -= sk_dkr; sk_dk <= 0 ? ( sk_dk = 0; sk_dst = 3; ); ) :
+  sk_dst == 2 ? ( sk_dk += sk_dkr; sk_dk >= 1 ? ( sk_dk = 1; sk_dst = 0; ); );
+  sk_dkg = sk_dk*sk_dk*(3 - 2*sk_dk);
+);
 xL = spl0; xR = spl1;
 eqin ? (
   skHon ? (
@@ -166,6 +174,7 @@ eqin ? (
   // op-amp headroom: transparent until a hot signal nears the rail
   xL = hr*xL*ihr/(1 + abs(xL*ihr)^4)^0.25; xR = hr*xR*ihr/(1 + abs(xR*ihr)^4)^0.25;
 );
+sk_dst ? ( xL *= sk_dkg; xR *= sk_dkg; );
 ost_out(xL*outg, xR*outg);
 spl0 = ost_l; spl1 = ost_r;
 a_ = max(abs(spl0), abs(spl1)); mOut = a_ > mOut ? a_ : mOut*0.9997;

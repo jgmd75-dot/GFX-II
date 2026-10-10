@@ -150,6 +150,7 @@ function shlo(b, f, g) ( g / (1 + (FQ[b] / f) ^ 2) );            // a gentle low
 function shhi(b, f, g) ( g / (1 + (f / FQ[b]) ^ 2) );            // a gentle high shelf shape
 function bell(b, f, w, g) ( g * exp(-sqr(log(FQ[b] / f) / log(2) / w)) );   // w = width in octaves
 function load_preset(p) local(b, g) (
+  ge_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   b = 0;
   loop(NB,
     g = p == 1 ? shlo(b, 90, 5) + shhi(b, 9000, 4) + bell(b, 500, 1.2, -1.5) :            // Smile
@@ -183,13 +184,14 @@ PNL = 0x1B1C1F; PRT = 0xD9D6CC; ORNG = 0xFF8A2A; YLW = 0xF6D25A; SCRN = 0x0A0B0C
 ge_hcf = min(slider35, srate * 0.45); ge_hck = 1 - exp(-16 / (0.02 * srate)); ge_hcn = 0;   // high cut glide (~20 ms)
 update();
 ge_hcw = hc_on; ge_hcxs = 1 / (0.02 * srate);   // high cut on / off fade: 20 ms
+ge_dkr = 1 / (0.012 * srate); ge_dk = 1; ge_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+ge_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+ge_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_thm);
@@ -198,6 +200,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+ge_dst ? (                                         // preset duck-and-swap
+  ge_dst == 1 ? ( ge_dk -= ge_dkr; ge_dk <= 0 ? ( ge_dk = 0; update(); ge_dst = 2; ); ) :
+  ( ge_dk += ge_dkr; ge_dk >= 1 ? ( ge_dk = 1; ge_dst = 0; ); );
+  ge_dkg = ge_dk * ge_dk * (3 - 2 * ge_dk);
+);
 in_process(spl0, spl1);
 ge_hcw = hc_on ? min(ge_hcw + ge_hcxs, 1) : max(ge_hcw - ge_hcxs, 0);
 ge_hct = min(slider35, srate * 0.45);
@@ -210,6 +217,7 @@ eq_on ? (
   ge_al = HCL.bq_run(xl); ge_ar = HCR.bq_run(xr);   // the high cut always runs (primed) and is faded in / out, never switched
   ge_hcw >= 1 ? ( xl = ge_al; xr = ge_ar; ) : ge_hcw > 0 ? ( xl += (ge_al - xl) * ge_hcw; xr += (ge_ar - xr) * ge_hcw; );
 );
+ge_dst ? ( xl *= ge_dkg; xr *= ge_dkg; );
 xl *= og; xr *= og;
 oL = ostL.ost_band(xl * in_comp); oR = ostR.ost_band(xr * in_comp);
 ost_out(oL, oR);

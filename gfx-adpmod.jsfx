@@ -164,6 +164,7 @@ function update() (
 );
 
 function load_preset(p) (
+  ad_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? ( slider1 = 0; slider3 = 440; slider5 = 0; slider6 = 2; slider7 = 100; slider8 = 30; slider9 = 2500; slider10 = 70; ) :
   p == 2 ? ( slider1 = 1; slider3 = 6.5; slider5 = 1; slider6 = 5; slider7 = 80; slider8 = 60; slider9 = 1500; slider10 = 50; ) :
   p == 3 ? ( slider1 = 2; slider3 = 180; slider5 = 2; slider6 = 8; slider7 = 100; slider8 = 85; slider9 = 8000; slider10 = 85; ) :
@@ -188,13 +189,14 @@ phaseL = 0; phaseR = 0;
 !ui_dflt ? ui_thm = 0; !ui_dflt ? ui_hw = 0;
 update();
 mix_s = mix_t; out_s = out_t;
+ad_dkr = 1 / (0.012 * srate); ad_dk = 1; ad_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+ad_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+ad_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_thm);
@@ -203,6 +205,11 @@ file_var(0, ui_hw);
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+ad_dst ? (                                         // preset duck-and-swap
+  ad_dst == 1 ? ( ad_dk -= ad_dkr; ad_dk <= 0 ? ( ad_dk = 0; update(); ad_dst = 2; mix_s = mix_t; ); ) :
+  ( ad_dk += ad_dkr; ad_dk >= 1 ? ( ad_dk = 1; ad_dst = 0; ); );
+  ad_dkg = ad_dk * ad_dk * (3 - 2 * ad_dk);
+);
 in_process(spl0, spl1);
 inL = in_l; inR = in_r;
 vu_ms += (0.5 * (inL * inL + inR * inR) - vu_ms) * vuc;
@@ -257,6 +264,7 @@ mode == 3 ? (
 dispP = phaseL; // Capture current carrier phase for UI animation
 
 // Output saturation & stage
+ad_dst ? ( oL *= ad_dkg; oR *= ad_dkg; );
 oL = ostL.ost_band(oL) * out_s;
 oR = ostR.ost_band(oR) * out_s;
 ost_out(oL, oR);
@@ -413,4 +421,5 @@ pkL *= 0.85; pkR *= 0.85;
 rd_lbl(750, 286, "$ LEVEL $", GOLD_DIM, 0.8);
 
 pk_end();
-ui_end();
+ui_end();
+

@@ -138,6 +138,7 @@ nmA = 0; nmB = 0;
 mIL = mIR = mOL = mOR = 0; mDec = exp(-1/(0.25*srate));
 detA.g = 0; detB.g = 0; detA.op = 0; detB.op = 0;
 lastF = -1;
+gt_dkr = 1/(0.012*srate); gt_dk = 1; gt_dst = 0;   // preset duck: 12 ms out, 12 ms in
 
 // ---- presets ----
 function pdyn(m, f, kn, th, rg, ra, at, ho, re, hy, la) (
@@ -149,6 +150,7 @@ function pkey(src, mi, st, lk, hp, lp, ff, fg) (
   slider17 = hp; slider18 = lp; slider19 = ff; slider20 = fg;
 );
 function apply_preset(n) (
+  gt_dst = 1;                                  // duck the output, swap the settings at silence, fade back in
   pdyn(0, 0, 0, -40, 60, 2, 0.5, 50, 150, 4, 0);
   pkey(0, 0, 0, 100, 20, 20000, 1000, 0);
   slider21 = 0; slider22 = 100; slider23 = 0;
@@ -187,6 +189,8 @@ file_var(0, lastPreset);
 slider1 != lastPreset ? ( apply_preset(slider1); lastPreset = slider1; );
 
 @block
+gt_dst == 3 ? gt_dst = 2;                    // at silence: the new settings (lookahead too) are applied below, then fade in
+gt_dst != 1 ? (
 // ---- parameters ----
 mdl = slider2 > 0.5; fnc = slider3 > 0.5; knee = slider4 > 0.5;
 thrDb = slider5; rngDb = slider6; ratV = max(1, slider7);
@@ -209,6 +213,7 @@ fsum != lastF ? (
   lpOn = slider18 < 19999; lpOn ? cLP(cL, slider18, 0.7071);
   pkOn = abs(slider20) > 0.05; pkOn ? cPK(cP, slider19, slider20, 1.4);
 );
+);   // gt_dst != 1
 
 // ---- MIDI: queue note on/off for sample-accurate triggering, pass everything through ----
 qn = 0;
@@ -234,6 +239,11 @@ while (qi < qn && mq[qi*3] <= si) (
 );
 si += 1;
 
+gt_dst ? (                                    // preset duck-and-swap
+  gt_dst == 1 ? ( gt_dk -= gt_dkr; gt_dk <= 0 ? ( gt_dk = 0; gt_dst = 3; ); ) :
+  gt_dst == 2 ? ( gt_dk += gt_dkr; gt_dk >= 1 ? ( gt_dk = 1; gt_dst = 0; ); );
+  gt_dkg = gt_dk*gt_dk*(3 - 2*gt_dk);
+);
 x0 = spl0; x1 = spl1;
 ext ? ( k0 = spl2; k1 = spl3; ) : ( k0 = x0; k1 = x1; );
 smode == 2 ? (
@@ -273,6 +283,7 @@ o0 = d0*(1 - mix + mix*db2g(gA));
 o1 = d1*(1 - mix + mix*db2g(gB));
 listen ? ( o0 = k0; o1 = k1; );
 smode == 2 ? ( y0 = o0 + o1; y1 = o0 - o1; ) : ( y0 = o0; y1 = o1; );
+gt_dst ? ( y0 *= gt_dkg; y1 *= gt_dkg; );
 spl0 = y0*outG; spl1 = y1*outG;
 
 // ---- meters ----

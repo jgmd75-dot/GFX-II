@@ -142,6 +142,7 @@ function update() local(i, any, a, g) (
 
 // ---------- presets (stems and VCAs are left alone) ----------
 function load_preset(p) (
+  s8_dst = 1;                                    // duck the output, swap the settings at silence, fade back in
   p == 1 ? ( slider1 = 0; slider2 = 0; ) :          // Vintage
   p == 2 ? ( slider1 = 0; slider2 = 6; ) :          // Vintage, driven
   p == 3 ? ( slider1 = 0; slider2 = 10; ) :         // Vintage, pushed hard
@@ -164,13 +165,14 @@ xt = 10 ^ (-55 / 20); nz_g = 10 ^ (-92 / 20);
 PNL = 0x25303C; INK = 0xE6EAF0; CYA = 0x40B8E0; ORA = 0xF0A030; CAPG = 0xC8CED6;
 update();
 i = 0; loop(8, SG[i] = SGT[i]; i += 1; );
+s8_dkr = 1 / (0.012 * srate); s8_dk = 1; s8_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
-update();
+s8_dst != 1 ? update();                     // during a preset duck the swap applies the new settings
 
 @block
-update();
+s8_dst != 1 ? update();
 
 @serialize
 file_var(0, ui_sz);
@@ -178,6 +180,11 @@ gn = 0; loop(8, file_avail(0) != 0 ? file_string(0, UI_NM + gn); gn += 1; );   /
 file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older projects end before it)
 
 @sample
+s8_dst ? (                                         // preset duck-and-swap
+  s8_dst == 1 ? ( s8_dk -= s8_dkr; s8_dk <= 0 ? ( s8_dk = 0; update(); s8_dst = 2; i = 0; loop(8, SG[i] = SGT[i]; i += 1; ); ); ) :
+  ( s8_dk += s8_dkr; s8_dk >= 1 ? ( s8_dk = 1; s8_dst = 0; ); );
+  s8_dkg = s8_dk * s8_dk * (3 - 2 * s8_dk);
+);
 sl = 0; sr = 0; k = 0;
 loop(8,
   SG[k] += (SGT[k] - SG[k]) * sm;
@@ -196,6 +203,7 @@ modern ? (
   sl = bl.vbus(sl); sr = br.vbus(sr);
 );
 sl *= mst / drv; sr *= mst / drv;
+s8_dst ? ( sl *= s8_dkg; sr *= s8_dkg; );
 sl = ostL.ost_band(sl); sr = ostR.ost_band(sr);
 ost_out(sl, sr);
 spl0 = ost_l; spl1 = ost_r;

@@ -73,6 +73,7 @@ function setp(m, t, r, d, lp, nz, dc, ol, mx, dr) (
   slider1 = m; slider2 = t; slider3 = r; slider4 = d; slider5 = lp; slider6 = nz; slider7 = dc; slider8 = ol; slider9 = mx; slider12 = dr;
 );
 function apply_preset(n) (
+  e3_dst = 1;                                                   // duck, swap at silence, start the lines clean, fade back in
   n == 0 ? setp(0, 250,  40, 30, 3500, 15, 0, 1, 35, 50) :     // Init
   n == 1 ? setp(1,  95,  10, 35, 4500, 10, 0, 1, 30, 40) :     // Slapback
   n == 2 ? setp(0, 380,  60, 40, 1800, 20, 0, 1, 35, 50) :     // Dark Repeats
@@ -110,19 +111,30 @@ drT.drift_init(0.8 + rand(0.5)); drF.drift_init(0.8 + rand(0.5));
 tsc = 1 - exp(-1 / (0.05 * srate));             // the delay time glides (as a BBD clock does) rather than jumps
 update();
 t_sm = t_s;
+e3_dkr = 1 / (0.012 * srate); e3_dk = 1; e3_dst = 0;   // preset duck: 12 ms out, 12 ms in
 ui_dflt = 1;
 
 @slider
 slider13 != lastp ? ( apply_preset(slider13); lastp = slider13; );
-update();
+e3_dst != 1 ? update();                        // during a preset duck the swap applies the new settings
 
 @block
-update();
+e3_dst != 1 ? update();
 // DRIFT: the clock filter (tone) wanders here; the clock rate (timing) wanders per sample below
 vF = drF.drift_tick(0.2 * dm_s * samplesblock / srate);
 bbd_alpha = 1 - exp(-2 * $pi * min(lpf_cutoff * (1 + 0.12 * dm_a * vF), srate * 0.45) / srate);
 
 @sample
+// preset duck-and-swap: drive, mix, mode and time change in silence; the lines start clean and their feed fades back
+// in (old audio at the new time would come round again as a click)
+e3_dst ? (
+  e3_dst == 1 ? ( e3_dk -= e3_dkr; e3_dk <= 0 ? (
+    e3_dk = 0; update(); e3_dst = 2;
+    memset(bufL, 0, dlen * 2); t_sm = t_s; lpf_stateL = lpf_stateR = 0;
+  ); ) :
+  ( e3_dk += e3_dkr; e3_dk >= 1 ? ( e3_dk = 1; e3_dst = 0; ); );
+  e3_dkg = e3_dk * e3_dk * (3 - 2 * e3_dk);
+);
 // Input trimming
 inL = spl0 * in_trim;
 inR = spl1 * in_trim;
@@ -157,8 +169,10 @@ osc_lim ? (
   fR = min(max(fR, -1.2), 1.2);
 );
 
-bufL[wp] = inL + fL;
-bufR[wp] = inR + fR;
+e3_dst ? ( bufL[wp] = inL * e3_dkg + fL; bufR[wp] = inR * e3_dkg + fR; ) : (
+  bufL[wp] = inL + fL;
+  bufR[wp] = inR + fR;
+);
 
 wp += 1; wp >= dlen ? wp = 0;
 
@@ -169,6 +183,7 @@ wet_g = min(2 * mix_t, 1);
 oL = (inL * dry_g + eL * wet_g) * out_t;
 oR = (inR * dry_g + eR * wet_g) * out_t;
 
+e3_dst ? ( oL *= e3_dkg; oR *= e3_dkg; );
 spl0 = oL;
 spl1 = oR;
 pkL = max(pkL, abs(spl0)); pkR = max(pkR, abs(spl1));
