@@ -1587,31 +1587,34 @@ function fdiv(i, md) (
   strcpy(#dv, i == 0 ? "4 BARS" : i == 1 ? "2 BARS" : i == 2 ? "1 BAR" : i == 3 ? "1/2" : i == 4 ? "1/4" : i == 5 ? "1/8" : i == 6 ? "1/16" : "1/32");
   md == 2 ? strcat(#dv, " D") : md == 3 ? strcat(#dv, " T"); #dv;
 );
-// one Mod Rack module: b = first slider, kind 0 tremolo, 1 chorus, 2 vibe, 3 delay
-function mrmod(mx, b, kind) local(md, k, on, x_) (
-  ui_col(FP3); RR(mx, 542, 296, 146, 6);
+// one Mod Rack module: b = first slider, kind 0 tremolo, 1 chorus, 2 vibe, 3 delay; w = its width.
+// The knobs are spread evenly across the module (three for tremolo / vibe, four for chorus / delay).
+function mrmod(mx, w, b, kind) local(md, k, on, n, a, st) (
+  ui_col(FP3); RR(mx, 542, w, 146, 6);
   gfx_setfont(11); ui_col(ACC); TX(mx + 12, 554, kind == 0 ? "TREMOLO" : kind == 1 ? "CHORUS" : kind == 2 ? "VIBE" : "DELAY");
   md = floor(slider(b + 7) + 0.5);
-  chip(mx + 150, 552, 80, 22, md == 0 ? "SYNC" : md == 1 ? "SYNC" : md == 2 ? "SYNC D" : "SYNC T", md > 0) ? (
+  chip(mx + w - 146, 552, 80, 22, md == 0 ? "SYNC" : md == 1 ? "SYNC" : md == 2 ? "SYNC D" : "SYNC T", md > 0) ? (
     setv(b + 7, (md + 1) % 4);
     setmsg(kind == 3 ? "DELAY TIME" : "RATE", md == 0 ? "SYNC STRAIGHT" : md == 1 ? "SYNC DOTTED" : md == 2 ? "SYNC TRIPLET" : kind == 3 ? "IN MS" : "IN HZ");
   );
+  n = kind == 1 || kind == 3 ? 4 : 3; st = (w - 64) / n; a = mx + 14 + st * 0.5;
   md > 0 ? (
-    sknob(b + 8, mx + 34, 614, 18, 0, 7, 4, kind == 3 ? "TIME" : "RATE", fdiv(slider(b + 8), md));
+    sknob(b + 8, a, 614, 18, 0, 7, 4, kind == 3 ? "TIME" : "RATE", fdiv(slider(b + 8), md));
   ) : kind == 3 ? (
-    knob(b, mx + 34, 614, 18, 20, 1500, 350, 1, "TIME", fms(slider(b)));
+    knob(b, a, 614, 18, 20, 1500, 350, 1, "TIME", fms(slider(b)));
   ) : (
-    sprintf(#mr0, "%.2f Hz", slider(b)); knob(b, mx + 34, 614, 18, kind == 1 ? 0.05 : 0.1, kind == 1 ? 8 : kind == 0 ? 15 : 12, 1, 1, "RATE", #mr0);
+    sprintf(#mr0, "%.2f Hz", slider(b)); knob(b, a, 614, 18, kind == 1 ? 0.05 : 0.1, kind == 1 ? 8 : kind == 0 ? 15 : 12, 1, 1, "RATE", #mr0);
   );
-  kind == 3 ? knob(b + 1, mx + 88, 614, 18, 0, 95, 30, 0, "FDBK", fpc(slider(b + 1)))
-            : knob(b + 1, mx + 88, 614, 18, 0, 100, 50, 0, "DEPTH", fpc(slider(b + 1)));
-  x_ = mx + 142;
-  kind == 1 || kind == 3 ? ( knob(b + 2, x_, 614, 18, 0, 100, 0, 0, "MIX", fpc(slider(b + 2))); x_ += 54; );
-  knob(b + 3, x_, 614, 18, 0, 100, 0, 0, kind == 0 ? "CHOP" : kind == 1 ? "STRETCH" : kind == 2 ? "LAMP" : "RUNAWAY", fpc(slider(b + 3)));
+  a += st;
+  kind == 3 ? knob(b + 1, a, 614, 18, 0, 95, 30, 0, "FDBK", fpc(slider(b + 1)))
+            : knob(b + 1, a, 614, 18, 0, 100, 50, 0, "DEPTH", fpc(slider(b + 1)));
+  a += st;
+  n == 4 ? ( knob(b + 2, a, 614, 18, 0, 100, 0, 0, "MIX", fpc(slider(b + 2))); a += st; );
+  knob(b + 3, a, 614, 18, 0, 100, 0, 0, kind == 0 ? "CHOP" : kind == 1 ? "STRETCH" : kind == 2 ? "LAMP" : "RUNAWAY", fpc(slider(b + 3)));
   k = 0;
   loop(3,
     on = slider(b + 4 + k) > 0.5;
-    chip(mx + 254, 584 + k*30, 34, 24, k == 0 ? "L" : k == 1 ? "C" : "R", on) ? tog(b + 4 + k);
+    chip(mx + w - 42, 584 + k*30, 34, 24, k == 0 ? "L" : k == 1 ? "C" : "R", on) ? tog(b + 4 + k);
     k += 1;
   );
 );
@@ -1751,7 +1754,7 @@ ui_cola(0x000000, 0.25); R(0, 182, 1280, 3);
 
   // row 3: the Mod Rack (the patch's own effects)
   sect(30, 534, 1220, 160, "");
-  mrmod(40, 90, 0); mrmod(342, 80, 1); mrmod(644, 100, 2); mrmod(946, 110, 3);
+  mrmod(40, 256, 90, 0); mrmod(302, 336, 80, 1); mrmod(644, 256, 100, 2); mrmod(906, 336, 110, 3);
 );
 
 // ---- PLAY strip ----
