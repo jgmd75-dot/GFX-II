@@ -1471,9 +1471,9 @@ loop(8,
 // ---------- master ----------
 ui_cola(0xFFFFFF, 0.08); gfx_rect(612 * sc, 70 * sc, 272 * sc, 356 * sc);
 dy_title(624, 76, "MAIN MIX");
-dy_ledv(668, 110, 216, cp_pkdL, 1); dy_ledv(684, 110, 216, cp_pkdR, 0);
+dy_ledv(668, 162, 216, cp_pkdL, 1); dy_ledv(684, 162, 216, cp_pkdR, 0);
 cp_pkdL = max(cp_pkL, cp_pkdL * 0.85); cp_pkdR = max(cp_pkR, cp_pkdR * 0.85); cp_pkL = cp_pkR = 0;
-dy_lbl(674, 330, "L", 0.7); dy_lbl(690, 330, "R", 0.7);
+dy_lbl(674, 382, "L", 0.7); dy_lbl(690, 382, "R", 0.7);
 dy_nov = 0;
 slider32 <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider32);
 dy_knob(790, 196, 30, 32, -60, 10, 0, 0, 0xF4F2EA, "MAIN MIX", #v);
