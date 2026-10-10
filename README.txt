@@ -4,7 +4,7 @@ GFX - free JSFX plug-ins for REAPER
 Designed by JGWizrad.
 Website: https://www.gardenfx.uk/
 
-118 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
+121 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
 space, mastering and summing - plus the CC-80 chord script. Every sound is
 synthesised: there are no samples. All plug-ins share one look, resizable
 S / M / L panels and the same output stage.
@@ -87,6 +87,7 @@ INSTRUMENTS
   G Daichi        gfx-g-daichi.jsfx
   G EB81          gfx-g-eb81.jsfx
   G Ensemble      gfx-g-ensemble.jsfx
+  G Fool          gfx-g-fool.jsfx
   G Glow          gfx-g-glow.jsfx
   G Harbour Keys  gfx-g-harbour-keys.jsfx
   G Lab80         gfx-g-lab80.jsfx
@@ -97,6 +98,7 @@ INSTRUMENTS
   G Rainbow       gfx-g-rainbow.jsfx
   G Seventy       gfx-g-seventy.jsfx
   G Tonewheel     gfx-g-tonewheel.jsfx
+  G Tower         gfx-g-tower.jsfx
   G Voce 90       gfx-g-voce-90.jsfx
 
 DRUM MACHINES
@@ -163,6 +165,7 @@ EQ & FILTERS
   Skye            gfx-skye.jsfx
   Surgical EQ     gfx-surgical-eq.jsfx
   Tilt EQ         gfx-tilt-eq.jsfx
+  Tony Q 550      gfx-tony-q-550.jsfx
   TransEQ         gfx-transeq.jsfx
 
 MODULATION & SPACE
