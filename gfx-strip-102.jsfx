@@ -93,6 +93,7 @@ function setp(g, h, c, lo, mi, hi) (
   slider1 = g; slider2 = h; slider3 = c; slider4 = lo; slider5 = mi; slider6 = hi;
 );
 function apply_preset(n) (
+  s2_dst = 1;                                      // duck the output, swap the settings at silence, fade back in
   n == 0 ? setp( 0, 0, 0,  0,  0,  0) :      // Init
   n == 1 ? setp( 6, 1, 4, -2,  2,  3) :      // Vocal
   n == 2 ? setp( 4, 1, 3, -3, -1,  4) :      // Acoustic Guitar
@@ -147,15 +148,16 @@ s2_srinit();
 update();
 s2_env = 0; s2_grs = 0;
 ostL.ost_ch_init(); ostR.ost_ch_init();
+s2_dkr = 1 / (0.012 * srate); s2_dk = 1; s2_dst = 0;   // preset duck: 12 ms out, 8 ms hold, 12 ms in
 ui_dflt = 1;
 
 @slider
 slider10 != lastp ? ( apply_preset(slider10); lastp = slider10; );
-update();
+s2_dst != 1 ? update();                            // during a preset duck the swap applies the new settings
 
 @block
 srate != s2_sr ? ( s2_sr = srate; s2_srinit(); );
-update();                                          // the panel's knobs change the sliders directly, so read them every block
+s2_dst != 1 ? update();                            // the panel's knobs change the sliders directly, so read them every block
 // DRIFT: the supply voltage (headroom and gain) and the saturation wander slowly
 vV = drV.drift_tick(0.12 * dm_s * samplesblock / srate);
 vS = drS.drift_tick(0.10 * dm_s * samplesblock / srate);
@@ -165,6 +167,9 @@ s2_kp = 2.6 - 0.35 * dm_a * vS; s2_kn = 3.0 + 0.35 * dm_a * vS;
 ost_setup(slider11 / 100, slider12 / 100, slider13, slider14, slider15, 0);   // output stage: straight through
 
 @sample
+// preset duck-and-swap: GAIN, HPF, COMP and EQ change in silence; a short hold lets the filters and the COMP settle
+s2_dst == 1 ? ( s2_dk -= s2_dkr; s2_dk <= 0 ? ( s2_dk = 0; update(); s2_hc = floor(0.008 * srate); s2_dst = 2; ); ) :
+s2_dst == 2 ? ( s2_hc > 0 ? s2_hc -= 1 : ( s2_dk += s2_dkr; s2_dk >= 1 ? ( s2_dk = 1; s2_dst = 0; ); ); );
 // GAIN and the preamp (DRIFT moves its headroom, gain and saturation)
 s2_l = s2_pre(spl0 * s2_gain * s2_gv, s2_hv, s2_kp, s2_kn);
 s2_r = s2_pre(spl1 * s2_gain * s2_gv, s2_hv, s2_kp, s2_kn);
@@ -190,6 +195,7 @@ s2_r = hiR.bq_run(miR.bq_run(loR.bq_run(s2_r)));
 s2_pk = max(s2_pk, max(abs(s2_l), abs(s2_r)));
 
 // LEVEL, the output stage's band saturation, PAN
+s2_dst ? ( s2_dkg = s2_dk * s2_dk * (3 - 2 * s2_dk); s2_l *= s2_dkg; s2_r *= s2_dkg; );   // the preset duck
 s2_l = ostL.ost_band(s2_l * s2_lev); s2_r = ostR.ost_band(s2_r * s2_lev);
 ost_out(s2_l * s2_pl, s2_r * s2_pr);
 spl0 = ost_l; spl1 = ost_r;

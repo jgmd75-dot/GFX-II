@@ -5,7 +5,7 @@ desc:GFX Channel 92 [channel strip]
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
 //
 // CHANNEL 92 - the 92 series channel strip: 90s domestic, portable and field gear (utilitarian, compact, mobile).
-// Four channel strips in one chassis; the MODEL keys (15 / 44 / COMPACT / FIELD) choose which one is in the circuit.
+// Four channel strips in one chassis; the MODEL keys (15 / 44 / 12 / FIELD) choose which one is in the circuit.
 // Each model is the original plug-in ported sample for sample (it nulls against it), with its own controls and faceplate:
 //
 //   15     MODEL 15 - LO-FI CHANNEL. In the spirit of the early-80s ultra-portable cassette multitrackers:
@@ -38,7 +38,7 @@ desc:GFX Channel 92 [channel strip]
 //          Parameter list only: FIELD input iron, limiter attack / release.
 //          FIELD has no output stage controls: its output always clips softly at -0.3 dBFS (the house CLIP at its
 //          default ceiling, no band saturation), as part of the unit's circuit.
-//   COMPACT  COMPACT STRIP - one channel of the Compact 12 desk as a stereo channel strip (the desk's own circuit; a
+//   12     MODEL 12 - DESK CHANNEL - one channel of the Model 12 desk (Sum 92) as a stereo channel strip (its own circuit; a
 //          mono source arrives as L = R): HI (12 kHz shelf, +/-15 dB), MID (2.5 kHz peak, +/-12 dB), LOW (80 Hz shelf,
 //          +/-15 dB) on each side, COMP (the one-knob compressor of Strip 102 after the EQ: 0 - 10, threshold 0 to
 //          -30 dB, ratio 1:1 to 10:1, make-up so the level stays even; 0 = off; its LED lights above 1 dB of gain
@@ -46,15 +46,15 @@ desc:GFX Channel 92 [channel strip]
 //          MAIN MIX: the desk's summing amp: MAIN MIX level, HOT (drives the summing amps into their rails: grit, edge,
 //          a little bite), NOISE (the desk's own hiss floor, about -84 dBFS); 12-LED meters (0 = 0 VU = -18 dBFS);
 //          CEILING of the always-on soft clip and its CLIP light (no band saturation on this model).
-//          With MID at 0 it nulls against a Compact 12 stereo pair with only that pair routed.
+//          It nulls against one channel of the desk (Model 12 replaces the former Compact 12 plug-in) routed on its own.
 //
 // SIGNAL FLOW: input -> the selected model -> the 92 OUTPUT STAGE (15 and 44: band SAT with its BIAS and LOW / HIGH
-//   bands, then the soft CLIP at CEILING - always on, no latency, no mode keys; COMPACT: the same clip at the same
+//   bands, then the soft CLIP at CEILING - always on, no latency, no mode keys; 12: the same clip at the same
 //   CEILING, no band saturation). The 15 and 44 apply their OUTPUT level after the band saturation, exactly as the
 //   originals. FIELD uses its fixed clip at -0.3 dBFS instead (see above).
 // MODEL SWITCH: only the selected model runs (CPU = that model). A change crossfades the outgoing model into the
 //   incoming one over 20 ms (both run for those 20 ms); the incoming model starts from a clean, reset state.
-// PRESETS: the house preset bar. Every preset of the originals (and five for COMPACT), named by model ("44: Rack Punch"); choosing
+// PRESETS: the house preset bar. Every preset of the originals (and five for the 12), named by model ("44: Rack Punch"); choosing
 //   one also selects its model. "Init" = the 15 at its defaults. "Reset all to defaults" (in the list) resets
 //   every model, the MODEL and the output stage. Presets leave the output stage alone.
 // GUI: drag a knob (SHIFT = fine, double-click = default, wheel); click a key; click the LCD (or PRESETS) for the
@@ -67,7 +67,7 @@ import gfx-panel.jsfx-inc
 import gfx-dyn.jsfx-inc
 import gfx-faceplate.jsfx-inc
 
-slider1:0<0,3,1{15 (lo-fi channel),44 (tape channel),COMPACT (desk channel),FIELD (location mic pre)}>-Model
+slider1:0<0,3,1{15 (lo-fi channel),44 (tape channel),12 (desk channel),FIELD (location mic pre)}>-Model
 slider2:6<-6,24,0.1>-15 Gain (dB)
 slider3:0<-10,10,0.1>-15 Treble (10 kHz) (dB)
 slider4:0<-10,10,0.1>-15 Bass (100 Hz) (dB)
@@ -113,13 +113,13 @@ slider43:30<0,100,1>-Bias (%)
 slider44:120<40,400,1>-Sat low band (Hz)
 slider45:6000<2000,16000,10>-Sat high band (Hz)
 slider46:-0.3<-24,0,0.1>-Ceiling (dB)
-slider47:0<-15,15,0.1>-COMPACT Hi (dB)
-slider48:0<-12,12,0.1>-COMPACT Mid (dB)
-slider49:0<-15,15,0.1>-COMPACT Low (dB)
-slider50:0<0,10,0.1>-COMPACT Comp
-slider51:0<-60,10,0.1>-COMPACT Main mix (dB)
-slider52:0<0,1,1{Off,On}>-COMPACT Hot
-slider53:0<0,1,1{Off,On}>-COMPACT Desk noise
+slider47:0<-15,15,0.1>-12 Hi (dB)
+slider48:0<-12,12,0.1>-12 Mid (dB)
+slider49:0<-15,15,0.1>-12 Low (dB)
+slider50:0<0,10,0.1>-12 Comp
+slider51:0<-60,10,0.1>-12 Main mix (dB)
+slider52:0<0,1,1{Off,On}>-12 Hot
+slider53:0<0,1,1{Off,On}>-12 Desk noise
 
 in_pin:left input
 in_pin:right input
@@ -670,8 +670,8 @@ function f42_blockrun() (
   f42_ol_t = f42_ol_thr + 20 * log10(f42_sup);
 );
 
-// ================================================================ COMPACT (one channel of gfx-compact-12)
-// One channel of the Compact 12 desk as a stereo channel strip (the desk's own circuit): each side through the desk's
+// ================================================================ MODEL 12 (one channel of the desk of gfx-compact-12)
+// One channel of the Model 12 desk as a stereo channel strip (the desk's own circuit): each side through the desk's
 // channel EQ (HI 12 kHz shelf, MID 2.5 kHz peak, LOW 80 Hz shelf), then the one-knob COMP (as on Strip 102: 0 - 10
 // lowers the threshold 0 to -30 dB, raises the ratio 1:1 to 10:1 and adds make-up gain so the level stays even; a
 // linked detector; 0 = out of circuit), then the desk's summing amp with MAIN MIX, HOT and the desk NOISE.
@@ -747,19 +747,20 @@ function cs_reset() (
 );
 
 // ================================================================ the 92 chassis
-// MODEL: 0 = 15, 1 = 44, 2 = COMPACT, 3 = FIELD. The selected model: reset (clean state + its own init), settings,
+// MODEL: 0 = 15, 1 = 44, 2 = 12, 3 = FIELD. The selected model: reset (clean state + its own init), settings,
 // per-block work, one sample (result in s92_rL / R, and s92_rg = the gain the original applied after its band
 // saturation). (The 15's settings wait while its preset duck is fading out, as on Model 15.)
 function s92_reset(m) ( m == 0 ? m15_reset() : m == 1 ? m44_reset() : m == 2 ? cs_reset() : f42_reset(); );
-function s92_update(m) ( m == 0 ? ( m15_m15_dst != 1 ? m15_update(); ) : m == 1 ? m44_update() : m == 2 ? cs_update() : f42_update(); );
-function s92_block(m) ( m == 0 ? ( m15_m15_dst != 1 ? m15_update(); ) : m == 1 ? m44_update() : m == 2 ? cs_update() : f42_blockrun(); );
+function s92_upd(m) ( m == 1 ? m44_update() : m == 2 ? cs_update() : f42_update(); );
+function s92_update(m) ( m == 0 ? ( m15_m15_dst != 1 ? m15_update(); ) : !(s92_dst == 1 && m == s92_cur) ? s92_upd(m); );
+function s92_block(m) ( m == 0 ? ( m15_m15_dst != 1 ? m15_update(); ) : !(s92_dst == 1 && m == s92_cur) ? ( m == 3 ? f42_blockrun() : s92_upd(m); ); );
 function s92_run(m) (
   m == 0 ? ( m15_run(); s92_rL = m15_oL; s92_rR = m15_oR; s92_rg = m15_out_s; ) :
   m == 1 ? ( m44_run(); s92_rL = m44_oL; s92_rR = m44_oR; s92_rg = m44_out_s; ) :
   m == 2 ? ( cs_run(); s92_rL = cs_ml; s92_rR = cs_mr; s92_rg = 1; ) :
            ( f42_run(); s92_rL = f42_xL; s92_rR = f42_xR; s92_rg = 1; );
 );
-// the output stage, CLIP always on: 15 / 44 / COMPACT with the shared band saturation and CEILING; FIELD its fixed
+// the output stage, CLIP always on: 15 / 44 / 12 with the shared band saturation and CEILING; FIELD its fixed
 // soft clip at -0.3 dBFS
 function s92_ost() (
   s92_cur == 3 ? ost_setup(0, 0.3, 120, 6000, -0.3, 1)
@@ -770,7 +771,7 @@ function s92_switch() local(m) (
   m = min(max(floor(slider1 + 0.5), 0), 3);
   m != s92_cur ? (
     !(s92_xf && s92_xt < 0.5) ? s92_old = s92_cur;
-    s92_cur = m; s92_reset(m); s92_xt = 0; s92_xf = 1;
+    s92_cur = m; s92_reset(m); s92_xt = 0; s92_xf = 1; s92_dst = 0; s92_dk = 1;
     s92_old == s92_cur ? s92_xf = 0;
   );
 );
@@ -782,10 +783,11 @@ function s92_srinit() (
   s92_reset(s92_cur);
   s92_ost();
   s92_xfc = 1 / (0.02 * srate);
+  s92_dkr = 1 / (0.012 * srate); s92_dk = 1; s92_dst = 0;   // the chassis preset duck
 );
 
 // ---------------------------------------------------------------- presets
-// COMPACT: EQ, COMP and the desk
+// MODEL 12: EQ, COMP and the desk
 function cs_set(hi, mid, lo, cmp, mm, hot, nse) ( slider47 = hi; slider48 = mid; slider49 = lo; slider50 = cmp; slider51 = mm; slider52 = hot; slider53 = nse; );
 function cs_preset(p) (
   p == 1 ? cs_set(0, 0, 0, 0, 0, 0, 0) :                  // Clean Channel
@@ -857,6 +859,9 @@ function s92_load(p) (
   slider53 = 0;
     s92_autor(1, 53);
   );
+  // a preset for the model in use changes without a click: the 15 ducks its tape (as Model 15), the others duck the
+  // whole output (12 ms out, the new settings at silence, 8 ms hold, 12 ms back); another model crossfades instead
+  floor(slider1 + 0.5) == s92_cur && s92_cur != 0 ? s92_dst = 1;
   ui_auto(1);
   s92_pr = p > 24 ? 1 : p;
 );
@@ -866,13 +871,13 @@ s92_srinit();
 
 @slider
 s92_switch();
-s92_update(s92_cur); s92_xf ? s92_update(s92_old);
+s92_update(s92_cur);          // the outgoing model of a crossfade keeps its settings until it is gone
 s92_ost();
 
 @block
 srate != s92_sr ? s92_srinit();
 s92_switch();
-s92_block(s92_cur); s92_xf ? s92_block(s92_old);
+s92_block(s92_cur);
 s92_ost();
 
 @serialize
@@ -880,7 +885,11 @@ file_var(0, ui_sz);
 file_avail(0) != 0 ? file_var(0, s92_pr);          // the preset in use
 
 @sample
+// the chassis preset duck: out, the new settings at silence, a short hold, back in
+s92_dst == 1 ? ( s92_dk -= s92_dkr; s92_dk <= 0 ? ( s92_dk = 0; s92_upd(s92_cur); s92_hc = floor(0.008 * srate); s92_dst = 2; ); ) :
+s92_dst == 2 ? ( s92_hc > 0 ? s92_hc -= 1 : ( s92_dk += s92_dkr; s92_dk >= 1 ? ( s92_dk = 1; s92_dst = 0; ); ); );
 s92_run(s92_cur); s92_yL = s92_rL; s92_yR = s92_rR; s92_g = s92_rg;
+s92_dst ? ( s92_dkg = s92_dk * s92_dk * (3 - 2 * s92_dk); s92_yL *= s92_dkg; s92_yR *= s92_dkg; );
 s92_xf ? (
   // the MODEL crossfade: the outgoing model runs alongside for 20 ms
   s92_w = 0.5 - 0.5 * cos($pi * s92_xt);
@@ -1012,16 +1021,16 @@ function s92_header() local(k, tw, th) (
   gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(S92_INK); gfx_x = 108 * sc; gfx_y = 8 * sc; gfx_drawstr("CHANNEL 92");
   gfx_setfont(4); ui_col(s92_mcol(s92_cur));
   gfx_x = 109 * sc; gfx_y = 40 * sc;
-  gfx_drawstr(s92_cur == 0 ? "MODEL 15  -  LO-FI CHANNEL" : s92_cur == 1 ? "MODEL 44  -  RACK CHANNEL" : s92_cur == 2 ? "COMPACT 12  -  DESK CHANNEL" : "FIELD 42  -  LOCATION PREAMP");
+  gfx_drawstr(s92_cur == 0 ? "MODEL 15  -  LO-FI CHANNEL" : s92_cur == 1 ? "MODEL 44  -  RACK CHANNEL" : s92_cur == 2 ? "MODEL 12  -  DESK CHANNEL" : "FIELD 42  -  LOCATION PREAMP");
   // MODEL keys
-  gfx_setfont(4); ui_col(S92_DIM); ui_text(402 * sc, 5 * sc, "MODEL");
-  s92_key(278, 19, 46, 30, s92_cur == 0, s92_mcol(0), "15") ? ( slider1 = 0; ui_auto(1); );
-  s92_key(328, 19, 46, 30, s92_cur == 1, s92_mcol(1), "44") ? ( slider1 = 1; ui_auto(1); );
-  s92_key(378, 19, 84, 30, s92_cur == 2, s92_mcol(2), "COMPACT") ? ( slider1 = 2; ui_auto(1); );
-  s92_key(466, 19, 62, 30, s92_cur == 3, s92_mcol(3), "FIELD") ? ( slider1 = 3; ui_auto(1); );
+  gfx_setfont(4); ui_col(S92_DIM); ui_text(396 * sc, 5 * sc, "MODEL");
+  s92_key(278, 19, 52, 30, s92_cur == 0, s92_mcol(0), "15") ? ( slider1 = 0; ui_auto(1); );
+  s92_key(334, 19, 52, 30, s92_cur == 1, s92_mcol(1), "44") ? ( slider1 = 1; ui_auto(1); );
+  s92_key(390, 19, 52, 30, s92_cur == 2, s92_mcol(2), "12") ? ( slider1 = 2; ui_auto(1); );
+  s92_key(446, 19, 68, 30, s92_cur == 3, s92_mcol(3), "FIELD") ? ( slider1 = 3; ui_auto(1); );
   // the house preset display
   pk_pextra = "Reset all to defaults";
-  k = pk_preset(544 * sc, 14 * sc, 332 * sc, 36 * sc, s92_pr, "Init|15: Bedroom Demo|15: Hot and Boxy|15: No NR, Open Tape|15: Worn-out Portable|15: Clean-ish Portable|44: Clean Double Speed|44: Normal Speed Warm|44: Rack Punch|44: Scooped Mids|44: No NR|COMPACT: Clean Channel|COMPACT: Hot Channel|COMPACT: Hot and Noisy|COMPACT: Vocal Presence|COMPACT: Keys|FIELD: Init|FIELD: Dialogue Boom|FIELD: Lavalier|FIELD: Acoustic|FIELD: Drum Room|FIELD: Kick and Bass|FIELD: Hot Field|FIELD: Safety Net");
+  k = pk_preset(544 * sc, 14 * sc, 332 * sc, 36 * sc, s92_pr, "Init|15: Bedroom Demo|15: Hot and Boxy|15: No NR, Open Tape|15: Worn-out Portable|15: Clean-ish Portable|44: Clean Double Speed|44: Normal Speed Warm|44: Rack Punch|44: Scooped Mids|44: No NR|12: Clean Channel|12: Hot Channel|12: Hot and Noisy|12: Vocal Presence|12: Keys|FIELD: Init|FIELD: Dialogue Boom|FIELD: Lavalier|FIELD: Acoustic|FIELD: Drum Room|FIELD: Kick and Bass|FIELD: Hot Field|FIELD: Safety Net");
   k > 0 ? s92_load(k);
   ui_size_picker(888 * sc, 23 * sc);
 );
@@ -1030,7 +1039,7 @@ function s92_cliplight(x, y) (
   s92_okclp = ost_clipped ? 1 : s92_okclp * 0.88; ost_clipped = 0;
   rd_led(x, y, 4, s92_okclp > 0.1, 0xFF3A2A); dy_lbl(x, y + 10, "CLIP", 0.7);
 );
-// the 92 OUTPUT STAGE of the 15 / 44 / COMPACT: band SAT, BIAS, LOW / HIGH bands and the CEILING of the always-on soft clip,
+// the 92 OUTPUT STAGE of the 15 / 44 / 12: band SAT, BIAS, LOW / HIGH bands and the CEILING of the always-on soft clip,
 // in the column beside the faceplate
 function s92_outstage() (
   dy_ink = S92_INK; dy_bg = S92_HDR; dy_kst = 20; dy_nov = 0;
@@ -1109,7 +1118,7 @@ function s92_gui44() (
   dy_lbl(690, 82, m44_speed ? "3 3/4 IPS" : "1 7/8 IPS", 0.7);
   dy_lbl(700, 262, "COMPANDER NR", 0.7);
 );
-// the COMPACT faceplate: one Compact 12 channel (EQ, COMP) and the desk's MAIN MIX, in the desk's own look
+// the MODEL 12 faceplate: one channel of the desk (EQ, COMP) and the desk's MAIN MIX, in the desk's own look
 function s92_compact() (
   cs_PNL = 0x2A2B2E; cs_INK = 0xF0EEE8; cs_CHI = 0x3FB05C; cs_CMD = 0x2F7FD0; cs_CLO = 0xE0B02A;
   dy_ink = cs_INK; dy_bg = cs_PNL; dy_kst = 7; dy_nov = 1;

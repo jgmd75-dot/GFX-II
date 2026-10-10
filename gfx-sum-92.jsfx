@@ -1,5 +1,5 @@
 desc:GFX Sum 92 [summing mixer]
-//tags: summing mixer cassette four-track compact desk field location transformer limiter stems bus 92
+//tags: summing mixer cassette four-track desk field location transformer limiter stems bus 92
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-instrument, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
@@ -11,7 +11,7 @@ desc:GFX Sum 92 [summing mixer]
 // SET-UP (REAPER): the bus track needs as many channels as the selected model uses (12 covers every model). Send the
 // stems to the channels below and turn off the stem tracks' master / parent send. The mix always leaves on 1/2.
 //   15 / 44   (Cassette 4)     8 channels: 1/2 TRACK 1, 3/4 TRACK 2, 5/6 TRACK 3, 7/8 TRACK 4 (stereo stems).
-//   COMPACT   (Compact 12)    12 channels: 1, 2, 3, 4 MONO channels (send to one channel each),
+//   12        (Model 12)      12 channels: 1, 2, 3, 4 MONO channels (send to one channel each),
 //                                          5/6, 7/8, 9/10, 11/12 STEREO pairs.
 //   FIELD     (Field 42 Mix)   8 channels: 1/2, 3/4, 5/6, 7/8 stereo PAIRS (or a mid / side pair: left = mid, right = side).
 //   Channels a model does not use are ignored; every output except 1/2 is silenced. The panel shows the map of the
@@ -30,7 +30,7 @@ desc:GFX Sum 92 [summing mixer]
 //                 tracks wobble together), HISS (the middle = the model's own; each track has its own hiss),
 //                 AGE (a worn tape: the top end goes, dropouts creep in), NR in / out, MASTER.
 //          MIXER  per track: TREBLE (10 kHz) and BASS (100 Hz) +/-10 dB, PAN, LEVEL, SOLO, MUTE; VU meters.
-//   COMPACT  COMPACT 12 - the little 12-channel desk from every 90s project studio: clean and honest, with the tight,
+//   12     MODEL 12 - the little 12-channel desk from every 90s project studio (it replaces the former Compact 12): clean and honest, with the tight,
 //          slightly forward sound of its op-amps - and the gritty edge when you run it hot.
 //          CH 1 - 4 (mono): HI (12 kHz), MID (2.5 kHz), LOW (80 Hz), PAN, LEVEL.  CH 5 - 12 (stereo pairs): HI, LOW,
 //          BALANCE, LEVEL.  Every channel: SOLO (the SOLO light on the master flashes while anything is soloed), MUTE.
@@ -49,19 +49,19 @@ desc:GFX Sum 92 [summing mixer]
 //          Parameter list only: FIELD input iron, limiter attack / release.
 //
 // OUTPUT: every model's output clips softly at -0.3 dBFS (the house CLIP at its ceiling, always on, no latency, no
-//   controls): part of the 92 chassis. Below about -2 dBFS it does nothing. 15 / 44 / COMPACT play 6 dB quieter than
+//   controls): part of the 92 chassis. Below about -2 dBFS it does nothing. 15 / 44 / 12 play 6 dB quieter than
 //   their originals with the same colour (6 dB more headroom before the clip); FIELD plays at its original level.
 //
 // MODEL SWITCH: only the selected model runs (CPU = that model). A change crossfades the outgoing model into the
 //   incoming one over 20 ms (both run for those 20 ms); the incoming model starts from a clean, reset state.
 //   (15 <-> 44 also crossfades: each has its own tape engine; they share their settings.)
-// PRESETS: the house preset bar. Every preset of the three originals, named by model ("COMPACT: Hot Desk"); choosing
+// PRESETS: the house preset bar. Every preset of the three originals, named by model ("12: Hot Desk"); choosing
 //   one also selects its model. "Init" = the 15 at its defaults. "Reset all to defaults" (in the list) resets every
 //   model, the MODEL and the output stage (channel names are kept). Presets leave the output stage alone.
-// NAMES: click the name at the top of a channel strip (15 / 44 and COMPACT) and type (e.g. Drums); Enter keeps it,
+// NAMES: click the name at the top of a channel strip (15 / 44 and 12) and type (e.g. Drums); Enter keeps it,
 //   Escape cancels, an empty name goes back to the number. The names are saved with the project.
 // GUI: drag a knob (SHIFT = fine, double-click = default, wheel); click a key; click the LCD (or PRESETS) for the
-//   preset list. S / M / L / ? = size and help. The 15 / 44 and COMPACT faceplates are shown enlarged to fill the
+//   preset list. S / M / L / ? = size and help. The 15 / 44 and 12 faceplates are shown enlarged to fill the
 //   chassis (the same layout as the originals, bigger); FIELD is shown at its own size.
 
 import gfx-drift.jsfx-inc
@@ -72,7 +72,7 @@ import gfx-instrument.jsfx-inc
 import gfx-dyn.jsfx-inc
 import gfx-faceplate.jsfx-inc
 
-slider1:0<0,3,1{15 (cassette / standard speed),44 (cassette / double speed),COMPACT (12-channel desk),FIELD (four-pair location mixer)}>-Model
+slider1:0<0,3,1{15 (cassette / standard speed),44 (cassette / double speed),12 (12-channel desk),FIELD (four-pair location mixer)}>-Model
 slider2:1<0,1,1{Off,On}>-15/44 Noise reduction
 slider3:0<-6,12,0.1>-15/44 Tape drive (dB)
 slider4:30<0,100,1>-15/44 Wow / flutter (%)
@@ -103,61 +103,61 @@ slider28:0<0,1,1{Off,On}>-15/44 Track 1 solo
 slider29:0<0,1,1{Off,On}>-15/44 Track 2 solo
 slider30:0<0,1,1{Off,On}>-15/44 Track 3 solo
 slider31:0<0,1,1{Off,On}>-15/44 Track 4 solo
-slider32:0<-60,10,0.1>-COMPACT Main mix (dB)
-slider33:0<0,1,1{Off,On}>-COMPACT Hot
-slider34:0<0,1,1{Off,On}>-COMPACT Desk noise
-slider35:0<-60,10,0.1>-COMPACT Ch 1 level (dB)
-slider36:0<-60,10,0.1>-COMPACT Ch 2 level (dB)
-slider37:0<-60,10,0.1>-COMPACT Ch 3 level (dB)
-slider38:0<-60,10,0.1>-COMPACT Ch 4 level (dB)
-slider39:0<-60,10,0.1>-COMPACT Ch 5-6 level (dB)
-slider40:0<-60,10,0.1>-COMPACT Ch 7-8 level (dB)
-slider41:0<-60,10,0.1>-COMPACT Ch 9-10 level (dB)
-slider42:0<-60,10,0.1>-COMPACT Ch 11-12 level (dB)
-slider43:0<-15,15,0.1>-COMPACT Ch 1 hi (dB)
-slider44:0<-15,15,0.1>-COMPACT Ch 2 hi (dB)
-slider45:0<-15,15,0.1>-COMPACT Ch 3 hi (dB)
-slider46:0<-15,15,0.1>-COMPACT Ch 4 hi (dB)
-slider47:0<-15,15,0.1>-COMPACT Ch 5-6 hi (dB)
-slider48:0<-15,15,0.1>-COMPACT Ch 7-8 hi (dB)
-slider49:0<-15,15,0.1>-COMPACT Ch 9-10 hi (dB)
-slider50:0<-15,15,0.1>-COMPACT Ch 11-12 hi (dB)
-slider51:0<-12,12,0.1>-COMPACT Ch 1 mid (dB)
-slider52:0<-12,12,0.1>-COMPACT Ch 2 mid (dB)
-slider53:0<-12,12,0.1>-COMPACT Ch 3 mid (dB)
-slider54:0<-12,12,0.1>-COMPACT Ch 4 mid (dB)
-slider55:0<-15,15,0.1>-COMPACT Ch 1 low (dB)
-slider56:0<-15,15,0.1>-COMPACT Ch 2 low (dB)
-slider57:0<-15,15,0.1>-COMPACT Ch 3 low (dB)
-slider58:0<-15,15,0.1>-COMPACT Ch 4 low (dB)
-slider59:0<-15,15,0.1>-COMPACT Ch 5-6 low (dB)
-slider60:0<-15,15,0.1>-COMPACT Ch 7-8 low (dB)
-slider61:0<-15,15,0.1>-COMPACT Ch 9-10 low (dB)
-slider62:0<-15,15,0.1>-COMPACT Ch 11-12 low (dB)
-slider63:0<-100,100,1>-COMPACT Ch 1 pan
-slider64:0<-100,100,1>-COMPACT Ch 2 pan
-slider65:0<-100,100,1>-COMPACT Ch 3 pan
-slider66:0<-100,100,1>-COMPACT Ch 4 pan
-slider67:0<-100,100,1>-COMPACT Ch 5-6 balance
-slider68:0<-100,100,1>-COMPACT Ch 7-8 balance
-slider69:0<-100,100,1>-COMPACT Ch 9-10 balance
-slider70:0<-100,100,1>-COMPACT Ch 11-12 balance
-slider71:0<0,1,1{Off,On}>-COMPACT Ch 1 mute
-slider72:0<0,1,1{Off,On}>-COMPACT Ch 2 mute
-slider73:0<0,1,1{Off,On}>-COMPACT Ch 3 mute
-slider74:0<0,1,1{Off,On}>-COMPACT Ch 4 mute
-slider75:0<0,1,1{Off,On}>-COMPACT Ch 5-6 mute
-slider76:0<0,1,1{Off,On}>-COMPACT Ch 7-8 mute
-slider77:0<0,1,1{Off,On}>-COMPACT Ch 9-10 mute
-slider78:0<0,1,1{Off,On}>-COMPACT Ch 11-12 mute
-slider79:0<0,1,1{Off,On}>-COMPACT Ch 1 solo
-slider80:0<0,1,1{Off,On}>-COMPACT Ch 2 solo
-slider81:0<0,1,1{Off,On}>-COMPACT Ch 3 solo
-slider82:0<0,1,1{Off,On}>-COMPACT Ch 4 solo
-slider83:0<0,1,1{Off,On}>-COMPACT Ch 5-6 solo
-slider84:0<0,1,1{Off,On}>-COMPACT Ch 7-8 solo
-slider85:0<0,1,1{Off,On}>-COMPACT Ch 9-10 solo
-slider86:0<0,1,1{Off,On}>-COMPACT Ch 11-12 solo
+slider32:0<-60,10,0.1>-12 Main mix (dB)
+slider33:0<0,1,1{Off,On}>-12 Hot
+slider34:0<0,1,1{Off,On}>-12 Desk noise
+slider35:0<-60,10,0.1>-12 Ch 1 level (dB)
+slider36:0<-60,10,0.1>-12 Ch 2 level (dB)
+slider37:0<-60,10,0.1>-12 Ch 3 level (dB)
+slider38:0<-60,10,0.1>-12 Ch 4 level (dB)
+slider39:0<-60,10,0.1>-12 Ch 5-6 level (dB)
+slider40:0<-60,10,0.1>-12 Ch 7-8 level (dB)
+slider41:0<-60,10,0.1>-12 Ch 9-10 level (dB)
+slider42:0<-60,10,0.1>-12 Ch 11-12 level (dB)
+slider43:0<-15,15,0.1>-12 Ch 1 hi (dB)
+slider44:0<-15,15,0.1>-12 Ch 2 hi (dB)
+slider45:0<-15,15,0.1>-12 Ch 3 hi (dB)
+slider46:0<-15,15,0.1>-12 Ch 4 hi (dB)
+slider47:0<-15,15,0.1>-12 Ch 5-6 hi (dB)
+slider48:0<-15,15,0.1>-12 Ch 7-8 hi (dB)
+slider49:0<-15,15,0.1>-12 Ch 9-10 hi (dB)
+slider50:0<-15,15,0.1>-12 Ch 11-12 hi (dB)
+slider51:0<-12,12,0.1>-12 Ch 1 mid (dB)
+slider52:0<-12,12,0.1>-12 Ch 2 mid (dB)
+slider53:0<-12,12,0.1>-12 Ch 3 mid (dB)
+slider54:0<-12,12,0.1>-12 Ch 4 mid (dB)
+slider55:0<-15,15,0.1>-12 Ch 1 low (dB)
+slider56:0<-15,15,0.1>-12 Ch 2 low (dB)
+slider57:0<-15,15,0.1>-12 Ch 3 low (dB)
+slider58:0<-15,15,0.1>-12 Ch 4 low (dB)
+slider59:0<-15,15,0.1>-12 Ch 5-6 low (dB)
+slider60:0<-15,15,0.1>-12 Ch 7-8 low (dB)
+slider61:0<-15,15,0.1>-12 Ch 9-10 low (dB)
+slider62:0<-15,15,0.1>-12 Ch 11-12 low (dB)
+slider63:0<-100,100,1>-12 Ch 1 pan
+slider64:0<-100,100,1>-12 Ch 2 pan
+slider65:0<-100,100,1>-12 Ch 3 pan
+slider66:0<-100,100,1>-12 Ch 4 pan
+slider67:0<-100,100,1>-12 Ch 5-6 balance
+slider68:0<-100,100,1>-12 Ch 7-8 balance
+slider69:0<-100,100,1>-12 Ch 9-10 balance
+slider70:0<-100,100,1>-12 Ch 11-12 balance
+slider71:0<0,1,1{Off,On}>-12 Ch 1 mute
+slider72:0<0,1,1{Off,On}>-12 Ch 2 mute
+slider73:0<0,1,1{Off,On}>-12 Ch 3 mute
+slider74:0<0,1,1{Off,On}>-12 Ch 4 mute
+slider75:0<0,1,1{Off,On}>-12 Ch 5-6 mute
+slider76:0<0,1,1{Off,On}>-12 Ch 7-8 mute
+slider77:0<0,1,1{Off,On}>-12 Ch 9-10 mute
+slider78:0<0,1,1{Off,On}>-12 Ch 11-12 mute
+slider79:0<0,1,1{Off,On}>-12 Ch 1 solo
+slider80:0<0,1,1{Off,On}>-12 Ch 2 solo
+slider81:0<0,1,1{Off,On}>-12 Ch 3 solo
+slider82:0<0,1,1{Off,On}>-12 Ch 4 solo
+slider83:0<0,1,1{Off,On}>-12 Ch 5-6 solo
+slider84:0<0,1,1{Off,On}>-12 Ch 7-8 solo
+slider85:0<0,1,1{Off,On}>-12 Ch 9-10 solo
+slider86:0<0,1,1{Off,On}>-12 Ch 11-12 solo
 slider87:75<75,240,1>-FIELD 1-2 HPF (Hz, 75 = off)
 slider88:0<-20,40,0.1>-FIELD 1-2 Trim (dB)
 slider89:1<0,1,1{Off,On}>-FIELD 1-2 Input limiter
@@ -236,7 +236,7 @@ function s92_auto(i) (
 function s92_autor(a, b) local(i) ( i = a; loop(b - a + 1, s92_auto(i); i += 1; ); );
 
 // memory: 15 tape 10000 - 75535 and 100 - 167, 44 tape 80000 - 145535 and 200 - 267, 15 / 44 panel 300 - 303,
-// COMPACT 400 - 447 and panel 500 - 507, FIELD output stage 150000 - 154095
+// 12 400 - 447 and panel 500 - 507, FIELD output stage 150000 - 154095
 
 // ================================================================ 15 (ported from gfx-cassette-4, MODEL 15)
 
@@ -683,7 +683,7 @@ function cb_run() (
   cb_c4_dst ? ( cb_c4_dkg = cb_c4_dk * cb_c4_dk * (3 - 2 * cb_c4_dk); cb_ml *= cb_c4_dkg; cb_mr *= cb_c4_dkg; );
 );
 
-// ================================================================ COMPACT (ported from gfx-compact-12)
+// ================================================================ MODEL 12 (ported from gfx-compact-12)
 
 
 // one channel's EQ: hi shelf 12 kHz, mid peak 2.5 kHz, low shelf 80 Hz
@@ -970,8 +970,9 @@ function fm_blockrun() (
 // ================================================================ the 92 chassis
 function s92_reset(m) ( m == 0 ? ca_reset() : m == 1 ? cb_reset() : m == 2 ? cp_reset() : fm_reset(); );
 // (the tape engines' settings wait while a preset duck is fading out, as on Cassette 4)
-function s92_update(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : m == 2 ? cp_update() : fm_update(); );
-function s92_block(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : m == 2 ? cp_update() : fm_blockrun(); );
+function s92_upd(m) ( m == 2 ? cp_update() : fm_update(); );
+function s92_update(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : !(s92_dst == 1 && m == s92_cur) ? s92_upd(m); );
+function s92_block(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : !(s92_dst == 1 && m == s92_cur) ? ( m == 3 ? fm_blockrun() : cp_update(); ); );
 function s92_run(m) (
   m == 0 ? ( ca_run(); s92_rL = ca_ml; s92_rR = ca_mr; s92_rg = S92_HR; ) :
   m == 1 ? ( cb_run(); s92_rL = cb_ml; s92_rR = cb_mr; s92_rg = S92_HR; ) :
@@ -983,7 +984,7 @@ function s92_switch() local(m) (
   m = min(max(floor(slider1 + 0.5), 0), 3);
   m != s92_cur ? (
     !(s92_xf && s92_xt < 0.5) ? s92_old = s92_cur;
-    s92_cur = m; s92_reset(m); s92_xt = 0; s92_xf = 1;
+    s92_cur = m; s92_reset(m); s92_xt = 0; s92_xf = 1; s92_dst = 0; s92_dk = 1;
     s92_old == s92_cur ? s92_xf = 0;
   );
 );
@@ -994,6 +995,7 @@ function s92_srinit() (
   ost_init(150000); s92_ostL.ost_ch_init(); s92_ostR.ost_ch_init();
   ost_setup(0, 0.3, 120, 6000, -0.3, 1);           // the chassis clip: CLIP at -0.3 dBFS, always on, no latency
   s92_xfc = 1 / (0.02 * srate);
+  s92_dkr = 1 / (0.012 * srate); s92_dk = 1; s92_dst = 0;   // the chassis preset duck
   s92_vuc = 1 - exp(-1 / (0.3 * srate));
 );
 
@@ -1143,11 +1145,14 @@ function s92_load(p) (
   // the circuit; a change between 15 and 44 crossfades instead (the incoming engine starts clean)
   ca_c4_dst = cb_c4_dst = 0;
   (p <= 9 || p == 21) && s92_cur <= 1 && floor(slider1 + 0.5) == s92_cur ? ( s92_cur ? cb_c4_dst = 1 : ca_c4_dst = 1; );
+  // 12 / FIELD: a preset for the model in use ducks the whole output (12 ms out, the new settings at silence,
+  // 8 ms hold, 12 ms back); another model crossfades instead
+  floor(slider1 + 0.5) == s92_cur && s92_cur >= 2 ? s92_dst = 1;
   s92_auto(1);
   s92_pr = p > 20 ? 1 : p;
 );
 
-// 15 / 44 / COMPACT play 6 dB quieter than their originals, so normal mixes stay clear of the chassis clip: the
+// 15 / 44 / 12 play 6 dB quieter than their originals, so normal mixes stay clear of the chassis clip: the
 // model runs exactly as the original (same tape drive, NR, saturation, hiss and noise - the same colour) and its
 // output is turned down 6 dB, which is the same as trimming the input 6 dB and raising every level-dependent
 // reference inside by 6 dB
@@ -1159,20 +1164,24 @@ s92_srinit();
 
 @slider
 s92_switch();
-s92_update(s92_cur); s92_xf ? s92_update(s92_old);
+s92_update(s92_cur);          // the outgoing model of a crossfade keeps its settings until it is gone
 
 @block
 srate != s92_sr ? s92_srinit();
 s92_switch();
-s92_block(s92_cur); s92_xf ? s92_block(s92_old);
+s92_block(s92_cur);
 
 @serialize
 file_var(0, ui_sz);
-s92_n = 0; loop(12, file_avail(0) != 0 ? file_string(0, UI_NM + s92_n); s92_n += 1; );   // channel names: 15 / 44 = 0 - 3, COMPACT = 4 - 11
+s92_n = 0; loop(12, file_avail(0) != 0 ? file_string(0, UI_NM + s92_n); s92_n += 1; );   // channel names: 15 / 44 = 0 - 3, 12 = 4 - 11
 file_avail(0) != 0 ? file_var(0, s92_pr);          // the preset in use
 
 @sample
+// the chassis preset duck: out, the new settings at silence, a short hold, back in
+s92_dst == 1 ? ( s92_dk -= s92_dkr; s92_dk <= 0 ? ( s92_dk = 0; s92_upd(s92_cur); s92_hc = floor(0.008 * srate); s92_dst = 2; ); ) :
+s92_dst == 2 ? ( s92_hc > 0 ? s92_hc -= 1 : ( s92_dk += s92_dkr; s92_dk >= 1 ? ( s92_dk = 1; s92_dst = 0; ); ); );
 s92_run(s92_cur); s92_yL = s92_rL; s92_yR = s92_rR; s92_g = s92_rg;
+s92_dst ? ( s92_dkg = s92_dk * s92_dk * (3 - 2 * s92_dk); s92_yL *= s92_dkg; s92_yR *= s92_dkg; );
 s92_xf ? (
   // the MODEL crossfade: the outgoing model runs alongside for 20 ms
   s92_w = 0.5 - 0.5 * cos($pi * s92_xt);
@@ -1181,7 +1190,7 @@ s92_xf ? (
   s92_g = s92_g * s92_w + s92_rg * (1 - s92_w);
   s92_xt += s92_xfc; s92_xt >= 1 ? s92_xf = 0;
 );
-// 6 dB of headroom for the 15 / 44 / COMPACT ahead of the chassis clip (S92_HR), then the clip (band saturation
+// 6 dB of headroom for the 15 / 44 / 12 ahead of the chassis clip (S92_HR), then the clip (band saturation
 // off: it passes the signal unchanged)
 s92_yL = s92_ostL.ost_band(s92_yL * s92_g); s92_yR = s92_ostR.ost_band(s92_yR * s92_g);
 ost_out(s92_yL, s92_yR);
@@ -1235,14 +1244,14 @@ function s92_header() local(k) (
   gfx_setfont(6, "Trebuchet MS", 21 * sc, 'b'); ui_col(S92_HDR); ui_keytext(75 * sc, 31.5 * sc, "92");
   gfx_setfont(6, "Trebuchet MS", 24 * sc, 'b'); ui_col(S92_INK); gfx_x = 108 * sc; gfx_y = 8 * sc; gfx_drawstr("SUM 92");
   gfx_setfont(4); ui_col(s92_mcol(s92_cur)); gfx_x = 109 * sc; gfx_y = 40 * sc;
-  gfx_drawstr(s92_cur == 0 ? "CASSETTE 4  -  MODEL 15" : s92_cur == 1 ? "CASSETTE 4  -  MODEL 44" : s92_cur == 2 ? "COMPACT 12 DESK" : "FIELD 42 MIX");
-  gfx_setfont(4); ui_col(S92_DIM); ui_text(396 * sc, 5 * sc, "MODEL");
+  gfx_drawstr(s92_cur == 0 ? "CASSETTE 4  -  MODEL 15" : s92_cur == 1 ? "CASSETTE 4  -  MODEL 44" : s92_cur == 2 ? "MODEL 12 DESK" : "FIELD 42 MIX");
+  gfx_setfont(4); ui_col(S92_DIM); ui_text(378 * sc, 5 * sc, "MODEL");
   s92_key(260, 19, 52, 30, s92_cur == 0, s92_mcol(0), "15") ? ( slider1 = 0; s92_auto(1); );
   s92_key(316, 19, 52, 30, s92_cur == 1, s92_mcol(1), "44") ? ( slider1 = 1; s92_auto(1); );
-  s92_key(372, 19, 88, 30, s92_cur == 2, s92_mcol(2), "COMPACT") ? ( slider1 = 2; s92_auto(1); );
-  s92_key(464, 19, 68, 30, s92_cur == 3, s92_mcol(3), "FIELD") ? ( slider1 = 3; s92_auto(1); );
+  s92_key(372, 19, 52, 30, s92_cur == 2, s92_mcol(2), "12") ? ( slider1 = 2; s92_auto(1); );
+  s92_key(428, 19, 68, 30, s92_cur == 3, s92_mcol(3), "FIELD") ? ( slider1 = 3; s92_auto(1); );
   pk_pextra = "Reset all to defaults";
-  k = pk_preset(556 * sc, 14 * sc, 392 * sc, 36 * sc, s92_pr, "Init|15: Bedroom Demo|15: Hot and Woolly|15: No NR, Old Tape|15: Worn-out Cassette|44: Clean Double Speed|44: Pumping Compander|44: Squashed Tape|44: Without NR|COMPACT: Clean Desk|COMPACT: Hot Desk|COMPACT: Hot and Noisy|COMPACT: Clean with Desk Noise|COMPACT: Flat all channels|FIELD: Init|FIELD: Drum Kit|FIELD: Field Rig|FIELD: Band Sub|FIELD: Dialogue Pair|FIELD: Glue Bus");
+  k = pk_preset(556 * sc, 14 * sc, 392 * sc, 36 * sc, s92_pr, "Init|15: Bedroom Demo|15: Hot and Woolly|15: No NR, Old Tape|15: Worn-out Cassette|44: Clean Double Speed|44: Pumping Compander|44: Squashed Tape|44: Without NR|12: Clean Desk|12: Hot Desk|12: Hot and Noisy|12: Clean with Desk Noise|12: Flat all channels|FIELD: Init|FIELD: Drum Kit|FIELD: Field Rig|FIELD: Band Sub|FIELD: Dialogue Pair|FIELD: Glue Bus");
   k > 0 ? s92_load(k);
   ui_size_picker(968 * sc, 23 * sc);
 );
