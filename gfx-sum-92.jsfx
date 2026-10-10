@@ -46,10 +46,10 @@ desc:GFX Sum 92 [summing mixer]
 //          DRIFT (50% = standard): battery sag. The supply wanders slowly and droops under heavy, sustained level (the
 //          whole mix draws on one battery), so the preamps' headroom, the limiter thresholds and the transformers'
 //          drive all move a little. 0% = a fresh battery, 100% = twice the standard amount. (Only FIELD drifts.)
-//          The GFX output stage (band SAT, OFF / CLIP / LIMIT; LIMIT adds 3 ms latency, reported to REAPER) works on
-//          FIELD only, as on the original Field 42 Mix: the cassette and the desk had none ("their own character does
-//          that job"). Its keys sit on the SET-UP line while FIELD is selected; SAT, BIAS, bands and CEILING are in the
-//          parameter list with the FIELD input iron and limiter attack / release.
+//          FIELD's output always clips softly at -0.3 dBFS (the house CLIP at its default ceiling, no band saturation)
+//          as part of the unit's circuit; there are no output stage controls. The cassette and the desk have no output
+//          stage at all, as on the originals. Parameter list only: FIELD input iron, limiter attack / release.
+//          No model adds latency.
 //
 // MODEL SWITCH: only the selected model runs (CPU = that model). A change crossfades the outgoing model into the
 //   incoming one over 20 ms (both run for those 20 ms); the incoming model starts from a clean, reset state.
@@ -204,12 +204,6 @@ slider130:50<0,100,1>-FIELD Drift (%)
 slider132:30<0,100,1>-FIELD Input iron (%)
 slider133:1<0.1,10,0.1>-FIELD Limiter attack (ms)
 slider134:200<50,1000,1>-FIELD Limiter release (ms)
-slider135:0<0,100,1>-FIELD Band sat (%)
-slider136:30<0,100,1>-FIELD Bias (%)
-slider137:120<40,400,1>-FIELD Sat low band (Hz)
-slider138:6000<2000,16000,10>-FIELD Sat high band (Hz)
-slider139:-0.3<-24,0,0.1>-FIELD Ceiling / limit threshold (dB)
-slider140:1<0,2,1{Off,Clip,Limit}>-FIELD Output stage
 
 in_pin:ch 1
 in_pin:ch 2
@@ -236,13 +230,7 @@ function s92_auto(i) (
   i == 130 ? slider_automate(slider130) :
   i == 132 ? slider_automate(slider132) :
   i == 133 ? slider_automate(slider133) :
-  i == 134 ? slider_automate(slider134) :
-  i == 135 ? slider_automate(slider135) :
-  i == 136 ? slider_automate(slider136) :
-  i == 137 ? slider_automate(slider137) :
-  i == 138 ? slider_automate(slider138) :
-  i == 139 ? slider_automate(slider139) :
-  i == 140 ? slider_automate(slider140);
+  i == 134 ? slider_automate(slider134);
 );
 function s92_autor(a, b) local(i) ( i = a; loop(b - a + 1, s92_auto(i); i += 1; ); );
 
@@ -331,6 +319,7 @@ function ca_update() local(ca_i, ca_a, ca_any) (
 // model, nr, drive, wow, hiss, age
 function ca_pp(ca_m, ca_n, ca_d, ca_w, ca_h, ca_a) ( slider1 = ca_m; slider2 = ca_n; slider3 = ca_d; slider4 = ca_w; slider5 = ca_h; slider6 = ca_a; );
 function ca_load_preset(ca_p) (
+  ca_c4_dst = 1;                                // duck the output, swap the settings at silence, fade back in
   ca_p == 1 ? ca_pp(0, 1, 0, 30, 50, 10) :       // Bedroom Demo (15)
   ca_p == 2 ? ca_pp(0, 1, 6, 45, 60, 30) :       // Hot and Woolly (15)
   ca_p == 3 ? ca_pp(0, 0, 3, 60, 100, 50) :      // No NR, Old Tape (15)
@@ -345,92 +334,93 @@ function ca_load_preset(ca_p) (
 
 function ca_reset() (
   // all state back to zero (as a fresh instance), then the original @init
-  ca_age = ca_b_c = ca_bmsk = ca_bsz = ca_bumpf = ca_bumpg = ca_den = ca_dr_r = ca_drop_g = ca_drop_n = 0;
-  ca_drop_t = ca_fph = ca_hfc = ca_hiss_g = ca_i = ca_k = ca_ml = ca_model = ca_mr = ca_mst = ca_nr = ca_nr_c = 0;
-  ca_nz = ca_pl = ca_play_g = ca_pr = ca_rec_g = ca_sat_k = ca_sm = ca_t0l = ca_t0r = ca_t1l = ca_t1r = ca_t2l = 0;
-  ca_t2r = ca_t3l = ca_t3r = ca_tg = ca_tgt = ca_tpk = ca_vu_sine = ca_vuc = ca_wdel = ca_wnd = ca_wow_a = 0;
-  ca_wph = ca_wpos = ca_a0l.ca_be = ca_a0l.ca_bh = ca_a0l.ca_dbe = ca_a0l.ca_de.a1 = ca_a0l.ca_de.a2 = 0;
-  ca_a0l.ca_de.b0 = ca_a0l.ca_de.b1 = ca_a0l.ca_de.b2 = ca_a0l.ca_de.x1 = ca_a0l.ca_de.x2 = ca_a0l.ca_de.y1 = 0;
-  ca_a0l.ca_de.y2 = ca_a0l.ca_dh = ca_a0l.ca_ed = ca_a0l.ca_ee = ca_a0l.ca_hb.a1 = ca_a0l.ca_hb.a2 = 0;
-  ca_a0l.ca_hb.b0 = ca_a0l.ca_hb.b1 = ca_a0l.ca_hb.b2 = ca_a0l.ca_hb.x1 = ca_a0l.ca_hb.x2 = ca_a0l.ca_hb.y1 = 0;
-  ca_a0l.ca_hb.y2 = ca_a0l.ca_hl.a1 = ca_a0l.ca_hl.a2 = ca_a0l.ca_hl.b0 = ca_a0l.ca_hl.b1 = ca_a0l.ca_hl.b2 = 0;
-  ca_a0l.ca_hl.x1 = ca_a0l.ca_hl.x2 = ca_a0l.ca_hl.y1 = ca_a0l.ca_hl.y2 = ca_a0l.ca_pe.a1 = ca_a0l.ca_pe.a2 = 0;
-  ca_a0l.ca_pe.b0 = ca_a0l.ca_pe.b1 = ca_a0l.ca_pe.b2 = ca_a0l.ca_pe.x1 = ca_a0l.ca_pe.x2 = ca_a0l.ca_pe.y1 = 0;
-  ca_a0l.ca_pe.y2 = ca_a0r.ca_be = ca_a0r.ca_bh = ca_a0r.ca_dbe = ca_a0r.ca_de.a1 = ca_a0r.ca_de.a2 = 0;
-  ca_a0r.ca_de.b0 = ca_a0r.ca_de.b1 = ca_a0r.ca_de.b2 = ca_a0r.ca_de.x1 = ca_a0r.ca_de.x2 = ca_a0r.ca_de.y1 = 0;
-  ca_a0r.ca_de.y2 = ca_a0r.ca_dh = ca_a0r.ca_ed = ca_a0r.ca_ee = ca_a0r.ca_hb.a1 = ca_a0r.ca_hb.a2 = 0;
-  ca_a0r.ca_hb.b0 = ca_a0r.ca_hb.b1 = ca_a0r.ca_hb.b2 = ca_a0r.ca_hb.x1 = ca_a0r.ca_hb.x2 = ca_a0r.ca_hb.y1 = 0;
-  ca_a0r.ca_hb.y2 = ca_a0r.ca_hl.a1 = ca_a0r.ca_hl.a2 = ca_a0r.ca_hl.b0 = ca_a0r.ca_hl.b1 = ca_a0r.ca_hl.b2 = 0;
-  ca_a0r.ca_hl.x1 = ca_a0r.ca_hl.x2 = ca_a0r.ca_hl.y1 = ca_a0r.ca_hl.y2 = ca_a0r.ca_pe.a1 = ca_a0r.ca_pe.a2 = 0;
-  ca_a0r.ca_pe.b0 = ca_a0r.ca_pe.b1 = ca_a0r.ca_pe.b2 = ca_a0r.ca_pe.x1 = ca_a0r.ca_pe.x2 = ca_a0r.ca_pe.y1 = 0;
-  ca_a0r.ca_pe.y2 = ca_a1l.ca_be = ca_a1l.ca_bh = ca_a1l.ca_dbe = ca_a1l.ca_de.a1 = ca_a1l.ca_de.a2 = 0;
-  ca_a1l.ca_de.b0 = ca_a1l.ca_de.b1 = ca_a1l.ca_de.b2 = ca_a1l.ca_de.x1 = ca_a1l.ca_de.x2 = ca_a1l.ca_de.y1 = 0;
-  ca_a1l.ca_de.y2 = ca_a1l.ca_dh = ca_a1l.ca_ed = ca_a1l.ca_ee = ca_a1l.ca_hb.a1 = ca_a1l.ca_hb.a2 = 0;
-  ca_a1l.ca_hb.b0 = ca_a1l.ca_hb.b1 = ca_a1l.ca_hb.b2 = ca_a1l.ca_hb.x1 = ca_a1l.ca_hb.x2 = ca_a1l.ca_hb.y1 = 0;
-  ca_a1l.ca_hb.y2 = ca_a1l.ca_hl.a1 = ca_a1l.ca_hl.a2 = ca_a1l.ca_hl.b0 = ca_a1l.ca_hl.b1 = ca_a1l.ca_hl.b2 = 0;
-  ca_a1l.ca_hl.x1 = ca_a1l.ca_hl.x2 = ca_a1l.ca_hl.y1 = ca_a1l.ca_hl.y2 = ca_a1l.ca_pe.a1 = ca_a1l.ca_pe.a2 = 0;
-  ca_a1l.ca_pe.b0 = ca_a1l.ca_pe.b1 = ca_a1l.ca_pe.b2 = ca_a1l.ca_pe.x1 = ca_a1l.ca_pe.x2 = ca_a1l.ca_pe.y1 = 0;
-  ca_a1l.ca_pe.y2 = ca_a1r.ca_be = ca_a1r.ca_bh = ca_a1r.ca_dbe = ca_a1r.ca_de.a1 = ca_a1r.ca_de.a2 = 0;
-  ca_a1r.ca_de.b0 = ca_a1r.ca_de.b1 = ca_a1r.ca_de.b2 = ca_a1r.ca_de.x1 = ca_a1r.ca_de.x2 = ca_a1r.ca_de.y1 = 0;
-  ca_a1r.ca_de.y2 = ca_a1r.ca_dh = ca_a1r.ca_ed = ca_a1r.ca_ee = ca_a1r.ca_hb.a1 = ca_a1r.ca_hb.a2 = 0;
-  ca_a1r.ca_hb.b0 = ca_a1r.ca_hb.b1 = ca_a1r.ca_hb.b2 = ca_a1r.ca_hb.x1 = ca_a1r.ca_hb.x2 = ca_a1r.ca_hb.y1 = 0;
-  ca_a1r.ca_hb.y2 = ca_a1r.ca_hl.a1 = ca_a1r.ca_hl.a2 = ca_a1r.ca_hl.b0 = ca_a1r.ca_hl.b1 = ca_a1r.ca_hl.b2 = 0;
-  ca_a1r.ca_hl.x1 = ca_a1r.ca_hl.x2 = ca_a1r.ca_hl.y1 = ca_a1r.ca_hl.y2 = ca_a1r.ca_pe.a1 = ca_a1r.ca_pe.a2 = 0;
-  ca_a1r.ca_pe.b0 = ca_a1r.ca_pe.b1 = ca_a1r.ca_pe.b2 = ca_a1r.ca_pe.x1 = ca_a1r.ca_pe.x2 = ca_a1r.ca_pe.y1 = 0;
-  ca_a1r.ca_pe.y2 = ca_a2l.ca_be = ca_a2l.ca_bh = ca_a2l.ca_dbe = ca_a2l.ca_de.a1 = ca_a2l.ca_de.a2 = 0;
-  ca_a2l.ca_de.b0 = ca_a2l.ca_de.b1 = ca_a2l.ca_de.b2 = ca_a2l.ca_de.x1 = ca_a2l.ca_de.x2 = ca_a2l.ca_de.y1 = 0;
-  ca_a2l.ca_de.y2 = ca_a2l.ca_dh = ca_a2l.ca_ed = ca_a2l.ca_ee = ca_a2l.ca_hb.a1 = ca_a2l.ca_hb.a2 = 0;
-  ca_a2l.ca_hb.b0 = ca_a2l.ca_hb.b1 = ca_a2l.ca_hb.b2 = ca_a2l.ca_hb.x1 = ca_a2l.ca_hb.x2 = ca_a2l.ca_hb.y1 = 0;
-  ca_a2l.ca_hb.y2 = ca_a2l.ca_hl.a1 = ca_a2l.ca_hl.a2 = ca_a2l.ca_hl.b0 = ca_a2l.ca_hl.b1 = ca_a2l.ca_hl.b2 = 0;
-  ca_a2l.ca_hl.x1 = ca_a2l.ca_hl.x2 = ca_a2l.ca_hl.y1 = ca_a2l.ca_hl.y2 = ca_a2l.ca_pe.a1 = ca_a2l.ca_pe.a2 = 0;
-  ca_a2l.ca_pe.b0 = ca_a2l.ca_pe.b1 = ca_a2l.ca_pe.b2 = ca_a2l.ca_pe.x1 = ca_a2l.ca_pe.x2 = ca_a2l.ca_pe.y1 = 0;
-  ca_a2l.ca_pe.y2 = ca_a2r.ca_be = ca_a2r.ca_bh = ca_a2r.ca_dbe = ca_a2r.ca_de.a1 = ca_a2r.ca_de.a2 = 0;
-  ca_a2r.ca_de.b0 = ca_a2r.ca_de.b1 = ca_a2r.ca_de.b2 = ca_a2r.ca_de.x1 = ca_a2r.ca_de.x2 = ca_a2r.ca_de.y1 = 0;
-  ca_a2r.ca_de.y2 = ca_a2r.ca_dh = ca_a2r.ca_ed = ca_a2r.ca_ee = ca_a2r.ca_hb.a1 = ca_a2r.ca_hb.a2 = 0;
-  ca_a2r.ca_hb.b0 = ca_a2r.ca_hb.b1 = ca_a2r.ca_hb.b2 = ca_a2r.ca_hb.x1 = ca_a2r.ca_hb.x2 = ca_a2r.ca_hb.y1 = 0;
-  ca_a2r.ca_hb.y2 = ca_a2r.ca_hl.a1 = ca_a2r.ca_hl.a2 = ca_a2r.ca_hl.b0 = ca_a2r.ca_hl.b1 = ca_a2r.ca_hl.b2 = 0;
-  ca_a2r.ca_hl.x1 = ca_a2r.ca_hl.x2 = ca_a2r.ca_hl.y1 = ca_a2r.ca_hl.y2 = ca_a2r.ca_pe.a1 = ca_a2r.ca_pe.a2 = 0;
-  ca_a2r.ca_pe.b0 = ca_a2r.ca_pe.b1 = ca_a2r.ca_pe.b2 = ca_a2r.ca_pe.x1 = ca_a2r.ca_pe.x2 = ca_a2r.ca_pe.y1 = 0;
-  ca_a2r.ca_pe.y2 = ca_a3l.ca_be = ca_a3l.ca_bh = ca_a3l.ca_dbe = ca_a3l.ca_de.a1 = ca_a3l.ca_de.a2 = 0;
-  ca_a3l.ca_de.b0 = ca_a3l.ca_de.b1 = ca_a3l.ca_de.b2 = ca_a3l.ca_de.x1 = ca_a3l.ca_de.x2 = ca_a3l.ca_de.y1 = 0;
-  ca_a3l.ca_de.y2 = ca_a3l.ca_dh = ca_a3l.ca_ed = ca_a3l.ca_ee = ca_a3l.ca_hb.a1 = ca_a3l.ca_hb.a2 = 0;
-  ca_a3l.ca_hb.b0 = ca_a3l.ca_hb.b1 = ca_a3l.ca_hb.b2 = ca_a3l.ca_hb.x1 = ca_a3l.ca_hb.x2 = ca_a3l.ca_hb.y1 = 0;
-  ca_a3l.ca_hb.y2 = ca_a3l.ca_hl.a1 = ca_a3l.ca_hl.a2 = ca_a3l.ca_hl.b0 = ca_a3l.ca_hl.b1 = ca_a3l.ca_hl.b2 = 0;
-  ca_a3l.ca_hl.x1 = ca_a3l.ca_hl.x2 = ca_a3l.ca_hl.y1 = ca_a3l.ca_hl.y2 = ca_a3l.ca_pe.a1 = ca_a3l.ca_pe.a2 = 0;
-  ca_a3l.ca_pe.b0 = ca_a3l.ca_pe.b1 = ca_a3l.ca_pe.b2 = ca_a3l.ca_pe.x1 = ca_a3l.ca_pe.x2 = ca_a3l.ca_pe.y1 = 0;
-  ca_a3l.ca_pe.y2 = ca_a3r.ca_be = ca_a3r.ca_bh = ca_a3r.ca_dbe = ca_a3r.ca_de.a1 = ca_a3r.ca_de.a2 = 0;
-  ca_a3r.ca_de.b0 = ca_a3r.ca_de.b1 = ca_a3r.ca_de.b2 = ca_a3r.ca_de.x1 = ca_a3r.ca_de.x2 = ca_a3r.ca_de.y1 = 0;
-  ca_a3r.ca_de.y2 = ca_a3r.ca_dh = ca_a3r.ca_ed = ca_a3r.ca_ee = ca_a3r.ca_hb.a1 = ca_a3r.ca_hb.a2 = 0;
-  ca_a3r.ca_hb.b0 = ca_a3r.ca_hb.b1 = ca_a3r.ca_hb.b2 = ca_a3r.ca_hb.x1 = ca_a3r.ca_hb.x2 = ca_a3r.ca_hb.y1 = 0;
-  ca_a3r.ca_hb.y2 = ca_a3r.ca_hl.a1 = ca_a3r.ca_hl.a2 = ca_a3r.ca_hl.b0 = ca_a3r.ca_hl.b1 = ca_a3r.ca_hl.b2 = 0;
-  ca_a3r.ca_hl.x1 = ca_a3r.ca_hl.x2 = ca_a3r.ca_hl.y1 = ca_a3r.ca_hl.y2 = ca_a3r.ca_pe.a1 = ca_a3r.ca_pe.a2 = 0;
-  ca_a3r.ca_pe.b0 = ca_a3r.ca_pe.b1 = ca_a3r.ca_pe.b2 = ca_a3r.ca_pe.x1 = ca_a3r.ca_pe.x2 = ca_a3r.ca_pe.y1 = 0;
-  ca_a3r.ca_pe.y2 = ca_e0l.ca_bsf.a1 = ca_e0l.ca_bsf.a2 = ca_e0l.ca_bsf.b0 = ca_e0l.ca_bsf.b1 = 0;
-  ca_e0l.ca_bsf.b2 = ca_e0l.ca_bsf.x1 = ca_e0l.ca_bsf.x2 = ca_e0l.ca_bsf.y1 = ca_e0l.ca_bsf.y2 = 0;
-  ca_e0l.ca_ts.a1 = ca_e0l.ca_ts.a2 = ca_e0l.ca_ts.b0 = ca_e0l.ca_ts.b1 = ca_e0l.ca_ts.b2 = ca_e0l.ca_ts.x1 = 0;
-  ca_e0l.ca_ts.x2 = ca_e0l.ca_ts.y1 = ca_e0l.ca_ts.y2 = ca_e0r.ca_bsf.a1 = ca_e0r.ca_bsf.a2 = ca_e0r.ca_bsf.b0 = 0;
-  ca_e0r.ca_bsf.b1 = ca_e0r.ca_bsf.b2 = ca_e0r.ca_bsf.x1 = ca_e0r.ca_bsf.x2 = ca_e0r.ca_bsf.y1 = 0;
-  ca_e0r.ca_bsf.y2 = ca_e0r.ca_ts.a1 = ca_e0r.ca_ts.a2 = ca_e0r.ca_ts.b0 = ca_e0r.ca_ts.b1 = ca_e0r.ca_ts.b2 = 0;
-  ca_e0r.ca_ts.x1 = ca_e0r.ca_ts.x2 = ca_e0r.ca_ts.y1 = ca_e0r.ca_ts.y2 = ca_e1l.ca_bsf.a1 = ca_e1l.ca_bsf.a2 = 0;
-  ca_e1l.ca_bsf.b0 = ca_e1l.ca_bsf.b1 = ca_e1l.ca_bsf.b2 = ca_e1l.ca_bsf.x1 = ca_e1l.ca_bsf.x2 = 0;
-  ca_e1l.ca_bsf.y1 = ca_e1l.ca_bsf.y2 = ca_e1l.ca_ts.a1 = ca_e1l.ca_ts.a2 = ca_e1l.ca_ts.b0 = ca_e1l.ca_ts.b1 = 0;
-  ca_e1l.ca_ts.b2 = ca_e1l.ca_ts.x1 = ca_e1l.ca_ts.x2 = ca_e1l.ca_ts.y1 = ca_e1l.ca_ts.y2 = ca_e1r.ca_bsf.a1 = 0;
-  ca_e1r.ca_bsf.a2 = ca_e1r.ca_bsf.b0 = ca_e1r.ca_bsf.b1 = ca_e1r.ca_bsf.b2 = ca_e1r.ca_bsf.x1 = 0;
-  ca_e1r.ca_bsf.x2 = ca_e1r.ca_bsf.y1 = ca_e1r.ca_bsf.y2 = ca_e1r.ca_ts.a1 = ca_e1r.ca_ts.a2 = ca_e1r.ca_ts.b0 = 0;
-  ca_e1r.ca_ts.b1 = ca_e1r.ca_ts.b2 = ca_e1r.ca_ts.x1 = ca_e1r.ca_ts.x2 = ca_e1r.ca_ts.y1 = ca_e1r.ca_ts.y2 = 0;
-  ca_e2l.ca_bsf.a1 = ca_e2l.ca_bsf.a2 = ca_e2l.ca_bsf.b0 = ca_e2l.ca_bsf.b1 = ca_e2l.ca_bsf.b2 = 0;
-  ca_e2l.ca_bsf.x1 = ca_e2l.ca_bsf.x2 = ca_e2l.ca_bsf.y1 = ca_e2l.ca_bsf.y2 = ca_e2l.ca_ts.a1 = 0;
-  ca_e2l.ca_ts.a2 = ca_e2l.ca_ts.b0 = ca_e2l.ca_ts.b1 = ca_e2l.ca_ts.b2 = ca_e2l.ca_ts.x1 = ca_e2l.ca_ts.x2 = 0;
-  ca_e2l.ca_ts.y1 = ca_e2l.ca_ts.y2 = ca_e2r.ca_bsf.a1 = ca_e2r.ca_bsf.a2 = ca_e2r.ca_bsf.b0 = 0;
-  ca_e2r.ca_bsf.b1 = ca_e2r.ca_bsf.b2 = ca_e2r.ca_bsf.x1 = ca_e2r.ca_bsf.x2 = ca_e2r.ca_bsf.y1 = 0;
-  ca_e2r.ca_bsf.y2 = ca_e2r.ca_ts.a1 = ca_e2r.ca_ts.a2 = ca_e2r.ca_ts.b0 = ca_e2r.ca_ts.b1 = ca_e2r.ca_ts.b2 = 0;
-  ca_e2r.ca_ts.x1 = ca_e2r.ca_ts.x2 = ca_e2r.ca_ts.y1 = ca_e2r.ca_ts.y2 = ca_e3l.ca_bsf.a1 = ca_e3l.ca_bsf.a2 = 0;
-  ca_e3l.ca_bsf.b0 = ca_e3l.ca_bsf.b1 = ca_e3l.ca_bsf.b2 = ca_e3l.ca_bsf.x1 = ca_e3l.ca_bsf.x2 = 0;
-  ca_e3l.ca_bsf.y1 = ca_e3l.ca_bsf.y2 = ca_e3l.ca_ts.a1 = ca_e3l.ca_ts.a2 = ca_e3l.ca_ts.b0 = ca_e3l.ca_ts.b1 = 0;
-  ca_e3l.ca_ts.b2 = ca_e3l.ca_ts.x1 = ca_e3l.ca_ts.x2 = ca_e3l.ca_ts.y1 = ca_e3l.ca_ts.y2 = ca_e3r.ca_bsf.a1 = 0;
-  ca_e3r.ca_bsf.a2 = ca_e3r.ca_bsf.b0 = ca_e3r.ca_bsf.b1 = ca_e3r.ca_bsf.b2 = ca_e3r.ca_bsf.x1 = 0;
-  ca_e3r.ca_bsf.x2 = ca_e3r.ca_bsf.y1 = ca_e3r.ca_bsf.y2 = ca_e3r.ca_ts.a1 = ca_e3r.ca_ts.a2 = ca_e3r.ca_ts.b0 = 0;
-  ca_e3r.ca_ts.b1 = ca_e3r.ca_ts.b2 = ca_e3r.ca_ts.x1 = ca_e3r.ca_ts.x2 = ca_e3r.ca_ts.y1 = ca_e3r.ca_ts.y2 = 0;
+  ca_age = ca_b_c = ca_bmsk = ca_bsz = ca_bumpf = ca_bumpg = ca_c4_dk = ca_c4_dkg = ca_c4_dkr = ca_c4_dst = 0;
+  ca_c4_hc = ca_den = ca_dr_r = ca_drop_g = ca_drop_n = ca_drop_t = ca_fph = ca_hfc = ca_hiss_g = ca_i = ca_k = 0;
+  ca_ml = ca_model = ca_mr = ca_mst = ca_nr = ca_nr_c = ca_nz = ca_pl = ca_play_g = ca_pr = ca_rec_g = 0;
+  ca_sat_k = ca_sm = ca_t0l = ca_t0r = ca_t1l = ca_t1r = ca_t2l = ca_t2r = ca_t3l = ca_t3r = ca_tg = ca_tgt = 0;
+  ca_tpk = ca_vu_sine = ca_vuc = ca_wdel = ca_wnd = ca_wow_a = ca_wph = ca_wpos = ca_a0l.ca_be = ca_a0l.ca_bh = 0;
+  ca_a0l.ca_dbe = ca_a0l.ca_de.a1 = ca_a0l.ca_de.a2 = ca_a0l.ca_de.b0 = ca_a0l.ca_de.b1 = ca_a0l.ca_de.b2 = 0;
+  ca_a0l.ca_de.x1 = ca_a0l.ca_de.x2 = ca_a0l.ca_de.y1 = ca_a0l.ca_de.y2 = ca_a0l.ca_dh = ca_a0l.ca_ed = 0;
+  ca_a0l.ca_ee = ca_a0l.ca_hb.a1 = ca_a0l.ca_hb.a2 = ca_a0l.ca_hb.b0 = ca_a0l.ca_hb.b1 = ca_a0l.ca_hb.b2 = 0;
+  ca_a0l.ca_hb.x1 = ca_a0l.ca_hb.x2 = ca_a0l.ca_hb.y1 = ca_a0l.ca_hb.y2 = ca_a0l.ca_hl.a1 = ca_a0l.ca_hl.a2 = 0;
+  ca_a0l.ca_hl.b0 = ca_a0l.ca_hl.b1 = ca_a0l.ca_hl.b2 = ca_a0l.ca_hl.x1 = ca_a0l.ca_hl.x2 = ca_a0l.ca_hl.y1 = 0;
+  ca_a0l.ca_hl.y2 = ca_a0l.ca_pe.a1 = ca_a0l.ca_pe.a2 = ca_a0l.ca_pe.b0 = ca_a0l.ca_pe.b1 = ca_a0l.ca_pe.b2 = 0;
+  ca_a0l.ca_pe.x1 = ca_a0l.ca_pe.x2 = ca_a0l.ca_pe.y1 = ca_a0l.ca_pe.y2 = ca_a0r.ca_be = ca_a0r.ca_bh = 0;
+  ca_a0r.ca_dbe = ca_a0r.ca_de.a1 = ca_a0r.ca_de.a2 = ca_a0r.ca_de.b0 = ca_a0r.ca_de.b1 = ca_a0r.ca_de.b2 = 0;
+  ca_a0r.ca_de.x1 = ca_a0r.ca_de.x2 = ca_a0r.ca_de.y1 = ca_a0r.ca_de.y2 = ca_a0r.ca_dh = ca_a0r.ca_ed = 0;
+  ca_a0r.ca_ee = ca_a0r.ca_hb.a1 = ca_a0r.ca_hb.a2 = ca_a0r.ca_hb.b0 = ca_a0r.ca_hb.b1 = ca_a0r.ca_hb.b2 = 0;
+  ca_a0r.ca_hb.x1 = ca_a0r.ca_hb.x2 = ca_a0r.ca_hb.y1 = ca_a0r.ca_hb.y2 = ca_a0r.ca_hl.a1 = ca_a0r.ca_hl.a2 = 0;
+  ca_a0r.ca_hl.b0 = ca_a0r.ca_hl.b1 = ca_a0r.ca_hl.b2 = ca_a0r.ca_hl.x1 = ca_a0r.ca_hl.x2 = ca_a0r.ca_hl.y1 = 0;
+  ca_a0r.ca_hl.y2 = ca_a0r.ca_pe.a1 = ca_a0r.ca_pe.a2 = ca_a0r.ca_pe.b0 = ca_a0r.ca_pe.b1 = ca_a0r.ca_pe.b2 = 0;
+  ca_a0r.ca_pe.x1 = ca_a0r.ca_pe.x2 = ca_a0r.ca_pe.y1 = ca_a0r.ca_pe.y2 = ca_a1l.ca_be = ca_a1l.ca_bh = 0;
+  ca_a1l.ca_dbe = ca_a1l.ca_de.a1 = ca_a1l.ca_de.a2 = ca_a1l.ca_de.b0 = ca_a1l.ca_de.b1 = ca_a1l.ca_de.b2 = 0;
+  ca_a1l.ca_de.x1 = ca_a1l.ca_de.x2 = ca_a1l.ca_de.y1 = ca_a1l.ca_de.y2 = ca_a1l.ca_dh = ca_a1l.ca_ed = 0;
+  ca_a1l.ca_ee = ca_a1l.ca_hb.a1 = ca_a1l.ca_hb.a2 = ca_a1l.ca_hb.b0 = ca_a1l.ca_hb.b1 = ca_a1l.ca_hb.b2 = 0;
+  ca_a1l.ca_hb.x1 = ca_a1l.ca_hb.x2 = ca_a1l.ca_hb.y1 = ca_a1l.ca_hb.y2 = ca_a1l.ca_hl.a1 = ca_a1l.ca_hl.a2 = 0;
+  ca_a1l.ca_hl.b0 = ca_a1l.ca_hl.b1 = ca_a1l.ca_hl.b2 = ca_a1l.ca_hl.x1 = ca_a1l.ca_hl.x2 = ca_a1l.ca_hl.y1 = 0;
+  ca_a1l.ca_hl.y2 = ca_a1l.ca_pe.a1 = ca_a1l.ca_pe.a2 = ca_a1l.ca_pe.b0 = ca_a1l.ca_pe.b1 = ca_a1l.ca_pe.b2 = 0;
+  ca_a1l.ca_pe.x1 = ca_a1l.ca_pe.x2 = ca_a1l.ca_pe.y1 = ca_a1l.ca_pe.y2 = ca_a1r.ca_be = ca_a1r.ca_bh = 0;
+  ca_a1r.ca_dbe = ca_a1r.ca_de.a1 = ca_a1r.ca_de.a2 = ca_a1r.ca_de.b0 = ca_a1r.ca_de.b1 = ca_a1r.ca_de.b2 = 0;
+  ca_a1r.ca_de.x1 = ca_a1r.ca_de.x2 = ca_a1r.ca_de.y1 = ca_a1r.ca_de.y2 = ca_a1r.ca_dh = ca_a1r.ca_ed = 0;
+  ca_a1r.ca_ee = ca_a1r.ca_hb.a1 = ca_a1r.ca_hb.a2 = ca_a1r.ca_hb.b0 = ca_a1r.ca_hb.b1 = ca_a1r.ca_hb.b2 = 0;
+  ca_a1r.ca_hb.x1 = ca_a1r.ca_hb.x2 = ca_a1r.ca_hb.y1 = ca_a1r.ca_hb.y2 = ca_a1r.ca_hl.a1 = ca_a1r.ca_hl.a2 = 0;
+  ca_a1r.ca_hl.b0 = ca_a1r.ca_hl.b1 = ca_a1r.ca_hl.b2 = ca_a1r.ca_hl.x1 = ca_a1r.ca_hl.x2 = ca_a1r.ca_hl.y1 = 0;
+  ca_a1r.ca_hl.y2 = ca_a1r.ca_pe.a1 = ca_a1r.ca_pe.a2 = ca_a1r.ca_pe.b0 = ca_a1r.ca_pe.b1 = ca_a1r.ca_pe.b2 = 0;
+  ca_a1r.ca_pe.x1 = ca_a1r.ca_pe.x2 = ca_a1r.ca_pe.y1 = ca_a1r.ca_pe.y2 = ca_a2l.ca_be = ca_a2l.ca_bh = 0;
+  ca_a2l.ca_dbe = ca_a2l.ca_de.a1 = ca_a2l.ca_de.a2 = ca_a2l.ca_de.b0 = ca_a2l.ca_de.b1 = ca_a2l.ca_de.b2 = 0;
+  ca_a2l.ca_de.x1 = ca_a2l.ca_de.x2 = ca_a2l.ca_de.y1 = ca_a2l.ca_de.y2 = ca_a2l.ca_dh = ca_a2l.ca_ed = 0;
+  ca_a2l.ca_ee = ca_a2l.ca_hb.a1 = ca_a2l.ca_hb.a2 = ca_a2l.ca_hb.b0 = ca_a2l.ca_hb.b1 = ca_a2l.ca_hb.b2 = 0;
+  ca_a2l.ca_hb.x1 = ca_a2l.ca_hb.x2 = ca_a2l.ca_hb.y1 = ca_a2l.ca_hb.y2 = ca_a2l.ca_hl.a1 = ca_a2l.ca_hl.a2 = 0;
+  ca_a2l.ca_hl.b0 = ca_a2l.ca_hl.b1 = ca_a2l.ca_hl.b2 = ca_a2l.ca_hl.x1 = ca_a2l.ca_hl.x2 = ca_a2l.ca_hl.y1 = 0;
+  ca_a2l.ca_hl.y2 = ca_a2l.ca_pe.a1 = ca_a2l.ca_pe.a2 = ca_a2l.ca_pe.b0 = ca_a2l.ca_pe.b1 = ca_a2l.ca_pe.b2 = 0;
+  ca_a2l.ca_pe.x1 = ca_a2l.ca_pe.x2 = ca_a2l.ca_pe.y1 = ca_a2l.ca_pe.y2 = ca_a2r.ca_be = ca_a2r.ca_bh = 0;
+  ca_a2r.ca_dbe = ca_a2r.ca_de.a1 = ca_a2r.ca_de.a2 = ca_a2r.ca_de.b0 = ca_a2r.ca_de.b1 = ca_a2r.ca_de.b2 = 0;
+  ca_a2r.ca_de.x1 = ca_a2r.ca_de.x2 = ca_a2r.ca_de.y1 = ca_a2r.ca_de.y2 = ca_a2r.ca_dh = ca_a2r.ca_ed = 0;
+  ca_a2r.ca_ee = ca_a2r.ca_hb.a1 = ca_a2r.ca_hb.a2 = ca_a2r.ca_hb.b0 = ca_a2r.ca_hb.b1 = ca_a2r.ca_hb.b2 = 0;
+  ca_a2r.ca_hb.x1 = ca_a2r.ca_hb.x2 = ca_a2r.ca_hb.y1 = ca_a2r.ca_hb.y2 = ca_a2r.ca_hl.a1 = ca_a2r.ca_hl.a2 = 0;
+  ca_a2r.ca_hl.b0 = ca_a2r.ca_hl.b1 = ca_a2r.ca_hl.b2 = ca_a2r.ca_hl.x1 = ca_a2r.ca_hl.x2 = ca_a2r.ca_hl.y1 = 0;
+  ca_a2r.ca_hl.y2 = ca_a2r.ca_pe.a1 = ca_a2r.ca_pe.a2 = ca_a2r.ca_pe.b0 = ca_a2r.ca_pe.b1 = ca_a2r.ca_pe.b2 = 0;
+  ca_a2r.ca_pe.x1 = ca_a2r.ca_pe.x2 = ca_a2r.ca_pe.y1 = ca_a2r.ca_pe.y2 = ca_a3l.ca_be = ca_a3l.ca_bh = 0;
+  ca_a3l.ca_dbe = ca_a3l.ca_de.a1 = ca_a3l.ca_de.a2 = ca_a3l.ca_de.b0 = ca_a3l.ca_de.b1 = ca_a3l.ca_de.b2 = 0;
+  ca_a3l.ca_de.x1 = ca_a3l.ca_de.x2 = ca_a3l.ca_de.y1 = ca_a3l.ca_de.y2 = ca_a3l.ca_dh = ca_a3l.ca_ed = 0;
+  ca_a3l.ca_ee = ca_a3l.ca_hb.a1 = ca_a3l.ca_hb.a2 = ca_a3l.ca_hb.b0 = ca_a3l.ca_hb.b1 = ca_a3l.ca_hb.b2 = 0;
+  ca_a3l.ca_hb.x1 = ca_a3l.ca_hb.x2 = ca_a3l.ca_hb.y1 = ca_a3l.ca_hb.y2 = ca_a3l.ca_hl.a1 = ca_a3l.ca_hl.a2 = 0;
+  ca_a3l.ca_hl.b0 = ca_a3l.ca_hl.b1 = ca_a3l.ca_hl.b2 = ca_a3l.ca_hl.x1 = ca_a3l.ca_hl.x2 = ca_a3l.ca_hl.y1 = 0;
+  ca_a3l.ca_hl.y2 = ca_a3l.ca_pe.a1 = ca_a3l.ca_pe.a2 = ca_a3l.ca_pe.b0 = ca_a3l.ca_pe.b1 = ca_a3l.ca_pe.b2 = 0;
+  ca_a3l.ca_pe.x1 = ca_a3l.ca_pe.x2 = ca_a3l.ca_pe.y1 = ca_a3l.ca_pe.y2 = ca_a3r.ca_be = ca_a3r.ca_bh = 0;
+  ca_a3r.ca_dbe = ca_a3r.ca_de.a1 = ca_a3r.ca_de.a2 = ca_a3r.ca_de.b0 = ca_a3r.ca_de.b1 = ca_a3r.ca_de.b2 = 0;
+  ca_a3r.ca_de.x1 = ca_a3r.ca_de.x2 = ca_a3r.ca_de.y1 = ca_a3r.ca_de.y2 = ca_a3r.ca_dh = ca_a3r.ca_ed = 0;
+  ca_a3r.ca_ee = ca_a3r.ca_hb.a1 = ca_a3r.ca_hb.a2 = ca_a3r.ca_hb.b0 = ca_a3r.ca_hb.b1 = ca_a3r.ca_hb.b2 = 0;
+  ca_a3r.ca_hb.x1 = ca_a3r.ca_hb.x2 = ca_a3r.ca_hb.y1 = ca_a3r.ca_hb.y2 = ca_a3r.ca_hl.a1 = ca_a3r.ca_hl.a2 = 0;
+  ca_a3r.ca_hl.b0 = ca_a3r.ca_hl.b1 = ca_a3r.ca_hl.b2 = ca_a3r.ca_hl.x1 = ca_a3r.ca_hl.x2 = ca_a3r.ca_hl.y1 = 0;
+  ca_a3r.ca_hl.y2 = ca_a3r.ca_pe.a1 = ca_a3r.ca_pe.a2 = ca_a3r.ca_pe.b0 = ca_a3r.ca_pe.b1 = ca_a3r.ca_pe.b2 = 0;
+  ca_a3r.ca_pe.x1 = ca_a3r.ca_pe.x2 = ca_a3r.ca_pe.y1 = ca_a3r.ca_pe.y2 = ca_e0l.ca_bsf.a1 = ca_e0l.ca_bsf.a2 = 0;
+  ca_e0l.ca_bsf.b0 = ca_e0l.ca_bsf.b1 = ca_e0l.ca_bsf.b2 = ca_e0l.ca_bsf.x1 = ca_e0l.ca_bsf.x2 = 0;
+  ca_e0l.ca_bsf.y1 = ca_e0l.ca_bsf.y2 = ca_e0l.ca_ts.a1 = ca_e0l.ca_ts.a2 = ca_e0l.ca_ts.b0 = ca_e0l.ca_ts.b1 = 0;
+  ca_e0l.ca_ts.b2 = ca_e0l.ca_ts.x1 = ca_e0l.ca_ts.x2 = ca_e0l.ca_ts.y1 = ca_e0l.ca_ts.y2 = ca_e0r.ca_bsf.a1 = 0;
+  ca_e0r.ca_bsf.a2 = ca_e0r.ca_bsf.b0 = ca_e0r.ca_bsf.b1 = ca_e0r.ca_bsf.b2 = ca_e0r.ca_bsf.x1 = 0;
+  ca_e0r.ca_bsf.x2 = ca_e0r.ca_bsf.y1 = ca_e0r.ca_bsf.y2 = ca_e0r.ca_ts.a1 = ca_e0r.ca_ts.a2 = ca_e0r.ca_ts.b0 = 0;
+  ca_e0r.ca_ts.b1 = ca_e0r.ca_ts.b2 = ca_e0r.ca_ts.x1 = ca_e0r.ca_ts.x2 = ca_e0r.ca_ts.y1 = ca_e0r.ca_ts.y2 = 0;
+  ca_e1l.ca_bsf.a1 = ca_e1l.ca_bsf.a2 = ca_e1l.ca_bsf.b0 = ca_e1l.ca_bsf.b1 = ca_e1l.ca_bsf.b2 = 0;
+  ca_e1l.ca_bsf.x1 = ca_e1l.ca_bsf.x2 = ca_e1l.ca_bsf.y1 = ca_e1l.ca_bsf.y2 = ca_e1l.ca_ts.a1 = 0;
+  ca_e1l.ca_ts.a2 = ca_e1l.ca_ts.b0 = ca_e1l.ca_ts.b1 = ca_e1l.ca_ts.b2 = ca_e1l.ca_ts.x1 = ca_e1l.ca_ts.x2 = 0;
+  ca_e1l.ca_ts.y1 = ca_e1l.ca_ts.y2 = ca_e1r.ca_bsf.a1 = ca_e1r.ca_bsf.a2 = ca_e1r.ca_bsf.b0 = 0;
+  ca_e1r.ca_bsf.b1 = ca_e1r.ca_bsf.b2 = ca_e1r.ca_bsf.x1 = ca_e1r.ca_bsf.x2 = ca_e1r.ca_bsf.y1 = 0;
+  ca_e1r.ca_bsf.y2 = ca_e1r.ca_ts.a1 = ca_e1r.ca_ts.a2 = ca_e1r.ca_ts.b0 = ca_e1r.ca_ts.b1 = ca_e1r.ca_ts.b2 = 0;
+  ca_e1r.ca_ts.x1 = ca_e1r.ca_ts.x2 = ca_e1r.ca_ts.y1 = ca_e1r.ca_ts.y2 = ca_e2l.ca_bsf.a1 = ca_e2l.ca_bsf.a2 = 0;
+  ca_e2l.ca_bsf.b0 = ca_e2l.ca_bsf.b1 = ca_e2l.ca_bsf.b2 = ca_e2l.ca_bsf.x1 = ca_e2l.ca_bsf.x2 = 0;
+  ca_e2l.ca_bsf.y1 = ca_e2l.ca_bsf.y2 = ca_e2l.ca_ts.a1 = ca_e2l.ca_ts.a2 = ca_e2l.ca_ts.b0 = ca_e2l.ca_ts.b1 = 0;
+  ca_e2l.ca_ts.b2 = ca_e2l.ca_ts.x1 = ca_e2l.ca_ts.x2 = ca_e2l.ca_ts.y1 = ca_e2l.ca_ts.y2 = ca_e2r.ca_bsf.a1 = 0;
+  ca_e2r.ca_bsf.a2 = ca_e2r.ca_bsf.b0 = ca_e2r.ca_bsf.b1 = ca_e2r.ca_bsf.b2 = ca_e2r.ca_bsf.x1 = 0;
+  ca_e2r.ca_bsf.x2 = ca_e2r.ca_bsf.y1 = ca_e2r.ca_bsf.y2 = ca_e2r.ca_ts.a1 = ca_e2r.ca_ts.a2 = ca_e2r.ca_ts.b0 = 0;
+  ca_e2r.ca_ts.b1 = ca_e2r.ca_ts.b2 = ca_e2r.ca_ts.x1 = ca_e2r.ca_ts.x2 = ca_e2r.ca_ts.y1 = ca_e2r.ca_ts.y2 = 0;
+  ca_e3l.ca_bsf.a1 = ca_e3l.ca_bsf.a2 = ca_e3l.ca_bsf.b0 = ca_e3l.ca_bsf.b1 = ca_e3l.ca_bsf.b2 = 0;
+  ca_e3l.ca_bsf.x1 = ca_e3l.ca_bsf.x2 = ca_e3l.ca_bsf.y1 = ca_e3l.ca_bsf.y2 = ca_e3l.ca_ts.a1 = 0;
+  ca_e3l.ca_ts.a2 = ca_e3l.ca_ts.b0 = ca_e3l.ca_ts.b1 = ca_e3l.ca_ts.b2 = ca_e3l.ca_ts.x1 = ca_e3l.ca_ts.x2 = 0;
+  ca_e3l.ca_ts.y1 = ca_e3l.ca_ts.y2 = ca_e3r.ca_bsf.a1 = ca_e3r.ca_bsf.a2 = ca_e3r.ca_bsf.b0 = 0;
+  ca_e3r.ca_bsf.b1 = ca_e3r.ca_bsf.b2 = ca_e3r.ca_bsf.x1 = ca_e3r.ca_bsf.x2 = ca_e3r.ca_bsf.y1 = 0;
+  ca_e3r.ca_bsf.y2 = ca_e3r.ca_ts.a1 = ca_e3r.ca_ts.a2 = ca_e3r.ca_ts.b0 = ca_e3r.ca_ts.b1 = ca_e3r.ca_ts.b2 = 0;
+  ca_e3r.ca_ts.x1 = ca_e3r.ca_ts.x2 = ca_e3r.ca_ts.y1 = ca_e3r.ca_ts.y2 = 0;
   ca_DEN = 0.00000000000000000001;
   ca_BSZ = 8192; ca_BMSK = ca_BSZ - 1;                         // wow delay lines: 8 x 8192 from 10000
   ca_TG = 100; ca_TGT = 110; ca_TPK = 120; ca_PL = 130; ca_PR = 140; // per track: gain, target, peak, pan L / R gains
@@ -443,9 +433,14 @@ function ca_reset() (
   ca_wpos = 0; ca_drop_g = 1; ca_drop_t = 1;
   ca_update();
   ca_i = 0; loop(4, ca_TG[ca_i] = ca_TGT[ca_i]; ca_i += 1; );
+  ca_c4_dkr = 1 / (0.012 * srate); ca_c4_dk = 1; ca_c4_dst = 0;   // preset duck: 12 ms out, hold through the tape delay, 12 ms in
 );
 
 function ca_run() (
+  // preset duck-and-swap: model, noise reduction, drive and wow change in silence; stay silent while the tape
+  // delay and the NR envelopes catch up with the new settings
+  ca_c4_dst == 1 ? ( ca_c4_dk -= ca_c4_dkr; ca_c4_dk <= 0 ? ( ca_c4_dk = 0; ca_update(); ca_c4_hc = floor(0.008 * srate); ca_c4_dst = 2; ); ) :
+  ca_c4_dst == 2 ? ( ca_c4_hc > 0 ? ca_c4_hc -= 1 : ( ca_c4_dk += ca_c4_dkr; ca_c4_dk >= 1 ? ( ca_c4_dk = 1; ca_c4_dst = 0; ); ); );
   // ---------- transport: wow (0.6 Hz + a slow wander) and flutter (6 Hz), one for all tracks ----------
   ca_wph += 0.6 / srate; ca_wph -= floor(ca_wph);
   ca_fph += 6.2 / srate; ca_fph -= floor(ca_fph);
@@ -469,6 +464,7 @@ function ca_run() (
   ca_ml = ca_e0l.ca_eq(ca_t0l) * ca_TG[0] * ca_PL[0] + ca_e1l.ca_eq(ca_t1l) * ca_TG[1] * ca_PL[1] + ca_e2l.ca_eq(ca_t2l) * ca_TG[2] * ca_PL[2] + ca_e3l.ca_eq(ca_t3l) * ca_TG[3] * ca_PL[3];
   ca_mr = ca_e0r.ca_eq(ca_t0r) * ca_TG[0] * ca_PR[0] + ca_e1r.ca_eq(ca_t1r) * ca_TG[1] * ca_PR[1] + ca_e2r.ca_eq(ca_t2r) * ca_TG[2] * ca_PR[2] + ca_e3r.ca_eq(ca_t3r) * ca_TG[3] * ca_PR[3];
   ca_ml *= ca_mst; ca_mr *= ca_mst;
+  ca_c4_dst ? ( ca_c4_dkg = ca_c4_dk * ca_c4_dk * (3 - 2 * ca_c4_dk); ca_ml *= ca_c4_dkg; ca_mr *= ca_c4_dkg; );
 );
 
 // ================================================================ 44 (ported from gfx-cassette-4, MODEL 44)
@@ -553,92 +549,93 @@ function cb_update() local(cb_i, cb_a, cb_any) (
 
 function cb_reset() (
   // all state back to zero (as a fresh instance), then the original @init
-  cb_age = cb_b_c = cb_bmsk = cb_bsz = cb_bumpf = cb_bumpg = cb_den = cb_dr_r = cb_drop_g = cb_drop_n = 0;
-  cb_drop_t = cb_fph = cb_hfc = cb_hiss_g = cb_i = cb_k = cb_ml = cb_model = cb_mr = cb_mst = cb_nr = cb_nr_c = 0;
-  cb_nz = cb_pl = cb_play_g = cb_pr = cb_rec_g = cb_sat_k = cb_sm = cb_t0l = cb_t0r = cb_t1l = cb_t1r = cb_t2l = 0;
-  cb_t2r = cb_t3l = cb_t3r = cb_tg = cb_tgt = cb_tpk = cb_vu_sine = cb_vuc = cb_wdel = cb_wnd = cb_wow_a = 0;
-  cb_wph = cb_wpos = cb_a0l.cb_be = cb_a0l.cb_bh = cb_a0l.cb_dbe = cb_a0l.cb_de.a1 = cb_a0l.cb_de.a2 = 0;
-  cb_a0l.cb_de.b0 = cb_a0l.cb_de.b1 = cb_a0l.cb_de.b2 = cb_a0l.cb_de.x1 = cb_a0l.cb_de.x2 = cb_a0l.cb_de.y1 = 0;
-  cb_a0l.cb_de.y2 = cb_a0l.cb_dh = cb_a0l.cb_ed = cb_a0l.cb_ee = cb_a0l.cb_hb.a1 = cb_a0l.cb_hb.a2 = 0;
-  cb_a0l.cb_hb.b0 = cb_a0l.cb_hb.b1 = cb_a0l.cb_hb.b2 = cb_a0l.cb_hb.x1 = cb_a0l.cb_hb.x2 = cb_a0l.cb_hb.y1 = 0;
-  cb_a0l.cb_hb.y2 = cb_a0l.cb_hl.a1 = cb_a0l.cb_hl.a2 = cb_a0l.cb_hl.b0 = cb_a0l.cb_hl.b1 = cb_a0l.cb_hl.b2 = 0;
-  cb_a0l.cb_hl.x1 = cb_a0l.cb_hl.x2 = cb_a0l.cb_hl.y1 = cb_a0l.cb_hl.y2 = cb_a0l.cb_pe.a1 = cb_a0l.cb_pe.a2 = 0;
-  cb_a0l.cb_pe.b0 = cb_a0l.cb_pe.b1 = cb_a0l.cb_pe.b2 = cb_a0l.cb_pe.x1 = cb_a0l.cb_pe.x2 = cb_a0l.cb_pe.y1 = 0;
-  cb_a0l.cb_pe.y2 = cb_a0r.cb_be = cb_a0r.cb_bh = cb_a0r.cb_dbe = cb_a0r.cb_de.a1 = cb_a0r.cb_de.a2 = 0;
-  cb_a0r.cb_de.b0 = cb_a0r.cb_de.b1 = cb_a0r.cb_de.b2 = cb_a0r.cb_de.x1 = cb_a0r.cb_de.x2 = cb_a0r.cb_de.y1 = 0;
-  cb_a0r.cb_de.y2 = cb_a0r.cb_dh = cb_a0r.cb_ed = cb_a0r.cb_ee = cb_a0r.cb_hb.a1 = cb_a0r.cb_hb.a2 = 0;
-  cb_a0r.cb_hb.b0 = cb_a0r.cb_hb.b1 = cb_a0r.cb_hb.b2 = cb_a0r.cb_hb.x1 = cb_a0r.cb_hb.x2 = cb_a0r.cb_hb.y1 = 0;
-  cb_a0r.cb_hb.y2 = cb_a0r.cb_hl.a1 = cb_a0r.cb_hl.a2 = cb_a0r.cb_hl.b0 = cb_a0r.cb_hl.b1 = cb_a0r.cb_hl.b2 = 0;
-  cb_a0r.cb_hl.x1 = cb_a0r.cb_hl.x2 = cb_a0r.cb_hl.y1 = cb_a0r.cb_hl.y2 = cb_a0r.cb_pe.a1 = cb_a0r.cb_pe.a2 = 0;
-  cb_a0r.cb_pe.b0 = cb_a0r.cb_pe.b1 = cb_a0r.cb_pe.b2 = cb_a0r.cb_pe.x1 = cb_a0r.cb_pe.x2 = cb_a0r.cb_pe.y1 = 0;
-  cb_a0r.cb_pe.y2 = cb_a1l.cb_be = cb_a1l.cb_bh = cb_a1l.cb_dbe = cb_a1l.cb_de.a1 = cb_a1l.cb_de.a2 = 0;
-  cb_a1l.cb_de.b0 = cb_a1l.cb_de.b1 = cb_a1l.cb_de.b2 = cb_a1l.cb_de.x1 = cb_a1l.cb_de.x2 = cb_a1l.cb_de.y1 = 0;
-  cb_a1l.cb_de.y2 = cb_a1l.cb_dh = cb_a1l.cb_ed = cb_a1l.cb_ee = cb_a1l.cb_hb.a1 = cb_a1l.cb_hb.a2 = 0;
-  cb_a1l.cb_hb.b0 = cb_a1l.cb_hb.b1 = cb_a1l.cb_hb.b2 = cb_a1l.cb_hb.x1 = cb_a1l.cb_hb.x2 = cb_a1l.cb_hb.y1 = 0;
-  cb_a1l.cb_hb.y2 = cb_a1l.cb_hl.a1 = cb_a1l.cb_hl.a2 = cb_a1l.cb_hl.b0 = cb_a1l.cb_hl.b1 = cb_a1l.cb_hl.b2 = 0;
-  cb_a1l.cb_hl.x1 = cb_a1l.cb_hl.x2 = cb_a1l.cb_hl.y1 = cb_a1l.cb_hl.y2 = cb_a1l.cb_pe.a1 = cb_a1l.cb_pe.a2 = 0;
-  cb_a1l.cb_pe.b0 = cb_a1l.cb_pe.b1 = cb_a1l.cb_pe.b2 = cb_a1l.cb_pe.x1 = cb_a1l.cb_pe.x2 = cb_a1l.cb_pe.y1 = 0;
-  cb_a1l.cb_pe.y2 = cb_a1r.cb_be = cb_a1r.cb_bh = cb_a1r.cb_dbe = cb_a1r.cb_de.a1 = cb_a1r.cb_de.a2 = 0;
-  cb_a1r.cb_de.b0 = cb_a1r.cb_de.b1 = cb_a1r.cb_de.b2 = cb_a1r.cb_de.x1 = cb_a1r.cb_de.x2 = cb_a1r.cb_de.y1 = 0;
-  cb_a1r.cb_de.y2 = cb_a1r.cb_dh = cb_a1r.cb_ed = cb_a1r.cb_ee = cb_a1r.cb_hb.a1 = cb_a1r.cb_hb.a2 = 0;
-  cb_a1r.cb_hb.b0 = cb_a1r.cb_hb.b1 = cb_a1r.cb_hb.b2 = cb_a1r.cb_hb.x1 = cb_a1r.cb_hb.x2 = cb_a1r.cb_hb.y1 = 0;
-  cb_a1r.cb_hb.y2 = cb_a1r.cb_hl.a1 = cb_a1r.cb_hl.a2 = cb_a1r.cb_hl.b0 = cb_a1r.cb_hl.b1 = cb_a1r.cb_hl.b2 = 0;
-  cb_a1r.cb_hl.x1 = cb_a1r.cb_hl.x2 = cb_a1r.cb_hl.y1 = cb_a1r.cb_hl.y2 = cb_a1r.cb_pe.a1 = cb_a1r.cb_pe.a2 = 0;
-  cb_a1r.cb_pe.b0 = cb_a1r.cb_pe.b1 = cb_a1r.cb_pe.b2 = cb_a1r.cb_pe.x1 = cb_a1r.cb_pe.x2 = cb_a1r.cb_pe.y1 = 0;
-  cb_a1r.cb_pe.y2 = cb_a2l.cb_be = cb_a2l.cb_bh = cb_a2l.cb_dbe = cb_a2l.cb_de.a1 = cb_a2l.cb_de.a2 = 0;
-  cb_a2l.cb_de.b0 = cb_a2l.cb_de.b1 = cb_a2l.cb_de.b2 = cb_a2l.cb_de.x1 = cb_a2l.cb_de.x2 = cb_a2l.cb_de.y1 = 0;
-  cb_a2l.cb_de.y2 = cb_a2l.cb_dh = cb_a2l.cb_ed = cb_a2l.cb_ee = cb_a2l.cb_hb.a1 = cb_a2l.cb_hb.a2 = 0;
-  cb_a2l.cb_hb.b0 = cb_a2l.cb_hb.b1 = cb_a2l.cb_hb.b2 = cb_a2l.cb_hb.x1 = cb_a2l.cb_hb.x2 = cb_a2l.cb_hb.y1 = 0;
-  cb_a2l.cb_hb.y2 = cb_a2l.cb_hl.a1 = cb_a2l.cb_hl.a2 = cb_a2l.cb_hl.b0 = cb_a2l.cb_hl.b1 = cb_a2l.cb_hl.b2 = 0;
-  cb_a2l.cb_hl.x1 = cb_a2l.cb_hl.x2 = cb_a2l.cb_hl.y1 = cb_a2l.cb_hl.y2 = cb_a2l.cb_pe.a1 = cb_a2l.cb_pe.a2 = 0;
-  cb_a2l.cb_pe.b0 = cb_a2l.cb_pe.b1 = cb_a2l.cb_pe.b2 = cb_a2l.cb_pe.x1 = cb_a2l.cb_pe.x2 = cb_a2l.cb_pe.y1 = 0;
-  cb_a2l.cb_pe.y2 = cb_a2r.cb_be = cb_a2r.cb_bh = cb_a2r.cb_dbe = cb_a2r.cb_de.a1 = cb_a2r.cb_de.a2 = 0;
-  cb_a2r.cb_de.b0 = cb_a2r.cb_de.b1 = cb_a2r.cb_de.b2 = cb_a2r.cb_de.x1 = cb_a2r.cb_de.x2 = cb_a2r.cb_de.y1 = 0;
-  cb_a2r.cb_de.y2 = cb_a2r.cb_dh = cb_a2r.cb_ed = cb_a2r.cb_ee = cb_a2r.cb_hb.a1 = cb_a2r.cb_hb.a2 = 0;
-  cb_a2r.cb_hb.b0 = cb_a2r.cb_hb.b1 = cb_a2r.cb_hb.b2 = cb_a2r.cb_hb.x1 = cb_a2r.cb_hb.x2 = cb_a2r.cb_hb.y1 = 0;
-  cb_a2r.cb_hb.y2 = cb_a2r.cb_hl.a1 = cb_a2r.cb_hl.a2 = cb_a2r.cb_hl.b0 = cb_a2r.cb_hl.b1 = cb_a2r.cb_hl.b2 = 0;
-  cb_a2r.cb_hl.x1 = cb_a2r.cb_hl.x2 = cb_a2r.cb_hl.y1 = cb_a2r.cb_hl.y2 = cb_a2r.cb_pe.a1 = cb_a2r.cb_pe.a2 = 0;
-  cb_a2r.cb_pe.b0 = cb_a2r.cb_pe.b1 = cb_a2r.cb_pe.b2 = cb_a2r.cb_pe.x1 = cb_a2r.cb_pe.x2 = cb_a2r.cb_pe.y1 = 0;
-  cb_a2r.cb_pe.y2 = cb_a3l.cb_be = cb_a3l.cb_bh = cb_a3l.cb_dbe = cb_a3l.cb_de.a1 = cb_a3l.cb_de.a2 = 0;
-  cb_a3l.cb_de.b0 = cb_a3l.cb_de.b1 = cb_a3l.cb_de.b2 = cb_a3l.cb_de.x1 = cb_a3l.cb_de.x2 = cb_a3l.cb_de.y1 = 0;
-  cb_a3l.cb_de.y2 = cb_a3l.cb_dh = cb_a3l.cb_ed = cb_a3l.cb_ee = cb_a3l.cb_hb.a1 = cb_a3l.cb_hb.a2 = 0;
-  cb_a3l.cb_hb.b0 = cb_a3l.cb_hb.b1 = cb_a3l.cb_hb.b2 = cb_a3l.cb_hb.x1 = cb_a3l.cb_hb.x2 = cb_a3l.cb_hb.y1 = 0;
-  cb_a3l.cb_hb.y2 = cb_a3l.cb_hl.a1 = cb_a3l.cb_hl.a2 = cb_a3l.cb_hl.b0 = cb_a3l.cb_hl.b1 = cb_a3l.cb_hl.b2 = 0;
-  cb_a3l.cb_hl.x1 = cb_a3l.cb_hl.x2 = cb_a3l.cb_hl.y1 = cb_a3l.cb_hl.y2 = cb_a3l.cb_pe.a1 = cb_a3l.cb_pe.a2 = 0;
-  cb_a3l.cb_pe.b0 = cb_a3l.cb_pe.b1 = cb_a3l.cb_pe.b2 = cb_a3l.cb_pe.x1 = cb_a3l.cb_pe.x2 = cb_a3l.cb_pe.y1 = 0;
-  cb_a3l.cb_pe.y2 = cb_a3r.cb_be = cb_a3r.cb_bh = cb_a3r.cb_dbe = cb_a3r.cb_de.a1 = cb_a3r.cb_de.a2 = 0;
-  cb_a3r.cb_de.b0 = cb_a3r.cb_de.b1 = cb_a3r.cb_de.b2 = cb_a3r.cb_de.x1 = cb_a3r.cb_de.x2 = cb_a3r.cb_de.y1 = 0;
-  cb_a3r.cb_de.y2 = cb_a3r.cb_dh = cb_a3r.cb_ed = cb_a3r.cb_ee = cb_a3r.cb_hb.a1 = cb_a3r.cb_hb.a2 = 0;
-  cb_a3r.cb_hb.b0 = cb_a3r.cb_hb.b1 = cb_a3r.cb_hb.b2 = cb_a3r.cb_hb.x1 = cb_a3r.cb_hb.x2 = cb_a3r.cb_hb.y1 = 0;
-  cb_a3r.cb_hb.y2 = cb_a3r.cb_hl.a1 = cb_a3r.cb_hl.a2 = cb_a3r.cb_hl.b0 = cb_a3r.cb_hl.b1 = cb_a3r.cb_hl.b2 = 0;
-  cb_a3r.cb_hl.x1 = cb_a3r.cb_hl.x2 = cb_a3r.cb_hl.y1 = cb_a3r.cb_hl.y2 = cb_a3r.cb_pe.a1 = cb_a3r.cb_pe.a2 = 0;
-  cb_a3r.cb_pe.b0 = cb_a3r.cb_pe.b1 = cb_a3r.cb_pe.b2 = cb_a3r.cb_pe.x1 = cb_a3r.cb_pe.x2 = cb_a3r.cb_pe.y1 = 0;
-  cb_a3r.cb_pe.y2 = cb_e0l.cb_bsf.a1 = cb_e0l.cb_bsf.a2 = cb_e0l.cb_bsf.b0 = cb_e0l.cb_bsf.b1 = 0;
-  cb_e0l.cb_bsf.b2 = cb_e0l.cb_bsf.x1 = cb_e0l.cb_bsf.x2 = cb_e0l.cb_bsf.y1 = cb_e0l.cb_bsf.y2 = 0;
-  cb_e0l.cb_ts.a1 = cb_e0l.cb_ts.a2 = cb_e0l.cb_ts.b0 = cb_e0l.cb_ts.b1 = cb_e0l.cb_ts.b2 = cb_e0l.cb_ts.x1 = 0;
-  cb_e0l.cb_ts.x2 = cb_e0l.cb_ts.y1 = cb_e0l.cb_ts.y2 = cb_e0r.cb_bsf.a1 = cb_e0r.cb_bsf.a2 = cb_e0r.cb_bsf.b0 = 0;
-  cb_e0r.cb_bsf.b1 = cb_e0r.cb_bsf.b2 = cb_e0r.cb_bsf.x1 = cb_e0r.cb_bsf.x2 = cb_e0r.cb_bsf.y1 = 0;
-  cb_e0r.cb_bsf.y2 = cb_e0r.cb_ts.a1 = cb_e0r.cb_ts.a2 = cb_e0r.cb_ts.b0 = cb_e0r.cb_ts.b1 = cb_e0r.cb_ts.b2 = 0;
-  cb_e0r.cb_ts.x1 = cb_e0r.cb_ts.x2 = cb_e0r.cb_ts.y1 = cb_e0r.cb_ts.y2 = cb_e1l.cb_bsf.a1 = cb_e1l.cb_bsf.a2 = 0;
-  cb_e1l.cb_bsf.b0 = cb_e1l.cb_bsf.b1 = cb_e1l.cb_bsf.b2 = cb_e1l.cb_bsf.x1 = cb_e1l.cb_bsf.x2 = 0;
-  cb_e1l.cb_bsf.y1 = cb_e1l.cb_bsf.y2 = cb_e1l.cb_ts.a1 = cb_e1l.cb_ts.a2 = cb_e1l.cb_ts.b0 = cb_e1l.cb_ts.b1 = 0;
-  cb_e1l.cb_ts.b2 = cb_e1l.cb_ts.x1 = cb_e1l.cb_ts.x2 = cb_e1l.cb_ts.y1 = cb_e1l.cb_ts.y2 = cb_e1r.cb_bsf.a1 = 0;
-  cb_e1r.cb_bsf.a2 = cb_e1r.cb_bsf.b0 = cb_e1r.cb_bsf.b1 = cb_e1r.cb_bsf.b2 = cb_e1r.cb_bsf.x1 = 0;
-  cb_e1r.cb_bsf.x2 = cb_e1r.cb_bsf.y1 = cb_e1r.cb_bsf.y2 = cb_e1r.cb_ts.a1 = cb_e1r.cb_ts.a2 = cb_e1r.cb_ts.b0 = 0;
-  cb_e1r.cb_ts.b1 = cb_e1r.cb_ts.b2 = cb_e1r.cb_ts.x1 = cb_e1r.cb_ts.x2 = cb_e1r.cb_ts.y1 = cb_e1r.cb_ts.y2 = 0;
-  cb_e2l.cb_bsf.a1 = cb_e2l.cb_bsf.a2 = cb_e2l.cb_bsf.b0 = cb_e2l.cb_bsf.b1 = cb_e2l.cb_bsf.b2 = 0;
-  cb_e2l.cb_bsf.x1 = cb_e2l.cb_bsf.x2 = cb_e2l.cb_bsf.y1 = cb_e2l.cb_bsf.y2 = cb_e2l.cb_ts.a1 = 0;
-  cb_e2l.cb_ts.a2 = cb_e2l.cb_ts.b0 = cb_e2l.cb_ts.b1 = cb_e2l.cb_ts.b2 = cb_e2l.cb_ts.x1 = cb_e2l.cb_ts.x2 = 0;
-  cb_e2l.cb_ts.y1 = cb_e2l.cb_ts.y2 = cb_e2r.cb_bsf.a1 = cb_e2r.cb_bsf.a2 = cb_e2r.cb_bsf.b0 = 0;
-  cb_e2r.cb_bsf.b1 = cb_e2r.cb_bsf.b2 = cb_e2r.cb_bsf.x1 = cb_e2r.cb_bsf.x2 = cb_e2r.cb_bsf.y1 = 0;
-  cb_e2r.cb_bsf.y2 = cb_e2r.cb_ts.a1 = cb_e2r.cb_ts.a2 = cb_e2r.cb_ts.b0 = cb_e2r.cb_ts.b1 = cb_e2r.cb_ts.b2 = 0;
-  cb_e2r.cb_ts.x1 = cb_e2r.cb_ts.x2 = cb_e2r.cb_ts.y1 = cb_e2r.cb_ts.y2 = cb_e3l.cb_bsf.a1 = cb_e3l.cb_bsf.a2 = 0;
-  cb_e3l.cb_bsf.b0 = cb_e3l.cb_bsf.b1 = cb_e3l.cb_bsf.b2 = cb_e3l.cb_bsf.x1 = cb_e3l.cb_bsf.x2 = 0;
-  cb_e3l.cb_bsf.y1 = cb_e3l.cb_bsf.y2 = cb_e3l.cb_ts.a1 = cb_e3l.cb_ts.a2 = cb_e3l.cb_ts.b0 = cb_e3l.cb_ts.b1 = 0;
-  cb_e3l.cb_ts.b2 = cb_e3l.cb_ts.x1 = cb_e3l.cb_ts.x2 = cb_e3l.cb_ts.y1 = cb_e3l.cb_ts.y2 = cb_e3r.cb_bsf.a1 = 0;
-  cb_e3r.cb_bsf.a2 = cb_e3r.cb_bsf.b0 = cb_e3r.cb_bsf.b1 = cb_e3r.cb_bsf.b2 = cb_e3r.cb_bsf.x1 = 0;
-  cb_e3r.cb_bsf.x2 = cb_e3r.cb_bsf.y1 = cb_e3r.cb_bsf.y2 = cb_e3r.cb_ts.a1 = cb_e3r.cb_ts.a2 = cb_e3r.cb_ts.b0 = 0;
-  cb_e3r.cb_ts.b1 = cb_e3r.cb_ts.b2 = cb_e3r.cb_ts.x1 = cb_e3r.cb_ts.x2 = cb_e3r.cb_ts.y1 = cb_e3r.cb_ts.y2 = 0;
+  cb_age = cb_b_c = cb_bmsk = cb_bsz = cb_bumpf = cb_bumpg = cb_c4_dk = cb_c4_dkg = cb_c4_dkr = cb_c4_dst = 0;
+  cb_c4_hc = cb_den = cb_dr_r = cb_drop_g = cb_drop_n = cb_drop_t = cb_fph = cb_hfc = cb_hiss_g = cb_i = cb_k = 0;
+  cb_ml = cb_model = cb_mr = cb_mst = cb_nr = cb_nr_c = cb_nz = cb_pl = cb_play_g = cb_pr = cb_rec_g = 0;
+  cb_sat_k = cb_sm = cb_t0l = cb_t0r = cb_t1l = cb_t1r = cb_t2l = cb_t2r = cb_t3l = cb_t3r = cb_tg = cb_tgt = 0;
+  cb_tpk = cb_vu_sine = cb_vuc = cb_wdel = cb_wnd = cb_wow_a = cb_wph = cb_wpos = cb_a0l.cb_be = cb_a0l.cb_bh = 0;
+  cb_a0l.cb_dbe = cb_a0l.cb_de.a1 = cb_a0l.cb_de.a2 = cb_a0l.cb_de.b0 = cb_a0l.cb_de.b1 = cb_a0l.cb_de.b2 = 0;
+  cb_a0l.cb_de.x1 = cb_a0l.cb_de.x2 = cb_a0l.cb_de.y1 = cb_a0l.cb_de.y2 = cb_a0l.cb_dh = cb_a0l.cb_ed = 0;
+  cb_a0l.cb_ee = cb_a0l.cb_hb.a1 = cb_a0l.cb_hb.a2 = cb_a0l.cb_hb.b0 = cb_a0l.cb_hb.b1 = cb_a0l.cb_hb.b2 = 0;
+  cb_a0l.cb_hb.x1 = cb_a0l.cb_hb.x2 = cb_a0l.cb_hb.y1 = cb_a0l.cb_hb.y2 = cb_a0l.cb_hl.a1 = cb_a0l.cb_hl.a2 = 0;
+  cb_a0l.cb_hl.b0 = cb_a0l.cb_hl.b1 = cb_a0l.cb_hl.b2 = cb_a0l.cb_hl.x1 = cb_a0l.cb_hl.x2 = cb_a0l.cb_hl.y1 = 0;
+  cb_a0l.cb_hl.y2 = cb_a0l.cb_pe.a1 = cb_a0l.cb_pe.a2 = cb_a0l.cb_pe.b0 = cb_a0l.cb_pe.b1 = cb_a0l.cb_pe.b2 = 0;
+  cb_a0l.cb_pe.x1 = cb_a0l.cb_pe.x2 = cb_a0l.cb_pe.y1 = cb_a0l.cb_pe.y2 = cb_a0r.cb_be = cb_a0r.cb_bh = 0;
+  cb_a0r.cb_dbe = cb_a0r.cb_de.a1 = cb_a0r.cb_de.a2 = cb_a0r.cb_de.b0 = cb_a0r.cb_de.b1 = cb_a0r.cb_de.b2 = 0;
+  cb_a0r.cb_de.x1 = cb_a0r.cb_de.x2 = cb_a0r.cb_de.y1 = cb_a0r.cb_de.y2 = cb_a0r.cb_dh = cb_a0r.cb_ed = 0;
+  cb_a0r.cb_ee = cb_a0r.cb_hb.a1 = cb_a0r.cb_hb.a2 = cb_a0r.cb_hb.b0 = cb_a0r.cb_hb.b1 = cb_a0r.cb_hb.b2 = 0;
+  cb_a0r.cb_hb.x1 = cb_a0r.cb_hb.x2 = cb_a0r.cb_hb.y1 = cb_a0r.cb_hb.y2 = cb_a0r.cb_hl.a1 = cb_a0r.cb_hl.a2 = 0;
+  cb_a0r.cb_hl.b0 = cb_a0r.cb_hl.b1 = cb_a0r.cb_hl.b2 = cb_a0r.cb_hl.x1 = cb_a0r.cb_hl.x2 = cb_a0r.cb_hl.y1 = 0;
+  cb_a0r.cb_hl.y2 = cb_a0r.cb_pe.a1 = cb_a0r.cb_pe.a2 = cb_a0r.cb_pe.b0 = cb_a0r.cb_pe.b1 = cb_a0r.cb_pe.b2 = 0;
+  cb_a0r.cb_pe.x1 = cb_a0r.cb_pe.x2 = cb_a0r.cb_pe.y1 = cb_a0r.cb_pe.y2 = cb_a1l.cb_be = cb_a1l.cb_bh = 0;
+  cb_a1l.cb_dbe = cb_a1l.cb_de.a1 = cb_a1l.cb_de.a2 = cb_a1l.cb_de.b0 = cb_a1l.cb_de.b1 = cb_a1l.cb_de.b2 = 0;
+  cb_a1l.cb_de.x1 = cb_a1l.cb_de.x2 = cb_a1l.cb_de.y1 = cb_a1l.cb_de.y2 = cb_a1l.cb_dh = cb_a1l.cb_ed = 0;
+  cb_a1l.cb_ee = cb_a1l.cb_hb.a1 = cb_a1l.cb_hb.a2 = cb_a1l.cb_hb.b0 = cb_a1l.cb_hb.b1 = cb_a1l.cb_hb.b2 = 0;
+  cb_a1l.cb_hb.x1 = cb_a1l.cb_hb.x2 = cb_a1l.cb_hb.y1 = cb_a1l.cb_hb.y2 = cb_a1l.cb_hl.a1 = cb_a1l.cb_hl.a2 = 0;
+  cb_a1l.cb_hl.b0 = cb_a1l.cb_hl.b1 = cb_a1l.cb_hl.b2 = cb_a1l.cb_hl.x1 = cb_a1l.cb_hl.x2 = cb_a1l.cb_hl.y1 = 0;
+  cb_a1l.cb_hl.y2 = cb_a1l.cb_pe.a1 = cb_a1l.cb_pe.a2 = cb_a1l.cb_pe.b0 = cb_a1l.cb_pe.b1 = cb_a1l.cb_pe.b2 = 0;
+  cb_a1l.cb_pe.x1 = cb_a1l.cb_pe.x2 = cb_a1l.cb_pe.y1 = cb_a1l.cb_pe.y2 = cb_a1r.cb_be = cb_a1r.cb_bh = 0;
+  cb_a1r.cb_dbe = cb_a1r.cb_de.a1 = cb_a1r.cb_de.a2 = cb_a1r.cb_de.b0 = cb_a1r.cb_de.b1 = cb_a1r.cb_de.b2 = 0;
+  cb_a1r.cb_de.x1 = cb_a1r.cb_de.x2 = cb_a1r.cb_de.y1 = cb_a1r.cb_de.y2 = cb_a1r.cb_dh = cb_a1r.cb_ed = 0;
+  cb_a1r.cb_ee = cb_a1r.cb_hb.a1 = cb_a1r.cb_hb.a2 = cb_a1r.cb_hb.b0 = cb_a1r.cb_hb.b1 = cb_a1r.cb_hb.b2 = 0;
+  cb_a1r.cb_hb.x1 = cb_a1r.cb_hb.x2 = cb_a1r.cb_hb.y1 = cb_a1r.cb_hb.y2 = cb_a1r.cb_hl.a1 = cb_a1r.cb_hl.a2 = 0;
+  cb_a1r.cb_hl.b0 = cb_a1r.cb_hl.b1 = cb_a1r.cb_hl.b2 = cb_a1r.cb_hl.x1 = cb_a1r.cb_hl.x2 = cb_a1r.cb_hl.y1 = 0;
+  cb_a1r.cb_hl.y2 = cb_a1r.cb_pe.a1 = cb_a1r.cb_pe.a2 = cb_a1r.cb_pe.b0 = cb_a1r.cb_pe.b1 = cb_a1r.cb_pe.b2 = 0;
+  cb_a1r.cb_pe.x1 = cb_a1r.cb_pe.x2 = cb_a1r.cb_pe.y1 = cb_a1r.cb_pe.y2 = cb_a2l.cb_be = cb_a2l.cb_bh = 0;
+  cb_a2l.cb_dbe = cb_a2l.cb_de.a1 = cb_a2l.cb_de.a2 = cb_a2l.cb_de.b0 = cb_a2l.cb_de.b1 = cb_a2l.cb_de.b2 = 0;
+  cb_a2l.cb_de.x1 = cb_a2l.cb_de.x2 = cb_a2l.cb_de.y1 = cb_a2l.cb_de.y2 = cb_a2l.cb_dh = cb_a2l.cb_ed = 0;
+  cb_a2l.cb_ee = cb_a2l.cb_hb.a1 = cb_a2l.cb_hb.a2 = cb_a2l.cb_hb.b0 = cb_a2l.cb_hb.b1 = cb_a2l.cb_hb.b2 = 0;
+  cb_a2l.cb_hb.x1 = cb_a2l.cb_hb.x2 = cb_a2l.cb_hb.y1 = cb_a2l.cb_hb.y2 = cb_a2l.cb_hl.a1 = cb_a2l.cb_hl.a2 = 0;
+  cb_a2l.cb_hl.b0 = cb_a2l.cb_hl.b1 = cb_a2l.cb_hl.b2 = cb_a2l.cb_hl.x1 = cb_a2l.cb_hl.x2 = cb_a2l.cb_hl.y1 = 0;
+  cb_a2l.cb_hl.y2 = cb_a2l.cb_pe.a1 = cb_a2l.cb_pe.a2 = cb_a2l.cb_pe.b0 = cb_a2l.cb_pe.b1 = cb_a2l.cb_pe.b2 = 0;
+  cb_a2l.cb_pe.x1 = cb_a2l.cb_pe.x2 = cb_a2l.cb_pe.y1 = cb_a2l.cb_pe.y2 = cb_a2r.cb_be = cb_a2r.cb_bh = 0;
+  cb_a2r.cb_dbe = cb_a2r.cb_de.a1 = cb_a2r.cb_de.a2 = cb_a2r.cb_de.b0 = cb_a2r.cb_de.b1 = cb_a2r.cb_de.b2 = 0;
+  cb_a2r.cb_de.x1 = cb_a2r.cb_de.x2 = cb_a2r.cb_de.y1 = cb_a2r.cb_de.y2 = cb_a2r.cb_dh = cb_a2r.cb_ed = 0;
+  cb_a2r.cb_ee = cb_a2r.cb_hb.a1 = cb_a2r.cb_hb.a2 = cb_a2r.cb_hb.b0 = cb_a2r.cb_hb.b1 = cb_a2r.cb_hb.b2 = 0;
+  cb_a2r.cb_hb.x1 = cb_a2r.cb_hb.x2 = cb_a2r.cb_hb.y1 = cb_a2r.cb_hb.y2 = cb_a2r.cb_hl.a1 = cb_a2r.cb_hl.a2 = 0;
+  cb_a2r.cb_hl.b0 = cb_a2r.cb_hl.b1 = cb_a2r.cb_hl.b2 = cb_a2r.cb_hl.x1 = cb_a2r.cb_hl.x2 = cb_a2r.cb_hl.y1 = 0;
+  cb_a2r.cb_hl.y2 = cb_a2r.cb_pe.a1 = cb_a2r.cb_pe.a2 = cb_a2r.cb_pe.b0 = cb_a2r.cb_pe.b1 = cb_a2r.cb_pe.b2 = 0;
+  cb_a2r.cb_pe.x1 = cb_a2r.cb_pe.x2 = cb_a2r.cb_pe.y1 = cb_a2r.cb_pe.y2 = cb_a3l.cb_be = cb_a3l.cb_bh = 0;
+  cb_a3l.cb_dbe = cb_a3l.cb_de.a1 = cb_a3l.cb_de.a2 = cb_a3l.cb_de.b0 = cb_a3l.cb_de.b1 = cb_a3l.cb_de.b2 = 0;
+  cb_a3l.cb_de.x1 = cb_a3l.cb_de.x2 = cb_a3l.cb_de.y1 = cb_a3l.cb_de.y2 = cb_a3l.cb_dh = cb_a3l.cb_ed = 0;
+  cb_a3l.cb_ee = cb_a3l.cb_hb.a1 = cb_a3l.cb_hb.a2 = cb_a3l.cb_hb.b0 = cb_a3l.cb_hb.b1 = cb_a3l.cb_hb.b2 = 0;
+  cb_a3l.cb_hb.x1 = cb_a3l.cb_hb.x2 = cb_a3l.cb_hb.y1 = cb_a3l.cb_hb.y2 = cb_a3l.cb_hl.a1 = cb_a3l.cb_hl.a2 = 0;
+  cb_a3l.cb_hl.b0 = cb_a3l.cb_hl.b1 = cb_a3l.cb_hl.b2 = cb_a3l.cb_hl.x1 = cb_a3l.cb_hl.x2 = cb_a3l.cb_hl.y1 = 0;
+  cb_a3l.cb_hl.y2 = cb_a3l.cb_pe.a1 = cb_a3l.cb_pe.a2 = cb_a3l.cb_pe.b0 = cb_a3l.cb_pe.b1 = cb_a3l.cb_pe.b2 = 0;
+  cb_a3l.cb_pe.x1 = cb_a3l.cb_pe.x2 = cb_a3l.cb_pe.y1 = cb_a3l.cb_pe.y2 = cb_a3r.cb_be = cb_a3r.cb_bh = 0;
+  cb_a3r.cb_dbe = cb_a3r.cb_de.a1 = cb_a3r.cb_de.a2 = cb_a3r.cb_de.b0 = cb_a3r.cb_de.b1 = cb_a3r.cb_de.b2 = 0;
+  cb_a3r.cb_de.x1 = cb_a3r.cb_de.x2 = cb_a3r.cb_de.y1 = cb_a3r.cb_de.y2 = cb_a3r.cb_dh = cb_a3r.cb_ed = 0;
+  cb_a3r.cb_ee = cb_a3r.cb_hb.a1 = cb_a3r.cb_hb.a2 = cb_a3r.cb_hb.b0 = cb_a3r.cb_hb.b1 = cb_a3r.cb_hb.b2 = 0;
+  cb_a3r.cb_hb.x1 = cb_a3r.cb_hb.x2 = cb_a3r.cb_hb.y1 = cb_a3r.cb_hb.y2 = cb_a3r.cb_hl.a1 = cb_a3r.cb_hl.a2 = 0;
+  cb_a3r.cb_hl.b0 = cb_a3r.cb_hl.b1 = cb_a3r.cb_hl.b2 = cb_a3r.cb_hl.x1 = cb_a3r.cb_hl.x2 = cb_a3r.cb_hl.y1 = 0;
+  cb_a3r.cb_hl.y2 = cb_a3r.cb_pe.a1 = cb_a3r.cb_pe.a2 = cb_a3r.cb_pe.b0 = cb_a3r.cb_pe.b1 = cb_a3r.cb_pe.b2 = 0;
+  cb_a3r.cb_pe.x1 = cb_a3r.cb_pe.x2 = cb_a3r.cb_pe.y1 = cb_a3r.cb_pe.y2 = cb_e0l.cb_bsf.a1 = cb_e0l.cb_bsf.a2 = 0;
+  cb_e0l.cb_bsf.b0 = cb_e0l.cb_bsf.b1 = cb_e0l.cb_bsf.b2 = cb_e0l.cb_bsf.x1 = cb_e0l.cb_bsf.x2 = 0;
+  cb_e0l.cb_bsf.y1 = cb_e0l.cb_bsf.y2 = cb_e0l.cb_ts.a1 = cb_e0l.cb_ts.a2 = cb_e0l.cb_ts.b0 = cb_e0l.cb_ts.b1 = 0;
+  cb_e0l.cb_ts.b2 = cb_e0l.cb_ts.x1 = cb_e0l.cb_ts.x2 = cb_e0l.cb_ts.y1 = cb_e0l.cb_ts.y2 = cb_e0r.cb_bsf.a1 = 0;
+  cb_e0r.cb_bsf.a2 = cb_e0r.cb_bsf.b0 = cb_e0r.cb_bsf.b1 = cb_e0r.cb_bsf.b2 = cb_e0r.cb_bsf.x1 = 0;
+  cb_e0r.cb_bsf.x2 = cb_e0r.cb_bsf.y1 = cb_e0r.cb_bsf.y2 = cb_e0r.cb_ts.a1 = cb_e0r.cb_ts.a2 = cb_e0r.cb_ts.b0 = 0;
+  cb_e0r.cb_ts.b1 = cb_e0r.cb_ts.b2 = cb_e0r.cb_ts.x1 = cb_e0r.cb_ts.x2 = cb_e0r.cb_ts.y1 = cb_e0r.cb_ts.y2 = 0;
+  cb_e1l.cb_bsf.a1 = cb_e1l.cb_bsf.a2 = cb_e1l.cb_bsf.b0 = cb_e1l.cb_bsf.b1 = cb_e1l.cb_bsf.b2 = 0;
+  cb_e1l.cb_bsf.x1 = cb_e1l.cb_bsf.x2 = cb_e1l.cb_bsf.y1 = cb_e1l.cb_bsf.y2 = cb_e1l.cb_ts.a1 = 0;
+  cb_e1l.cb_ts.a2 = cb_e1l.cb_ts.b0 = cb_e1l.cb_ts.b1 = cb_e1l.cb_ts.b2 = cb_e1l.cb_ts.x1 = cb_e1l.cb_ts.x2 = 0;
+  cb_e1l.cb_ts.y1 = cb_e1l.cb_ts.y2 = cb_e1r.cb_bsf.a1 = cb_e1r.cb_bsf.a2 = cb_e1r.cb_bsf.b0 = 0;
+  cb_e1r.cb_bsf.b1 = cb_e1r.cb_bsf.b2 = cb_e1r.cb_bsf.x1 = cb_e1r.cb_bsf.x2 = cb_e1r.cb_bsf.y1 = 0;
+  cb_e1r.cb_bsf.y2 = cb_e1r.cb_ts.a1 = cb_e1r.cb_ts.a2 = cb_e1r.cb_ts.b0 = cb_e1r.cb_ts.b1 = cb_e1r.cb_ts.b2 = 0;
+  cb_e1r.cb_ts.x1 = cb_e1r.cb_ts.x2 = cb_e1r.cb_ts.y1 = cb_e1r.cb_ts.y2 = cb_e2l.cb_bsf.a1 = cb_e2l.cb_bsf.a2 = 0;
+  cb_e2l.cb_bsf.b0 = cb_e2l.cb_bsf.b1 = cb_e2l.cb_bsf.b2 = cb_e2l.cb_bsf.x1 = cb_e2l.cb_bsf.x2 = 0;
+  cb_e2l.cb_bsf.y1 = cb_e2l.cb_bsf.y2 = cb_e2l.cb_ts.a1 = cb_e2l.cb_ts.a2 = cb_e2l.cb_ts.b0 = cb_e2l.cb_ts.b1 = 0;
+  cb_e2l.cb_ts.b2 = cb_e2l.cb_ts.x1 = cb_e2l.cb_ts.x2 = cb_e2l.cb_ts.y1 = cb_e2l.cb_ts.y2 = cb_e2r.cb_bsf.a1 = 0;
+  cb_e2r.cb_bsf.a2 = cb_e2r.cb_bsf.b0 = cb_e2r.cb_bsf.b1 = cb_e2r.cb_bsf.b2 = cb_e2r.cb_bsf.x1 = 0;
+  cb_e2r.cb_bsf.x2 = cb_e2r.cb_bsf.y1 = cb_e2r.cb_bsf.y2 = cb_e2r.cb_ts.a1 = cb_e2r.cb_ts.a2 = cb_e2r.cb_ts.b0 = 0;
+  cb_e2r.cb_ts.b1 = cb_e2r.cb_ts.b2 = cb_e2r.cb_ts.x1 = cb_e2r.cb_ts.x2 = cb_e2r.cb_ts.y1 = cb_e2r.cb_ts.y2 = 0;
+  cb_e3l.cb_bsf.a1 = cb_e3l.cb_bsf.a2 = cb_e3l.cb_bsf.b0 = cb_e3l.cb_bsf.b1 = cb_e3l.cb_bsf.b2 = 0;
+  cb_e3l.cb_bsf.x1 = cb_e3l.cb_bsf.x2 = cb_e3l.cb_bsf.y1 = cb_e3l.cb_bsf.y2 = cb_e3l.cb_ts.a1 = 0;
+  cb_e3l.cb_ts.a2 = cb_e3l.cb_ts.b0 = cb_e3l.cb_ts.b1 = cb_e3l.cb_ts.b2 = cb_e3l.cb_ts.x1 = cb_e3l.cb_ts.x2 = 0;
+  cb_e3l.cb_ts.y1 = cb_e3l.cb_ts.y2 = cb_e3r.cb_bsf.a1 = cb_e3r.cb_bsf.a2 = cb_e3r.cb_bsf.b0 = 0;
+  cb_e3r.cb_bsf.b1 = cb_e3r.cb_bsf.b2 = cb_e3r.cb_bsf.x1 = cb_e3r.cb_bsf.x2 = cb_e3r.cb_bsf.y1 = 0;
+  cb_e3r.cb_bsf.y2 = cb_e3r.cb_ts.a1 = cb_e3r.cb_ts.a2 = cb_e3r.cb_ts.b0 = cb_e3r.cb_ts.b1 = cb_e3r.cb_ts.b2 = 0;
+  cb_e3r.cb_ts.x1 = cb_e3r.cb_ts.x2 = cb_e3r.cb_ts.y1 = cb_e3r.cb_ts.y2 = 0;
   cb_DEN = 0.00000000000000000001;
   cb_BSZ = 8192; cb_BMSK = cb_BSZ - 1;                         // wow delay lines: 8 x 8192 from 80000
   cb_TG = 200; cb_TGT = 210; cb_TPK = 220; cb_PL = 230; cb_PR = 240; // per track: gain, target, peak, pan L / R gains
@@ -651,9 +648,14 @@ function cb_reset() (
   cb_wpos = 0; cb_drop_g = 1; cb_drop_t = 1;
   cb_update();
   cb_i = 0; loop(4, cb_TG[cb_i] = cb_TGT[cb_i]; cb_i += 1; );
+  cb_c4_dkr = 1 / (0.012 * srate); cb_c4_dk = 1; cb_c4_dst = 0;   // preset duck: 12 ms out, hold through the tape delay, 12 ms in
 );
 
 function cb_run() (
+  // preset duck-and-swap: model, noise reduction, drive and wow change in silence; stay silent while the tape
+  // delay and the NR envelopes catch up with the new settings
+  cb_c4_dst == 1 ? ( cb_c4_dk -= cb_c4_dkr; cb_c4_dk <= 0 ? ( cb_c4_dk = 0; cb_update(); cb_c4_hc = floor(0.008 * srate); cb_c4_dst = 2; ); ) :
+  cb_c4_dst == 2 ? ( cb_c4_hc > 0 ? cb_c4_hc -= 1 : ( cb_c4_dk += cb_c4_dkr; cb_c4_dk >= 1 ? ( cb_c4_dk = 1; cb_c4_dst = 0; ); ); );
   // ---------- transport: wow (0.6 Hz + a slow wander) and flutter (6 Hz), one for all tracks ----------
   cb_wph += 0.6 / srate; cb_wph -= floor(cb_wph);
   cb_fph += 6.2 / srate; cb_fph -= floor(cb_fph);
@@ -677,6 +679,7 @@ function cb_run() (
   cb_ml = cb_e0l.cb_eq(cb_t0l) * cb_TG[0] * cb_PL[0] + cb_e1l.cb_eq(cb_t1l) * cb_TG[1] * cb_PL[1] + cb_e2l.cb_eq(cb_t2l) * cb_TG[2] * cb_PL[2] + cb_e3l.cb_eq(cb_t3l) * cb_TG[3] * cb_PL[3];
   cb_mr = cb_e0r.cb_eq(cb_t0r) * cb_TG[0] * cb_PR[0] + cb_e1r.cb_eq(cb_t1r) * cb_TG[1] * cb_PR[1] + cb_e2r.cb_eq(cb_t2r) * cb_TG[2] * cb_PR[2] + cb_e3r.cb_eq(cb_t3r) * cb_TG[3] * cb_PR[3];
   cb_ml *= cb_mst; cb_mr *= cb_mst;
+  cb_c4_dst ? ( cb_c4_dkg = cb_c4_dk * cb_c4_dk * (3 - 2 * cb_c4_dk); cb_ml *= cb_c4_dkg; cb_mr *= cb_c4_dkg; );
 );
 
 // ================================================================ COMPACT (ported from gfx-compact-12)
@@ -886,7 +889,7 @@ function fm_update() (
   fm_tone_on = slider127 > 0.5; fm_tone_f = slider128 < 0.5 ? 1000 : slider128 < 1.5 ? 400 : 100; fm_tone_a = 10 ^ ((slider129 - 20) / 20) * sqrt(2);
   drift_macro(slider130);
   fm_l_at = 1 - exp(-1 / (max(slider133, 0.05) * 0.001 * srate)); fm_l_rl = 1 - exp(-1 / (slider134 * 0.001 * srate));
-  ost_setup(slider135 / 100, slider136 / 100, slider137, slider138, slider139, floor(slider140 + 0.5));
+  ost_setup(0, 0.3, 120, 6000, -0.3, 1);   // the output clips softly at -0.3 dBFS: part of the unit (no output stage controls)
 );
 
 
@@ -968,8 +971,9 @@ function fm_blockrun() (
 
 // ================================================================ the 92 chassis
 function s92_reset(m) ( m == 0 ? ca_reset() : m == 1 ? cb_reset() : m == 2 ? cp_reset() : fm_reset(); );
-function s92_update(m) ( m == 0 ? ca_update() : m == 1 ? cb_update() : m == 2 ? cp_update() : fm_update(); );
-function s92_block(m) ( m == 0 ? ca_update() : m == 1 ? cb_update() : m == 2 ? cp_update() : fm_blockrun(); );
+// (the tape engines' settings wait while a preset duck is fading out, as on Cassette 4)
+function s92_update(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : m == 2 ? cp_update() : fm_update(); );
+function s92_block(m) ( m == 0 ? ( ca_c4_dst != 1 ? ca_update(); ) : m == 1 ? ( cb_c4_dst != 1 ? cb_update(); ) : m == 2 ? cp_update() : fm_blockrun(); );
 function s92_run(m) (
   m == 0 ? ( ca_run(); s92_rL = ca_ml; s92_rR = ca_mr; ) :
   m == 1 ? ( cb_run(); s92_rL = cb_ml; s92_rR = cb_mr; ) :
@@ -1136,14 +1140,12 @@ function s92_load(p) (
     slider132 = 30;
     slider133 = 1;
     slider134 = 200;
-    slider135 = 0;
-    slider136 = 30;
-    slider137 = 120;
-    slider138 = 6000;
-    slider139 = -0.3;
-    slider140 = 1;
-    s92_autor(1, 140);
+    s92_autor(1, 134);
   );
+  // the click-free preset change of Cassette 4 (duck, swap at silence, fade back in) for the tape engine that stays in
+  // the circuit; a change between 15 and 44 crossfades instead (the incoming engine starts clean)
+  ca_c4_dst = cb_c4_dst = 0;
+  (p <= 9 || p == 21) && s92_cur <= 1 && floor(slider1 + 0.5) == s92_cur ? ( s92_cur ? cb_c4_dst = 1 : ca_c4_dst = 1; );
   s92_auto(1);
   s92_pr = p > 20 ? 1 : p;
 );
@@ -1191,7 +1193,7 @@ s92_cur <= 1 ? (
 
 @gfx 1040 570
 ui_begin(1040, 570);
-s92_sn129 = slider129; s92_sn130 = slider130; s92_sn132 = slider132; s92_sn133 = slider133; s92_sn134 = slider134; s92_sn135 = slider135; s92_sn136 = slider136; s92_sn137 = slider137; s92_sn138 = slider138; s92_sn139 = slider139; s92_sn140 = slider140;
+s92_sn129 = slider129; s92_sn130 = slider130; s92_sn132 = slider132; s92_sn133 = slider133; s92_sn134 = slider134;
 
 // ---------------------------------------------------------------- the 92 chassis parts
 S92_HDR = 0x26272B; S92_INK = 0xEEEFEA; S92_DIM = 0x9A9C9F;
@@ -1239,7 +1241,7 @@ function s92_header() local(k) (
   k > 0 ? s92_load(k);
   ui_size_picker(968 * sc, 23 * sc);
 );
-// the SET-UP line: the channel map of the selected model; on FIELD also its output stage keys
+// the SET-UP line: the channel map of the selected model
 function s92_footer() local(i, c, x, tw, th) (
   ui_col(S92_HDR); gfx_rect(0, 540 * sc, 1040 * sc, 30 * sc);
   ui_cola(0xFFFFFF, 0.08); gfx_rect(0, 540 * sc, 1040 * sc, 1 * sc);
@@ -1248,16 +1250,6 @@ function s92_footer() local(i, c, x, tw, th) (
   gfx_drawstr(s92_cur <= 1 ? "BUS 8 CH:   1/2 TRACK 1    3/4 TRACK 2    5/6 TRACK 3    7/8 TRACK 4      MIX OUT 1/2" :
               s92_cur == 2 ? "BUS 12 CH:   1  2  3  4 MONO    5/6  7/8  9/10  11/12 STEREO      MIX OUT 1/2" :
                              "BUS 8 CH:   1/2  3/4  5/6  7/8 PAIRS      MASTER OUT 1/2");
-  s92_cur == 3 ? (
-    gfx_setfont(4); ui_col(S92_DIM); gfx_measurestr("OUTPUT STAGE", tw, th); gfx_x = 838 * sc - tw; gfx_y = 550 * sc; gfx_drawstr("OUTPUT STAGE");
-    s92_okclp = ost_clipped ? 1 : s92_okclp * 0.88; ost_clipped = 0;
-    i = 0; loop(3,
-      x = 848 + i * 62;
-      c = i == 0 ? 0x3A9CFF : i == 1 ? (s92_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
-      ui_okey(x, 545, 56, 20, floor(slider140 + 0.5) == i || (i == 1 && s92_okclp > 0.1), c) ? ( slider140 = i; s92_auto(140); );
-      gfx_setfont(4); ui_col(0x141414); ui_keytext((x + 28) * sc, 555 * sc, i == 0 ? "OFF" : i == 1 ? "CLIP" : "LIMIT");
-      i += 1; );
-  );
 );
 // a faceplate designed bw x bh (from y = sy) shown enlarged to the full chassis width: drawn off-screen at the
 // enlarged scale (crisp, its fonts re-fitted), with the mouse mapped into it, then put in place under the header
@@ -1538,12 +1530,6 @@ slider130 != s92_sn130 ? s92_auto(130);
 slider132 != s92_sn132 ? s92_auto(132);
 slider133 != s92_sn133 ? s92_auto(133);
 slider134 != s92_sn134 ? s92_auto(134);
-slider135 != s92_sn135 ? s92_auto(135);
-slider136 != s92_sn136 ? s92_auto(136);
-slider137 != s92_sn137 ? s92_auto(137);
-slider138 != s92_sn138 ? s92_auto(138);
-slider139 != s92_sn139 ? s92_auto(139);
-slider140 != s92_sn140 ? s92_auto(140);
 
 pk_end();
 ui_end();
