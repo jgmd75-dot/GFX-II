@@ -89,6 +89,7 @@ slider21:120<40,400,1>-Sat low band (Hz)
 slider22:6000<2000,16000,10>-Sat high band (Hz)
 slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider25:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -660,6 +661,7 @@ ui_begin(920, 340);
 // Colours: TOKYO (charcoal terminal, its VFD colour from the skin) / BERLIN (the 45-family skins)
 // =====================================================================
 dq_b = slider1 >= 0.5;
+dq_de = slider25 >= 0.5;                                // the language key: ENG / DE labels (TOKYO / BERLIN only sets the look and sound)
 dq_sk = min(max(slider17 | 0, 0), 2);
 dq_ta = min(max(slider2 | 0, 0), 5);
 dq_ba = min(max(slider3 | 0, 0), 3);
@@ -700,16 +702,21 @@ function dq_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = c
 function dq_ltxt(x, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = x * sc; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function dq_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = rx * sc - tw; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function dq_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
-// BERLIN prints decimal commas
-function dq_dec(s) local(i) ( dq_b ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
+// DE prints decimal commas
+function dq_dec(s) local(i) ( dq_de ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
 // glowing VFD text (TOKYO)
 function dq_vtxt(x, cy, s, a) ( ui_cola(DQV, 0.22 * a); dq_ltxt(x + 0.7, cy + 0.7, s); ui_cola(DQV, a); dq_ltxt(x, cy, s); );
 
+// the algorithm names in the current language
+function dq_alg(v) ( dq_de ? (v < 0.5 ? "HALL" : v < 1.5 ? "RAUM" : v < 2.5 ? "PLATTE" : v < 3.5 ? "FRÜHREFL." : v < 4.5 ? "GATE" : "UMKEHR")
+                           : (v < 0.5 ? "HALL" : v < 1.5 ? "ROOM" : v < 2.5 ? "PLATE" : v < 3.5 ? "EARLY REF" : v < 4.5 ? "GATE" : "REVERSE"); );
+function dq_balg(v) ( dq_de ? (v < 0.5 ? "RAUM A" : v < 1.5 ? "RAUM B" : v < 2.5 ? "PLATTE B" : "ECHO")
+                            : (v < 0.5 ? "ROOM A" : v < 1.5 ? "ROOM B" : v < 2.5 ? "PLATE B" : "ECHO"); );
 // ---------- the value of a slider, as printed ----------
 function dq_fmt(idx) local(v) (
   v = slider(idx);
-  idx == 2 ? strcpy(#dq_fv, v < 0.5 ? "HALL" : v < 1.5 ? "ROOM" : v < 2.5 ? "PLATE" : v < 3.5 ? "EARLY REF" : v < 4.5 ? "GATE" : "REVERSE") :
-  idx == 3 ? strcpy(#dq_fv, v < 0.5 ? "RAUM A" : v < 1.5 ? "RAUM B" : v < 2.5 ? "PLATTE B" : "ECHO") :
+  idx == 2 ? strcpy(#dq_fv, dq_alg(v)) :
+  idx == 3 ? strcpy(#dq_fv, dq_balg(v)) :
   idx == 4 ? sprintf(#dq_fv, "%.2f s", v) :
   idx == 5 || idx == 14 ? sprintf(#dq_fv, "%.0f ms", v) :
   idx == 7 ? sprintf(#dq_fv, "%.1f ms", v) :
@@ -761,24 +768,23 @@ function dq_tcap(cx, cy, r, n) (
   pk_bkcap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi);
   pk_ptr = -1; pk_shad = 0.4; pk_shoff = 1;
 );
-// BERLIN: a chunky cast-aluminium step rotary (scalloped skirt, sandy cast top, a black pointer bar)
+// BERLIN: a chunky aluminium step rotary: a scalloped skirt in one flat grey, a flat satin top with one soft
+// highlight on its edge, a black pointer bar
+function dq_arcw(cx, cy, r, a1, a2, w) local(k) (       // a smooth thick arc (pixels): anti-aliased arcs every half pixel
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
 function dq_alu(cx, cy, r, n) local(i, t, a, ca, sa, k) (
   cx *= sc; cy *= sc; r *= sc;
   a = -0.75 * $pi + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
-  ui_cola(0x000000, 0.35); gfx_circle(cx + 2 * sc, cy + 3.5 * sc, r, 1, 1);
-  ui_col(0x55585C); gfx_circle(cx, cy, r * 0.9, 1, 1);
+  ui_cola(0x000000, 0.30); gfx_circle(cx + 2 * sc, cy + 3.5 * sc, r * 0.9, 1, 1);
+  ui_col(0x6A6D72); gfx_circle(cx, cy, r * 0.9, 1, 1);
   i = 0; loop(12, t = (i + 0.5) / 12 * 2 * $pi; gfx_circle(cx + cos(t) * r * 0.82, cy + sin(t) * r * 0.82, r * 0.2, 1, 1); i += 1; );
-  ui_col(0x9A9DA1); gfx_circle(cx, cy, r * 0.86, 1, 1);
+  ui_col(0x8E9196); gfx_circle(cx, cy, r * 0.86, 1, 1);
   i = 0; loop(12, t = (i + 0.5) / 12 * 2 * $pi; gfx_circle(cx + cos(t) * r * 0.79, cy + sin(t) * r * 0.79, r * 0.16, 1, 1); i += 1; );
-  i = 0; loop(12, t = i / 12 * 2 * $pi; ui_cola(0x000000, 0.22);
-    gfx_circle(cx + cos(t) * r * 0.86, cy + sin(t) * r * 0.86, r * 0.09, 1, 1); i += 1; );
   k = r * 0.66;
-  ui_col(0x7E8186); gfx_circle(cx, cy, k + 1.5 * sc, 1, 1);
-  ui_col(0xB8BBBF); gfx_circle(cx, cy, k, 1, 1);
-  i = 0; loop(70, t = rd_hash(i * 3.1) * 2 * $pi; ui_cola(rd_hash(i + 0.7) > 0.5 ? 0xFFFFFF : 0x000000, 0.10);
-    gfx_circle(cx + cos(t) * k * 0.92 * sqrt(rd_hash(i * 1.7)), cy + sin(t) * k * 0.92 * sqrt(rd_hash(i * 1.7)), 0.8 * sc, 1, 1); i += 1; );
-  gfx_gradrect(cx - k * 0.75, cy - k * 0.8, k * 1.5, k * 0.8, 1, 1, 1, 0.22, 0, 0, 0, 0, 0, 0, 0, -0.22 / (k * 0.8));
-  ui_cola(0x000000, 0.25); gfx_circle(cx, cy, k, 0, 1);
+  ui_col(0x5E6166); gfx_circle(cx, cy, k + 1.2 * sc, 1, 1);
+  ui_col(0xBABDC1); gfx_circle(cx, cy, k, 1, 1);
+  ui_col(0xDDDFE2); dq_arcw(cx, cy, k - 1.6 * sc, -0.66 * $pi, 0.06 * $pi, 1.3 * sc);
   ui_col(0x141414); i = -1.5;
   loop(4, gfx_line(cx + ca * r * 0.12 - sa * i * 0.9 * sc, cy + sa * r * 0.12 + ca * i * 0.9 * sc,
                    cx + ca * r * 0.96 - sa * i * 0.9 * sc, cy + sa * r * 0.96 + ca * i * 0.9 * sc, 1); i += 1; );
@@ -823,8 +829,8 @@ ui_col(dq_b ? (dq_sk == 2 ? DQA : DQI) : 0xD9DEE2); gfx_circle(31 * sc, 27 * sc,
 gfx_setfont(4); ui_col(dq_b ? (dq_sk == 0 ? DQF : 0x111213) : DQH); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); ui_col(DQI); dq_txt(58, 11, "DRP-45");
 gfx_setfont(11); ui_col(DQI2);
-dq_b ? ( dq_txt(172, 13, "DIGITALER"); dq_txt(172, 28, "RAUMKLANG-PROZESSOR") )
-     : ( dq_txt(172, 13, "DIGITAL REVERB"); dq_txt(172, 28, "PROCESSOR  16 BIT") );
+dq_de ? ( dq_txt(172, 13, "DIGITALER"); dq_txt(172, 28, dq_b ? "RAUMKLANG-PROZESSOR" : "HALLPROZESSOR 16 BIT") )
+      : ( dq_txt(172, 13, "DIGITAL REVERB"); dq_txt(172, 28, dq_b ? "PROCESSOR" : "PROCESSOR  16 BIT") );
 // TOKYO / BERLIN keys
 function dq_hkey(x, y, w, h, lbl, on) local(hov, hit) (
   hov = dq_hov(x, y, w, h); hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;
@@ -852,26 +858,29 @@ function dq_hkey(x, y, w, h, lbl, on) local(hov, hit) (
 dq_hkey(352, 13, 64, 28, "TOKYO", !dq_b) ? ( slider1 = 0; ui_auto(1); );
 dq_hkey(420, 13, 68, 28, "BERLIN", dq_b) ? ( slider1 = 1; ui_auto(1); );
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
-k_ = pk_preset(498 * sc, 10 * sc, 350 * sc, 34 * sc, pr_cur,
+k_ = pk_preset(498 * sc, 10 * sc, 310 * sc, 34 * sc, pr_cur,
   "Init|Tokyo Snare Gate|Arcade Hall|Glass Plate|Early Punch|Reverse Vocal|Neon Room|Berlin Raum|Post-Punk Drums|Plattenbau Hall|Grau Echo|Smeared Wash|Studio Send 100%|Funkhaus Vocal");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 14 ? 1 : k_; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(830 * sc, 18 * sc, 27 * sc, 18 * sc, dq_de ? "DE" : "ENG", 0, 1) ? ( slider25 = dq_de ? 0 : 1; ui_auto(25); dq_de = slider25 >= 0.5; );
+rd_led(821, 27, 3, dq_de, 0xFFA126);
 ui_size_picker(858 * sc, 18 * sc);
 
 function dq_pinfo(p) (
   dq_plg = 0; dq_pst = 1;
-  p == 1  ? ( dq_pi = 2;  dq_plo = 0;   dq_phi = 5;    strcpy(#dq_pn, "ALGORITHM"); ) :
-  p == 2  ? ( dq_pi = 7;  dq_plo = 0;   dq_phi = 300;  strcpy(#dq_pn, "PRE-DELAY"); ) :
-  p == 3  ? ( dq_gt ? ( dq_pi = 5; dq_plo = 60; dq_phi = 1000; dq_plg = 1; dq_pst = 10; strcpy(#dq_pn, dq_ta == 4 ? "GATE TIME" : "REV TIME"); )
-                    : ( dq_pi = 4; dq_plo = 0.2; dq_phi = 10; dq_plg = 1; dq_pst = slider4 < 1 ? 0.05 : slider4 < 4 ? 0.1 : 0.25; strcpy(#dq_pn, "DECAY"); ); ) :
-  p == 4  ? ( dq_pi = 8;  dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, "HF DAMP"); ) :
-  p == 5  ? ( dq_pi = 9;  dq_plo = 20;  dq_phi = 600;  dq_plg = 1; dq_pst = 5; strcpy(#dq_pn, "LOW CUT"); ) :
-  p == 6  ? ( dq_pi = 11; dq_plo = 50;  dq_phi = 150;  strcpy(#dq_pn, "SIZE"); ) :
+  p == 1  ? ( dq_pi = 2;  dq_plo = 0;   dq_phi = 5;    strcpy(#dq_pn, dq_de ? "PROGRAMM" : "ALGORITHM"); ) :
+  p == 2  ? ( dq_pi = 7;  dq_plo = 0;   dq_phi = 300;  strcpy(#dq_pn, dq_de ? "VORVERZ." : "PRE-DELAY"); ) :
+  p == 3  ? ( dq_gt ? ( dq_pi = 5; dq_plo = 60; dq_phi = 1000; dq_plg = 1; dq_pst = 10; strcpy(#dq_pn, dq_ta == 4 ? (dq_de ? "GATEZEIT" : "GATE TIME") : (dq_de ? "UMK.-ZEIT" : "REV TIME")); )
+                    : ( dq_pi = 4; dq_plo = 0.2; dq_phi = 10; dq_plg = 1; dq_pst = slider4 < 1 ? 0.05 : slider4 < 4 ? 0.1 : 0.25; strcpy(#dq_pn, dq_de ? "NACHHALL" : "DECAY"); ); ) :
+  p == 4  ? ( dq_pi = 8;  dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, dq_de ? "HF-DÄMPF." : "HF DAMP"); ) :
+  p == 5  ? ( dq_pi = 9;  dq_plo = 20;  dq_phi = 600;  dq_plg = 1; dq_pst = 5; strcpy(#dq_pn, dq_de ? "TIEFEN" : "LOW CUT"); ) :
+  p == 6  ? ( dq_pi = 11; dq_plo = 50;  dq_phi = 150;  strcpy(#dq_pn, dq_de ? "GRÖSSE" : "SIZE"); ) :
   p == 7  ? ( dq_pi = 12; dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, "DIFFUSION"); ) :
-  p == 8  ? ( dq_pi = 6;  dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, "SHAPE"); ) :
-  p == 9  ? ( dq_pi = 10; dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, "DRIVE"); ) :
-  p == 10 ? ( dq_pi = 15; dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, "MIX"); ) :
+  p == 8  ? ( dq_pi = 6;  dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, dq_de ? "FORM" : "SHAPE"); ) :
+  p == 9  ? ( dq_pi = 10; dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, dq_de ? "ANTRIEB" : "DRIVE"); ) :
+  p == 10 ? ( dq_pi = 15; dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, dq_de ? "MISCHUNG" : "MIX"); ) :
   p == 11 ? ( dq_pi = 16; dq_plo = 0;   dq_phi = 100;  strcpy(#dq_pn, "DRIFT"); ) :
-            ( dq_pi = 18; dq_plo = -24; dq_phi = 12;   dq_pst = 0.5; strcpy(#dq_pn, "OUTPUT"); );
+            ( dq_pi = 18; dq_plo = -24; dq_phi = 12;   dq_pst = 0.5; strcpy(#dq_pn, dq_de ? "PEGEL" : "OUTPUT"); );
   dq_fmt(dq_pi);
 );
 function dq_dkey(x, y, w, h, lbl) local(hov, hit, dn) (
@@ -981,24 +990,24 @@ dq_sx = 484; dq_sw = 304;
 pk_inset((dq_sx + 5) * sc, 69 * sc, (dq_sw - 10) * sc, 256 * sc, DQF);
 gfx_setfont(13); ui_col(DQI2); dq_txt(dq_sx + 14, 74, "PARAMETER");
 dq_c1 = dq_sx + 42; dq_c2 = dq_sx + 116; dq_c3 = dq_sx + 190; dq_c4 = dq_sx + 264;
-dq_gt ? dq_sknob(dq_c1, 132, 22, 5, 60, 1000, 300, 1, 0, 0, 0, 3, dq_ta == 4 ? "GATE" : "LENGTH", 0)
-      : dq_sknob(dq_c1, 132, 22, 4, 0.2, 10, 2.4, 1, 0, 0, 0, 3, "DECAY", 0);
-dq_sknob(dq_c2, 132, 22, 7, 0, 300, 20, 0, 0, 0, 0, 2, "PRE-DELAY", 0);
-dq_sknob(dq_c3, 132, 22, 8, 0, 100, 40, 0, 10, 0, 0, 4, "HF DAMP", 0);
-dq_sknob(dq_c4, 132, 20, 9, 20, 600, 80, 1, 0, 1, 0, 5, "LOW CUT", 0);
-dq_sknob(dq_c1, 250, 22, 11, 50, 150, 100, 0, 0, 0, 0, 6, "SIZE", dq_gt);
+dq_gt ? dq_sknob(dq_c1, 132, 22, 5, 60, 1000, 300, 1, 0, 0, 0, 3, dq_ta == 4 ? "GATE" : (dq_de ? "LÄNGE" : "LENGTH"), 0)
+      : dq_sknob(dq_c1, 132, 22, 4, 0.2, 10, 2.4, 1, 0, 0, 0, 3, dq_de ? "NACHHALL" : "DECAY", 0);
+dq_sknob(dq_c2, 132, 22, 7, 0, 300, 20, 0, 0, 0, 0, 2, dq_de ? "VORVERZ." : "PRE-DELAY", 0);
+dq_sknob(dq_c3, 132, 22, 8, 0, 100, 40, 0, 10, 0, 0, 4, dq_de ? "DÄMPF." : "HF DAMP", 0);
+dq_sknob(dq_c4, 132, 20, 9, 20, 600, 80, 1, 0, 1, 0, 5, dq_de ? "TIEFEN" : "LOW CUT", 0);
+dq_sknob(dq_c1, 250, 22, 11, 50, 150, 100, 0, 0, 0, 0, 6, dq_de ? "GRÖSSE" : "SIZE", dq_gt);
 dq_sknob(dq_c2, 250, 22, 12, 0, 100, 70, 0, 0, 0, 0, 7, "DIFFUSION", dq_ta == 3);
-dq_sknob(dq_c3, 250, 22, 6, 0, 100, 30, 0, 0, 0, 0, 8, "SHAPE", !dq_gt);
-dq_sknob(dq_c4, 250, 22, 10, 0, 100, 20, 0, 0, 0, 0, 9, "DRIVE", 0);
+dq_sknob(dq_c3, 250, 22, 6, 0, 100, 30, 0, 0, 0, 0, 8, dq_de ? "FORM" : "SHAPE", !dq_gt);
+dq_sknob(dq_c4, 250, 22, 10, 0, 100, 20, 0, 0, 0, 0, 9, dq_de ? "ANTRIEB" : "DRIVE", 0);
 
 // OUTPUT section
 dq_ox = 794; dq_ow = 116;
 pk_inset((dq_ox + 5) * sc, 69 * sc, (dq_ow - 10) * sc, 256 * sc, DQS);
-gfx_setfont(13); ui_col(DQI2); dq_txt(dq_ox + 14, 74, "OUTPUT");
-dq_sknob(dq_ox + 58, 124, 20, 15, 0, 100, 30, 0, 0, 0, 0, 10, "MIX", 0);
-dq_sknob(dq_ox + 32, 200, 14, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 12, "LEVEL", 0);
+gfx_setfont(13); ui_col(DQI2); dq_txt(dq_ox + 14, 74, dq_de ? "AUSGANG" : "OUTPUT");
+dq_sknob(dq_ox + 58, 124, 20, 15, 0, 100, 30, 0, 0, 0, 0, 10, dq_de ? "MISCHUNG" : "MIX", 0);
+dq_sknob(dq_ox + 32, 200, 14, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 12, dq_de ? "PEGEL" : "LEVEL", 0);
 ui_outkeys(dq_ox + 60, 176, 46, 17, 4, 24);
-dq_sknob(dq_ox + 32, 264, 11, 19, 0, 100, 0, 0, 0, 2, 0xD8B040, 0, "SAT", 0);
+dq_sknob(dq_ox + 32, 264, 11, 19, 0, 100, 0, 0, 0, 2, 0xD8B040, 0, dq_de ? "SÄTT." : "SAT", 0);
 dq_sknob(dq_ox + 84, 264, 11, 16, 0, 100, 50, 0, 0, 2, 0x9DA2A8, 11, "DRIFT", 0);
 mtL.ui_ledm((dq_ox + 14) * sc, 300 * sc, 88 * sc, 7 * sc, dp_opkL); mtR.ui_ledm((dq_ox + 14) * sc, 311 * sc, 88 * sc, 7 * sc, dp_opkR);
 dp_opkL = 0; dp_opkR = 0;
@@ -1009,7 +1018,7 @@ pk_inset(15 * sc, (dq_ky + 1) * sc, 458 * sc, 34 * sc, DQS);
 gfx_setfont(11); ui_col(DQI2); dq_txt(22, dq_ky + 10, "PARAM");
 dq_dkey(78, dq_ky + 3, 38, 30, "◄") ? ( dq_sel = dq_sel <= 1 ? 12 : dq_sel - 1; );
 dq_dkey(120, dq_ky + 3, 38, 30, "►") ? ( dq_sel = dq_sel >= 12 ? 1 : dq_sel + 1; );
-gfx_setfont(11); ui_col(DQI2); dq_txt(176, dq_ky + 10, "VALUE");
+gfx_setfont(11); ui_col(DQI2); dq_txt(176, dq_ky + 10, dq_de ? "WERT" : "VALUE");
 dq_inc = 0;
 dq_dkey(230, dq_ky + 3, 38, 30, "-") ? dq_inc = -1;
 dq_dkey(272, dq_ky + 3, 38, 30, "+") ? dq_inc = 1;
@@ -1047,7 +1056,7 @@ loop(6,
   rd_led(dq_k + 12, dq_ry + 13 + (dq_on ? 1.5 : 0), 3, dq_on, DQV);
   gfx_setfont(11); ui_col(DQI2); sprintf(#dqs, "%02d", dq_i + 1); dq_rtxt(dq_k + 66, dq_ry + 13 + (dq_on ? 1.5 : 0), #dqs);
   gfx_setfont(11); ui_col(dq_on ? DQV : 0xE6EAEE);
-  dq_ctxt(dq_k + 37, dq_ry + 31 + (dq_on ? 1.5 : 0), dq_i == 0 ? "HALL" : dq_i == 1 ? "ROOM" : dq_i == 2 ? "PLATE" : dq_i == 3 ? "EARLY REF" : dq_i == 4 ? "GATE" : "REVERSE");
+  dq_ctxt(dq_k + 37, dq_ry + 31 + (dq_on ? 1.5 : 0), dq_alg(dq_i));
   dq_i += 1;
 );
 
@@ -1063,10 +1072,10 @@ sprintf(#dqs, "%s", #dq_fv); dq_vtxt(dq_vx + 20 + dq_tw / sc + 6, dq_vy + 30, #d
 sprintf(#dqs, "[0x%02X]", floor(min(max(dq_pn_, 0), 1) * 255 + 0.5)); ui_cola(DQV, 0.8); dq_rtxt(dq_vx + dq_vw - 20, dq_vy + 30, #dqs);
 // status line
 gfx_setfont(16);
-sprintf(#dqs, "ALG %02d %-9s", dq_ta + 1, dq_ta == 0 ? "HALL" : dq_ta == 1 ? "ROOM" : dq_ta == 2 ? "PLATE" : dq_ta == 3 ? "EARLY REF" : dq_ta == 4 ? "GATE" : "REVERSE");
+sprintf(#dqs, dq_de ? "PRG %02d %-9s" : "ALG %02d %-9s", dq_ta + 1, dq_alg(dq_ta));
 dq_vtxt(dq_vx + 20, dq_vy + 54, #dqs, 0.85);
 dq_vtxt(dq_vx + 170, dq_vy + 54, dq_ta <= 2 ? "FDN 16x16" : dq_ta == 3 ? "ER 16 TAP" : "NL 96 TAP", 0.6);
-sprintf(#dqs, "16BIT %.1fkHz", srate / 1000); ui_cola(DQV, 0.6); dq_rtxt(dq_vx + dq_vw - 20, dq_vy + 54, #dqs);
+sprintf(#dqs, "16BIT %.1fkHz", srate / 1000); dq_dec(#dqs); ui_cola(DQV, 0.6); dq_rtxt(dq_vx + dq_vw - 20, dq_vy + 54, #dqs);
 ui_cola(DQV, 0.25); dq_r(dq_vx + 18, dq_vy + 67, dq_vw - 36, 1);
 // the decay-time matrix: six bands x time (newest on the right), RT60 per band on the right
 dq_now - dq_ht > 0.06 ? (
@@ -1116,20 +1125,20 @@ dq_ec = dq_ba == 3;
 
 
 // ---------- PROGRAMM ----------
-dq_sect(10, 64, 212, 222, DQF, "PROGRAMM");
+dq_sect(10, 64, 212, 222, DQF, dq_de ? "PROGRAMM" : "PROGRAM");
 dq_i = 0;
 loop(4,
-  dq_big(22 + (dq_i % 2) * 100, 96 + floor(dq_i / 2) * 70, 90, 60, dq_i == 0 ? "RAUM A" : dq_i == 1 ? "RAUM B" : dq_i == 2 ? "PLATTE B" : "ECHO",
+  dq_big(22 + (dq_i % 2) * 100, 96 + floor(dq_i / 2) * 70, 90, 60, dq_balg(dq_i),
          dq_i == 0 ? "1" : dq_i == 1 ? "2" : dq_i == 2 ? "3" : "4", dq_ba == dq_i) ? ( slider3 = dq_i; ui_auto(3); );
   dq_i += 1;
 );
 // lamps: ready, processor overload
 dq_ov = dp_ovt; dp_ovt = 0; dq_ov ? dq_ovt = dq_now;
-dq_lamp(32, 254, 1, 0xFFA126, "BEREIT");
-dq_lamp(124, 254, dq_now - dq_ovt < 0.25, DQRED, "ÜBERLAST");
+dq_lamp(32, 254, 1, 0xFFA126, dq_de ? "BEREIT" : "READY");
+dq_lamp(124, 254, dq_now - dq_ovt < 0.25, DQRED, dq_de ? "ÜBERLAST" : "OVERLOAD");
 
 // ---------- ZEIT: pre-delay and decay, coarse + fine ----------
-dq_sect(230, 64, 240, 222, DQF, "ZEIT");
+dq_sect(230, 64, 240, 222, DQF, dq_de ? "ZEIT" : "TIME");
 // pre-delay: coarse 20 ms steps 0 .. 300, fine 0 .. 20 ms
 dq_pc = min(floor(slider7 / 20 + 0.0001), 15); dq_pf = slider7 - dq_pc * 20;
 dq_cx = 296;
@@ -1144,9 +1153,9 @@ dq_n_ = dq_knob(dq_cx, 222, 14, 207, dq_pf / 20, 0, 0);
 dq_chg ? ( slider7 = min(dq_pc * 20 + min(dq_n_ * 20, 19.9), 300); slider7 = floor(slider7 * 10 + 0.5) / 10; ui_auto(7); );
 dq_a2 = dq_act;
 dq_ticks(dq_cx, 222, 14, 5, DQI2, 0.8); dq_bcap(dq_cx, 222, 14, dq_n_);
-gfx_setfont(11); ui_col(DQI2); dq_rtxt(dq_cx - 22, 222, "FEIN");
+gfx_setfont(11); ui_col(DQI2); dq_rtxt(dq_cx - 22, 222, dq_de ? "FEIN" : "FINE");
 gfx_setfont(14);
-(dq_a1 || dq_a2) ? ( dq_fmt(7); ui_col(DQHI); dq_ctxt(dq_cx, 266, #dq_fv); ) : ( gfx_setfont(11); ui_col(DQI); dq_ctxt(dq_cx + 2, 266, "VORVERZÖGERUNG"); );
+(dq_a1 || dq_a2) ? ( dq_fmt(7); ui_col(DQHI); dq_ctxt(dq_cx, 266, #dq_fv); ) : ( gfx_setfont(11); ui_col(DQI); dq_ctxt(dq_cx + 2, 266, dq_de ? "VORVERZÖGERUNG" : "PRE-DELAY"); );
 // decay: coarse 13 steps 0.2 .. 10 s, fine between two steps
 dq_dc = 0; loop(12, dq_dstep(dq_dc + 1) <= slider4 + 0.0001 ? dq_dc += 1; );
 dq_df = dq_dc < 12 ? log(slider4 / dq_dstep(dq_dc)) / log(dq_dstep(dq_dc + 1) / dq_dstep(dq_dc)) : 0;
@@ -1154,7 +1163,7 @@ dq_df = min(max(dq_df, 0), 0.999);
 dq_cx = 414;
 dq_i = 0; loop(13, dq_a = -0.75 * $pi + dq_i / 12 * 1.5 * $pi; ui_col(DQI2);
   gfx_line((dq_cx + sin(dq_a) * 30) * sc, (130 - cos(dq_a) * 30) * sc, (dq_cx + sin(dq_a) * (dq_i % 3 ? 34 : 37)) * sc, (130 - cos(dq_a) * (dq_i % 3 ? 34 : 37)) * sc, 1); dq_i += 1; );
-dq_slbl(dq_cx - 36, 162, "0,2"); dq_slbl(dq_cx - 45, 104, "0,6"); dq_slbl(dq_cx, 84, "2"); dq_slbl(dq_cx + 44, 104, "5,6"); dq_slbl(dq_cx + 37, 162, "10");
+dq_slbl(dq_cx - 36, 162, dq_de ? "0,2" : "0.2"); dq_slbl(dq_cx - 45, 104, dq_de ? "0,6" : "0.6"); dq_slbl(dq_cx, 84, "2"); dq_slbl(dq_cx + 44, 104, dq_de ? "5,6" : "5.6"); dq_slbl(dq_cx + 37, 162, "10");
 dq_n_ = dq_knob(dq_cx, 130, 24, 104, dq_dc / 12, 7 / 12, -12);
 dq_chg ? ( dq_k = floor(dq_n_ * 12 + 0.5);
            slider4 = dq_k >= 12 ? 10 : dq_dstep(dq_k) * (dq_dstep(dq_k + 1) / dq_dstep(dq_k)) ^ dq_df;
@@ -1167,19 +1176,19 @@ dq_chg ? ( slider4 = dq_dc >= 12 ? 10 : dq_dstep(dq_dc) * (dq_dstep(dq_dc + 1) /
            slider4 = floor(slider4 * 100 + 0.5) / 100; ui_auto(4); );
 dq_a2 = dq_act;
 dq_ticks(dq_cx, 222, 14, 5, DQI2, 0.8); dq_bcap(dq_cx, 222, 14, dq_n_);
-gfx_setfont(11); ui_col(DQI2); dq_rtxt(dq_cx - 22, 222, "FEIN");
+gfx_setfont(11); ui_col(DQI2); dq_rtxt(dq_cx - 22, 222, dq_de ? "FEIN" : "FINE");
 gfx_setfont(14);
-(dq_a1 || dq_a2) ? ( dq_fmt(4); ui_col(DQHI); dq_ctxt(dq_cx, 266, #dq_fv); ) : ( ui_col(DQI); dq_ctxt(dq_cx, 266, dq_ec ? "ABKLINGEN" : "NACHHALL"); );
+(dq_a1 || dq_a2) ? ( dq_fmt(4); ui_col(DQHI); dq_ctxt(dq_cx, 266, #dq_fv); ) : ( ui_col(DQI); dq_ctxt(dq_cx, 266, dq_ec ? (dq_de ? "ABKLINGEN" : "FEEDBACK") : (dq_de ? "NACHHALL" : "DECAY")); );
 
 // ---------- KLANG ----------
-dq_sect(478, 64, 240, 222, DQF, "KLANG");
+dq_sect(478, 64, 240, 222, DQF, dq_de ? "KLANG" : "TONE");
 dq_c1 = 524; dq_c2 = 598; dq_c3 = 672;
-dq_sknob(dq_c1, 122, 21, 8, 0, 100, 40, 0, 10, 0, 0, 0, "DÄMPFUNG", 0);
-dq_sknob(dq_c2, 122, 19, 9, 20, 600, 80, 1, 0, 1, 0, 0, "TIEFEN", 0);
-dq_sknob(dq_c3, 122, 21, 10, 0, 100, 20, 0, 0, 0, 0, 0, "ANTRIEB", 0);
-dq_sknob(dq_c1, 218, 21, 13, 0, 100, 50, 0, 0, 0, 0, 0, "KÖRNUNG", 0);
-dq_ec ? dq_sknob(dq_c2, 218, 21, 14, 40, 1000, 300, 1, 0, 0, 0, 0, "ECHOZEIT", 0)
-      : dq_sknob(dq_c2, 218, 21, 11, 50, 150, 100, 0, 0, 0, 0, 0, "GRÖSSE", 0);
+dq_sknob(dq_c1, 122, 21, 8, 0, 100, 40, 0, 10, 0, 0, 0, dq_de ? "DÄMPFUNG" : "DAMPING", 0);
+dq_sknob(dq_c2, 122, 19, 9, 20, 600, 80, 1, 0, 1, 0, 0, dq_de ? "TIEFEN" : "LOW CUT", 0);
+dq_sknob(dq_c3, 122, 21, 10, 0, 100, 20, 0, 0, 0, 0, 0, dq_de ? "ANTRIEB" : "DRIVE", 0);
+dq_sknob(dq_c1, 218, 21, 13, 0, 100, 50, 0, 0, 0, 0, 0, dq_de ? "KÖRNUNG" : "GRAIN", 0);
+dq_ec ? dq_sknob(dq_c2, 218, 21, 14, 40, 1000, 300, 1, 0, 0, 0, 0, dq_de ? "ECHOZEIT" : "DELAY", 0)
+      : dq_sknob(dq_c2, 218, 21, 11, 50, 150, 100, 0, 0, 0, 0, 0, dq_de ? "GRÖSSE" : "SIZE", 0);
 dq_sknob(dq_c3, 218, 21, 12, 0, 100, 70, 0, 0, 0, 0, 0, "DIFFUSION", 0);
 
 // ---------- PEGEL: the vertical meter ladders ----------
@@ -1195,24 +1204,27 @@ dq_ladder(746, 74, 12, 196, floor((min(dq_iv, 6) + 42) / 3 + 0.5), 0);
 dq_ladder(768, 74, 12, 196, floor(dq_rv / 2.5 + 0.5), 1);
 // the names, silkscreened vertically
 gfx_setfont(10); ui_col(DQI);
-dq_i = 0; loop(12, strcpy_substr(#dqs, "AUSSTEUERUNG", dq_i, 1); dq_ctxt(736, 82 + dq_i * 15.8, #dqs); dq_i += 1; );
-dq_i = 0; loop(12, strcpy_substr(#dqs, "REGELRESERVE", dq_i, 1); dq_ctxt(790, 82 + dq_i * 15.8, #dqs); dq_i += 1; );
+// (centred on the 12-letter column; these words have no umlauts, so one byte per letter)
+strcpy(#dqw, dq_de ? "AUSSTEUERUNG" : "INPUT LEVEL");
+dq_i = 0; loop(strlen(#dqw), strcpy_substr(#dqs, #dqw, dq_i, 1); dq_ctxt(736, 82 + (12 - strlen(#dqw)) * 7.9 + dq_i * 15.8, #dqs); dq_i += 1; );
+strcpy(#dqw, dq_de ? "REGELRESERVE" : "HEADROOM");
+dq_i = 0; loop(strlen(#dqw), strcpy_substr(#dqs, #dqw, dq_i, 1); dq_ctxt(790, 82 + (12 - strlen(#dqw)) * 7.9 + dq_i * 15.8, #dqs); dq_i += 1; );
 
 // ---------- AUSGANG ----------
-dq_sect(808, 64, 102, 222, DQS, "AUSGANG");
-dq_sknob(859, 120, 18, 15, 0, 100, 30, 0, 0, 0, 0, 0, "MISCHUNG", 0);
-dq_sknob(834, 194, 13, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 0, "PEGEL", 0);
+dq_sect(808, 64, 102, 222, DQS, dq_de ? "AUSGANG" : "OUTPUT");
+dq_sknob(859, 120, 18, 15, 0, 100, 30, 0, 0, 0, 0, 0, dq_de ? "MISCHUNG" : "MIX", 0);
+dq_sknob(834, 194, 13, 18, -24, 12, 0, 0, 0, 2, 0x9DA2A8, 0, dq_de ? "PEGEL" : "LEVEL", 0);
 ui_outkeys(856, 172, 46, 17, 4, 24);
-dq_sknob(834, 248, 10, 19, 0, 100, 0, 0, 0, 2, 0xD8B040, 0, "SAT", 0);
+dq_sknob(834, 248, 10, 19, 0, 100, 0, 0, 0, 2, 0xD8B040, 0, dq_de ? "SÄTT." : "SAT", 0);
 dq_sknob(884, 248, 10, 16, 0, 100, 50, 0, 0, 2, dq_sk == 0 ? 0x6F8794 : DQI2, 0, "DRIFT", 0);
 
 // ---------- bottom band: SKIN keys and the silkscreen ----------
 dq_sect(10, 294, 900, 38, DQS, "");
-gfx_setfont(11); ui_col(DQI2); dq_ltxt(22, 313, "SKIN");
-dq_key(64, 301, 74, 24, "ENAMEL", dq_sk == 0) ? ( slider17 = 0; ui_auto(17); );
+gfx_setfont(11); ui_col(DQI2); dq_ltxt(22, 313, dq_de ? "OPTIK" : "SKIN");
+dq_key(64, 301, 74, 24, dq_de ? "EMAILLE" : "ENAMEL", dq_sk == 0) ? ( slider17 = 0; ui_auto(17); );
 dq_key(142, 301, 54, 24, "VFD", dq_sk == 1) ? ( slider17 = 1; ui_auto(17); );
 dq_key(200, 301, 74, 24, "MATRIX", dq_sk == 2) ? ( slider17 = 2; ui_auto(17); );
-gfx_setfont(13); ui_col(DQI); dq_ctxt(600, 313, "DRP-45   DIGITALER RAUMKLANG-PROZESSOR");
+gfx_setfont(13); ui_col(DQI); dq_ctxt(600, 313, dq_de ? "DRP-45   DIGITALER RAUMKLANG-PROZESSOR" : "DRP-45   DIGITAL REVERB PROCESSOR");
 gfx_setfont(11); ui_col(DQI2); dq_rtxt(898, 313, "12 BIT · 9 kHz");
 );
 

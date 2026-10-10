@@ -44,6 +44,7 @@ slider2:0<0,5,1{-9 dBFS,-12 dBFS,-14 dBFS,-15 dBFS,-18 dBFS,-20 dBFS}>-PPM ref (
 slider3:4<0,5,1{-9 dBFS,-12 dBFS,-14 dBFS,-15 dBFS,-18 dBFS,-20 dBFS}>-VU ref (0 VU =)
 slider4:1<0,3,1{Off,2 s,5 s,Inf}>-Peak hold
 slider5:0<0,2,1{Enamel,VFD,Matrix}>-Theme
+slider6:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -207,6 +208,7 @@ ui_begin(760, 340);
 // Theme colours (the recipe's palette)
 // =====================================================================
 pgv_th = slider5 | 0; pgv_sc = slider1 | 0;
+pgv_de = slider6 >= 0.5;                                // the language key: ENG / DE labels
 pgv_th == 0 ? (                                         // ENAMEL: light industrial faceplate
   PGF  = 0xD6D2C4;                                      // bone-grey baked enamel (meter faces)
   PGP  = ui_mix(PGF, 0x000000, 0.10);                   // the panel around them, a shade deeper
@@ -302,11 +304,17 @@ ui_col(pgv_th == 0 ? PGI : PGA); pg_r(0, 54, 760, 2);
 ui_col(pgv_th == 0 ? PGI : pgv_th == 1 ? PGI : PGA); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(pgv_th == 0 ? PGF : 0x111213); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); ui_col(pgv_th == 0 ? PGI : PGI); pg_txt(58, 12, "PEGEL 45");
-gfx_setfont(11); ui_col(PGI2); pg_txt(196, 15, "STEREO"); pg_txt(196, 29, "PEGELMESSER");
+gfx_setfont(11); ui_col(PGI2); pg_txt(196, 15, "STEREO"); pg_txt(196, 29, pgv_de ? "PEGELMESSER" : "LEVEL METER");
 // the house preset bar: PRESETS, prev / next, LCD (click it for the list)
-k_ = pk_preset(300 * sc, 10 * sc, 386 * sc, 34 * sc, pr_cur,
+k_ = pk_preset(300 * sc, 10 * sc, 346 * sc, 34 * sc, pr_cur,
   "Init|Broadcast PPM -9|PPM Align -18|Live Desk PPM -12|Tracking VU -18|Mix VU -14|Hot Master VU -12|Mastering Peak|VFD Peak|VFD PPM|Matrix PPM|Matrix VU");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(666 * sc, 18 * sc, 27 * sc, 18 * sc, pgv_de ? "DE" : "ENG", 0, 1) ? ( slider6 = pgv_de ? 0 : 1; ui_auto(6); pgv_de = slider6 >= 0.5; );
+ui_col(0x060607); gfx_circle(657 * sc, 27 * sc, 4.5 * sc, 1, 1);
+pgv_de ? ( ui_cola(0xFFA126, 0.22); gfx_circle(657 * sc, 27 * sc, 7 * sc, 1, 1); ui_col(0xFFA126); ) : ui_col(ui_mix(0xFFA126, 0x000000, 0.78));
+gfx_circle(657 * sc, 27 * sc, 3 * sc, 1, 1);
+ui_cola(0xFFFFFF, pgv_de ? 0.6 : 0.15); gfx_circle(656.1 * sc, 25.95 * sc, 1.05 * sc, 1, 1);
 ui_size_picker(694 * sc, 18 * sc);
 
 // =====================================================================
@@ -317,11 +325,16 @@ pgv_wx = 12; pgv_wy = 62; pgv_ww = 536; pgv_wh = 208;
 pressed && drag_id == 0 && mouse_x >= pgv_wx * sc && mouse_x < (pgv_wx + pgv_ww) * sc && mouse_y >= pgv_wy * sc &&
   mouse_y < (pgv_wy + pgv_wh) * sc ? ( pg_req += 1; drag_id = -1; );
 
-strcpy(#pgv_sn, pgv_sc == 0 ? "PPM" : pgv_sc == 1 ? "VU" : "PEAK");
+strcpy(#pgv_sn, pgv_sc == 0 ? "PPM" : pgv_sc == 1 ? "VU" : pgv_de ? "SPITZE" : "PEAK");
 pgv_sc == 0 ? sprintf(#pgv_ds, "0 dB = %d dBFS", pga_ref) :
-pgv_sc == 1 ? sprintf(#pgv_ds, "0 VU = %d dBFS", pga_ref) : strcpy(#pgv_ds, "SCALE dBFS");
-pgv_sc == 0 ? strcpy(#pgv_bl, "INTEGR. 10 ms   RÜCKLAUF 20 dB / 1,5 s") :
-pgv_sc == 1 ? strcpy(#pgv_bl, "ANSTIEG 300 ms   RÜCKLAUF 300 ms") : strcpy(#pgv_bl, "SAMPLE PEAK   RÜCKLAUF 20 dB / 1,7 s");
+pgv_sc == 1 ? sprintf(#pgv_ds, "0 VU = %d dBFS", pga_ref) : strcpy(#pgv_ds, pgv_de ? "SKALA dBFS" : "SCALE dBFS");
+pgv_de ? (
+  pgv_sc == 0 ? strcpy(#pgv_bl, "INTEGR. 10 ms   RÜCKLAUF 20 dB / 1,5 s") :
+  pgv_sc == 1 ? strcpy(#pgv_bl, "ANSTIEG 300 ms   RÜCKLAUF 300 ms") : strcpy(#pgv_bl, "ABTASTSPITZE   RÜCKLAUF 20 dB / 1,7 s");
+) : (
+  pgv_sc == 0 ? strcpy(#pgv_bl, "INTEGR. 10 ms   RETURN 20 dB / 1.5 s") :
+  pgv_sc == 1 ? strcpy(#pgv_bl, "RISE 300 ms   RETURN 300 ms") : strcpy(#pgv_bl, "SAMPLE PEAK   RETURN 20 dB / 1.7 s");
+);
 
 // tick label text
 function pg_tlbl(s, d) (
@@ -336,8 +349,8 @@ function pg_needle_meter(x, y, w, h, q, hq, ch) local(cx, py, R, i, n, d, k, a, 
   ui_col(PGF); pg_r(x + 1.5, y + 1.5, w - 3, h - 3);
   cx = x + w * 0.5; py = y + h - 12; R = 150;
   // over-zone band (safety orange) and the scale arc
-  ui_col(PGA); i = 0;
-  loop(7 * sc, gfx_arc(cx * sc, py * sc, R * sc + i, -pgv_span + 2 * pgv_span * pgv_zR, pgv_span, 1); i += 1; );
+  ui_col(PGA); i = 0;                                   // (anti-aliased arcs every half pixel: a smooth band)
+  loop(14 * sc, gfx_arc(cx * sc, py * sc, R * sc + i * 0.5, -pgv_span + 2 * pgv_span * pgv_zR, pgv_span, 1); i += 1; );
   ui_col(PGI); gfx_arc(cx * sc, py * sc, R * sc, -pgv_span, pgv_span, 1);
   gfx_arc(cx * sc, py * sc, R * sc - 1, -pgv_span, pgv_span, 1);
   // ticks and numbers
@@ -356,7 +369,7 @@ function pg_needle_meter(x, y, w, h, q, hq, ch) local(cx, py, R, i, n, d, k, a, 
   );
   // captions inside the arc
   gfx_setfont(14); ui_col(PGI); pg_txt(x + 14, y + h - 80, pgv_sc == 1 ? "VU" : "dB");
-  gfx_setfont(11); ui_col(PGI2); pg_rtxt(x + w - 14, y + h - 66, "PEGEL");
+  gfx_setfont(11); ui_col(PGI2); pg_rtxt(x + w - 14, y + h - 66, pgv_de ? "PEGEL" : "LEVEL");
   // hold: an orange drag pointer
   pgv_hon && hq > 0.001 ? (
     a = -pgv_span + 2 * pgv_span * min(hq, 1.02); ca = cos(a); sa = sin(a);
@@ -444,7 +457,7 @@ pgv_th == 0 ? (
   ui_col(PGF); pg_r(pgv_wx + 1, pgv_wy + 1, pgv_ww - 2, pgv_wh - 2);
   pgv_bx = 56; pgv_bw = 476;
   // caption row
-  gfx_setfont(11); ui_col(PGI); pg_txt(26, 70, "PEGEL"); ui_col(PGI2); pg_txt(78, 70, pgv_sc == 1 ? "VU" : "dB");
+  gfx_setfont(11); ui_col(PGI); pg_txt(26, 70, pgv_de ? "PEGEL" : "LEVEL"); ui_col(PGI2); pg_txt(78, 70, pgv_sc == 1 ? "VU" : "dB");
   ui_col(PGI2); pg_rtxt(pgv_bx + pgv_bw, 77, #pgv_ds);
   pgv_sc != 1 ? ( ui_col(PGI); pg_txt(116, 70, #pgv_sn); );
   // bars and scale
@@ -455,7 +468,7 @@ pgv_th == 0 ? (
   // footer: the ballistics in print
   ui_col(pgv_th == 1 ? 0x1E2224 : 0x2C302E); pg_r(pgv_wx + 1, 240, pgv_ww - 2, 1);
   gfx_setfont(11); ui_col(PGI2); pg_txt(26, 249, #pgv_bl);
-  ui_col(PGI2); pg_rtxt(pgv_bx + pgv_bw, 256, "CLICK = HOLD RESET");
+  ui_col(PGI2); pg_rtxt(pgv_bx + pgv_bw, 256, pgv_de ? "KLICK = HALTEN LÖSCHEN" : "CLICK = HOLD RESET");
 );
 
 // =====================================================================
@@ -464,7 +477,7 @@ pgv_th == 0 ? (
 pgv_cy = 278; pgv_chh = 54; pgv_cbx = 112; pgv_cbw = 420;
 pgv_th == 0 ? ( ui_col(PGI); pg_r(12, pgv_cy, 536, pgv_chh); ui_col(PGF); pg_r(13.5, pgv_cy + 1.5, 533, pgv_chh - 3); )
             : ( ui_col(pgv_th == 1 ? 0x2E3235 : 0x0B0C0D); pg_r(12, pgv_cy, 536, pgv_chh); ui_col(PGF); pg_r(13, pgv_cy + 1, 534, pgv_chh - 2); );
-gfx_setfont(11); ui_col(PGI); pg_txt(24, pgv_cy + 12, "KORREL.");
+gfx_setfont(11); ui_col(PGI); pg_txt(24, pgv_cy + 12, pgv_de ? "KORREL." : "CORREL.");
 ui_col(PGI2); pg_txt(24, pgv_cy + 28, "PHASE");
 // scale: -1 .. +1
 gfx_setfont(11);
@@ -513,7 +526,7 @@ pgv_th == 0 ? ( ui_col(PGI); pg_r(pgv_rx, 62, pgv_rw, 64); ui_col(0x141414); pg_
 : ( ui_col(0x0B0C0D); pg_r(pgv_rx, 62, pgv_rw, 64); ui_col(0x0E0F10); pg_r(pgv_rx + 1, 63, pgv_rw - 2, 62); pgv_dc = PGL2; );
 pressed && drag_id == 0 && mouse_x >= pgv_rx * sc && mouse_x < (pgv_rx + pgv_rw) * sc && mouse_y >= 62 * sc && mouse_y < 126 * sc ?
   ( pg_req += 1; drag_id = -1; );
-gfx_setfont(11); ui_cola(pgv_dc, 0.7); pg_txt(pgv_rx + 10, 69, "PEAK  dBFS");
+gfx_setfont(11); ui_cola(pgv_dc, 0.7); pg_txt(pgv_rx + 10, 69, pgv_de ? "SPITZE  dBFS" : "PEAK  dBFS");
 // OVER lamps
 pgv_i = 0;
 loop(2,
@@ -523,7 +536,7 @@ loop(2,
   pg_r(pgv_x, 69, 14, 9);
   pgv_i += 1;
 );
-gfx_setfont(11); ui_cola(pgv_dc, 0.55); pg_rtxt(pgv_rx + pgv_rw - 52, 74, "OVER");
+gfx_setfont(11); ui_cola(pgv_dc, 0.55); pg_rtxt(pgv_rx + pgv_rw - 52, 74, pgv_de ? "ÜBER" : "OVER");
 // the numbers
 pgv_i = 0;
 loop(2,
@@ -536,13 +549,14 @@ loop(2,
 );
 
 // ---------- SCALE ----------
-pg_lbl(pgv_rx, 133, "SCALE");
+pg_lbl(pgv_rx, 133, pgv_de ? "SKALA" : "SCALE");
 pg_key(pgv_rx,       148, 60, 24, "PPM",  pgv_sc == 0, 1) ? ( slider1 = 0; ui_auto(1); );
 pg_key(pgv_rx + 65,  148, 60, 24, "VU",   pgv_sc == 1, 1) ? ( slider1 = 1; ui_auto(1); );
-pg_key(pgv_rx + 130, 148, 60, 24, "PEAK", pgv_sc == 2, 1) ? ( slider1 = 2; ui_auto(1); );
+pg_key(pgv_rx + 130, 148, 60, 24, pgv_de ? "SPITZE" : "PEAK", pgv_sc == 2, 1) ? ( slider1 = 2; ui_auto(1); );
 // ---------- REF (the active scale's own alignment) ----------
 pgv_rs = pgv_sc == 1 ? 3 : 2; pgv_rv = slider(pgv_rs);
-pg_lbl(pgv_rx, 179, pgv_sc == 1 ? "REF LEVEL  (dBFS = 0 VU)" : pgv_sc == 0 ? "REF LEVEL  (dBFS = 0 dB)" : "REF LEVEL  (PEAK: dBFS)");
+pg_lbl(pgv_rx, 179, pgv_de ? (pgv_sc == 1 ? "BEZUG  (dBFS = 0 VU)" : pgv_sc == 0 ? "BEZUG  (dBFS = 0 dB)" : "BEZUG  (SPITZE: dBFS)")
+                    : (pgv_sc == 1 ? "REF LEVEL  (dBFS = 0 VU)" : pgv_sc == 0 ? "REF LEVEL  (dBFS = 0 dB)" : "REF LEVEL  (PEAK: dBFS)"));
 pgv_i = 0;
 loop(6,
   sprintf(#pgv_k, "%d", pg_refdb(pgv_i));
@@ -551,16 +565,16 @@ loop(6,
   pgv_i += 1;
 );
 // ---------- HOLD ----------
-pg_lbl(pgv_rx, 249, "HOLD");
+pg_lbl(pgv_rx, 249, pgv_de ? "HALTEN" : "HOLD");
 pgv_i = 0;
 loop(4,
-  pg_key(pgv_rx + pgv_i * 49, 264, 45, 24, pgv_i == 0 ? "OFF" : pgv_i == 1 ? "2 S" : pgv_i == 2 ? "5 S" : "INF", slider4 == pgv_i, 1) ?
+  pg_key(pgv_rx + pgv_i * 49, 264, 45, 24, pgv_i == 0 ? (pgv_de ? "AUS" : "OFF") : pgv_i == 1 ? "2 S" : pgv_i == 2 ? "5 S" : (pgv_de ? "FEST" : "INF"), slider4 == pgv_i, 1) ?
     ( slider4 = pgv_i; ui_auto(4); );
   pgv_i += 1;
 );
 // ---------- THEME ----------
-pg_lbl(pgv_rx, 294, "THEME");
-pg_key(pgv_rx,       308, 66, 24, "ENAMEL", pgv_th == 0, 1) ? ( slider5 = 0; ui_auto(5); );
+pg_lbl(pgv_rx, 294, pgv_de ? "OPTIK" : "THEME");
+pg_key(pgv_rx,       308, 66, 24, pgv_de ? "EMAILLE" : "ENAMEL", pgv_th == 0, 1) ? ( slider5 = 0; ui_auto(5); );
 pg_key(pgv_rx + 70,  308, 52, 24, "VFD",    pgv_th == 1, 1) ? ( slider5 = 1; ui_auto(5); );
 pg_key(pgv_rx + 126, 308, 64, 24, "MATRIX", pgv_th == 2, 1) ? ( slider5 = 2; ui_auto(5); );
 

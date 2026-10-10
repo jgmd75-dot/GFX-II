@@ -90,6 +90,7 @@ slider27:120<40,400,1>-Sat low band (Hz)
 slider28:6000<2000,16000,10>-Sat high band (Hz)
 slider29:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider30:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider31:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -631,8 +632,10 @@ function dv_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = c
 function dv_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = rx * sc - tw; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function dv_ltxt(lx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = lx * sc; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function dv_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
-// BERLIN prints decimal commas
-function dv_dec(s) local(i) ( dv_b ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
+// the language key (slider31): ENG / DE labels; the TOKYO / BERLIN keys only set the look (and the sound)
+dv_de = slider31 >= 0.5;
+// DE prints decimal commas
+function dv_dec(s) local(i) ( dv_de ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
 
 // =====================================================================
 // The unit faces: u = 0 DRIVE 45 / 1 JDM-45, b = BERLIN
@@ -769,9 +772,11 @@ function dv_n2v(kind, n, lo, hi) ( n = min(max(n, 0), 1); kind == 2 ? lo * (hi /
 // a printed tick and its number at n (0..1) round a knob
 function dv_tick(cx, cy, r, n, s, big) local(a, ca, sa) (
   a = -0.75 * $pi + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
-  ui_col(KI2);
-  gfx_line((cx + ca * (r + 4)) * sc, (cy + sa * (r + 4)) * sc, (cx + ca * (r + (big ? 8 : 6))) * sc, (cy + sa * (r + (big ? 8 : 6))) * sc, 1);
-  big ? gfx_line((cx + ca * (r + 4)) * sc + 1, (cy + sa * (r + 4)) * sc, (cx + ca * (r + 8)) * sc + 1, (cy + sa * (r + 8)) * sc, 1);
+  dv_b ? (                                              // (TOKYO: the knob's own value ring takes the place of the ticks)
+    ui_col(KI2);
+    gfx_line((cx + ca * (r + 4)) * sc, (cy + sa * (r + 4)) * sc, (cx + ca * (r + (big ? 8 : 6))) * sc, (cy + sa * (r + (big ? 8 : 6))) * sc, 1);
+    big ? gfx_line((cx + ca * (r + 4)) * sc + 1, (cy + sa * (r + 4)) * sc, (cx + ca * (r + 8)) * sc + 1, (cy + sa * (r + 8)) * sc, 1);
+  );
   strlen(s) ? ( gfx_setfont(10); ui_col(KI); dv_ctxt(cx + ca * (r + 14), cy + sa * (r + 13), s); );
 );
 // numbers from a list "a|b|c", evenly spread
@@ -786,26 +791,42 @@ function dv_scale(cx, cy, r, labels) local(i, k, k0, len, c, n) (
 );
 // eleven plain ticks round a knob
 function dv_ticks(cx, cy, r) local(i) ( i = 0; loop(11, dv_tick(cx, cy, r, i / 10, "", i == 0 || i == 5 || i == 10); i += 1; ); );
-// TOKYO knob: black rubberised body, a ring of dots lit in the display colour up to the setting
-function dv_tcap(cx, cy, r, n, ring) local(i, t, m, rr, a, ca, sa) (
+// a smooth thick arc (pixels): anti-aliased arcs every half pixel
+function dv_arcw(cx, cy, r, a1, a2, w) local(k) (
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+// a straight pointer line, w pixels wide (pixel coordinates)
+function dv_ptr(cx, cy, a, r1, r2, w) local(ca, sa, k) (
+  ca = sin(a); sa = -cos(a); k = -w * 0.5;
+  loop(max(1, floor(w * 2) + 1), gfx_line(cx + ca * r1 - sa * k, cy + sa * r1 + ca * k, cx + ca * r2 - sa * k, cy + sa * r2 + ca * k, 1); k += 0.5; );
+);
+// TOKYO knob: a smooth black rubber body with one soft highlight; ring = a thin track with the value arc glowing
+// in the display colour
+function dv_tcap(cx, cy, r, n, ring) local(rr, a, a0) (
+  a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi;
   ring ? (
     rr = r + 5 * sc;
-    i = 0; loop(41, t = -0.75 * $pi + i / 40 * 1.5 * $pi; m = i / 40 <= n + 0.001;
-      ui_col(m ? KA : 0x2A2E30); gfx_circle(cx + sin(t) * rr, cy - cos(t) * rr, 1.3 * sc, 1, 1);
-      m ? ( ui_cola(KA, 0.16); gfx_circle(cx + sin(t) * rr, cy - cos(t) * rr, 3 * sc, 1, 1); );
-      i += 1; );
+    ui_col(0x2A2E30); dv_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.4 * sc);
+    n > 0.004 ? (
+      ui_col(ui_mix(KA, KS, 0.78)); dv_arcw(cx, cy, rr, a0, a, 5 * sc);
+      ui_col(KA); dv_arcw(cx, cy, rr, a0, a, 2.2 * sc);
+      gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, 1.1 * sc, 1, 1); gfx_circle(cx + sin(a) * rr, cy - cos(a) * rr, 1.1 * sc, 1, 1);
+    );
   );
-  ui_cola(0x000000, 0.55); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
-  ui_col(0x0B0C0D); gfx_circle(cx, cy, r, 1, 1);
-  i = 0; loop(36, t = i / 36 * 2 * $pi; ui_cola(0xFFFFFF, i % 2 ? 0.03 : 0.09);
-    gfx_line(cx + sin(t) * r * 0.84, cy - cos(t) * r * 0.84, cx + sin(t) * r * 0.99, cy - cos(t) * r * 0.99, 1); i += 1; );
-  ui_col(0x1E2123); gfx_circle(cx, cy, r * 0.8, 1, 1);
-  gfx_gradrect(cx - r * 0.6, cy - r * 0.7, r * 1.2, r * 0.7, 1, 1, 1, 0.07, 0, 0, 0, 0, 0, 0, 0, -0.07 / (r * 0.7));
-  ui_cola(0x000000, 0.6); gfx_circle(cx, cy, r * 0.8, 0, 1);
-  a = -0.75 * $pi + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
-  ui_col(ui_mix(KA, 0xFFFFFF, 0.35)); i = -1;
-  loop(3, gfx_line(cx + ca * r * 0.3 - sa * i * 0.8 * sc, cy + sa * r * 0.3 + ca * i * 0.8 * sc,
-                   cx + ca * r * 0.76 - sa * i * 0.8 * sc, cy + sa * r * 0.76 + ca * i * 0.8 * sc, 1); i += 1; );
+  ui_cola(0x000000, 0.5); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
+  ui_col(0x090A0B); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0x1B1E20); gfx_circle(cx, cy, r - 1.5 * sc, 1, 1);
+  ui_col(0x34383B); dv_arcw(cx, cy, r - 2.5 * sc, -0.66 * $pi, 0.06 * $pi, 1.2 * sc);
+  ui_col(ui_mix(KA, 0xFFFFFF, 0.35)); dv_ptr(cx, cy, a, r * 0.3, r - 4 * sc, 2 * sc);
+);
+// BERLIN knob: a plain dark skirt, a flat satin-silver face with one soft highlight on its edge, a black pointer
+function dv_bcap(cx, cy, r, a) (
+  ui_cola(0x000000, 0.35); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
+  ui_col(0x1A1B1E); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0x5B6168); gfx_circle(cx, cy, r * 0.8, 1, 1);
+  ui_col(0xB7BCC2); gfx_circle(cx, cy, r * 0.8 - 1.2 * sc, 1, 1);
+  ui_col(0xDCDFE3); dv_arcw(cx, cy, r * 0.8 - 2.6 * sc, -0.66 * $pi, 0.06 * $pi, 1.3 * sc);
+  ui_col(0x141416); dv_ptr(cx, cy, a, r * 0.2, r * 0.95, 2 * sc);
 );
 // a knob: cap 0 = the unit's main knob (TOKYO rubber / BERLIN cast aluminium), otherwise a small house knob with
 // that cap colour. Its name below; the value replaces it while touched.
@@ -830,7 +851,7 @@ function dv_knob(cx, cy, r, idx, kind, lo, hi, def, cap, name, val, ly) local(v,
   );
   v = slider(idx); n = dv_v2n(kind, v, lo, hi); a = -0.75 * $pi + n * 1.5 * $pi;
   cap == 0 ? (
-    dv_b ? ( pk_kstyle = 1; pk_ptr = -1; pk_bkcap(cx * sc, cy * sc, r * sc, a); ) : dv_tcap(cx * sc, cy * sc, r * sc, n, 1);
+    dv_b ? dv_bcap(cx * sc, cy * sc, r * sc, a) : dv_tcap(cx * sc, cy * sc, r * sc, n, 1);
   ) : dy_fcap(cx * sc, cy * sc, r * sc, a, cap);
   dv_act = hov || drag_id == did;
   dv_act ? ( ui_cola(0xFFFFFF, 0.08); gfx_circle(cx * sc, cy * sc, (r + 3) * sc, 1, 1); );
@@ -874,7 +895,7 @@ function dv_sel(cx, cy, r, idx, n1, n2, n3, n4) local(v, dx, dy, hov, did, a, i,
   );
   // the knob: a skirted pointer knob
   a = dv_selang(v);
-  dv_b ? ( pk_kstyle = 1; pk_ptr = -1; pk_bkcap(cx * sc, cy * sc, r * sc, a); ) : dv_tcap(cx * sc, cy * sc, r * sc, (v * 60 + 45) / 270, 0);
+  dv_b ? dv_bcap(cx * sc, cy * sc, r * sc, a) : dv_tcap(cx * sc, cy * sc, r * sc, (v * 60 + 45) / 270, 0);
   (hov || drag_id == did) ? ( ui_cola(0xFFFFFF, 0.08); gfx_circle(cx * sc, cy * sc, (r + 3) * sc, 1, 1); );
 );
 
@@ -895,7 +916,7 @@ function dv_unit(x, y, w, h, model, s1, s2, sidx, oidx) local(tw, th) (
   // style keys and ON
   dv_key(x + w - 176, y + 10, 56, 26, "TOKYO", !dv_b) ? ( slider(sidx) = 0; ui_auto(sidx); );
   dv_key(x + w - 116, y + 10, 60, 26, "BERLIN", dv_b) ? ( slider(sidx) = 1; ui_auto(sidx); );
-  dv_key(x + w - 52, y + 10, 40, 26, dv_b ? "EIN" : "ON", slider(oidx) >= 0.5) ? ( slider(oidx) = slider(oidx) >= 0.5 ? 0 : 1; ui_auto(oidx); );
+  dv_key(x + w - 52, y + 10, 40, 26, dv_de ? "EIN" : "ON", slider(oidx) >= 0.5) ? ( slider(oidx) = slider(oidx) >= 0.5 ? 0 : 1; ui_auto(oidx); );
 );
 
 // =====================================================================
@@ -911,7 +932,7 @@ function dv_face(u, x, b, vi, vo, pk) local(c, on, dc, gx, gy, p, i, v, cx) (
   dv_digits(gx + 30, gy + 20, #dvs, "8", dc);
   gfx_setfont(17); ui_col(dc);
   u == 0 ? (
-    dv_b ? (
+    dv_de ? (
       dv_txt(gx + 40, gy + 5, c == 0 ? "STUDIO-" : c == 1 ? "GERMANIUM-" : c == 2 ? "OP-AMP-" : "TRANSISTOR-");
       dv_txt(gx + 40, gy + 21, c == 0 ? "VERSTÄRKUNG" : c == 1 ? "PULT" : c == 2 ? "LEITUNGSTREIBER" : "MATRIX");
     ) : (
@@ -919,7 +940,7 @@ function dv_face(u, x, b, vi, vo, pk) local(c, on, dc, gx, gy, p, i, v, cx) (
       dv_txt(gx + 40, gy + 21, c == 0 ? "CLEAN BOOST" : c == 1 ? "CONSOLE" : c == 2 ? "LINE DRIVER" : "MATRIX");
     );
   ) : (
-    dv_b ? (
+    dv_de ? (
       dv_txt(gx + 40, gy + 5, c == 0 ? "PULT-" : c == 1 ? "RUNDFUNK-" : c == 2 ? "HARMONISCHE" : "UNTER-");
       dv_txt(gx + 40, gy + 21, c == 0 ? "ÜBERSTEUERUNG" : c == 1 ? "BEGRENZER" : c == 2 ? "DISSONANZ" : "SPANNUNG");
     ) : (
@@ -929,7 +950,7 @@ function dv_face(u, x, b, vi, vo, pk) local(c, on, dc, gx, gy, p, i, v, cx) (
   );
   // VU bars, the scale, and the clip lamp (the unit's output over full scale)
   gfx_setfont(16); ui_col(dv_b ? KD : KI2);
-  dv_ltxt(gx + 7, gy + 49, dv_b ? "EIN" : "IN"); dv_ltxt(gx + 7, gy + 64, dv_b ? "AUS" : "OUT"); dv_ltxt(gx + 7, gy + 78, "VU");
+  dv_ltxt(gx + 7, gy + 49, dv_de ? "EIN" : "IN"); dv_ltxt(gx + 7, gy + 64, dv_de ? "AUS" : "OUT"); dv_ltxt(gx + 7, gy + 78, "VU");
   dv_bar(gx + 44, gy + 44, 118, 10, dv_b ? 18 : 36, on ? dv_vupos(vi) : 0, 0.463, 0.686);
   dv_bar(gx + 44, gy + 59, 118, 10, dv_b ? 18 : 36, on ? dv_vupos(vo) : 0, 0.463, 0.686);
   gfx_setfont(16); ui_col(dv_b ? ui_mix(KD, KW, 0.4) : KI2);
@@ -944,39 +965,39 @@ function dv_face(u, x, b, vi, vo, pk) local(c, on, dc, gx, gy, p, i, v, cx) (
   dv_sect(x + 232, 106, 246, 104);
   cx = x + 352;
   u == 0 ? (
-    dv_b ? dv_sel(cx, 156, 21, b + 2, "REIN", "GERMANIUM", "LEITUNG", "MATRIX")
+    dv_de ? dv_sel(cx, 156, 21, b + 2, "REIN", "GERMANIUM", "LEITUNG", "MATRIX")
          : dv_sel(cx, 156, 21, b + 2, "CLEAN", "GERMANIUM", "LINE DRV", "MATRIX");
   ) : (
-    dv_b ? dv_sel(cx, 156, 21, b + 2, "PULT", "RUNDFUNK", "DISSONANZ", "UNTERSPG.")
+    dv_de ? dv_sel(cx, 156, 21, b + 2, "PULT", "RUNDFUNK", "DISSONANZ", "UNTERSPG.")
          : dv_sel(cx, 156, 21, b + 2, "CONSOLE", "BROADCAST", "DISSONANCE", "STARVED");
   );
-  gfx_setfont(14); ui_col(KI); dv_ctxt(cx, 192, dv_b ? "SCHALTUNG" : "CIRCUIT");
+  gfx_setfont(14); ui_col(KI); dv_ctxt(cx, 192, dv_de ? "SCHALTUNG" : "CIRCUIT");
 
   // ---------- DRIVE, BLEND, OUTPUT ----------
   dv_sect(x + 12, 214, 246, 114);
   dv_bg = KS; dv_kf = 14;
   sprintf(#dvv, "+%.1f dB", slider(b + 3)); dv_dec(#dvv);
   dv_scale(x + 53, 268, 23, "0||15||30");
-  dv_knob(x + 53, 268, 23, b + 3, 0, 0, 30, 8, 0, dv_b ? "ANTRIEB" : "DRIVE", #dvv, 44);
+  dv_knob(x + 53, 268, 23, b + 3, 0, 0, 30, 8, 0, dv_de ? "ANTRIEB" : "DRIVE", #dvv, 44);
   sprintf(#dvv, "%.0f %%", slider(b + 4));
   dv_scale(x + 135, 268, 23, "0|5|10");
-  dv_knob(x + 135, 268, 23, b + 4, 0, 0, 100, 100, 0, dv_b ? "MISCHUNG" : "BLEND", #dvv, 44);
+  dv_knob(x + 135, 268, 23, b + 4, 0, 0, 100, 100, 0, dv_de ? "MISCHUNG" : "BLEND", #dvv, 44);
   sprintf(#dvv, "%+.1f dB", slider(b + 5)); dv_dec(#dvv);
   dv_scale(x + 217, 268, 23, "-24||0|+12");
-  dv_knob(x + 217, 268, 23, b + 5, 0, -24, 12, 0, 0, dv_b ? "PEGEL" : "OUTPUT", #dvv, 44);
+  dv_knob(x + 217, 268, 23, b + 5, 0, -24, 12, 0, 0, dv_de ? "PEGEL" : "OUTPUT", #dvv, 44);
 
   // ---------- EQ ----------
   dv_sect(x + 264, 214, 214, 114);
-  gfx_setfont(11); ui_col(KI2); dv_ctxt(x + 371, 228, dv_b ? "ENTZERRER" : "STUDIO EQ");
+  gfx_setfont(11); ui_col(KI2); dv_ctxt(x + 371, 228, dv_de ? "ENTZERRER" : "STUDIO EQ");
   cx = x + 293; dv_kf = 16;
   sprintf(#dvv, "%+.1f dB", slider(b + 6)); dv_dec(#dvv);
-  dv_ticks(cx, 272, 17); dv_knob(cx, 272, 17, b + 6, 0, -15, 15, 0, 0, dv_b ? "TIEFEN" : "LOW", #dvv, 40);
+  dv_ticks(cx, 272, 17); dv_knob(cx, 272, 17, b + 6, 0, -15, 15, 0, 0, dv_de ? "TIEFEN" : "LOW", #dvv, 40);
   sprintf(#dvv, "%+.1f dB", slider(b + 7)); dv_dec(#dvv);
-  dv_ticks(cx + 52, 272, 17); dv_knob(cx + 52, 272, 17, b + 7, 0, -15, 15, 0, 0, dv_b ? "MITTEN" : "MID", #dvv, 40);
+  dv_ticks(cx + 52, 272, 17); dv_knob(cx + 52, 272, 17, b + 7, 0, -15, 15, 0, 0, dv_de ? "MITTEN" : "MID", #dvv, 40);
   v = slider(b + 8); v < 1000 ? sprintf(#dvv, "%.0f Hz", v) : sprintf(#dvv, "%.2f kHz", v / 1000); dv_dec(#dvv);
   dv_ticks(cx + 104, 272, 17); dv_knob(cx + 104, 272, 17, b + 8, 2, 200, 8000, 1000, 0, "FREQ", #dvv, 40);
   sprintf(#dvv, "%+.1f dB", slider(b + 9)); dv_dec(#dvv);
-  dv_ticks(cx + 156, 272, 17); dv_knob(cx + 156, 272, 17, b + 9, 0, -15, 15, 0, 0, dv_b ? "HÖHEN" : "HIGH", #dvv, 40);
+  dv_ticks(cx + 156, 272, 17); dv_knob(cx + 156, 272, 17, b + 9, 0, -15, 15, 0, 0, dv_de ? "HÖHEN" : "HIGH", #dvv, 40);
 );
 
 // =====================================================================
@@ -990,11 +1011,14 @@ ui_col(0x111213); dv_r(0, 54, 1100, 2);
 ui_col(KHI_); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(KH); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); ui_col(KHI_); dv_txt(58, 12, "DRIVE-45");
-gfx_setfont(11); ui_col(0xA99999); dv_txt(196, 14, "EIGHT-CIRCUIT"); dv_txt(196, 29, "STUDIO DRIVE RACK");
+gfx_setfont(11); ui_col(0xA99999); dv_txt(196, 14, dv_de ? "ACHT SCHALTUNGEN" : "EIGHT-CIRCUIT"); dv_txt(196, 29, dv_de ? "STUDIO-VERZERRER" : "STUDIO DRIVE RACK");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
-dv_k = pk_preset(380 * sc, 10 * sc, 620 * sc, 34 * sc, pr_cur,
+dv_k = pk_preset(380 * sc, 10 * sc, 600 * sc, 34 * sc, pr_cur,
   "Init|Bus Warmth|Germanium Glue|Line Driver Snare|Matrix Bass|Console Vocal|Broadcast Slam Drums|Dissonant Synth|Starved Kick|Parallel Crunch|Tokyo-Berlin Chain|Full Melt");
 dv_k > 0 ? ( load_preset(dv_k); pr_cur = dv_k > 12 ? 1 : dv_k; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(1004 * sc, 18 * sc, 27 * sc, 18 * sc, dv_de ? "DE" : "ENG", 0, 1) ? ( slider31 = dv_de ? 0 : 1; ui_auto(31); dv_de = slider31 >= 0.5; );
+rd_led(995, 27, 3, dv_de, 0xFFA126);
 ui_size_picker(1032 * sc, 18 * sc);
 
 // ---------- meter readings (VU, sine-referenced: 0 VU = a sine peaking at -18 dBFS) ----------
@@ -1008,14 +1032,14 @@ dqa_pkB >= 1 ? dv_ckB = dv_now; dqa_pkB = 0;
 // LEFT UNIT: DRIVE 45 (x 8..500)
 // =====================================================================
 dv_style(0, slider2 >= 0.5);
-dv_unit(8, 60, 492, 274, "DRIVE 45", "STUDIO-", "VERZERRER", 2, 1);
+dv_unit(8, 60, 492, 274, "DRIVE 45", dv_de ? "STUDIO-" : "STUDIO", dv_de ? "VERZERRER" : "DRIVE UNIT", 2, 1);
 dv_face(0, 8, 1, dv_v0, dv_v1, dv_ckA);
 
 // =====================================================================
 // RIGHT UNIT: JDM-45 (x 600..1092)
 // =====================================================================
 dv_style(1, slider12 >= 0.5);
-dv_unit(600, 60, 492, 274, "JDM-45", "BROADCAST-", "SÄTTIGUNGSEINHEIT", 12, 11);
+dv_unit(600, 60, 492, 274, "JDM-45", dv_de ? "RUNDFUNK-" : "BROADCAST", dv_de ? "SÄTTIGUNGSEINHEIT" : "SATURATION UNIT", 12, 11);
 dv_face(1, 600, 11, dv_v2, dv_v3, dv_ckB);
 
 // =====================================================================
@@ -1025,10 +1049,10 @@ KF = 0x9DA2A8; KI = 0x1C1C1C; KI2 = 0x3A3D40; KHI = 0x8A2E00; dv_b = 1; dv_u = 0
 ui_cola(0x000000, 0.5); dv_r(492, 62, 120, 276);
 rd_brushed(490, 58, 120, 278, 0x9AA0A6);
 ui_cola(0x000000, 0.45); dv_fr(490, 58, 120, 278);
-ui_cola(0xFFFFFF, 0.35); dv_r(461, 59, 118, 1);
+ui_cola(0xFFFFFF, 0.35); dv_r(491, 59, 118, 1);
 ui_cola(0x000000, 0.25); dv_r(501, 66, 1, 264); dv_r(598, 66, 1, 264);
 rd_screw(500, 70); rd_screw(600, 70); rd_screw(500, 324); rd_screw(600, 324);
-gfx_setfont(11); ui_col(0x1C1C1C); dv_ctxt(550, 74, "ORDER");
+gfx_setfont(11); ui_col(0x1C1C1C); dv_ctxt(550, 74, dv_de ? "KETTE" : "ORDER");
 // ORDER: two lit keys, the chain drawn on the key
 function dv_okey(y, rev) local(on, c) (
   on = (slider21 >= 0.5) == rev;
@@ -1040,20 +1064,20 @@ function dv_okey(y, rev) local(on, c) (
 );
 dv_okey(86, 0); dv_okey(110, 1);
 sprintf(#dvv, "%+.1f dB", slider22);
-dv_ticks(526, 158, 13); dv_knob(526, 158, 13, 22, 0, -24, 12, 0, 0x9DA2A8, "INPUT", #dvv, 27);
+dv_ticks(526, 158, 13); dv_knob(526, 158, 13, 22, 0, -24, 12, 0, 0x9DA2A8, dv_de ? "EING." : "INPUT", #dvv, 27);
 sprintf(#dvv, "%.0f %%", slider23);
 dv_ticks(574, 158, 13); dv_knob(574, 158, 13, 23, 0, 0, 100, 50, 0x6F8794, "DRIFT", #dvv, 27);
 sprintf(#dvv, "%+.1f dB", slider24);
-dv_ticks(526, 216, 13); dv_knob(526, 216, 13, 24, 0, -24, 12, 0, 0x9DA2A8, "OUTPUT", #dvv, 27);
+dv_ticks(526, 216, 13); dv_knob(526, 216, 13, 24, 0, -24, 12, 0, 0x9DA2A8, dv_de ? "AUSG." : "OUTPUT", #dvv, 27);
 sprintf(#dvv, "%.0f %%", slider25);
-dv_ticks(574, 216, 13); dv_knob(574, 216, 13, 25, 0, 0, 100, 0, 0xD8B040, "SAT", #dvv, 27);
+dv_ticks(574, 216, 13); dv_knob(574, 216, 13, 25, 0, 0, 100, 0, 0xD8B040, dv_de ? "SÄTT." : "SAT", #dvv, 27);
 // the house output stage keys
 ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
 dv_i = 0;
 loop(3,
   dv_c = dv_i == 0 ? 0x3A9CFF : dv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
   ui_okey(516, 252 + dv_i * 23, 68, 19, (slider30 | 0) == dv_i || (dv_i == 1 && ui_okclp > 0.1), dv_c) ? ( slider30 = dv_i; ui_auto(30); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext(550 * sc, (252 + dv_i * 23 + 9.5) * sc, dv_i == 0 ? "OFF" : dv_i == 1 ? "CLIP" : "LIMIT");
+  gfx_setfont(12); ui_col(0x141414); ui_keytext(550 * sc, (252 + dv_i * 23 + 9.5) * sc, dv_i == 0 ? (dv_de ? "AUS" : "OFF") : dv_i == 1 ? "CLIP" : (dv_de ? "BEGR." : "LIMIT"));
   dv_i += 1;
 );
 

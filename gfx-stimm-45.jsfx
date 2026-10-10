@@ -37,6 +37,7 @@ slider3:440<400,480,1>-Reference A4 (Hz)
 slider4:60<0,100,1>-Sensitivity (%)
 slider5:0<0,1,1{Off,On}>-Mute
 slider6:0<0,1,1{Sharps,Flats}>-Note names
+slider7:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -247,6 +248,7 @@ ui_begin(560, 250);
 // 1 VFD:    dark slate, cold turquoise and neon amber glow, dark unlit ghost segments
 // 2 MATRIX: battleship grey, chunky stacked LED squares, forest green -> amber -> red, olive-drab ghost cells
 sg_t = slider2;
+sg_de = slider7 >= 0.5;                                 // the language key: ENG / DE labels
 sg_t == 1 ? (
   sg_bg = 0x181A1B; sg_hdr = ui_mix(sg_bg, 0x000000, 0.35); sg_bg2 = 0x000000;
   sg_ink = 0x4EE1DC; sg_ink2 = ui_mix(0x4EE1DC, sg_bg, 0.45); sg_line = ui_mix(0x4EE1DC, sg_bg, 0.7);
@@ -283,6 +285,8 @@ function sg_txtm(x, y, s, al) local(tw, th) (            // y = vertical centre
   gfx_measurestr(s, tw, th);
   gfx_x = x * sc - (al == 1 ? tw * 0.5 : al == 2 ? tw : 0); gfx_y = y * sc - th * 0.5; gfx_drawstr(s);
 );
+// DE prints decimal commas
+function sg_dec(s) local(i) ( sg_de ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
 function sg_in(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
 // engineering caption: name, then a thin rule to the end of the group
 function sg_cap(x, y, w, s) local(tw, th) (
@@ -391,10 +395,16 @@ ui_col(sg_t == 0 ? sg_ink : sg_acc); sg_rect(0, 46, 560, 2);
 ui_col(sg_t == 2 ? sg_acc : sg_ink); gfx_circle(25 * sc, 23 * sc, 14 * sc, 1, 1);
 gfx_setfont(4); ui_col(sg_t == 0 ? 0xD6D2C4 : 0x111213); ui_text(25 * sc, 18 * sc, "GFX");
 sg_font(6, 0, 23); ui_col(sg_ink); sg_txt(46, 9, "STIMM 45", 0);
-sg_font(8, 0, 11); ui_col(sg_ink2); sg_txt(172, 10, "CHROMATIC", 0); sg_txt(172, 24, "STIMMGERÄT", 0);
-k_ = pk_preset(254 * sc, 8 * sc, 232 * sc, 30 * sc, pr_cur,
+sg_font(8, 0, 11); ui_col(sg_ink2); sg_txt(172, 10, sg_de ? "CHROMATISCH" : "CHROMATIC", 0); sg_txt(172, 24, sg_de ? "STIMMGERÄT" : "TUNER", 0);
+k_ = pk_preset(262 * sc, 8 * sc, 188 * sc, 30 * sc, pr_cur,
   "Init|Guitar Strobe|Bass Needle|Stage Ladder (VFD)|Studio Matrix|Lab Strobe|Quiet Room|Horn Section (flats)|Baroque 415|Concert 442|Orchestra 443|Verdi 432");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(467 * sc, 14 * sc, 27 * sc, 18 * sc, sg_de ? "DE" : "ENG", 0, 1) ? ( slider7 = sg_de ? 0 : 1; ui_auto(7); sg_de = slider7 >= 0.5; );
+ui_col(0x060607); gfx_circle(458 * sc, 23 * sc, 4.5 * sc, 1, 1);
+sg_de ? ( ui_cola(0xFFA126, 0.22); gfx_circle(458 * sc, 23 * sc, 7 * sc, 1, 1); ui_col(0xFFA126); ) : ui_col(ui_mix(0xFFA126, 0x000000, 0.78));
+gfx_circle(458 * sc, 23 * sc, 3 * sc, 1, 1);
+ui_cola(0xFFFFFF, sg_de ? 0.6 : 0.15); gfx_circle(457.1 * sc, 21.95 * sc, 1.05 * sc, 1, 1);
 ui_size_picker(495 * sc, 14 * sc);
 
 // ---------- the display window: LADDER / NEEDLE / STROBE ----------
@@ -419,7 +429,7 @@ function sg_tick(c, r1, r2) local(a) (
   gfx_line((sg_cx + sin(a) * r1) * sc, (sg_py - cos(a) * r1) * sc, (sg_cx + sin(a) * r2) * sc, (sg_py - cos(a) * r2) * sc, 1);
 );
 function sg_arcb(c1, c2, r, th, col) local(i) (
-  ui_col(col); i = 0; loop(max(1, floor(th * sc + 0.5)), gfx_arc(sg_cx * sc, sg_py * sc, r * sc + i, sg_ang(c1), sg_ang(c2), 1); i += 1; );
+  ui_col(col); i = 0; loop(max(1, floor(th * sc * 2 + 0.5)), gfx_arc(sg_cx * sc, sg_py * sc, r * sc + i * 0.5, sg_ang(c1), sg_ang(c2), 1); i += 1; );   // half-pixel steps: smooth
 );
 sg_window(DX, DY, DW, DH);
 sg_md = slider1;
@@ -430,8 +440,8 @@ sg_md == 0 ? (
   sg_x0 = DX + (DW - (24 * sg_cw + sg_cc + 24 * sg_cg)) * 0.5;
   sg_ly = DY + 24; sg_lh = 54;
   sg_font(8, 0, 11);
-  sg_wtxt(DX + 12, DY + 12, "FLAT", 0, sg_wink, 0.75);
-  sg_wtxt(DX + DW - 12, DY + 12, "SHARP", 2, sg_wink, 0.75);
+  sg_wtxt(DX + 12, DY + 12, sg_de ? "TIEF" : "FLAT", 0, sg_wink, 0.75);
+  sg_wtxt(DX + DW - 12, DY + 12, sg_de ? "HOCH" : "SHARP", 2, sg_wink, 0.75);
   sg_wtxt(DX + DW * 0.5, DY + 12, "CENT", 1, sg_wink, 0.55);
   sg_i = -12;
   loop(25,
@@ -466,7 +476,7 @@ sg_md == 0 ? (
     sg_i += 1;
   );
   sg_font(8, 0, 10);
-  sg_wtxt(DX + 12, sg_vy + sg_vh * 0.5, "FINE", 0, sg_wink, 0.55);
+  sg_wtxt(DX + 12, sg_vy + sg_vh * 0.5, sg_de ? "FEIN" : "FINE", 0, sg_wink, 0.55);
   sg_wtxt(DX + DW - 12, sg_vy + sg_vh * 0.5, "1 CT", 2, sg_wink, 0.55);
 );
 
@@ -492,8 +502,8 @@ sg_md == 1 ? (
     sg_i += 1;
   );
   sg_font(8, 0, 11);
-  sg_wtxt(DX + 14, DY + DH - 30, "FLAT", 0, sg_wink, 0.75);
-  sg_wtxt(DX + DW - 14, DY + DH - 30, "SHARP", 2, sg_wink, 0.75);
+  sg_wtxt(DX + 14, DY + DH - 30, sg_de ? "TIEF" : "FLAT", 0, sg_wink, 0.75);
+  sg_wtxt(DX + DW - 14, DY + DH - 30, sg_de ? "HOCH" : "SHARP", 2, sg_wink, 0.75);
   sg_font(7, 0, 13); sg_wtxt(sg_cx, DY + 96, "CENT", 1, sg_wink, 0.6);
   // the needle: razor-thin, a soft shadow (ENAMEL) or glow (VFD)
   sg_a = sg_np * sg_am;
@@ -512,8 +522,8 @@ sg_md == 1 ? (
   ui_col(sg_t == 0 ? sg_ink : sg_line); gfx_line((DX + 1) * sc, (DY + DH - 20) * sc, (DX + DW - 2) * sc, (DY + DH - 20) * sc, 0);
   sg_tune ? sg_cell(sg_cx - 14, DY + DH - 14, 28, 7, sg_ok, sg_k) : ( ui_col(sg_t == 0 ? 0x4A4943 : sg_ghost); sg_rect(sg_cx - 14, DY + DH - 14, 28, 7); );
   sg_font(8, 0, 10); ui_cola(sg_t == 0 ? 0xD6D2C4 : sg_ink2, 0.8);
-  sg_txtm(sg_cx - 22, DY + DH - 10.5, "IN TUNE", 2);
-  sprintf(#sg_s, "A4 %d HZ", slider3); sg_txtm(sg_cx + 22, DY + DH - 10.5, #sg_s, 0);
+  sg_txtm(sg_cx - 22, DY + DH - 10.5, sg_de ? "STIMMT" : "IN TUNE", 2);
+  sprintf(#sg_s, sg_de ? "A4 %d Hz" : "A4 %d HZ", slider3); sg_txtm(sg_cx + 22, DY + DH - 10.5, #sg_s, 0);
 );
 
 sg_md == 2 ? (
@@ -560,10 +570,10 @@ sg_md == 2 ? (
   ui_col(sg_t == 0 ? sg_acc : sg_t == 1 ? sg_mid : sg_hot);
   sg_rect(DX + DW * 0.5 - 1, DY + 5, 2, 2 * 37 + 40);
   sg_font(8, 0, 11);
-  sg_wtxt(DX + 12, DY + DH - 12, "< FLAT", 0, sg_wink, 0.75);
-  sg_wtxt(DX + DW - 12, DY + DH - 12, "SHARP >", 2, sg_wink, 0.75);
+  sg_wtxt(DX + 12, DY + DH - 12, sg_de ? "< TIEF" : "< FLAT", 0, sg_wink, 0.75);
+  sg_wtxt(DX + DW - 12, DY + DH - 12, sg_de ? "HOCH >" : "SHARP >", 2, sg_wink, 0.75);
   sg_cell(DX + DW * 0.5 - 16, DY + DH - 16, 32, 8, sg_ok, sg_show && abs(sg_c) < 1 ? sg_k : 0);
-  sg_font(8, 0, 10); sg_wtxt(DX + DW * 0.5 - 22, DY + DH - 12, "LOCK", 2, sg_wink, 0.6);
+  sg_font(8, 0, 10); sg_wtxt(DX + DW * 0.5 - 22, DY + DH - 12, sg_de ? "STEHT" : "LOCK", 2, sg_wink, 0.6);
 );
 
 // ---------- the readout: note, cents, Hz ----------
@@ -571,7 +581,7 @@ RX = 382; RY = 54; RW = 168; RH = 110;
 sg_window(RX, RY, RW, RH);
 sg_font(8, 0, 10);
 sg_wtxt(RX + 8, RY + 9, "NOTE", 0, sg_wink, 0.55);
-slider5 ? sg_wtxt(RX + RW - 8, RY + 9, "MUTED", 2, sg_hot, 1) : (
+slider5 ? sg_wtxt(RX + RW - 8, RY + 9, sg_de ? "STUMM" : "MUTED", 2, sg_hot, 1) : (
   sg_cell(RX + RW - 16, RY + 6, 8, 6, sg_ok, st_open ? 1 : 0);
   sg_wtxt(RX + RW - 20, RY + 9, "SIG", 2, sg_wink, 0.55);
 );
@@ -611,11 +621,11 @@ sg_font(7, 0, 24); ui_cola(sg_nc, sg_al); gfx_x = sg_ex; gfx_y = sg_ny + sg_th *
 sg_font(7, 0, 22); gfx_measurestr(#sg_o, sg_tw, sg_th2); ui_cola(sg_nc, sg_al); gfx_x = sg_ex; gfx_y = sg_ny + sg_th * 0.86 - sg_th2; gfx_drawstr(#sg_o);
 // cents (0.1) and Hz
 ui_cola(sg_t == 0 ? sg_ink : sg_line, 0.5); gfx_line((RX + 8) * sc, (RY + 72) * sc, (RX + RW - 9) * sc, (RY + 72) * sc, 0);
-sg_show ? ( sprintf(#sg_s, "%+.1f", min(max(sg_c, -99.9), 99.9)); abs(sg_c) < 0.05 ? strcpy(#sg_s, " 0.0"); ) : strcpy(#sg_s, "--.-");
+sg_show ? ( sprintf(#sg_s, "%+.1f", min(max(sg_c, -99.9), 99.9)); abs(sg_c) < 0.05 ? strcpy(#sg_s, " 0.0"); sg_dec(#sg_s); ) : strcpy(#sg_s, "--.-");
 sg_font(9, 1, 20); ui_cola(sg_show ? (sg_t == 0 ? sg_ink : sg_tune ? sg_okt : sg_t == 1 ? sg_ok : sg_mid) : sg_wink, sg_al);
 sg_txtm(RX + RW * 0.5 + 4, RY + 84, #sg_s, 2);
 sg_font(8, 0, 11); ui_cola(sg_wink, 0.7); sg_txtm(RX + RW * 0.5 + 8, RY + 85, "CENT", 0);
-sg_show ? sprintf(#sg_s, st_freq < 100 ? "%.3f Hz" : "%.2f Hz", st_freq) : strcpy(#sg_s, "---.-- Hz");
+sg_show ? ( sprintf(#sg_s, st_freq < 100 ? "%.3f Hz" : "%.2f Hz", st_freq); sg_dec(#sg_s); ) : strcpy(#sg_s, "---.-- Hz");
 sg_font(9, 1, 13); ui_cola(sg_wink, sg_show ? 0.85 : 0.4); sg_txtm(RX + RW * 0.5, RY + 100, #sg_s, 1);
 
 // ---------- A4 reference ----------
@@ -636,12 +646,12 @@ sg_in(RX + 77, sg_ry, 64, 22) ? (
 
 // ---------- the control strip ----------
 sg_ky = 213; sg_kh = 29; sg_cy = 203;
-sg_cap(10, sg_cy, 176, "MODE");
-sg_keyb(10, sg_ky, 56, sg_kh, "LADDER", slider1 == 0, sg_kacc) ? ( slider1 = 0; ui_auto(1); );
-sg_keyb(70, sg_ky, 56, sg_kh, "NEEDLE", slider1 == 1, sg_kacc) ? ( slider1 = 1; ui_auto(1); );
-sg_keyb(130, sg_ky, 56, sg_kh, "STROBE", slider1 == 2, sg_kacc) ? ( slider1 = 2; ui_auto(1); );
-sg_cap(196, sg_cy, 176, "THEME");
-sg_keyb(196, sg_ky, 56, sg_kh, "ENAMEL", slider2 == 0, sg_kacc) ? ( slider2 = 0; ui_auto(2); );
+sg_cap(10, sg_cy, 176, sg_de ? "ANZEIGE" : "MODE");
+sg_keyb(10, sg_ky, 56, sg_kh, sg_de ? "LEITER" : "LADDER", slider1 == 0, sg_kacc) ? ( slider1 = 0; ui_auto(1); );
+sg_keyb(70, sg_ky, 56, sg_kh, sg_de ? "ZEIGER" : "NEEDLE", slider1 == 1, sg_kacc) ? ( slider1 = 1; ui_auto(1); );
+sg_keyb(130, sg_ky, 56, sg_kh, sg_de ? "STROBO" : "STROBE", slider1 == 2, sg_kacc) ? ( slider1 = 2; ui_auto(1); );
+sg_cap(196, sg_cy, 176, sg_de ? "OPTIK" : "THEME");
+sg_keyb(196, sg_ky, 56, sg_kh, sg_de ? "EMAILLE" : "ENAMEL", slider2 == 0, sg_kacc) ? ( slider2 = 0; ui_auto(2); );
 sg_keyb(256, sg_ky, 56, sg_kh, "VFD", slider2 == 1, sg_kacc) ? ( slider2 = 1; ui_auto(2); );
 sg_keyb(316, sg_ky, 56, sg_kh, "MATRIX", slider2 == 2, sg_kacc) ? ( slider2 = 2; ui_auto(2); );
 
@@ -659,7 +669,7 @@ drag_id == 960 ? (
   floor(sg_kv + 0.5) != slider4 ? ( slider4 = floor(sg_kv + 0.5); ui_auto(4); );
 );
 sg_kh_ && mouse_wheel != 0 ? ( slider4 = min(max(slider4 + (mouse_wheel > 0 ? 2 : -2), 0), 100); ui_auto(4); mouse_wheel = 0; );
-sg_kh_ || drag_id == 960 ? ( sprintf(#sg_s, "SENS %d%%", slider4); sg_cap(RX, sg_cy, 44, #sg_s); ) : sg_cap(RX, sg_cy, 44, "SENS");
+sg_kh_ || drag_id == 960 ? ( sprintf(#sg_s, sg_de ? "EMPF. %d%%" : "SENS %d%%", slider4); sg_cap(RX, sg_cy, 44, #sg_s); ) : sg_cap(RX, sg_cy, 44, sg_de ? "EMPF." : "SENS");
 sg_i = 0;
 loop(11,
   sg_a = (-135 + sg_i * 27) * $pi / 180;
@@ -676,12 +686,12 @@ gfx_line((sg_kx + sin(sg_a) * 3) * sc, (sg_kcy - cos(sg_a) * 3) * sc, (sg_kx + s
 gfx_line((sg_kx + sin(sg_a) * 3) * sc + 1, (sg_kcy - cos(sg_a) * 3) * sc, (sg_kx + sin(sg_a) * (sg_kr - 2)) * sc + 1, (sg_kcy - cos(sg_a) * (sg_kr - 2)) * sc, 1);
 
 // NAMES: sharps or flats
-sg_cap(RX + 50, sg_cy, 54, "NAMES");
+sg_cap(RX + 50, sg_cy, 54, sg_de ? "NAMEN" : "NAMES");
 sg_keyb(RX + 50, sg_ky, 26, sg_kh, "#", slider6 == 0, sg_kacc) ? ( slider6 = 0; ui_auto(6); );
 sg_keyb(RX + 78, sg_ky, 26, sg_kh, "b", slider6 == 1, sg_kacc) ? ( slider6 = 1; ui_auto(6); );
 // MUTE: a lit key
-sg_cap(RX + 112, sg_cy, 56, "OUTPUT");
-sg_keyb(RX + 112, sg_ky, 56, sg_kh, "MUTE", slider5, sg_t == 1 ? sg_mid : sg_hot) ? ( slider5 = 1 - slider5; ui_auto(5); );
+sg_cap(RX + 112, sg_cy, 56, sg_de ? "AUSGANG" : "OUTPUT");
+sg_keyb(RX + 112, sg_ky, 56, sg_kh, sg_de ? "STUMM" : "MUTE", slider5, sg_t == 1 ? sg_mid : sg_hot) ? ( slider5 = 1 - slider5; ui_auto(5); );
 
 pk_end();
 ui_end();

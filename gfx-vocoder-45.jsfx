@@ -99,6 +99,7 @@ slider28:6000<2000,16000,10>-Sat high band (Hz)
 slider29:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider30:1<0,2,1{Off,Clip,Limit}>-Output stage
 slider31:0<0,16,1>-MIDI channel (0 = omni)
+slider32:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:Modulator L
 in_pin:Modulator R
@@ -639,8 +640,10 @@ function vg_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = c
 function vg_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = rx * sc - tw; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function vg_ltxt(lx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = lx * sc; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function vg_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
-// BERLIN prints decimal commas
-function vg_dec(s) local(i) ( vg_b ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
+// the language key (slider32): ENG / DE labels; the TOKYO / BERLIN keys only set the look (and the sound)
+vg_de = slider32 >= 0.5;
+// DE prints decimal commas
+function vg_dec(s) local(i) ( vg_de ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
 
 // =====================================================================
 // The unit faces: u = 0 KR-45 / 1 SV-45, b = BERLIN
@@ -770,9 +773,11 @@ function vg_n2v(kind, n, lo, hi) ( n = min(max(n, 0), 1); kind == 2 ? lo + (hi -
 // a printed tick and its number at n (0..1) round a knob
 function vg_tick(cx, cy, r, n, s, big) local(a, ca, sa) (
   a = -0.75 * $pi + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
-  ui_col(vqI2);
-  gfx_line((cx + ca * (r + 4)) * sc, (cy + sa * (r + 4)) * sc, (cx + ca * (r + (big ? 8 : 6))) * sc, (cy + sa * (r + (big ? 8 : 6))) * sc, 1);
-  big ? gfx_line((cx + ca * (r + 4)) * sc + 1, (cy + sa * (r + 4)) * sc, (cx + ca * (r + 8)) * sc + 1, (cy + sa * (r + 8)) * sc, 1);
+  vg_b ? (                                              // (TOKYO: the knob's own value ring takes the place of the ticks)
+    ui_col(vqI2);
+    gfx_line((cx + ca * (r + 4)) * sc, (cy + sa * (r + 4)) * sc, (cx + ca * (r + (big ? 8 : 6))) * sc, (cy + sa * (r + (big ? 8 : 6))) * sc, 1);
+    big ? gfx_line((cx + ca * (r + 4)) * sc + 1, (cy + sa * (r + 4)) * sc, (cx + ca * (r + 8)) * sc + 1, (cy + sa * (r + 8)) * sc, 1);
+  );
   strlen(s) ? ( gfx_setfont(10); ui_col(vqI); vg_ctxt(cx + ca * (r + 14), cy + sa * (r + 13), s); );
 );
 // numbers from a list "a|b|c", evenly spread
@@ -786,24 +791,39 @@ function vg_scale(cx, cy, r, labels) local(i, k, k0, len, c, n) (
   );
 );
 function vg_ticks(cx, cy, r) local(i) ( i = 0; loop(11, vg_tick(cx, cy, r, i / 10, "", i == 0 || i == 5 || i == 10); i += 1; ); );
-// TOKYO knob: black rubberised body, a ring of dots lit in the display colour up to the setting
-function vg_tcap(cx, cy, r, n) local(i, t, m, rr, a, ca, sa) (
-  rr = r + 5 * sc;
-  i = 0; loop(41, t = -0.75 * $pi + i / 40 * 1.5 * $pi; m = i / 40 <= n + 0.001;
-    ui_col(m ? vqA : 0x2A2E30); gfx_circle(cx + sin(t) * rr, cy - cos(t) * rr, 1.3 * sc, 1, 1);
-    m ? ( ui_cola(vqA, 0.16); gfx_circle(cx + sin(t) * rr, cy - cos(t) * rr, 3 * sc, 1, 1); );
-    i += 1; );
-  ui_cola(0x000000, 0.55); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
-  ui_col(0x0B0C0D); gfx_circle(cx, cy, r, 1, 1);
-  i = 0; loop(36, t = i / 36 * 2 * $pi; ui_cola(0xFFFFFF, i % 2 ? 0.03 : 0.09);
-    gfx_line(cx + sin(t) * r * 0.84, cy - cos(t) * r * 0.84, cx + sin(t) * r * 0.99, cy - cos(t) * r * 0.99, 1); i += 1; );
-  ui_col(0x1E2123); gfx_circle(cx, cy, r * 0.8, 1, 1);
-  gfx_gradrect(cx - r * 0.6, cy - r * 0.7, r * 1.2, r * 0.7, 1, 1, 1, 0.07, 0, 0, 0, 0, 0, 0, 0, -0.07 / (r * 0.7));
-  ui_cola(0x000000, 0.6); gfx_circle(cx, cy, r * 0.8, 0, 1);
-  a = -0.75 * $pi + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
-  ui_col(ui_mix(vqA, 0xFFFFFF, 0.35)); i = -1;
-  loop(3, gfx_line(cx + ca * r * 0.3 - sa * i * 0.8 * sc, cy + sa * r * 0.3 + ca * i * 0.8 * sc,
-                   cx + ca * r * 0.76 - sa * i * 0.8 * sc, cy + sa * r * 0.76 + ca * i * 0.8 * sc, 1); i += 1; );
+// a smooth thick arc (pixels): anti-aliased arcs every half pixel
+function vg_arcw(cx, cy, r, a1, a2, w) local(k) (
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+// a straight pointer line, w pixels wide (pixel coordinates)
+function vg_ptr(cx, cy, a, r1, r2, w) local(ca, sa, k) (
+  ca = sin(a); sa = -cos(a); k = -w * 0.5;
+  loop(max(1, floor(w * 2) + 1), gfx_line(cx + ca * r1 - sa * k, cy + sa * r1 + ca * k, cx + ca * r2 - sa * k, cy + sa * r2 + ca * k, 1); k += 0.5; );
+);
+// TOKYO knob: a smooth black rubber body with one soft highlight, a thin track with the value arc glowing in the
+// display colour
+function vg_tcap(cx, cy, r, n) local(rr, a, a0) (
+  a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; rr = r + 5 * sc;
+  ui_col(0x2A2E30); vg_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.4 * sc);
+  n > 0.004 ? (
+    ui_col(ui_mix(vqA, vqS, 0.78)); vg_arcw(cx, cy, rr, a0, a, 5 * sc);
+    ui_col(vqA); vg_arcw(cx, cy, rr, a0, a, 2.2 * sc);
+    gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, 1.1 * sc, 1, 1); gfx_circle(cx + sin(a) * rr, cy - cos(a) * rr, 1.1 * sc, 1, 1);
+  );
+  ui_cola(0x000000, 0.5); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
+  ui_col(0x090A0B); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0x1B1E20); gfx_circle(cx, cy, r - 1.5 * sc, 1, 1);
+  ui_col(0x34383B); vg_arcw(cx, cy, r - 2.5 * sc, -0.66 * $pi, 0.06 * $pi, 1.2 * sc);
+  ui_col(ui_mix(vqA, 0xFFFFFF, 0.35)); vg_ptr(cx, cy, a, r * 0.3, r - 4 * sc, 2 * sc);
+);
+// BERLIN knob: a plain dark skirt, a flat satin-silver face with one soft highlight on its edge, a black pointer
+function vg_bcap(cx, cy, r, a) (
+  ui_cola(0x000000, 0.35); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
+  ui_col(0x1A1B1E); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0x5B6168); gfx_circle(cx, cy, r * 0.8, 1, 1);
+  ui_col(0xB7BCC2); gfx_circle(cx, cy, r * 0.8 - 1.2 * sc, 1, 1);
+  ui_col(0xDCDFE3); vg_arcw(cx, cy, r * 0.8 - 2.6 * sc, -0.66 * $pi, 0.06 * $pi, 1.3 * sc);
+  ui_col(0x141416); vg_ptr(cx, cy, a, r * 0.2, r * 0.95, 2 * sc);
 );
 // a knob: cap 0 = the unit's main knob (TOKYO rubber / BERLIN cast aluminium), otherwise a small house knob with that
 // cap colour. Its name below; the value replaces it while touched.
@@ -831,7 +851,7 @@ function vg_knob(cx, cy, r, idx, kind, lo, hi, def, st, cap, name, val) local(v,
   );
   v = slider(idx); n = vg_v2n(kind, v, lo, hi); a = -0.75 * $pi + n * 1.5 * $pi;
   cap == 0 ? (
-    vg_b ? ( pk_kstyle = 1; pk_ptr = -1; pk_bkcap(cx * sc, cy * sc, r * sc, a); ) : vg_tcap(cx * sc, cy * sc, r * sc, n);
+    vg_b ? vg_bcap(cx * sc, cy * sc, r * sc, a) : vg_tcap(cx * sc, cy * sc, r * sc, n);
   ) : dy_fcap(cx * sc, cy * sc, r * sc, a, cap);
   vg_act = hov || drag_id == did;
   vg_act ? ( ui_cola(0xFFFFFF, 0.08); gfx_circle(cx * sc, cy * sc, (r + 3) * sc, 1, 1); );
@@ -857,7 +877,7 @@ function vg_unit(x, y, w, h, model, s1, s2, sidx, oidx) local(tw, th) (
   // style keys and ON
   vg_key(x + w - 186, y + 10, 58, 26, "TOKYO", !vg_b) ? ( slider(sidx) = 0; ui_auto(sidx); );
   vg_key(x + w - 124, y + 10, 62, 26, "BERLIN", vg_b) ? ( slider(sidx) = 1; ui_auto(sidx); );
-  vg_key(x + w - 56, y + 10, 42, 26, vg_b ? "EIN" : "ON", slider(oidx) >= 0.5) ? ( slider(oidx) = slider(oidx) >= 0.5 ? 0 : 1; ui_auto(oidx); );
+  vg_key(x + w - 56, y + 10, 42, 26, vg_de ? "EIN" : "ON", slider(oidx) >= 0.5) ? ( slider(oidx) = slider(oidx) >= 0.5 ? 0 : 1; ui_auto(oidx); );
 );
 
 // =====================================================================
@@ -871,11 +891,14 @@ ui_col(0x111213); vg_r(0, 54, 1000, 2);
 ui_col(vqHW); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(vqH); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); ui_col(vqHW); vg_txt(58, 12, "VOCODER-45");
-gfx_setfont(11); ui_col(0xA99999); vg_txt(252, 14, "DUAL HALF-RACK"); vg_txt(252, 29, "VOCODER SYSTEM");
+gfx_setfont(11); ui_col(0xA99999); vg_txt(252, 14, vg_de ? "DOPPEL-HALBRACK" : "DUAL HALF-RACK"); vg_txt(252, 29, vg_de ? "VOCODER-SYSTEM" : "VOCODER SYSTEM");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
-vg_k = pk_preset(388 * sc, 10 * sc, 518 * sc, 34 * sc, pr_cur,
+vg_k = pk_preset(388 * sc, 10 * sc, 478 * sc, 34 * sc, pr_cur,
   "Init|Robot Voice|Choir Pad (Synth)|Talking Strings|Labor Grit|Broadcast Clear|Whisper Noise|Formant Up|Formant Down|Space Station|Drum Vocoder|Synth Solo");
 vg_k > 0 ? ( load_preset(vg_k); pr_cur = vg_k > 12 ? 1 : vg_k; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(904 * sc, 18 * sc, 27 * sc, 18 * sc, vg_de ? "DE" : "ENG", 0, 1) ? ( slider32 = vg_de ? 0 : 1; ui_auto(32); vg_de = slider32 >= 0.5; );
+rd_led(895, 27, 3, vg_de, 0xFFA126);
 ui_size_picker(932 * sc, 18 * sc);
 
 // ---------- meter smoothing (frame-rate independent) ----------
@@ -899,7 +922,7 @@ vc_mhit != vg_mh ? ( vg_mh = vc_mhit; vg_mt = vg_now; );
 // =====================================================================
 vg_style(0, slider2 >= 0.5);
 vg_x = 8;
-vg_unit(vg_x, 60, 432, 272, "KR-45", "LABOR-VOCODER", vg_b ? "24 KANÄLE" : "24 CHANNELS", 2, 1);
+vg_unit(vg_x, 60, 432, 272, "KR-45", vg_de ? "LABOR-VOCODER" : "LAB VOCODER", vg_de ? "24 KANÄLE" : "24 CHANNELS", 2, 1);
 vg_on = slider1 >= 0.5;
 // ---------- the band ladders ----------
 vg_sect(vg_x + 12, 108, 408, 96);
@@ -916,33 +939,33 @@ loop(8,
 vg_lamp(vg_x + 372, 135, 4.5, vg_on * min(vg_uv * 2, 1), vg_b ? 0x46D86A : vqD);
 gfx_setfont(16); ui_col(vg_b ? vqD : vqI2); vg_ltxt(vg_x + 382, 135, "UV");
 vg_lamp(vg_x + 372, 165, 4.5, vg_on * min(max((vg_kp - 1) * 1.5, 0), 1), 0xFF3A2A);
-gfx_setfont(16); ui_col(vg_b ? vqD : vqI2); vg_ltxt(vg_x + 382, 165, "SAT");
+gfx_setfont(16); ui_col(vg_b ? vqD : vqI2); vg_ltxt(vg_x + 382, 165, vg_de ? "SÄTT" : "SAT");
 
 // ---------- the knob row ----------
 vg_sect(vg_x + 12, 210, 408, 104);
 vg_cy = 256; vg_kr = 23;
 sprintf(#vgv, "%.0f %%  Q %.1f", slider3, 10 * 0.26 ^ (slider3 / 100)); vg_dec(#vgv);
 vg_scale(vg_x + 58, vg_cy, vg_kr, "0||5||10");
-vg_knob(vg_x + 58, vg_cy, vg_kr, 3, 0, 0, 100, 50, 1, 0, vg_b ? "BREITE" : "WIDTH", #vgv);
-sprintf(#vgv, "%+.2f oct", slider4); vg_dec(#vgv);
+vg_knob(vg_x + 58, vg_cy, vg_kr, 3, 0, 0, 100, 50, 1, 0, vg_de ? "BREITE" : "WIDTH", #vgv);
+sprintf(#vgv, vg_de ? "%+.2f Okt." : "%+.2f oct", slider4); vg_dec(#vgv);
 vg_scale(vg_x + 136, vg_cy, vg_kr, "-1||0||+1");
-vg_knob(vg_x + 136, vg_cy, vg_kr, 4, 0, -1, 1, 0, 0.01, 0, vg_b ? "FORMANT" : "SHIFT", #vgv);
+vg_knob(vg_x + 136, vg_cy, vg_kr, 4, 0, -1, 1, 0, 0.01, 0, vg_de ? "FORMANT" : "SHIFT", #vgv);
 sprintf(#vgv, "%.0f %%", slider5);
 vg_scale(vg_x + 214, vg_cy, vg_kr, "0||5||10");
-vg_knob(vg_x + 214, vg_cy, vg_kr, 5, 0, 0, 100, 25, 1, 0, vg_b ? "ANTRIEB" : "DRIVE", #vgv);
+vg_knob(vg_x + 214, vg_cy, vg_kr, 5, 0, 0, 100, 25, 1, 0, vg_de ? "ANTRIEB" : "DRIVE", #vgv);
 sprintf(#vgv, "+%.1f dB", slider6); vg_dec(#vgv);
 vg_scale(vg_x + 292, vg_cy, vg_kr, "0||6||12");
-vg_knob(vg_x + 292, vg_cy, vg_kr, 6, 0, 0, 12, 4, 0.1, 0, vg_b ? "HÖHEN" : "HF BOOST", #vgv);
+vg_knob(vg_x + 292, vg_cy, vg_kr, 6, 0, 0, 12, 4, 0.1, 0, vg_de ? "HÖHEN" : "HF BOOST", #vgv);
 sprintf(#vgv, "%.0f %%", slider7);
 vg_scale(vg_x + 370, vg_cy, vg_kr, "0||5||10");
-vg_knob(vg_x + 370, vg_cy, vg_kr, 7, 0, 0, 100, 0, 1, 0, vg_b ? "DIREKT" : "DIRECT", #vgv);
+vg_knob(vg_x + 370, vg_cy, vg_kr, 7, 0, 0, 100, 0, 1, 0, vg_de ? "DIREKT" : "DIRECT", #vgv);
 
 // =====================================================================
 // RIGHT UNIT: SV-45 broadcast vocoder system (x 560..992)
 // =====================================================================
 vg_style(1, slider9 >= 0.5);
 vg_x = 560;
-vg_unit(vg_x, 60, 432, 272, "SV-45", "BROADCAST", "VOCODER SYSTEM", 9, 8);
+vg_unit(vg_x, 60, 432, 272, "SV-45", vg_de ? "RUNDFUNK-" : "BROADCAST", "VOCODER", 9, 8);
 vg_on = slider8 >= 0.5;
 // ---------- the display: ladders, lamps and the carrier line ----------
 vg_sect(vg_x + 12, 108, 240, 96);
@@ -958,22 +981,23 @@ gfx_setfont(16); ui_col(vg_b ? vqD : vqI2); vg_ctxt(vg_x + 222, 173, "MIDI");
 gfx_setfont(16);
 vg_cl = vg_cp > 0.0003;
 slider19 >= 0.5 ? (
-  vca_nv > 0 ? ( sprintf(#vgc, slider20 >= 0.5 ? "SYNTH  HOLD  %d VOICE%s" : "SYNTH  %d VOICE%s", vca_nv, vca_nv == 1 ? "" : "S"); )
-             : strcpy(#vgc, vg_b ? "KEIN TRÄGER: MIDI SPIELEN" : "NO CARRIER: PLAY MIDI");
+  vca_nv > 0 ? ( vg_de ? sprintf(#vgc, slider20 >= 0.5 ? "SYNTH  HALTEN  %d STIMME%s" : "SYNTH  %d STIMME%s", vca_nv, vca_nv == 1 ? "" : "N")
+                      : sprintf(#vgc, slider20 >= 0.5 ? "SYNTH  HOLD  %d VOICE%s" : "SYNTH  %d VOICE%s", vca_nv, vca_nv == 1 ? "" : "S"); )
+             : strcpy(#vgc, vg_de ? "KEIN TRÄGER: MIDI SPIELEN" : "NO CARRIER: PLAY MIDI");
 ) : (
-  vg_cl ? strcpy(#vgc, vg_b ? "TRÄGER  EXT 3/4" : "CARRIER  EXT 3/4") : strcpy(#vgc, vg_b ? "KEIN TRÄGER AUF 3/4" : "NO CARRIER ON 3/4");
+  vg_cl ? strcpy(#vgc, vg_de ? "TRÄGER  EXT 3/4" : "CARRIER  EXT 3/4") : strcpy(#vgc, vg_de ? "KEIN TRÄGER AUF 3/4" : "NO CARRIER ON 3/4");
 );
 vg_ok = slider19 >= 0.5 ? vca_nv > 0 : vg_cl;
 ui_col(vg_ok ? vqD : 0xFF6A3A); vg_ltxt(vg_x + 28, 186, #vgc);
 
 // ---------- keys: release, bands, synth wave ----------
 vg_sect(vg_x + 258, 108, 162, 96);
-vg_key(vg_x + 267, 115, 70, 22, vg_b ? "KURZ" : "REL FAST", slider11 < 0.5) ? ( slider11 = 0; ui_auto(11); );
-vg_key(vg_x + 341, 115, 70, 22, vg_b ? "LANG" : "REL SLOW", slider11 >= 0.5) ? ( slider11 = 1; ui_auto(11); );
-vg_key(vg_x + 267, 142, 70, 22, vg_b ? "16 KAN." : "16 BANDS", slider10 < 0.5) ? ( slider10 = 0; ui_auto(10); );
-vg_key(vg_x + 341, 142, 70, 22, vg_b ? "24 KAN." : "24 BANDS", slider10 >= 0.5) ? ( slider10 = 1; ui_auto(10); );
-vg_key(vg_x + 267, 169, 45, 22, vg_b ? "SÄGE" : "SAW", (slider18 | 0) == 0) ? ( slider18 = 0; ui_auto(18); );
-vg_key(vg_x + 316, 169, 46, 22, vg_b ? "PULS" : "PULSE", (slider18 | 0) == 1) ? ( slider18 = 1; ui_auto(18); );
+vg_key(vg_x + 267, 115, 70, 22, vg_de ? "KURZ" : "REL FAST", slider11 < 0.5) ? ( slider11 = 0; ui_auto(11); );
+vg_key(vg_x + 341, 115, 70, 22, vg_de ? "LANG" : "REL SLOW", slider11 >= 0.5) ? ( slider11 = 1; ui_auto(11); );
+vg_key(vg_x + 267, 142, 70, 22, vg_de ? "16 KAN." : "16 BANDS", slider10 < 0.5) ? ( slider10 = 0; ui_auto(10); );
+vg_key(vg_x + 341, 142, 70, 22, vg_de ? "24 KAN." : "24 BANDS", slider10 >= 0.5) ? ( slider10 = 1; ui_auto(10); );
+vg_key(vg_x + 267, 169, 45, 22, vg_de ? "SÄGE" : "SAW", (slider18 | 0) == 0) ? ( slider18 = 0; ui_auto(18); );
+vg_key(vg_x + 316, 169, 46, 22, vg_de ? "PULS" : "PULSE", (slider18 | 0) == 1) ? ( slider18 = 1; ui_auto(18); );
 vg_key(vg_x + 366, 169, 45, 22, "SUPER", (slider18 | 0) == 2) ? ( slider18 = 2; ui_auto(18); );
 
 // ---------- the knob rows: analysis, synth carrier ----------
@@ -985,19 +1009,19 @@ vg_ticks(vg_x + 46, vg_cy, vg_kr); vg_tick(vg_x + 46, vg_cy, vg_kr, 0.5, "5", 1)
 vg_knob(vg_x + 46, vg_cy, vg_kr, 12, 0, 0, 100, 50, 1, 0, "V/UV", #vgv);
 sprintf(#vgv, "%+.1f dB", slider13); vg_dec(#vgv);
 vg_ticks(vg_x + 106, vg_cy, vg_kr); vg_tick(vg_x + 106, vg_cy, vg_kr, 0.5, "0", 1);
-vg_knob(vg_x + 106, vg_cy, vg_kr, 13, 0, -12, 12, 0, 0.1, 0, vg_b ? "NEIGUNG" : "TILT", #vgv);
+vg_knob(vg_x + 106, vg_cy, vg_kr, 13, 0, -12, 12, 0, 0.1, 0, vg_de ? "NEIGUNG" : "TILT", #vgv);
 sprintf(#vgv, "%+.1f dB", slider14); vg_dec(#vgv);
 vg_ticks(vg_x + 178, vg_cy, vg_kr);
-vg_knob(vg_x + 178, vg_cy, vg_kr, 14, 0, -24, 6, 0, 0.1, 0, vg_b ? "PEGEL" : "LEVEL", #vgv);
-sprintf(#vgv, "%+.2f st", slider15); vg_dec(#vgv);
+vg_knob(vg_x + 178, vg_cy, vg_kr, 14, 0, -24, 6, 0, 0.1, 0, vg_de ? "PEGEL" : "LEVEL", #vgv);
+sprintf(#vgv, vg_de ? "%+.2f HT" : "%+.2f st", slider15); vg_dec(#vgv);
 vg_ticks(vg_x + 246, vg_cy, vg_kr); vg_tick(vg_x + 246, vg_cy, vg_kr, 0.5, "0", 1);
-vg_knob(vg_x + 246, vg_cy, vg_kr, 15, 0, -12, 12, 0, 0.01, 0, vg_b ? "STIMMEN" : "TUNE", #vgv);
-sprintf(#vgv, "%+d oct", slider16);
+vg_knob(vg_x + 246, vg_cy, vg_kr, 15, 0, -12, 12, 0, 0.01, 0, vg_de ? "STIMMEN" : "TUNE", #vgv);
+sprintf(#vgv, vg_de ? "%+d Okt." : "%+d oct", slider16);
 vg_i = 0; loop(5, vg_tick(vg_x + 314, vg_cy, vg_kr, vg_i / 4, vg_i == 2 ? "0" : "", 1); vg_i += 1; );
-vg_knob(vg_x + 314, vg_cy, vg_kr, 16, 1, -2, 2, 0, 1, 0, vg_b ? "OKTAVE" : "OCTAVE", #vgv);
-slider17 < 0.5 ? strcpy(#vgv, vg_b ? "AUS" : "OFF") : sprintf(#vgv, "%.0f ms", slider17);
+vg_knob(vg_x + 314, vg_cy, vg_kr, 16, 1, -2, 2, 0, 1, 0, vg_de ? "OKTAVE" : "OCTAVE", #vgv);
+slider17 < 0.5 ? strcpy(#vgv, vg_de ? "AUS" : "OFF") : sprintf(#vgv, "%.0f ms", slider17);
 vg_ticks(vg_x + 382, vg_cy, vg_kr);
-vg_knob(vg_x + 382, vg_cy, vg_kr, 17, 2, 0, 1000, 0, 1, 0, vg_b ? "GLEITEN" : "GLIDE", #vgv);
+vg_knob(vg_x + 382, vg_cy, vg_kr, 17, 2, 0, 1000, 0, 1, 0, vg_de ? "GLEITEN" : "GLIDE", #vgv);
 
 // =====================================================================
 // The central mounting bracket: CARRIER, BALANCE, MIX, DRIFT, OUTPUT, band SAT, output stage (x 428..572)
@@ -1009,28 +1033,28 @@ ui_cola(0x000000, 0.45); vg_fr(428, 58, 144, 276);
 ui_cola(0xFFFFFF, 0.35); vg_r(429, 59, 142, 1);
 ui_cola(0x000000, 0.25); vg_r(440, 66, 1, 262); vg_r(560, 66, 1, 262);
 rd_screw(434, 72); rd_screw(566, 72); rd_screw(434, 320); rd_screw(566, 320);
-gfx_setfont(11); ui_col(0x1C1C1C); vg_ctxt(500, 72, "CARRIER");
+gfx_setfont(11); ui_col(0x1C1C1C); vg_ctxt(500, 72, vg_de ? "TRÄGER" : "CARRIER");
 vg_key(446, 82, 52, 24, "EXT", slider19 < 0.5) ? ( slider19 = 0; ui_auto(19); );
 vg_key(502, 82, 52, 24, "SYNTH", slider19 >= 0.5) ? ( slider19 = 1; ui_auto(19); );
-vg_key(446, 110, 108, 22, "HOLD", slider20 >= 0.5) ? ( slider20 = slider20 >= 0.5 ? 0 : 1; ui_auto(20); );
+vg_key(446, 110, 108, 22, vg_de ? "HALTEN" : "HOLD", slider20 >= 0.5) ? ( slider20 = slider20 >= 0.5 ? 0 : 1; ui_auto(20); );
 ui_cola(0x000000, 0.3); vg_r(446, 142, 108, 1); ui_cola(0xFFFFFF, 0.3); vg_r(446, 143, 108, 1);
 sprintf(#vgv, "KR %.0f / SV %.0f", 100 - slider21, slider21);
 vg_ticks(472, 168, 13); vg_knob(472, 168, 13, 21, 0, 0, 100, 50, 1, 0xC7BEB3, "KR / SV", #vgv);
 sprintf(#vgv, "%.0f %%", slider22);
-vg_ticks(528, 168, 13); vg_knob(528, 168, 13, 22, 0, 0, 100, 100, 1, 0xC7BEB3, "MIX", #vgv);
+vg_ticks(528, 168, 13); vg_knob(528, 168, 13, 22, 0, 0, 100, 100, 1, 0xC7BEB3, vg_de ? "MISCH." : "MIX", #vgv);
 sprintf(#vgv, "%.0f %%", slider23);
 vg_ticks(472, 226, 13); vg_knob(472, 226, 13, 23, 0, 0, 100, 50, 1, 0x6F8794, "DRIFT", #vgv);
 sprintf(#vgv, "%+.1f dB", slider24);
-vg_ticks(528, 226, 13); vg_knob(528, 226, 13, 24, 0, -24, 12, 0, 0.1, 0x9DA2A8, "OUTPUT", #vgv);
+vg_ticks(528, 226, 13); vg_knob(528, 226, 13, 24, 0, -24, 12, 0, 0.1, 0x9DA2A8, vg_de ? "AUSG." : "OUTPUT", #vgv);
 sprintf(#vgv, "%.0f %%", slider25);
-vg_ticks(472, 284, 12); vg_knob(472, 284, 12, 25, 0, 0, 100, 0, 1, 0xD8B040, "SAT", #vgv);
+vg_ticks(472, 284, 12); vg_knob(472, 284, 12, 25, 0, 0, 100, 0, 1, 0xD8B040, vg_de ? "SÄTT." : "SAT", #vgv);
 // the house output stage keys
 ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
 vg_i = 0;
 loop(3,
   vg_c = vg_i == 0 ? 0x3A9CFF : vg_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
   ui_okey(504, 266 + vg_i * 21, 52, 18, (slider30 | 0) == vg_i || (vg_i == 1 && ui_okclp > 0.1), vg_c) ? ( slider30 = vg_i; ui_auto(30); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext(530 * sc, (266 + vg_i * 21 + 9) * sc, vg_i == 0 ? "OFF" : vg_i == 1 ? "CLIP" : "LIMIT");
+  gfx_setfont(12); ui_col(0x141414); ui_keytext(530 * sc, (266 + vg_i * 21 + 9) * sc, vg_i == 0 ? (vg_de ? "AUS" : "OFF") : vg_i == 1 ? "CLIP" : (vg_de ? "BEGR." : "LIMIT"));
   vg_i += 1;
 );
 
