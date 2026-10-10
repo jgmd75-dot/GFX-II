@@ -147,8 +147,8 @@ xf_c = 2 * $pi * 40 / (2 * srate); xf_lk = 1 - 2 * $pi * 5 / (2 * srate);
 sg_att = 1 - exp(-1 / (0.004 * 2 * srate)); sg_rel = 1 - exp(-1 / (0.09 * 2 * srate));
 sup = 1; sgenv = 0;
 ghupL.am_aa(); ghdnL.am_aa(); ghupR.am_aa(); ghdnR.am_aa();
-ghL.rv.am_spring_init(200000, 2 * srate); ghL.rv.gh_tank(200000, 2 * srate, 0.965);   // L tank a little shorter,
-ghR.rv.am_spring_init(300000, 2 * srate); ghR.rv.gh_tank(300000, 2 * srate, 1.035);   // R a little longer
+ghL.rv.am_spring_init(200000, 2 * srate); ghL.rv.gh_tank(200000, 2 * srate, 1.0);   // L tank a little shorter,
+ghR.rv.am_spring_init(300000, 2 * srate); ghR.rv.gh_tank(300000, 2 * srate, 1.04);   // R a little longer
 gh_mono = slider26;
 // the two tank returns are cross-blended a little, so the tanks stay decorrelated (width) but the centre
 // (L + R) keeps the old mono reverb level

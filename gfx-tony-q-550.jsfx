@@ -1,0 +1,629 @@
+desc:GFX Tony Q 550
+//tags: equalizer eq console channel stepped constant-q proportional-q transformer saturation preamp
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// TONY Q 550. A three-band stepped console equaliser with two personalities, switched by the CITY keys:
+//   TOKYO    - in the spirit of the Japanese discrete broadcast consoles: constant-Q bells on stepped switches, the
+//              midrange the star of the show (twelve steps, 500 Hz - 4 kHz), feeding a MID-FOCUSED OUTPUT
+//              TRANSFORMER: only the 400 Hz - 5 kHz band of the iron saturates, so a pushed mid blooms and gently
+//              compresses while the kick, the bass and the air stay clean. Industrial charcoal / white strip.
+//   NEW YORK - in the spirit of the classic American proportional-Q console equaliser: the bells are wide and
+//              musical at +/-2 dB and narrow as they are pushed towards +/-12 dB, on the classic stepped layout,
+//              into a fast discrete op-amp (hard knee near the rails, a touch of slew) and an output transformer
+//              (low-end saturation, a slight low-frequency bump as it is worked). Forward, punchy transients.
+//              Vintage blue-grey console faceplate, cream print.
+//   Each city keeps its own settings (separate sliders); a CITY change starts the other engine, lets it settle for
+//   40 ms and crossfades to it in 30 ms (no click). The two engines are phase-matched (both carry the same
+//   400 Hz / 5 kHz all-pass rotation), so the crossfade never combs.
+//
+// SIGNAL FLOW (per channel; the whole engine runs at 2x, 95-tap Kaiser half-band up / down, latency 47 samples,
+// reported to the host; LIMIT adds 3 ms)
+//   input -> INPUT DRIVE (0 .. +24 dB of gain into the engine, taken off again at its end, so DRIVE changes the
+//   character, not the loudness: like turning the mic amp up and the fader down) -> the discrete preamp
+//   (asymmetric biased curve: mostly 2nd harmonic, peaks tightened; switched out at 0 dB, faded in over the
+//   first 2 dB) -> HPF -> LOW / MID / HIGH -> LPF -> the output stage (TOKYO: the mid-focused transformer;
+//   NEW YORK: op-amp + transformer) -> OUTPUT trim -> back to 1x -> the house output stage (OFF / CLIP / LIMIT).
+//
+// TOKYO EQ (constant Q: the bandwidth never changes with the gain)
+//   LOW  50 / 80 / 120 / 180 / 250 / 400 Hz, BELL (Q 1.0) or SHELF (Q 0.71, no overshoot)
+//   MID  500 / 600 / 700 / 800 Hz / 1 / 1.2 / 1.5 / 1.8 / 2.2 / 2.7 / 3.3 / 4 kHz, bell, Q 1.2 (about 1.1 octaves)
+//   HIGH 2.5 / 4 / 6 / 8 / 10 / 12.5 / 16 kHz, BELL (Q 1.0) or SHELF (Q 0.71)
+//   LEVEL -15 .. +15 dB in 1 dB steps on every band.
+// THE MID-FOCUSED TRANSFORMER (TOKYO)
+//   The signal is split at 400 Hz and 5 kHz by two phase-compensated Linkwitz-Riley crossovers (24 dB/oct; the
+//   low band carries the 5 kHz all-pass, so the three bands sum to an all-pass: flat in level at every
+//   frequency). Only the mid band goes through the iron: a soft-kneed core curve (mostly 3rd harmonic, a little
+//   2nd as it is worked), a smooth backlash memory (the core lags at the turning points: a small hysteresis loop
+//   that opens up with level) and a bloom: the core's level follower (2 ms / 150 ms) eases the band down by up to
+//   about 1.5 dB when it is pushed. Below the knee the band passes exactly; only what the iron adds is DC-blocked.
+// NEW YORK EQ (proportional Q, as the classic: Q = 0.22 + 0.19 x |gain dB|: 0.60 at 2 dB, 1.36 at 6, 2.5 at 12)
+//   LOW  50 / 100 / 200 / 300 / 400 Hz, PEAK or SHELF (Q 1.0: a slight dip / bump beyond the corner)
+//   MID  400 / 800 Hz / 1.5 / 3 / 5 kHz, peak
+//   HIGH 5 / 7 / 10 / 12.5 / 15 kHz, PEAK or SHELF
+//   GAIN in the classic steps: 0, 2, 4, 6, 9, 12 dB boost or cut.
+// NEW YORK OUTPUT STAGE
+//   Discrete op-amp: clean and linear (just a trace of 2nd harmonic) until it nears its rails (+4 dBFS in the
+//   drive domain), then a hard knee; a soft slew limit rounds the steepest edges of hot high-frequency peaks.
+//   Output transformer: the core saturates on flux (the integral of the signal), so the low end thickens first;
+//   a +1 dB bump at 45 Hz comes in with DRIVE (the iron being worked). Then the 400 Hz / 5 kHz all-pass pair that
+//   phase-matches the engine to TOKYO.
+// FILTERS: HPF 20 - 400 Hz (fully left = off), LPF 3 - 22 kHz (fully right = off), 12 or 18 dB/oct (Butterworth),
+//   the slope keys crossfade (20 ms). EQ IN: the three bands in or out (gliding; filters and iron stay in).
+// Stepped controls: every switch step glides (gains 20 ms, frequencies 30 ms, BELL / SHELF changes dip the band
+//   out and back in 8 ms each way), so nothing clicks.
+// DRIFT (0 - 100 %, 50 % = standard): component tolerance wander. Each band's frequency wanders slowly by up to
+//   about +/-1.2 % and its gain by +/-2 %, the op-amp / preamp bias wanders, the transformer's saturation point
+//   by +/-4 %; with a small fixed L / R mismatch (+/-0.4 % frequency, +/-1 % gain), as between two hand-built
+//   channels. 0 % = both channels identical and steady.
+// METERS: VU on the input (a sine peaking at -18 dBFS = 0 VU), the LED ladder on the output (L / R, peak).
+// GUI: drag a knob (shift = fine, double-click = default, wheel = one step); click a key; click the LCD (or
+//   PRESETS) for the preset list. S / M / L / ? = size and help.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,1,1{Tokyo,New York}>-City
+slider2:1<0,1,1{Out,In}>-EQ in
+slider3:50<0,100,1>-Drift (%)
+slider4:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider5:0<0,24,0.1>-Tokyo drive (dB)
+slider6:2<0,5,1{50 Hz,80 Hz,120 Hz,180 Hz,250 Hz,400 Hz}>-Tokyo low freq
+slider7:0<-15,15,1>-Tokyo low level (dB)
+slider8:1<0,1,1{Bell,Shelf}>-Tokyo low shape
+slider9:4<0,11,1{500 Hz,600 Hz,700 Hz,800 Hz,1 kHz,1.2 kHz,1.5 kHz,1.8 kHz,2.2 kHz,2.7 kHz,3.3 kHz,4 kHz}>-Tokyo mid freq
+slider10:0<-15,15,1>-Tokyo mid level (dB)
+slider11:3<0,6,1{2.5 kHz,4 kHz,6 kHz,8 kHz,10 kHz,12.5 kHz,16 kHz}>-Tokyo high freq
+slider12:0<-15,15,1>-Tokyo high level (dB)
+slider13:1<0,1,1{Bell,Shelf}>-Tokyo high shape
+slider14:20<20,400,1>-Tokyo HPF (Hz, 20 = off)
+slider15:0<0,1,1{12 dB/oct,18 dB/oct}>-Tokyo HPF slope
+slider16:22000<3000,22000,10>-Tokyo LPF (Hz, 22000 = off)
+slider17:0<0,1,1{12 dB/oct,18 dB/oct}>-Tokyo LPF slope
+slider18:0<-12,12,0.1>-Tokyo output (dB)
+slider19:0<0,24,0.1>-New York drive (dB)
+slider20:1<0,4,1{50 Hz,100 Hz,200 Hz,300 Hz,400 Hz}>-New York low freq
+slider21:5<0,10,1{-12 dB,-9 dB,-6 dB,-4 dB,-2 dB,0 dB,+2 dB,+4 dB,+6 dB,+9 dB,+12 dB}>-New York low gain
+slider22:1<0,1,1{Peak,Shelf}>-New York low shape
+slider23:2<0,4,1{400 Hz,800 Hz,1.5 kHz,3 kHz,5 kHz}>-New York mid freq
+slider24:5<0,10,1{-12 dB,-9 dB,-6 dB,-4 dB,-2 dB,0 dB,+2 dB,+4 dB,+6 dB,+9 dB,+12 dB}>-New York mid gain
+slider25:2<0,4,1{5 kHz,7 kHz,10 kHz,12.5 kHz,15 kHz}>-New York high freq
+slider26:5<0,10,1{-12 dB,-9 dB,-6 dB,-4 dB,-2 dB,0 dB,+2 dB,+4 dB,+6 dB,+9 dB,+12 dB}>-New York high gain
+slider27:1<0,1,1{Peak,Shelf}>-New York high shape
+slider28:20<20,400,1>-New York HPF (Hz, 20 = off)
+slider29:0<0,1,1{12 dB/oct,18 dB/oct}>-New York HPF slope
+slider30:22000<3000,22000,10>-New York LPF (Hz, 22000 = off)
+slider31:0<0,1,1{12 dB/oct,18 dB/oct}>-New York LPF slope
+slider32:0<-12,12,0.1>-New York output (dB)
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-tony-q-550";                             // the ? pop-up links to this manual
+ext_noinit = 1;
+
+// ---------- memory ----------
+nextmem = 0;
+function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
+tq_H   = alloc(48);                                     // half-band odd taps
+tq_ubL = alloc(128); tq_ubR = alloc(128);               // 1x input history (mirrored rings of 64)
+tq_aL  = alloc(128); tq_aR  = alloc(128);               // 2x output, first phase
+tq_bL  = alloc(128); tq_bR  = alloc(128);               // 2x output, second phase
+// per engine and channel: filter coefficients (12 sets of 8) and flags; TL / TR Tokyo, NL / NR New York
+tq_CTL = alloc(192); tq_CTR = alloc(192); tq_CNL = alloc(192); tq_CNR = alloc(192);
+tq_D   = alloc(16);                                     // drift factors
+ost_init(alloc(4096));                                  // the house output stage
+tq_wp = 0;
+tq_LAT = 47;                                            // latency of the 2x engine (samples)
+//   coefficient block layout: 0 LOW, 8 MID, 16 HIGH, 24 HPF 12, 32 HPF 18 (2-pole), 40 HPF 18 (1-pole),
+//   48 LPF 12, 56 LPF 18 (2-pole), 64 LPF 18 (1-pole), 72 split 400 Hz, 80 split 5 kHz, 88 NY bump.
+//   flags: 96 HPF on, 97 HPF 18 weight, 98 LPF on, 99 LPF 18 weight, 100 / 101 / 102 band on, 103 drive gain,
+//   104 trim, 105 preamp fade, 106 preamp bias, 107 iron saturation point, 108 / 109 per-sample ramps,
+//   110 reset mask, 111 / 112 preamp curve offset / normaliser, 113 op-amp even term, 114 / 115 slope ramps,
+//   116 / 118 HPF / LPF in-circuit weight, 119 / 120 their ramps, 117 band coefficients gliding,
+//   128..151 the bands' target coefficients, 152..175 their per-sample increments.
+
+// ---------- the half-band (95 taps, Kaiser beta 8): the 48 non-zero odd taps h[2i - 47], i = 0..47 ----------
+function tq_i0(x) local(s, t, k) ( s = 1; t = 1; k = 1; loop(40, t *= sqr(x / (2 * k)); s += t; k += 1; ); s; );
+tq_i = 0; tq_s = 0; tq_bk = 8; tq_ib = tq_i0(tq_bk);
+loop(48,
+  tq_k = 2 * tq_i - 47;
+  tq_H[tq_i] = sin($pi * tq_k * 0.5) / ($pi * tq_k) * tq_i0(tq_bk * sqrt(max(1 - sqr(tq_k / 48), 0))) / tq_ib;
+  tq_s += tq_H[tq_i]; tq_i += 1;
+);
+tq_i = 0; loop(48, tq_H[tq_i] *= 0.5 / tq_s; tq_i += 1; );   // the odd taps sum to exactly 0.5 (unity at DC)
+function tq_conv(b) local(s, i, j) (
+  s = 0; i = 0; j = 47;
+  loop(24, s += tq_H[i] * (b[i] + b[j]); i += 1; j -= 1; );
+  s;
+);
+
+// ---------- filters: the TPT state-variable filter (stable under modulation) and a TPT one-pole ----------
+// c[0..3] = a1, a2, a3, k; an EQ set adds the output mix c[4..6] = m0, m1, m2
+function tq_sv(v0, c) instance(ic1, ic2) local(v1, v2, v3) (
+  v3 = v0 - ic2;
+  v1 = c[0] * ic1 + c[1] * v3;
+  v2 = ic2 + c[1] * ic1 + c[2] * v3;
+  ic1 = 2 * v1 - ic1; ic2 = 2 * v2 - ic2;
+  tq_bpo = v1; tq_hpo = v0 - c[3] * v1 - v2;
+  v2;
+);
+function tq_eq(v0, c) instance(ic1, ic2) local(v1, v2, v3) (
+  v3 = v0 - ic2;
+  v1 = c[0] * ic1 + c[1] * v3;
+  v2 = ic2 + c[1] * ic1 + c[2] * v3;
+  ic1 = 2 * v1 - ic1; ic2 = 2 * v2 - ic2;
+  c[4] * v0 + c[5] * v1 + c[6] * v2;
+);
+function tq_op(x, c) instance(s) local(v, lp) ( v = (x - s) * c[0]; lp = v + s; s = lp + v; lp; );
+function tq_z() instance(ic1, ic2, s) ( ic1 = ic2 = s = 0; );
+function tq_zl(x) instance(ic1, ic2, s) ( ic1 = 0; ic2 = x; s = x; );   // a low-pass already settled on x
+function tq_fl() instance(ic1, ic2, s) (
+  abs(ic1) < 0.000000000001 ? ic1 = 0; abs(ic2) < 0.000000000001 ? ic2 = 0; abs(s) < 0.000000000001 ? s = 0;
+);
+// coefficient sets (fs2 = the 2x rate)
+function tq_cg(c, g, k) ( c[0] = 1 / (1 + g * (g + k)); c[1] = g * c[0]; c[2] = g * c[1]; c[3] = k; );
+function tq_tn(f) ( tan($pi * min(max(f, 2), 0.47 * tq_fs2) / tq_fs2); );
+function tq_cset(c, f, k) ( tq_cg(c, tq_tn(f), k); );
+// an EQ band: type 0 bell, 1 low shelf, 2 high shelf; gdb in dB
+function tq_band(c, type, f, gdb, q) local(A, t, k) (
+  A = exp(gdb * 0.0575646273); t = tq_tn(f);            // A = 10 ^ (dB / 40)
+  type == 0 ? ( k = 1 / (q * A); tq_cg(c, t, k); c[4] = 1; c[5] = k * (A * A - 1); c[6] = 0; ) :
+  type == 1 ? ( k = 1 / q; tq_cg(c, t / sqrt(A), k); c[4] = 1; c[5] = k * (A - 1); c[6] = A * A - 1; ) :
+              ( k = 1 / q; tq_cg(c, t * sqrt(A), k); c[4] = A * A; c[5] = k * (1 - A) * A; c[6] = 1 - A * A; );
+);
+function tq_opset(c, f) local(g) ( g = tq_tn(f); c[0] = g / (1 + g); );
+
+// ---------- the discrete preamp (drive domain): biased curve, level-matched; only its added part is DC-blocked ----------
+tq_pk = 0.03; tq_pd = 1.0;                              // headroom scale, curve drive
+function tq_pre(x, c) instance(dx, dy) local(u, t, d) (
+  c[105] > 0.00001 ? (
+    u = tq_pd * (x * tq_pk + c[106]);
+    t = exp(2 * min(max(u, -20), 20)); t = (t - 1) / (t + 1);
+    t = (t - c[111]) * c[112];
+    d = t - x;
+    dy = d - dx + tq_dcd * dy; dx = d;
+    x += c[105] * dy;
+  );
+  x;
+);
+
+// ---------- HPF -> LOW / MID / HIGH -> LPF (shared by both engines; the flags and sets live in c) ----------
+function tq_lin(x, c) instance(h1, h2, h3, l1, l2, l3, b1, b2, b3) local(m, w, a, b, d) (
+  m = c[110];
+  m ? (
+    c[110] = 0;
+    m & 1 ? h1.tq_z(); m & 2 ? ( h2.tq_z(); h3.tq_z(); );
+    m & 16 ? b1.tq_z(); m & 32 ? b2.tq_z(); m & 64 ? b3.tq_z();
+  );
+  c[96] ? (
+    w = c[97]; d = x;
+    w < 0.9999 ? ( h1.tq_sv(x, c + 24); a = tq_hpo; );
+    w > 0.0001 ? ( h2.tq_sv(x, c + 32); b = tq_hpo; b -= h3.tq_op(b, c + 40); );
+    x = w <= 0.0001 ? a : w >= 0.9999 ? b : a + (b - a) * w;
+    c[116] < 0.9999 ? x = d + (x - d) * c[116];        // switching in / out: a 30 ms crossfade
+  );
+  c[100] ? x = b1.tq_eq(x, c);
+  c[101] ? x = b2.tq_eq(x, c + 8);
+  c[102] ? x = b3.tq_eq(x, c + 16);
+  m & 4 ? l1.tq_zl(x); m & 8 ? ( l2.tq_zl(x); l3.tq_zl(x); );
+  c[98] ? (
+    w = c[99]; d = x;
+    w < 0.9999 ? a = l1.tq_sv(x, c + 48);
+    w > 0.0001 ? b = l3.tq_op(l2.tq_sv(x, c + 56), c + 64);
+    x = w <= 0.0001 ? a : w >= 0.9999 ? b : a + (b - a) * w;
+    c[118] < 0.9999 ? x = d + (x - d) * c[118];
+  );
+  x;
+);
+function tq_linfl() instance(h1, h2, h3, l1, l2, l3, b1, b2, b3) (
+  h1.tq_fl(); h2.tq_fl(); h3.tq_fl(); l1.tq_fl(); l2.tq_fl(); l3.tq_fl(); b1.tq_fl(); b2.tq_fl(); b3.tq_fl();
+);
+
+// ---------- TOKYO: the mid-focused output transformer ----------
+tq_iw = 0.12;                                           // the core's backlash width (memory)
+tq_ihy = 0.35;                                          // how far the core lags at the turning points (full level)
+tq_iev = 0.05;                                          // even (2nd) harmonic as the core is worked
+tq_ibl = 0.08;                                          // bloom: the band eases down as the core fills
+function tq_iron(m, c) instance(env, z, e2, dx, dy) local(k, v, a, e, h, u, q, cc, y, d) (
+  k = c[107]; v = m * k; a = abs(v);
+  env = a > env ? env + (a - env) * tq_iat : env * tq_irl;
+  // the backlash memory: z follows v with a soft dead band of +/- tq_iw
+  e = v - z; e /= tq_iw; z += (e - e / sqrt(1 + e * e)) * tq_iw;
+  h = env * env; h = tq_ihy * h / (1 + h);              // the loop opens up with level, nothing at low level
+  u = v - h * (v - z);
+  // the core: a soft knee, linear below it
+  q = abs(u); cc = u / (1 + q * q * q) ^ 0.33333333;
+  e2 += (cc * cc - e2) * tq_ce;
+  cc += tq_iev * env / (1 + env) * (cc * cc - e2);
+  y = cc / ((1 + tq_ibl * env * env) * k);
+  d = y - m;
+  dy = d - dx + tq_dcd * dy; dx = d;
+  m + dy;
+);
+function tq_tout(x, c) instance(s1a, s1b, s1c, sap, s2a, s2b, s2c, ir) local(lp, t, lo, hi1, mid, hi) (
+  lp = s1a.tq_sv(x, c + 72); t = tq_hpo;
+  lo = s1b.tq_sv(lp, c + 72);                           // LO = LP . LP (400 Hz)
+  s1c.tq_sv(t, c + 72); hi1 = tq_hpo;                     // the rest = HP . HP
+  sap.tq_sv(lo, c + 80); lo -= 2 * c[83] * tq_bpo;        // LO gets the 5 kHz all-pass: the bands stay in phase
+  lp = s2a.tq_sv(hi1, c + 80); t = tq_hpo;
+  mid = s2b.tq_sv(lp, c + 80);
+  s2c.tq_sv(t, c + 80); hi = tq_hpo;
+  lo + ir.tq_iron(mid, c) + hi;
+);
+function tq_toutfl() instance(s1a, s1b, s1c, sap, s2a, s2b, s2c, ir) (
+  s1a.tq_fl(); s1b.tq_fl(); s1c.tq_fl(); sap.tq_fl(); s2a.tq_fl(); s2b.tq_fl(); s2c.tq_fl();
+  abs(ir.env) < 0.000000000001 ? ir.env = 0; abs(ir.e2) < 0.000000000001 ? ir.e2 = 0;
+  abs(ir.dx) < 0.000000000001 ? ir.dx = 0; abs(ir.dy) < 0.000000000001 ? ir.dy = 0;
+);
+
+// ---------- NEW YORK: discrete op-amp + output transformer ----------
+tq_nrl = 2.2;                                           // the op-amp's rails (drive domain): +4 dBFS
+tq_na2 = 0.008;                                         // a trace of 2nd harmonic below the rails
+tq_xw  = 0.7;                                           // how far the core curve bends
+// the op-amp's curve: linear to 0.6 of the rail, a quadratic knee, flat at the rail from 1.4 (a hard knee near the
+// rails). Only the residue (curve - input) is computed, with first-order antiderivative anti-aliasing (ADAA).
+tq_ka = 0.6; tq_kb = 1.4; tq_kw = tq_kb - tq_ka;
+function tq_nres(v) local(a) ( a = abs(v); a <= tq_ka ? 0 : a < tq_kb ? -sign(v) * sqr(a - tq_ka) / (2 * tq_kw) : sign(v) * (1 - a); );
+function tq_nR(v) local(a, k) ( a = abs(v); k = a - tq_ka;
+  a <= tq_ka ? 0 : a < tq_kb ? 0 - k * k * k / (6 * tq_kw) : (a - tq_kb) - 0.5 * (a * a - tq_kb * tq_kb) - tq_kw * tq_kw / 6; );
+function tq_nout(x, c) instance(v0, m2, ys, ph, sp, bm, ap1, ap2) local(v, q, y, d, s, k) (
+  // op-amp: linear until it nears the rails, then the hard knee (ADAA on the residue), bias drift on the even term
+  v = x / tq_nrl; d = v - v0;
+  q = abs(v) <= tq_ka && abs(v0) <= tq_ka ? 0 : abs(d) > 0.00001 ? (tq_nR(v) - tq_nR(v0)) / d : tq_nres(0.5 * (v + v0));
+  v0 = v; v += q;
+  m2 += (v * v - m2) * tq_ce;
+  y = tq_nrl * (v + tq_na2 * c[113] * (v * v - m2));
+  // slew: the steepest edges of hot peaks are rounded
+  d = (y - ys) / tq_slw; q = d * d; ys += tq_slw * d / sqrt(sqrt(1 + q * q)); y = ys;
+  // the low-frequency bump (comes in with DRIVE)
+  y = bm.tq_eq(y, c + 88);
+  // output transformer: the core saturates on flux, so the low end goes first
+  k = c[107];
+  ph = ph * tq_xlk + y * tq_xc; ph = min(max(ph, -8), 8);
+  s = exp(2 * min(max(ph * k, -20), 20)); s = (s - 1) / (s + 1);
+  s = ph + tq_xw * (s / k - ph);
+  y = (s - sp * tq_xlk) / tq_xc; sp = s;
+  // the 400 Hz / 5 kHz all-pass pair: phase-matched to TOKYO
+  ap1.tq_sv(y, c + 72); y -= 2 * c[75] * tq_bpo;
+  ap2.tq_sv(y, c + 80); y -= 2 * c[83] * tq_bpo;
+  y;
+);
+function tq_noutfl() instance(v0, m2, ys, ph, sp, bm, ap1, ap2) (
+  bm.tq_fl(); ap1.tq_fl(); ap2.tq_fl();
+  abs(m2) < 0.000000000001 ? m2 = 0; abs(ys) < 0.000000000001 ? ys = 0;
+  abs(ph) < 0.000000000001 ? ph = 0; abs(sp) < 0.000000000001 ? sp = 0;
+);
+
+// ---------- one engine, one channel (2x rate): drive gain in, preamp, filters, output stage, gain out, trim ----------
+function tq_tch(x, c) instance(pre, lin, tro) local(g, i) (
+  c[103] += c[108]; c[104] += c[109]; c[97] += c[114]; c[99] += c[115]; c[116] += c[119]; c[118] += c[120];
+  c[117] ? ( i = 0; loop(23, c[i] += c[152 + i]; i += 1; ); );
+  g = c[103];
+  x = pre.tq_pre(x * g, c);
+  x = lin.tq_lin(x, c);
+  tro.tq_tout(x, c) * c[104] / g;
+);
+function tq_nch(x, c) instance(pre, lin, nyo) local(g, i) (
+  c[103] += c[108]; c[104] += c[109]; c[97] += c[114]; c[99] += c[115]; c[116] += c[119]; c[118] += c[120];
+  c[117] ? ( i = 0; loop(23, c[i] += c[152 + i]; i += 1; ); );
+  g = c[103];
+  x = pre.tq_pre(x * g, c);
+  x = lin.tq_lin(x, c);
+  nyo.tq_nout(x, c) * c[104] / g;
+);
+function tq_tfl() instance(pre, lin, tro) (
+  lin.tq_linfl(); tro.tq_toutfl(); abs(pre.dx) < 0.000000000001 ? pre.dx = 0; abs(pre.dy) < 0.000000000001 ? pre.dy = 0;
+);
+function tq_nfl() instance(pre, lin, nyo) (
+  lin.tq_linfl(); nyo.tq_noutfl(); abs(pre.dx) < 0.000000000001 ? pre.dx = 0; abs(pre.dy) < 0.000000000001 ? pre.dy = 0;
+);
+
+// ---------- the stepped tables ----------
+function tq_ftl(i) ( i = min(max(i | 0, 0), 5);  i == 0 ? 50 : i == 1 ? 80 : i == 2 ? 120 : i == 3 ? 180 : i == 4 ? 250 : 400; );
+function tq_ftm(i) ( i = min(max(i | 0, 0), 11); i == 0 ? 500 : i == 1 ? 600 : i == 2 ? 700 : i == 3 ? 800 : i == 4 ? 1000 :
+  i == 5 ? 1200 : i == 6 ? 1500 : i == 7 ? 1800 : i == 8 ? 2200 : i == 9 ? 2700 : i == 10 ? 3300 : 4000; );
+function tq_fth(i) ( i = min(max(i | 0, 0), 6);  i == 0 ? 2500 : i == 1 ? 4000 : i == 2 ? 6000 : i == 3 ? 8000 : i == 4 ? 10000 : i == 5 ? 12500 : 16000; );
+function tq_fnl(i) ( i = min(max(i | 0, 0), 4);  i == 0 ? 50 : i == 1 ? 100 : i == 2 ? 200 : i == 3 ? 300 : 400; );
+function tq_fnm(i) ( i = min(max(i | 0, 0), 4);  i == 0 ? 400 : i == 1 ? 800 : i == 2 ? 1500 : i == 3 ? 3000 : 5000; );
+function tq_fnh(i) ( i = min(max(i | 0, 0), 4);  i == 0 ? 5000 : i == 1 ? 7000 : i == 2 ? 10000 : i == 3 ? 12500 : 15000; );
+function tq_gny(i) ( i = min(max(i | 0, 0), 10); i == 0 ? -12 : i == 1 ? -9 : i == 2 ? -6 : i == 3 ? -4 : i == 4 ? -2 : i == 5 ? 0 :
+  i == 6 ? 2 : i == 7 ? 4 : i == 8 ? 6 : i == 9 ? 9 : 12; );
+function tq_gtk(v) ( min(max(floor(v + 0.5), -15), 15); );
+
+// ---------- one engine's controls: glides (control rate, every 32 samples), flags and coefficients ----------
+// b = its first slider, ny = 1 for NEW YORK, cl / cr = its two coefficient blocks
+function tq_ech(c, d0, gm, bias, ks, sn) instance(lf, lg, mf, mg, hf, hg, ls, lw, hs, hw, hp, lp, h18, l18, dr, ny)
+  local(q, e, t) (
+  // the three bands (drift: d0 = the band frequency factors, gm = the gain factor)
+  e = lg * lw * lw * (3 - 2 * lw) * gm;
+  q = ny ? (ls ? 1.0 : 0.22 + 0.19 * abs(e)) : (ls ? 0.70710678 : 1.0);
+  c[100] ? tq_band(c + 128, ls ? 1 : 0, lf * d0[0], e, q);
+  e = mg * gm;
+  q = ny ? 0.22 + 0.19 * abs(e) : 1.2;
+  c[101] ? tq_band(c + 136, 0, mf * d0[1], e, q);
+  e = hg * hw * hw * (3 - 2 * hw) * gm;
+  q = ny ? (hs ? 1.0 : 0.22 + 0.19 * abs(e)) : (hs ? 0.70710678 : 1.0);
+  c[102] ? tq_band(c + 144, hs ? 2 : 0, hf * d0[2], e, q);
+  // the bands glide to their new coefficients sample by sample (a band starting from rest snaps)
+  t = 0;
+  loop(23,
+    (sn & (t < 8 ? 16 : t < 16 ? 32 : 64)) ? ( c[t] = c[128 + t]; c[152 + t] = 0; ) : c[152 + t] = (c[128 + t] - c[t]) / (2 * tq_N);
+    t += 1;
+  );
+  c[117] = 1;
+  // filters (they drift with the LOW / HIGH band factors)
+  c[96] ? ( t = hp * d0[0]; tq_cset(c + 24, t, 1.41421356); tq_cset(c + 32, t, 1); tq_opset(c + 40, t); );
+  c[98] ? ( t = min(lp * d0[2], 0.47 * tq_fs2); tq_cset(c + 48, t, 1.41421356); tq_cset(c + 56, t, 1); tq_opset(c + 64, t); );
+  // NEW YORK: the transformer's bump comes in with DRIVE
+  ny ? tq_band(c + 88, 0, 45, dr / 24, 0.8);
+  // preamp: fade-in, bias (drift), curve offset and normaliser; NEW YORK op-amp even term; the iron's saturation point
+  c[105] = min(dr / 2, 1);
+  c[106] = 0.30 + bias;
+  t = exp(2 * tq_pd * c[106]); t = (t - 1) / (t + 1);
+  c[111] = t; c[112] = 1 / (tq_pd * tq_pk * (1 - t * t));
+  c[113] = 1 + bias * 10;
+  c[107] = (ny ? 0.45 : 0.42) * ks;
+);
+// two-pole glides (critically damped: they start and land gently, so a stepped switch never zippers)
+function tq_gl(t) instance(v, w) ( v != t || w != t ? ( w += (t - w) * tq_kG; v += (w - v) * tq_kG;
+  abs(v - t) < 0.0005 && abs(w - t) < 0.0005 ? v = w = t; tq_mv = 1; ); v; );
+function tq_glf(t) instance(v, w) ( v != t || w != t ? ( w *= (t / w) ^ tq_kF; v *= (w / v) ^ tq_kF;
+  abs(v / t - 1) < 0.0002 && abs(w / t - 1) < 0.0002 ? v = w = t; tq_mv = 1; ); v; );
+function tq_gli(t) instance(v, w) ( v = w = t; );
+function tq_eng(b, ny, cl, cr) instance(lf, lg, mf, mg, hf, hg, ls, lw, hs, hw, hp, lp, h18, l18, dr, tr, init, mv, df, hwt, lwt, sn,
+  glf, glg, gmf, gmg, ghf, ghg, ghp, glp, gdr, gtr)
+  local(eq, tlf, tlg, tmf, tmg, thf, thg, tls, ths, thp, tlp, hon, lon, t18h, t18l, tdr, ttr, on, g, t, x) (
+  this.ny = ny;
+  eq = slider2 >= 0.5;
+  ny ? (
+    tlf = tq_fnl(slider(b + 1)); tlg = tq_gny(slider(b + 2)); tmf = tq_fnm(slider(b + 4)); tmg = tq_gny(slider(b + 5));
+    thf = tq_fnh(slider(b + 6)); thg = tq_gny(slider(b + 7));
+  ) : (
+    tlf = tq_ftl(slider(b + 1)); tlg = tq_gtk(slider(b + 2)); tmf = tq_ftm(slider(b + 4)); tmg = tq_gtk(slider(b + 5));
+    thf = tq_fth(slider(b + 6)); thg = tq_gtk(slider(b + 7));
+  );
+  tlg *= eq; tmg *= eq; thg *= eq;
+  tls = slider(b + 3) >= 0.5; ths = slider(b + 8) >= 0.5;
+  t = slider(b + 9);  hon = t > 20.5;  thp = hon ? min(t, 400) : 10;
+  t = slider(b + 11); lon = t < 21990; tlp = lon ? max(t, 3000) : tq_lpoff;
+  t18h = slider(b + 10) >= 0.5; t18l = slider(b + 12) >= 0.5;
+  tdr = min(max(slider(b), 0), 24); ttr = exp(min(max(slider(b + 13), -12), 12) * 0.115129255);
+  init ? (
+    glf.tq_gli(tlf); glg.tq_gli(tlg); gmf.tq_gli(tmf); gmg.tq_gli(tmg); ghf.tq_gli(thf); ghg.tq_gli(thg);
+    ghp.tq_gli(thp); glp.tq_gli(tlp); gdr.tq_gli(tdr); gtr.tq_gli(ttr);
+    ls = tls; hs = ths; lw = hw = 1; h18 = t18h; l18 = t18l;
+    cl[96] = cr[96] = hon; cl[98] = cr[98] = lon; cl[97] = cr[97] = h18; cl[99] = cr[99] = l18;
+    hwt = cl[116] = cr[116] = hon; lwt = cl[118] = cr[118] = lon; sn = 112;
+    cl[103] = cr[103] = exp(tdr * 0.115129255); cl[104] = cr[104] = ttr;
+    init = 0; mv = 1;
+  );
+  tq_mv = 0;
+  // ---- glides: frequencies (log, about 30 ms), gains (about 20 ms), drive, trim
+  lf = glf.tq_glf(tlf); mf = gmf.tq_glf(tmf); hf = ghf.tq_glf(thf);
+  lg = glg.tq_gl(tlg);  mg = gmg.tq_gl(tmg);  hg = ghg.tq_gl(thg);
+  hp = ghp.tq_glf(thp); lp = glp.tq_glf(tlp);
+  dr = gdr.tq_gl(tdr);  x = tq_mv; tr = gtr.tq_gl(ttr); tq_mv = x;
+  // ---- BELL / SHELF: the band dips out (8 ms), changes shape and comes back (8 ms), on a smooth S-curve
+  ls != tls ? ( lw = max(lw - tq_kS, 0); lw <= 0 ? ls = tls; tq_mv = 1; ) : lw < 1 ? ( lw = min(lw + tq_kS, 1); tq_mv = 1; );
+  hs != ths ? ( hw = max(hw - tq_kS, 0); hw <= 0 ? hs = ths; tq_mv = 1; ) : hw < 1 ? ( hw = min(hw + tq_kS, 1); tq_mv = 1; );
+  // ---- slope crossfades (20 ms, ramped per sample); a section starting up again starts from rest
+  h18 != t18h ? ( (h18 <= 0 || h18 >= 1) ? ( cl[110] = cr[110] = cl[110] | (h18 <= 0 ? 2 : 1); );
+                  h18 = t18h ? min(h18 + tq_kX, 1) : max(h18 - tq_kX, 0); );
+  l18 != t18l ? ( (l18 <= 0 || l18 >= 1) ? ( cl[110] = cr[110] = cl[110] | (l18 <= 0 ? 8 : 4); );
+                  l18 = t18l ? min(l18 + tq_kX, 1) : max(l18 - tq_kX, 0); );
+  cl[114] = cr[114] = (h18 - cl[97]) / (2 * tq_N); cl[115] = cr[115] = (l18 - cl[99]) / (2 * tq_N);
+  // ---- filters on / off (off = glide to the end of the range, then out of circuit)
+  // ---- filters in / out of circuit: a 30 ms crossfade (switching in, the corner glides up from 10 Hz / down
+  //      from the top of the range)
+  hon && !cl[96] ? ( cl[96] = cr[96] = 1; cl[110] = cr[110] = cl[110] | 3; cl[116] = cr[116] = hwt = 0;
+                     ghp.tq_gli(10); hp = 10; tq_mv = 1; );
+  lon && !cl[98] ? ( cl[98] = cr[98] = 1; cl[110] = cr[110] = cl[110] | 12; cl[118] = cr[118] = lwt = 0;
+                     glp.tq_gli(tq_lpoff); lp = tq_lpoff; tq_mv = 1; );
+  hwt = hon ? min(hwt + tq_kfw, 1) : max(hwt - tq_kfw, 0);
+  lwt = lon ? min(lwt + tq_kfw, 1) : max(lwt - tq_kfw, 0);
+  cl[119] = cr[119] = (hwt - cl[116]) / (2 * tq_N); cl[120] = cr[120] = (lwt - cl[118]) / (2 * tq_N);
+  !hon && cl[96] && hwt <= 0 && cl[116] <= 0.00001 ? ( cl[96] = cr[96] = 0; );
+  !lon && cl[98] && lwt <= 0 && cl[118] <= 0.00001 ? ( cl[98] = cr[98] = 0; );
+  // ---- bands on / off: a band at 0 dB is exactly out, so it is skipped (and starts from rest when it comes back)
+  on = abs(lg * lw) > 0.0001 || tlg != 0; on && !cl[100] ? ( cl[110] = cr[110] = cl[110] | 16; ); cl[100] = cr[100] = on;
+  on = abs(mg) > 0.0001 || tmg != 0;      on && !cl[101] ? ( cl[110] = cr[110] = cl[110] | 32; ); cl[101] = cr[101] = on;
+  on = abs(hg * hw) > 0.0001 || thg != 0; on && !cl[102] ? ( cl[110] = cr[110] = cl[110] | 64; ); cl[102] = cr[102] = on;
+  // ---- drive and trim: per-sample ramps to the new values over the next tick
+  g = exp(dr * 0.115129255);
+  cl[108] = (g - cl[103]) / (2 * tq_N); cr[108] = (g - cr[103]) / (2 * tq_N);
+  cl[109] = (tr - cl[104]) / (2 * tq_N); cr[109] = (tr - cr[104]) / (2 * tq_N);
+  // ---- coefficients, per channel with its drift (while something moves; drift alone: once per block)
+  sn |= cl[110] & 112;
+  tq_mv || mv || (df && dm_a > 0) ? (
+    this.tq_ech(cl, tq_D,     tq_D[6], tq_D[8], tq_D[10], sn);
+    this.tq_ech(cr, tq_D + 3, tq_D[7], tq_D[9], tq_D[11], sn);
+    df = 0;
+  ) : cl[117] ? (                                       // nothing moved: land exactly on the targets
+    t = 0; loop(23, cl[t] = cl[128 + t]; cr[t] = cr[128 + t]; t += 1; );
+    cl[117] = cr[117] = 0;
+  );
+  sn = 0;
+  mv = tq_mv;
+);
+
+// ---------- settings ----------
+function tq_srinit() local(c, i) (
+  tq_sr = srate; tq_fs2 = 2 * srate;
+  tq_dcd = 1 - 2 * $pi * 5 / tq_fs2;                    // DC blockers on the added parts, 5 Hz
+  tq_iat = 1 - exp(-1 / (0.002 * tq_fs2)); tq_irl = exp(-1 / (0.150 * tq_fs2));   // the core's level follower
+  tq_ce  = 1 - exp(-1 / (0.010 * tq_fs2));              // mean-square trackers (even terms DC-free), 10 ms
+  tq_xc  = 2 * $pi * 40 / tq_fs2; tq_xlk = 1 - 2 * $pi * 5 / tq_fs2;   // flux: a 40 Hz sine's flux = its amplitude
+  tq_slw = 2.2 * 1.8 * 96000 / tq_fs2;                  // op-amp slew (per 2x sample)
+  tq_lpoff = min(0.45 * tq_fs2, 40000);                 // LPF 'off' end of its glide
+  tq_N = 8;                                             // control rate: every 8 samples
+  tq_kF = 1 - exp(-tq_N / (0.012 * srate)); tq_kG = 1 - exp(-tq_N / (0.008 * srate));   // two poles each
+  tq_kS = tq_N / (0.008 * srate); tq_kX = tq_N / (0.020 * srate); tq_kfw = tq_N / (0.030 * srate);
+  tq_xs = 1 / (0.030 * srate); tq_nwarm = floor(0.040 * srate);   // CITY: 40 ms settle, 30 ms crossfade
+  tq_vdt = 1 / srate;
+  i = 0;
+  loop(4,
+    c = i == 0 ? tq_CTL : i == 1 ? tq_CTR : i == 2 ? tq_CNL : tq_CNR;
+    tq_cset(c + 72, 400, 1.41421356); tq_cset(c + 80, 5000, 1.41421356);
+    c[106] = 0.3; c[107] = 1; c[113] = 1;
+    i += 1;
+  );
+  eT.init = eN.init = 1; eT.mv = eN.mv = 1;
+  ost_init(ost_buf);
+);
+tq_srinit();
+tq_vw = 13.6; tq_vz = 0.81;                             // VU needle: natural frequency, damping
+tq_vw2 = tq_vw * tq_vw; tq_vzw = 2 * tq_vz * tq_vw;
+tq_vref = 1.5707963 / 0.125892541;                      // rectified x pi/2: 0 VU = a sine peaking at -18 dBFS
+
+function tq_update() (
+  drift_macro(slider3);
+  tq_om = slider4 | 0;
+  ost_setup(0, 0, 120, 6000, -0.3, tq_om);
+  pdc_bot_ch = 0; pdc_top_ch = 2;
+  pdc_delay = tq_LAT + (tq_om == 2 ? ost_N : 0);
+  tq_tgt = slider1 >= 0.5;
+);
+
+// ---------- presets ----------
+// Tokyo: drive, low f / lvl / shelf, mid f / lvl, high f / lvl / shelf, hpf, hpf 18, lpf, lpf 18, output
+function tq_pt(dr, lf, lg, lsh, mf, mg, hf, hg, hsh, hp, h18, lp, l18, o) (
+  slider5 = dr; slider6 = lf; slider7 = lg; slider8 = lsh; slider9 = mf; slider10 = mg; slider11 = hf; slider12 = hg;
+  slider13 = hsh; slider14 = hp; slider15 = h18; slider16 = lp; slider17 = l18; slider18 = o;
+  slider1 = 0; slider2 = 1;
+);
+// New York: the same, gains as switch positions (5 = 0 dB, 6 / 7 / 8 / 9 / 10 = +2 / 4 / 6 / 9 / 12)
+function tq_pn(dr, lf, lg, lsh, mf, mg, hf, hg, hsh, hp, h18, lp, l18, o) (
+  slider19 = dr; slider20 = lf; slider21 = lg; slider22 = lsh; slider23 = mf; slider24 = mg; slider25 = hf; slider26 = hg;
+  slider27 = hsh; slider28 = hp; slider29 = h18; slider30 = lp; slider31 = l18; slider32 = o;
+  slider1 = 1; slider2 = 1;
+);
+function tq_pinit() (                                  // Init: TOKYO flat (and NEW YORK flat too)
+  tq_pt(0, 2, 0, 1, 4, 0, 3, 0, 1, 20, 0, 22000, 0, 0);
+  tq_pn(0, 1, 5, 1, 2, 5, 2, 5, 1, 20, 0, 22000, 0, 0); slider1 = 0;
+);
+function load_preset(p) (
+  p == 1  ? tq_pinit() :                                                        // Init
+  p == 2  ? tq_pt(4,  3, -2, 1,  9,  5, 5,  3, 1,  90, 0, 22000, 0, -0.5) :     // Tokyo Vocal Bite
+  p == 3  ? tq_pt(8,  4,  3, 0,  6, -3, 1,  6, 0, 100, 1, 22000, 0, -1.0) :     // Tokyo Snare Crack
+  p == 4  ? tq_pt(10, 3, -3, 0,  4,  6, 3,  2, 1,  80, 0, 12000, 0, -1.5) :     // Tokyo Guitar Bloom
+  p == 5  ? tq_pt(3,  2, -2, 1,  8,  3, 4,  4, 1,  60, 0, 22000, 0, -0.5) :     // Tokyo Keys Presence
+  p == 6  ? tq_pt(5,  0,  2, 1,  3, -1, 5,  3, 1,  25, 0, 22000, 0, -0.5) :     // Tokyo Bus Gloss
+  p == 7  ? tq_pt(12, 2,  0, 1,  7,  9, 3,  0, 1,  40, 0, 22000, 0, -2.5) :     // Tokyo Mid Push
+  p == 8  ? tq_pn(6,  1,  8, 0,  1,  2, 2,  7, 0,  25, 0, 22000, 0, -1.0) :     // New York Kick
+  p == 9  ? tq_pn(10, 2,  7, 0,  3,  8, 2,  7, 1,  80, 1, 22000, 0, -1.5) :     // New York Snare Snap
+  p == 10 ? tq_pn(8,  1,  8, 1,  1,  6, 0,  4, 0,  30, 0, 10000, 0, -1.5) :     // New York Bass Punch
+  p == 11 ? tq_pn(5,  2,  4, 1,  3,  7, 2,  7, 1,  80, 0, 22000, 0, -0.5) :     // New York Vocal
+  p == 12 ? tq_pn(9,  1,  7, 1,  1,  4, 3,  7, 1,  30, 0, 22000, 0, -1.5) :     // New York Drum Bus
+  p == 13 ? tq_pn(12, 2,  4, 0,  3,  7, 1,  6, 0, 100, 1, 14000, 0, -2.0) :     // New York Guitar
+  p == 14 ? tq_pn(2,  1,  5, 1,  2,  5, 4,  8, 1,  20, 0, 22000, 0,  0.0) :     // New York Air
+  p == 15 ? (                                                                   // Reset all to defaults
+    tq_pinit(); slider3 = 50; slider4 = 1;
+  );
+  p >= 1 ? slider_automate(4294967295);                 // sliders 1-32
+);
+
+// ---------- state ----------
+dB1L.drift_init(0.8 + rand(0.4)); dB1R.drift_init(0.8 + rand(0.4));
+dB2L.drift_init(0.8 + rand(0.4)); dB2R.drift_init(0.8 + rand(0.4));
+dB3L.drift_init(0.8 + rand(0.4)); dB3R.drift_init(0.8 + rand(0.4));
+dGL.drift_init(0.9 + rand(0.5));  dGR.drift_init(0.9 + rand(0.5));
+dBiL.drift_init(0.7 + rand(0.5)); dBiR.drift_init(0.7 + rand(0.5));
+dKL.drift_init(0.6 + rand(0.4));  dKR.drift_init(0.6 + rand(0.4));
+tq_mm1 = rand(2) - 1; tq_mm2 = rand(2) - 1; tq_mm3 = rand(2) - 1; tq_mm4 = rand(2) - 1;   // fixed L / R mismatch
+tq_i = 0; loop(12, tq_D[tq_i] = 1; tq_i += 1; ); tq_D[8] = tq_D[9] = 0;
+tq_update();
+tq_tg = tq_tgt; tq_w = tq_tgt; tq_wc = 0; tq_cc = 0;
+tq_vy = tq_vv = 0; tqa_pl = tqa_pr = 0;
+
+ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                  // new instances open in Large, on Init
+ui_dflt = 1;
+
+@slider
+tq_update();
+
+@block
+srate != tq_sr ? tq_srinit();
+tq_update();                                            // keys and knobs moved on the panel do not run @slider
+// ---- DRIFT: component tolerance wander (band frequencies and gains, bias, the iron), each channel on its own
+tq_di = 0.12 * dm_s * samplesblock / srate;
+tq_D[0] = 1 + dm_a * (0.012 * dB1L.drift_tick(tq_di) + 0.004 * tq_mm1);
+tq_D[3] = 1 + dm_a * (0.012 * dB1R.drift_tick(tq_di) - 0.004 * tq_mm1);
+tq_D[1] = 1 + dm_a * (0.012 * dB2L.drift_tick(tq_di) + 0.004 * tq_mm2);
+tq_D[4] = 1 + dm_a * (0.012 * dB2R.drift_tick(tq_di) - 0.004 * tq_mm2);
+tq_D[2] = 1 + dm_a * (0.012 * dB3L.drift_tick(tq_di) + 0.004 * tq_mm3);
+tq_D[5] = 1 + dm_a * (0.012 * dB3R.drift_tick(tq_di) - 0.004 * tq_mm3);
+tq_D[6] = 1 + dm_a * (0.02 * dGL.drift_tick(tq_di) + 0.01 * tq_mm4);
+tq_D[7] = 1 + dm_a * (0.02 * dGR.drift_tick(tq_di) - 0.01 * tq_mm4);
+tq_D[8] = dm_a * 0.03 * dBiL.drift_tick(tq_di);  tq_D[9] = dm_a * 0.03 * dBiR.drift_tick(tq_di);
+tq_D[10] = 1 + dm_a * 0.04 * dKL.drift_tick(tq_di); tq_D[11] = 1 + dm_a * 0.04 * dKR.drift_tick(tq_di);
+eT.df = eN.df = 1;                                      // the drift moved: coefficients once per block
+// ---- denormal housekeeping
+tq_rT || tq_w < 1 ? ( TL.tq_tfl(); TR.tq_tfl(); );
+tq_rN || tq_w > 0 ? ( NL.tq_nfl(); NR.tq_nfl(); );
+abs(tq_vy) + abs(tq_vv) < 0.000000001 ? tq_vy = tq_vv = 0;
+// ---- the meters' block values for the panel
+tqa_v = tq_vy;
+tqa_ol = tqa_pl; tqa_or = tqa_pr; tqa_pl = tqa_pr = 0;
+tqa_blk += 1;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+tq_il = spl0; tq_ir = spl1;
+// ---------- control rate (every 8 samples): glides, flags, coefficients ----------
+(tq_cc -= 1) <= 0 ? (
+  tq_cc = tq_N;
+  // CITY: the incoming engine starts, settles 40 ms, then a 30 ms crossfade
+  tq_tgt != tq_tg ? ( tq_tg = tq_tgt; tq_wc = tq_nwarm; );
+  tq_rT = tq_w < 1 || !tq_tg; tq_rN = tq_w > 0 || tq_tg;
+  tq_rT ? eT.tq_eng(5,  0, tq_CTL, tq_CTR) : eT.mv = 1;
+  tq_rN ? eN.tq_eng(19, 1, tq_CNL, tq_CNR) : eN.mv = 1;
+);
+tq_wc > 0 ? tq_wc -= 1 : tq_w = tq_tg ? min(tq_w + tq_xs, 1) : max(tq_w - tq_xs, 0);
+tq_xw2 = tq_w * tq_w * (3 - 2 * tq_w);
+// ---------- 2x: up-sample, the engine(s), down-sample ----------
+tq_wp = (tq_wp + 63) & 63;
+tq_ubL[tq_wp] = tq_ubL[tq_wp + 64] = tq_il; tq_ubR[tq_wp] = tq_ubR[tq_wp + 64] = tq_ir;
+tq_u0 = 2 * tq_conv(tq_ubL + tq_wp); tq_u1 = tq_ubL[tq_wp + 23];
+tq_v0 = 2 * tq_conv(tq_ubR + tq_wp); tq_v1 = tq_ubR[tq_wp + 23];
+tq_rT && tq_rN ? (
+  tq_y0 = TL.tq_tch(tq_u0, tq_CTL); tq_y0 += (NL.tq_nch(tq_u0, tq_CNL) - tq_y0) * tq_xw2;
+  tq_y1 = TL.tq_tch(tq_u1, tq_CTL); tq_y1 += (NL.tq_nch(tq_u1, tq_CNL) - tq_y1) * tq_xw2;
+  tq_y2 = TR.tq_tch(tq_v0, tq_CTR); tq_y2 += (NR.tq_nch(tq_v0, tq_CNR) - tq_y2) * tq_xw2;
+  tq_y3 = TR.tq_tch(tq_v1, tq_CTR); tq_y3 += (NR.tq_nch(tq_v1, tq_CNR) - tq_y3) * tq_xw2;
+) : tq_rT ? (
+  tq_y0 = TL.tq_tch(tq_u0, tq_CTL); tq_y1 = TL.tq_tch(tq_u1, tq_CTL);
+  tq_y2 = TR.tq_tch(tq_v0, tq_CTR); tq_y3 = TR.tq_tch(tq_v1, tq_CTR);
+) : (
+  tq_y0 = NL.tq_nch(tq_u0, tq_CNL); tq_y1 = NL.tq_nch(tq_u1, tq_CNL);
+  tq_y2 = NR.tq_nch(tq_v0, tq_CNR); tq_y3 = NR.tq_nch(tq_v1, tq_CNR);
+);
+tq_aL[tq_wp] = tq_aL[tq_wp + 64] = tq_y0;  tq_bL[tq_wp] = tq_bL[tq_wp + 64] = tq_y1;
+tq_aR[tq_wp] = tq_aR[tq_wp + 64] = tq_y2;  tq_bR[tq_wp] = tq_bR[tq_wp + 64] = tq_y3;
+tq_ol = 0.5 * tq_bL[tq_wp + 24] + tq_conv(tq_aL + tq_wp);
+tq_or = 0.5 * tq_bR[tq_wp + 24] + tq_conv(tq_aR + tq_wp);
+// ---------- the house output stage ----------
+ost_out(tq_ol, tq_or);
+spl0 = ost_l; spl1 = ost_r;
+// ---------- meters: the input VU needle (mass + spring + damping), the output peaks ----------
+tq_md = max(abs(tq_il), abs(tq_ir)) * tq_vref;
+tq_vv += (tq_vw2 * (tq_md - tq_vy) - tq_vzw * tq_vv) * tq_vdt; tq_vy += tq_vv * tq_vdt;
+tqa_pl = max(tqa_pl, abs(spl0)); tqa_pr = max(tqa_pr, abs(spl1));
+
+@gfx 900 340
+ui_begin(900, 340);
+ui_col(0x202326); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_end();
+ui_end();
