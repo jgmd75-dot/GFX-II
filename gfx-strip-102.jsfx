@@ -8,7 +8,8 @@ desc:GFX Strip 102 [channel strip]
 //   GAIN       - preamp gain, -24 to +24 dB. The preamp colours gently as it is pushed.
 //   HPF        - 80 Hz high-pass, 12 dB/oct (as on the mic channels).
 //   COMP       - one knob, 0 - 10: turning it up lowers the threshold (0 to -30 dB), raises the ratio
-//                (1:1 to 10:1) and adds make-up gain, so the level stays about the same as it squashes.
+//                (1:1 to 10:1) and adds make-up gain, so the level stays the same (within about 1 dB at normal
+//                levels, around -17 dBFS RMS) as it squashes.
 //   LOW / MID / HIGH - 100 Hz shelf, 2.5 kHz peak, 10 kHz shelf, each +/-15 dB (Audio EQ Cookbook biquads).
 //   PAN        - constant-power pan (a balance on stereo tracks: the centre stays at unity).
 //   LEVEL      - channel level, -40 dB (off) to +10 dB.
@@ -107,6 +108,11 @@ function pname(n) ( n = floor(n + 0.5);
   n == 4 ? "KICK" : n == 5 ? "SNARE" : n == 6 ? "KEYS" : "SQUASH"; );
 
 // coefficients and gains, worked out here rather than per sample
+// COMP make-up (dB) for COMP 0 - 10: measured so the level stays even (within about 1 dB) on music and vocals at
+// around -17 dBFS RMS; linear between the points
+function s2_mkt(i) ( i <= 1 ? 0 : i == 2 ? 0.15 : i == 3 ? 1.05 : i == 4 ? 2.65 : i == 5 ? 4.95 : i == 6 ? 7.55 :
+  i == 7 ? 10.3 : i == 8 ? 13.2 : i == 9 ? 16.15 : 19.1; );
+function s2_mkdb(c) local(i, f) ( c = min(max(c, 0), 10); i = min(floor(c), 9); f = c - i; s2_mkt(i) * (1 - f) + s2_mkt(i + 1) * f; );
 function update() local(k, th) (
   s2_gain = 10 ^ (slider1 / 20);
   s2_hpon = slider2 > 0.5;
@@ -117,7 +123,7 @@ function update() local(k, th) (
   k = slider3 / 10;
   s2_thr = -30 * k;
   s2_rat = 1 + 9 * k ^ 1.6;
-  s2_mk = 10 ^ (max(0, -s2_thr * (1 - 1 / s2_rat)) * 0.45 / 20);
+  s2_mk = 10 ^ (s2_mkdb(slider3) / 20);
   s2_con = k > 0.001;
   s2_lev = slider8 <= -39.95 ? 0 : 10 ^ (slider8 / 20);
   th = (slider7 + 1) * $pi / 4;
