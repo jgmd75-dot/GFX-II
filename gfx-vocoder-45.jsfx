@@ -111,16 +111,16 @@ nextmem = 0;
 function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
 vc_KF = alloc(32);                                      // KR-45 band centres (Hz)
 vc_SF = alloc(32);                                      // SV-45 band centres (Hz)
-vc_KM = alloc(32); vc_SM = alloc(32);                   // band activity mailboxes (audio raises, panel reads + clears)
-vc_V  = alloc(8 * 16);                                  // synth voices, 16 slots each:
+vc_KMB = alloc(32); vc_SMB = alloc(32);                   // band activity mailboxes (audio raises, panel reads + clears)
+vc_VO  = alloc(8 * 16);                                  // synth voices, 16 slots each:
                                                         //   0 note (-1 free) 1 gate 2 env 3 inc now 4 inc target
                                                         //   5-7 phases 8 age 9 velocity gain 10 key down
-vc_Q  = alloc(256 * 4);                                 // MIDI event queue: offset, type, data 1, data 2
+vc_MQ  = alloc(256 * 4);                                 // MIDI event queue: offset, type, data 1, data 2
 vg_LK = alloc(32); vg_LS = alloc(32);                   // panel: smoothed ladder levels
 vc_ostm = alloc(4096); ost_init(vc_ostm);
 
 vc_i = 0; loop(24, vc_KF[vc_i] = 100 * 80 ^ (vc_i / 23); vc_i += 1; );
-vc_i = 0; loop(8, vc_V[vc_i * 16] = -1; vc_i += 1; );
+vc_i = 0; loop(8, vc_VO[vc_i * 16] = -1; vc_i += 1; );
 
 // ---------- filter helpers ----------
 // constant 0 dB peak band-pass (b1 = 0, b2 = -b0): results in vc_c0, vc_a1, vc_a2
@@ -174,6 +174,7 @@ function kr_band(m, c) instance(mc0, ma1, ma2, ms1, ms2, ms3, ms4, cc0, ca1, ca2
 function kr_blk(b) instance(mc0, ma1, ma2, ms1, ms2, ms3, ms4, cc0, ca1, ca2, cs1, cs2, cs3, cs4,
                             e1, e2, ea, er, es, gl, gr, nw, ti, tm, tc, wa, wb, wp, wr) local(f, fm, fc, w, g, fd, pn, hf) (
   !ti ? ( ti = 1; tm = rand(2) - 1; tc = rand(2) - 1; wa = rand(2) - 1; wb = rand(2) - 1; wp = rand(1); wr = 0.7 + rand(0.6); );
+  vc_rst ? ( ms1 = ms2 = ms3 = ms4 = cs1 = cs2 = cs3 = cs4 = e1 = e2 = 0; );
   wp += vc_dinc * wr; wp >= 1 ? ( wp -= 1; wa = wb; wb = rand(2) - 1; );
   w = wa + (wb - wa) * (0.5 - 0.5 * cos($pi * wp));
   f = vc_KF[b];
@@ -186,7 +187,7 @@ function kr_blk(b) instance(mc0, ma1, ma2, ms1, ms2, ms3, ms4, cc0, ca1, ca2, cs
   er = 1 - exp(-1 / ((10 + 25 * sqrt(250 / f)) * 0.001 * srate * (1 + 5 * vc_kdr * w)));
   es = 1 - exp(-2 * $pi * min(max(f * 0.25, 25), 70) / srate);
   hf = 10 ^ (vc_khf * f * f / (f * f + 9000000) / 20);
-  g = vc_kG * vc_kG2 * vc_kqn * min(max(sqrt(f / 1000), 0.35), 2.8) * hf * fd;
+  g = vc_kcal * vc_kmk * vc_kqn * min(max((f / 1000) ^ 0.25, 0.5), 1.8) * hf * fd;
   pn = b & 1 ? -vc_kwd : vc_kwd;
   gl = g * (1 + pn); gr = g * (1 - pn);
   nw = f > 2500 ? vc_knw * min((f - 2500) / 3000, 1) : 0;
@@ -195,7 +196,7 @@ function kr_blk(b) instance(mc0, ma1, ma2, ms1, ms2, ms3, ms4, cc0, ca1, ca2, cs
   abs(cs1) < 0.000000000001 ? cs1 = 0; abs(cs2) < 0.000000000001 ? cs2 = 0;
   abs(cs3) < 0.000000000001 ? cs3 = 0; abs(cs4) < 0.000000000001 ? cs4 = 0;
   e1 < 0.000000000001 ? e1 = 0; e2 < 0.000000000001 ? e2 = 0;
-  vc_KM[b] = max(vc_KM[b], e2 * hf);
+  vc_KMB[b] = max(vc_KMB[b], e2 * hf);
 );
 
 // ---------- SV-45: one band (Butterworth pair shared by both banks, smooth follower, VCA) ----------
@@ -217,7 +218,7 @@ function sv_blk(b) instance(ka0, ka1, ka2, kb0, kb1, kb2, ms1, ms2, ms3, ms4, cs
   !ti ? ( ti = 1; tm = rand(2) - 1; wa = rand(2) - 1; wb = rand(2) - 1; wp = rand(1); wr = 0.7 + rand(0.6); );
   wp += vc_dinc * wr; wp >= 1 ? ( wp -= 1; wa = wb; wb = rand(2) - 1; );
   w = wa + (wb - wa) * (0.5 - 0.5 * cos($pi * wp));
-  vc_sclr ? ( ms1 = ms2 = ms3 = ms4 = cs1 = cs2 = cs3 = cs4 = e1 = e2 = 0; );
+  vc_sclr || vc_rst ? ( ms1 = ms2 = ms3 = ms4 = cs1 = cs2 = cs3 = cs4 = e1 = e2 = 0; );
   b < vc_svn ? (
     f = vc_SF[b] * (1 + vc_sdr * (0.6 * tm + 0.4 * w));
     vc_bp(f * vc_ska, vc_sqa); ka0 = vc_c0; ka1 = vc_a1; ka2 = vc_a2;
@@ -226,7 +227,7 @@ function sv_blk(b) instance(ka0, ka1, ka2, kb0, kb1, kb2, ms1, ms2, ms3, ms4, cs
     er = 1 - exp(-1 / (max(vc_srel, 9000 / f) * 0.001 * srate));
     es = vc_ses;
     tl = 10 ^ (vc_stl * f * f / (f * f + 6250000) / 20);
-    g = vc_sG * vc_sg * vc_sg * vc_sqn * min(max(sqrt(f / 1000), 0.35), 2.8) * tl;
+    g = vc_scal * vc_sg * vc_sg * vc_sqn * min(max((f / 1000) ^ 0.25, 0.5), 1.8) * tl;
     pn = b & 1 ? -vc_swd : vc_swd;
     gl = g * (1 + pn); gr = g * (1 - pn);
     nw = f > 2500 ? vc_snw * min((f - 2500) / 3000, 1) : 0;
@@ -235,7 +236,7 @@ function sv_blk(b) instance(ka0, ka1, ka2, kb0, kb1, kb2, ms1, ms2, ms3, ms4, cs
     abs(cs1) < 0.000000000001 ? cs1 = 0; abs(cs2) < 0.000000000001 ? cs2 = 0;
     abs(cs3) < 0.000000000001 ? cs3 = 0; abs(cs4) < 0.000000000001 ? cs4 = 0;
     e1 < 0.000000000001 ? e1 = 0; e2 < 0.000000000001 ? e2 = 0;
-    vc_SM[b] = max(vc_SM[b], e2 * vc_sg * tl);
+    vc_SMB[b] = max(vc_SMB[b], e2 * vc_sg * tl);
   ) : ( gl = gr = 0; );
 );
 
@@ -275,15 +276,15 @@ function vc_xfm(x, k, d) instance(lo) local(t) (
 
 // ---------- the synth carrier ----------
 function vc_blep(t, dt) ( t < dt ? ( t /= dt; 2 * t - t * t - 1; ) : t > 1 - dt ? ( t = (t - 1) / dt; t * t + 2 * t + 1; ) : 0; );
-function vc_all_off() local(p) ( p = vc_V; loop(8, p[1] = 0; p[10] = 0; p += 16; ); vc_nheld = 0; );
+function vc_all_off() local(p) ( p = vc_VO; loop(8, p[1] = 0; p[10] = 0; p += 16; ); vc_nheld = 0; );
 function vc_non(n, v) local(p, q, i, best, lo) (
-  vc_hold && vc_nheld == 0 ? ( p = vc_V; loop(8, p[1] = 0; p += 16; ); );   // HOLD: a new chord replaces the old
+  vc_hold && vc_nheld == 0 ? ( p = vc_VO; loop(8, p[1] = 0; p += 16; ); );   // HOLD: a new chord replaces the old
   vc_nheld += 1;
-  q = -1; p = vc_V;                                     // the same note still sounding: play it again
+  q = -1; p = vc_VO;                                     // the same note still sounding: play it again
   loop(8, p[0] == n ? q = p; p += 16; );
-  q < 0 ? ( p = vc_V; loop(8, q < 0 && p[0] < 0 ? q = p; p += 16; ); );   // a free voice
-  q < 0 ? ( lo = 2; p = vc_V; loop(8, !p[1] && p[2] < lo ? ( lo = p[2]; q = p; ); p += 16; ); );   // the quietest released
-  q < 0 ? ( best = 1000000000; p = vc_V; loop(8, p[8] < best ? ( best = p[8]; q = p; ); p += 16; ); );   // the oldest
+  q < 0 ? ( p = vc_VO; loop(8, q < 0 && p[0] < 0 ? q = p; p += 16; ); );   // a free voice
+  q < 0 ? ( lo = 2; p = vc_VO; loop(8, !p[1] && p[2] < lo ? ( lo = p[2]; q = p; ); p += 16; ); );   // the quietest released
+  q < 0 ? ( best = 1000000000; p = vc_VO; loop(8, p[8] < best ? ( best = p[8]; q = p; ); p += 16; ); );   // the oldest
   q[0] < 0 ? ( q[2] = 0; q[5] = rand(1); q[6] = rand(1); q[7] = rand(1); );
   q[4] = 440 * 2 ^ ((n - 69) / 12) / srate;
   q[3] = vc_glon && vc_linc > 0 ? vc_linc : q[4];
@@ -293,7 +294,7 @@ function vc_non(n, v) local(p, q, i, best, lo) (
 );
 function vc_noff(n) local(p) (
   vc_nheld = max(vc_nheld - 1, 0);
-  p = vc_V; loop(8, p[0] == n && p[10] ? ( p[10] = 0; !vc_hold ? p[1] = 0; ); p += 16; );
+  p = vc_VO; loop(8, p[0] == n && p[10] ? ( p[10] = 0; !vc_hold ? p[1] = 0; ); p += 16; );
 );
 
 // ---------- settings ----------
@@ -379,7 +380,7 @@ function vc_srinit() (
   vc_xlc = 1 - exp(-2 * $pi * 120 / srate);             // transformer low band
   vc_atk = 1 - exp(-1 / (0.003 * srate));               // synth envelope
   vc_rel = 1 - exp(-1 / (0.09 * srate));
-  vc_cea = 1 - exp(-1 / (0.005 * srate)); vc_cer = 1 - exp(-1 / (0.3 * srate));   // carrier level follower
+  vc_cea = 1 - exp(-1 / (0.005 * srate)); vc_cer = 1 - exp(-1 / (0.06 * srate));   // carrier level follower
   // V/UV detector
   vc_hp(3500, 0.7071); vc_u0 = vc_h0; vc_u1 = vc_h1; vc_u2 = vc_h2; vc_u3 = vc_h3; vc_u4 = vc_h4;
   vc_ulc = 1 - exp(-2 * $pi * 800 / srate);             // low band (one pole)
@@ -395,11 +396,13 @@ vc_kq = vc_kqt * 0.6436; vc_ksm = vc_ksht; vc_kdg = vc_kdgt; vc_khf = vc_khft; v
 vc_kdi = vc_kdit; vc_bal = vc_balt; vc_mix = vc_mixt; vc_og = vc_ogt; vc_lev = vc_levt; vc_pm = vc_tun;
 vc_kw = vc_kon; vc_vw = vc_von; vc_srw = vc_src; vc_kbw = vc_kbt; vc_vbw = vc_vbt; vc_sxf = 1;
 vc_bend = 1; vc_nheld = 0; vc_hold = 0; vc_age = 0; vc_linc = 0;
-vc_kG = 6; vc_sG = 6;                                   // output calibration of the two units
+vc_kcal = 6; vc_scal = 15;                                   // output calibration of the two units
 vc_kwd = 0.25; vc_swd = 0.45;                           // band spread (left / right alternation)
 kxL.lo = kxR.lo = sxL.lo = sxR.lo = 0;
 vcoL.ost_ch_init(); vcoR.ost_ch_init();
 vca_uv = 0; vca_cpk = 0; vca_kpk = 0; vca_mpk = 0;
+vc_rst = 1;                                             // the first block clears every band's state
+vc_cen = vc_uv = 0;
 
 ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                  // new instances open in Large, on Init
@@ -419,12 +422,12 @@ vc_kdg += (vc_kdgt - vc_kdg) * vc_bk;
 vc_khf += (vc_khft - vc_khf) * vc_bk;
 vc_stl += (vc_stlt - vc_stl) * vc_bk;
 vc_kqn = vc_kq / (5.1 * 0.6436);                        // narrower bands pass less: level compensation
-vc_kG2 = 1 / vc_kdg ^ 0.75;                             // drive make-up
+vc_kmk = 1 / vc_kdg ^ 0.75;                             // drive make-up
 // DRIFT: filter-bank tolerance
 vc_dinc = 0.25 * dm_s * samplesblock / srate;
 vc_kdr = 0.02 * dm_a; vc_sdr = 0.003 * dm_a;
 // the V/UV noise weights (SV-45 full, KR-45 lighter)
-vc_snw = vc_uvon ? 1 : 0; vc_knw = vc_uvon ? 0.45 : 0;
+vc_snw = vc_uvon ? 0.5 : 0; vc_knw = vc_uvon ? 0.25 : 0;
 // the SV-45 band count: fade out, rebuild, fade back in
 vc_sclr = 0;
 vc_svn != vc_svt && (vc_sxf < 0.001 || vc_svn == 0) ? ( vc_svn = vc_svt; vc_svtab(vc_svn); vc_sclr = 1; );
@@ -435,16 +438,17 @@ kr06.kr_blk(6);  kr07.kr_blk(7);  kr08.kr_blk(8);  kr09.kr_blk(9);  kr10.kr_blk(
 kr12.kr_blk(12); kr13.kr_blk(13); kr14.kr_blk(14); kr15.kr_blk(15); kr16.kr_blk(16); kr17.kr_blk(17);
 kr18.kr_blk(18); kr19.kr_blk(19); kr20.kr_blk(20); kr21.kr_blk(21); kr22.kr_blk(22); kr23.kr_blk(23);
 krtp.tp_blk(9500, 18, vc_knw);
-vc_KM[24] = max(vc_KM[24], krtp.e2 * 10 ^ (vc_khf / 20));
-vc_kTg = vc_kG * vc_kG2 * 2.2 * 10 ^ (vc_khf / 20);     // the TOP band's gain
+vc_KMB[24] = max(vc_KMB[24], krtp.e2 * 10 ^ (vc_khf / 20));
+vc_kTg = vc_kcal * vc_kmk * 0.35 * 10 ^ (vc_khf / 20);     // the TOP band's gain
 sv00.sv_blk(0);  sv01.sv_blk(1);  sv02.sv_blk(2);  sv03.sv_blk(3);  sv04.sv_blk(4);  sv05.sv_blk(5);
 sv06.sv_blk(6);  sv07.sv_blk(7);  sv08.sv_blk(8);  sv09.sv_blk(9);  sv10.sv_blk(10); sv11.sv_blk(11);
 sv12.sv_blk(12); sv13.sv_blk(13); sv14.sv_blk(14); sv15.sv_blk(15); sv16.sv_blk(16); sv17.sv_blk(17);
 sv18.sv_blk(18); sv19.sv_blk(19); sv20.sv_blk(20); sv21.sv_blk(21); sv22.sv_blk(22); sv23.sv_blk(23);
 svtp.tp_blk(9500, max(vc_srel * 0.6, 18), vc_snw);
-vc_sclr ? svtp.tp_clr();
-vc_SM[vc_svn] = max(vc_SM[vc_svn], svtp.e2 * 10 ^ (vc_stl / 20));
-vc_sTg = vc_sG * 2.2 * 10 ^ (vc_stl / 20);
+vc_sclr || vc_rst ? svtp.tp_clr();
+vc_rst ? ( krtp.tp_clr(); vc_rst = 0; );
+vc_SMB[vc_svn] = max(vc_SMB[vc_svn], svtp.e2 * 10 ^ (vc_stl / 20));
+vc_sTg = vc_scal * 2.2 * 10 ^ (vc_stl / 20);
 // denormal housekeeping
 abs(vc_uz1) < 0.000000000001 ? vc_uz1 = 0; abs(vc_uz2) < 0.000000000001 ? vc_uz2 = 0;
 vc_ueh < 0.0000000000000001 ? vc_ueh = 0; vc_uel < 0.0000000000000001 ? vc_uel = 0;
@@ -460,16 +464,16 @@ while (midirecv(vc_mo, vc_m1, vc_m2, vc_m3)) (
   (vc_mch == 0 || (vc_m1 & 0x0F) + 1 == vc_mch) && vc_qn < 256 ? (
     vc_ty = vc_st == 0x90 ? (vc_m3 > 0 ? 1 : 0) : vc_st == 0x80 ? 0 :
             vc_st == 0xB0 && (vc_m2 == 120 || vc_m2 == 123) ? 2 : vc_st == 0xE0 ? 3 : -1;
-    vc_ty >= 0 ? ( vc_Q[vc_qn * 4] = vc_mo; vc_Q[vc_qn * 4 + 1] = vc_ty; vc_Q[vc_qn * 4 + 2] = vc_m2; vc_Q[vc_qn * 4 + 3] = vc_m3; vc_qn += 1; );
+    vc_ty >= 0 ? ( vc_MQ[vc_qn * 4] = vc_mo; vc_MQ[vc_qn * 4 + 1] = vc_ty; vc_MQ[vc_qn * 4 + 2] = vc_m2; vc_MQ[vc_qn * 4 + 3] = vc_m3; vc_qn += 1; );
   );
   midisend(vc_mo, vc_m1, vc_m2, vc_m3);
 );
 vc_qr = 0; vc_spos = 0;
 // HOLD switched off: let go of the notes whose keys are up
-vc_hold && !vc_hn ? ( vc_p = vc_V; loop(8, vc_p[1] && !vc_p[10] ? vc_p[1] = 0; vc_p += 16; ); );
+vc_hold && !vc_hn ? ( vc_p = vc_VO; loop(8, vc_p[1] && !vc_p[10] ? vc_p[1] = 0; vc_p += 16; ); );
 vc_hold = vc_hn;
 // voices still sounding
-vc_nv = 0; vc_p = vc_V; loop(8, vc_p[0] >= 0 ? vc_nv += 1; vc_p += 16; );
+vc_nv = 0; vc_p = vc_VO; loop(8, vc_p[0] >= 0 ? vc_nv += 1; vc_p += 16; );
 vc_vact = vc_nv > 0;
 vca_nv = vc_nv;
 
@@ -480,12 +484,12 @@ file_var(0, pr_cur);
 @sample
 vc_ml = spl0; vc_mr = spl1;
 // ---------- MIDI events due now ----------
-while (vc_qr < vc_qn && vc_Q[vc_qr * 4] <= vc_spos) (
-  vc_ty = vc_Q[vc_qr * 4 + 1];
-  vc_ty == 1 ? vc_non(vc_Q[vc_qr * 4 + 2], vc_Q[vc_qr * 4 + 3]) :
-  vc_ty == 0 ? vc_noff(vc_Q[vc_qr * 4 + 2]) :
+while (vc_qr < vc_qn && vc_MQ[vc_qr * 4] <= vc_spos) (
+  vc_ty = vc_MQ[vc_qr * 4 + 1];
+  vc_ty == 1 ? vc_non(vc_MQ[vc_qr * 4 + 2], vc_MQ[vc_qr * 4 + 3]) :
+  vc_ty == 0 ? vc_noff(vc_MQ[vc_qr * 4 + 2]) :
   vc_ty == 2 ? vc_all_off() :
-  vc_bend = 2 ^ ((((vc_Q[vc_qr * 4 + 3] * 128 + vc_Q[vc_qr * 4 + 2]) - 8192) / 8192) * 2 / 12);
+  vc_bend = 2 ^ ((((vc_MQ[vc_qr * 4 + 3] * 128 + vc_MQ[vc_qr * 4 + 2]) - 8192) / 8192) * 2 / 12);
   vc_qr += 1;
 );
 vc_spos += 1;
@@ -510,7 +514,7 @@ vca_mpk = max(vca_mpk, abs(vc_m));
 // ---------- the carrier ----------
 vc_syn = 0;
 vc_vact && vc_srw > 0.0001 ? (
-  vc_ve = 0; vc_p = vc_V;
+  vc_ve = 0; vc_p = vc_VO;
   loop(8,
     vc_p[0] >= 0 ? (
       vc_p[2] += (vc_p[1] - vc_p[2]) * (vc_p[1] ? vc_atk : vc_rel);
@@ -553,7 +557,7 @@ vc_uzr += ((vc_us != vc_uzs) - vc_uzr) * vc_uzc; vc_uzs = vc_us;
 vc_ut = vc_uvon && vc_ueh > vc_uvr * vc_uel && vc_uzr > vc_uvz && vc_ueh > vc_uvg;
 vc_uv += (vc_ut - vc_uv) * (vc_ut > vc_uv ? vc_uua : vc_uur);
 vca_uv = max(vca_uv, vc_uv);
-vc_nz = vc_uv > 0.0001 ? (rand(2) - 1) * vc_uv * vc_cen * 2.5 : 0;
+vc_nz = vc_uv > 0.0001 ? (rand(2) - 1) * vc_uv * vc_cen * 0.7 : 0;
 
 // ---------- KR-45 ----------
 vc_kl = vc_kr = 0;
@@ -865,9 +869,9 @@ vg_now = time_precise();
 vg_dt = vg_t0 > 0 ? min(max(vg_now - vg_t0, 0), 0.25) : 1; vg_t0 = vg_now;
 vg_i = 0;
 loop(25,
-  vg_q = (20 * log10(max(vc_KM[vg_i] * 9, 0.000001)) + 48) / 48; vc_KM[vg_i] = 0;
+  vg_q = (20 * log10(max(vc_KMB[vg_i] * 9, 0.000001)) + 48) / 48; vc_KMB[vg_i] = 0;
   vg_LK[vg_i] = max(vg_q, vg_LK[vg_i] - 1.6 * vg_dt);
-  vg_q = (20 * log10(max(vc_SM[vg_i] * 9, 0.000001)) + 48) / 48; vc_SM[vg_i] = 0;
+  vg_q = (20 * log10(max(vc_SMB[vg_i] * 9, 0.000001)) + 48) / 48; vc_SMB[vg_i] = 0;
   vg_LS[vg_i] = max(vg_q, vg_LS[vg_i] - (slider11 >= 0.5 ? 0.8 : 1.6) * vg_dt);
   vg_i += 1;
 );
