@@ -1,0 +1,469 @@
+desc:GFX Spring 78 [spring reverb]
+//tags: reverb spring tank drip surf dub boing kick vintage valve tube solid-state amp guitar 78
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// SPRING 78. The first unit of the 78 series (named after the 78 rpm records): two spring reverb units bolted side by
+// side by a central bracket, running in parallel.
+//   LEFT  - 2S-78 SHORT TANK: two short springs, in the spirit of the reverb pans of the period guitar combo amps:
+//           splashy, drippy, bright and quick (about 2 s).
+//   RIGHT - 3S-78 LONG TANK: three long springs, in the spirit of the long studio tanks: darker, denser, smoother and
+//           longer (about 3.5 s).
+// FACE keys (each unit): BAMAKO / HAVANA change the unit's faceplate and its electronics (the springs stay):
+//   BAMAKO - 1970s solid-state driver and recovery amps: a treble-lifted transistor driver that crunches a little when
+//            pushed (odd harmonics, a slightly asymmetric curve) and a firm recovery stage.
+//   HAVANA - 1950s-60s valve driver and recovery: no treble lift, a top roll-off, a biased triode-like curve (even
+//            harmonics, a soft warm squash).
+//   2S-78 opens with the BAMAKO face, 3S-78 with the HAVANA face. A face change cross-fades the electronics (20 ms).
+//
+// THE SPRING MODEL (each spring), after the parametric dispersive models of Valimaki, Parker and Abel and Parker's
+// efficient stretched-allpass chirp structures, with the echo pattern of the helical-spring work of Bilbao and Parker:
+//   the spring is a loop in two halves - [allpass cascade A -> delay A] -> (driver input) -> [cascade B -> delay B] ->
+//   (recovery output) -> loss -> back to A - so the first arrival comes after one trip down the spring (T) and the
+//   reflections after 3T, 5T ... with the dispersion growing with each trip, as on a real spring.
+//   Each cascade is M first-order 'stretched' allpasses (z^-1 replaced by z^-K, K = rate / (2 x fc)): below the
+//   transition frequency fc the highs are delayed far more than the lows, which turns every echo into the rising
+//   'drip' chirp (2S-78: fc about 4.7 kHz, 18 stages per half; 3S-78: fc about 3.4 kHz, 22 stages, more dispersion).
+//   The images above fc are removed by a 4-pole low-pass at the output; a weaker high-frequency chirp loop (plain
+//   allpasses of the opposite sign, above fc) adds the sizzle. Delay B is fractional and modulated (DRIFT, KICK).
+//   The loss: a gain per trip from DECAY (the RT60 at 500 Hz) and a damping shelf (the highs die sooner; 3S-78 more).
+//   The transducers: a high-pass (2S-78 170 Hz, 3S-78 110 Hz) and the ring near fc (2S-78 +4 dB, 3S-78 +2.5 dB).
+//   A soft limiter in each loop lets the springs crash when they are kicked or driven very hard.
+//   Spring trips (one way): 2S-78 23.3 / 29.1 ms; 3S-78 33.1 / 37.3 / 41.9 ms.
+// SIGNAL FLOW
+//   input (stereo, summed to mono into the tanks) -> PRE-DELAY 0 - 250 ms (glides) -> each unit: DWELL (the drive into
+//   its driver, -8 .. +24 dB, mostly level-compensated after the driver so DWELL sets the colour and crunch) -> driver
+//   -> springs (+ KICK) -> transducer EQ -> TONE (a high shelf at 1.6 kHz, -10 .. +6 dB, 50 % = flat) -> recovery amp
+//   -> BLEND (2S <-> 3S; with only one unit on it plays at full level) -> WIDTH -> LOW CUT (yellow cap) / HIGH CUT
+//   (black cap) on the return -> MIX (dry full up to 50 %, wet full from 50 %) -> OUTPUT -> house output stage.
+//   2S-78 stereo: spring 1 left, spring 2 right (some cross-feed); 3S-78: springs 1 / 2 left / right, spring 3 in
+//   the middle with opposite signs (wide). WIDTH 0 = mono, 100 = as built, 150 = wider.
+// KICK (bracket key, or the 'Kick' slider rising 0 -> 1 for automation): a short mechanical shock into every spring
+//   that is on - a soft 1.5 ms onset, a thump and a burst of filtered noise (about 40 ms), and the springs swinging
+//   (their length wobbles at about 5.5 Hz for a second or so): the kicked-amp crash and 'boing'. The key stays lit while
+//   the springs swing. It never clicks: the burst starts from silence with a smooth envelope.
+// ON keys (each unit): 10 ms fades; a unit switched off stops (CPU) and is cleared.
+// DRIFT (0 - 100 %, 50 % = standard): spring tension. Each spring's length (and so its pitch of echoes) sits a little
+//   off its nominal value (fixed per instance, up to about +/-1.2 % at 50 %), its dispersion a little off (allpass
+//   coefficient +/-0.015), and its length wanders slowly with the 'temperature' (about +/-0.6 %, 3 - 8 s cycles):
+//   a gentle chorus-like movement in the tail. 0 % = ideal, matched springs, no movement.
+// LANGUAGE key (header): ENG / LOCAL. LOCAL prints French on a BAMAKO-faced unit and Spanish on a HAVANA-faced unit;
+//   the central bracket and the header follow the left unit's face. Presets never change it.
+// GUI: drag a knob (SHIFT = fine, double-click = default, wheel); values show while a knob is touched; click a key;
+//      click the LCD (or PRESETS) for the preset list. S / M / L / ? = size and help.
+// CPU: about 6 % of one core at 48 kHz with both units on.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:1<0,1,1{Off,On}>-2S-78 short tank on
+slider2:0<0,1,1{Bamako,Havana}>-2S-78 face
+slider3:40<0,100,1>-2S-78 dwell (%)
+slider4:2<0.8,4,0.01>-2S-78 decay (s)
+slider5:50<0,100,1>-2S-78 tone (%)
+slider6:1<0,1,1{Off,On}>-3S-78 long tank on
+slider7:1<0,1,1{Bamako,Havana}>-3S-78 face
+slider8:35<0,100,1>-3S-78 dwell (%)
+slider9:3.5<1.5,7,0.01>-3S-78 decay (s)
+slider10:50<0,100,1>-3S-78 tone (%)
+slider11:50<0,100,1>-Blend 2S / 3S (%)
+slider12:30<0,100,1>-Mix (%)
+slider13:0<0,250,0.1>-Pre-delay (ms)
+slider14:60<20,600,1>-Low cut (Hz)
+slider15:20000<2000,20000,10>-High cut (Hz)
+slider16:100<0,150,1>-Width (%)
+slider17:50<0,100,1>-Drift (%)
+slider18:0<-24,12,0.1>-Output (dB)
+slider19:0<0,100,1>-Band sat (%)
+slider20:30<0,100,1>-Bias (%)
+slider21:120<40,400,1>-Sat low band (Hz)
+slider22:6000<2000,16000,10>-Sat high band (Hz)
+slider23:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider24:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider25:0<0,1,1{-,Kick}>-Kick (trigger)
+slider26:0<0,1,1{ENG,LOCAL}>-Label language
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+options:maxmem=2097152
+
+@init
+#ui_man = "gfx-spring-78";                              // the ? pop-up links to this manual
+ext_noinit = 1;
+
+// ---------- memory ----------
+nextmem = 0;
+function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
+function sp_p2(n) local(p) ( p = 1; while (p < n) ( p *= 2; ); p; );
+
+// one spring's buffers: two cascades (mh stages of up to sp_kmx samples) and two delay lines
+function sp_salloc(m) instance(ca, cb, da, db, mh) (
+  mh = m; ca = alloc(mh * sp_kmx); cb = alloc(mh * sp_kmx); da = alloc(sp_dsz); db = alloc(sp_dsz);
+);
+function sp_halloc() instance(buf) ( buf = alloc(sp_dsz); );
+// the layout follows the sample rate: the @block rate check lays the memory out again when it changes
+function sp_mem() (
+  nextmem = 0;
+  sp_dsz = sp_p2(0.075 * srate); sp_dm = sp_dsz - 1;    // spring delay lines
+  sp_kmx = floor(srate / 6000) + 2;                     // the longest stretch K
+  sp_psz = sp_p2(0.26 * srate); sp_pm = sp_psz - 1;     // pre-delay
+  sp_pb = alloc(sp_psz);
+  sp_m0 = nextmem; spA.sp_salloc(10); spB.sp_salloc(10); hfB.sp_halloc(); sp_m1 = nextmem;   // 2S-78 (cleared when off)
+  sp_m2 = nextmem; spC.sp_salloc(12); spD.sp_salloc(12); spE.sp_salloc(12); hfH.sp_halloc(); sp_m3 = nextmem;   // 3S-78
+  ost_init(alloc(4096));
+);
+sp_mem();
+
+sp_dn = 0.000000000000001;                              // anti-denormal: a -300 dB alternating whisper in the loops
+
+// ---------- one spring ----------
+// [cascade A -> delay A] -> + x -> [cascade B -> delay B (fractional)] -> out -> loss -> back
+// K = the stretch, ix = the tank's cascade index (0 .. K-1), shared by every stage
+function sp_spr(x, K, ix) instance(ca, cb, da, db, mh, la, lb, g, a, kc, kd, lp, lq, fb, y, e)
+                          local(p, v, w, u, rp, ri, rf) (
+  u = fb;
+  p = ca + ix;
+  loop(mh, w = p[0]; v = u - a * w; u = a * v + w; p[0] = v; p += K; );
+  da[sp_dw] = u; u = da[(sp_dw - la) & sp_dm] + x;
+  p = cb + ix;
+  loop(mh, w = p[0]; v = u - a * w; u = a * v + w; p[0] = v; p += K; );
+  db[sp_dw] = u;
+  rp = sp_dw - lb; ri = floor(rp); rf = rp - ri;
+  w = db[ri & sp_dm]; u = w + (db[(ri + 1) & sp_dm] - w) * rf;
+  y = u;
+  e = max(e, abs(u));
+  w = abs(u); w > 0.7 ? u = sign(u) * (0.7 + (w - 0.7) / (1 + (w - 0.7) * 2.5));   // the springs crash, never blow up
+  lp += (u - lp) * kc; lq += (lp - lq) * kc;            // the loss: a 2-pole damping shelf
+  fb = g * (u + kd * (lq - u)) + sp_dn;
+  y;
+);
+// set up one spring: T = one trip (ms), a0 = dispersion, K = stretch
+function sp_sinit(T, a0, K, f, d) instance(la, lb, lbs, lbt, tb, a, at, ab, o1, o2, pa, pb, pp, pr, g, lp, lq, fb, y, e, mh, kc, kd, lg)
+                                 local(w, c, re, im, r2, i2) (
+  kc = 1 - exp(-2 * $pi * f / srate); kd = d;
+  // the loss shelf's gain at 500 Hz (made up in the loop gain, so DECAY is the 500 Hz RT60)
+  w = 2 * $pi * 500 / srate; re = 1 - (1 - kc) * cos(w); im = (1 - kc) * sin(w); c = kc / (re * re + im * im);
+  re *= c; im *= -c;                                    // H = kc / (1 - (1 - kc) e^-jw)
+  r2 = re * re - im * im; i2 = 2 * re * im;             // H^2
+  lg = sqrt(sqr(1 - kd + kd * r2) + sqr(kd * i2));
+  ab = a0; a = at = a0;
+  tb = T * 0.001 * srate - mh * K * (1 - a0) / (1 + a0);   // each delay: the trip less the cascade's low-frequency delay
+  la = floor(tb); lb = lbs = lbt = tb;
+  o1 = rand(2) - 1; o2 = rand(2) - 1;                  // this instance's tension offsets
+  pa = rand(2) - 1; pb = rand(2) - 1; pp = rand(1); pr = 0.6 + rand(0.8);
+  lp = lq = fb = y = e = 0;
+);
+// per block: tension drift, dispersion, loop gain for RT60 t (s) at 500 Hz
+function sp_sblk(t, K, dinc) instance(la, lbt, tb, a, at, ab, o1, o2, pa, pb, pp, pr, g, lp, lq, fb, mh, lg) local(w, c, gd) (
+  pp += dinc * pr; pp >= 1 ? ( pp -= 1; pa = pb; pb = rand(2) - 1; );
+  w = pa + (pb - pa) * (0.5 - 0.5 * cos($pi * pp));
+  lbt = tb * (1 + dm_a * (0.012 * o1 + 0.006 * w));
+  at = ab + 0.015 * dm_a * o2;
+  a += (at - a) * 0.08;
+  c = cos(K * 2 * $pi * 500 / srate);
+  gd = mh * K * (1 - a * a) / (1 + 2 * a * c + a * a);
+  g = min(10 ^ (-3 * (la + lbt + 2 * gd) / (t * srate)) / lg, 0.995);
+  abs(lp) < 0.000000000001 ? lp = 0; abs(lq) < 0.000000000001 ? lq = 0;
+);
+function sp_sglide(m) instance(lb, lbs, lbt) ( lbs += (lbt - lbs) * sp_mk; lb = lbs * (1 + m); );
+function sp_sclr() instance(lp, lq, fb, y, e, lbs, lbt, lb) ( lp = lq = fb = y = e = 0; lbs = lb = lbt; );
+
+// ---------- the high-frequency chirp loop (one per tank): plain allpasses of the opposite sign, above fc ----------
+function sp_hf(x) instance(buf, len, g, hl, s1, s2, s3, s4, s5, s6, fb, lp) local(u, v) (
+  hl += (x - hl) * sp_hfc; u = x - hl + fb;              // above fc
+  v = -0.5 * u + s1; s1 = u + 0.5 * v; u = v;
+  v = -0.5 * u + s2; s2 = u + 0.5 * v; u = v;
+  v = -0.5 * u + s3; s3 = u + 0.5 * v; u = v;
+  v = -0.5 * u + s4; s4 = u + 0.5 * v; u = v;
+  v = -0.5 * u + s5; s5 = u + 0.5 * v; u = v;
+  v = -0.5 * u + s6; s6 = u + 0.5 * v; u = v;
+  buf[sp_dw] = u; v = buf[(sp_dw - len) & sp_dm];
+  lp += (v - lp) * 0.5;
+  fb = g * lp + sp_dn;
+  v;
+);
+function sp_hinit(T, t60) instance(len, g, hl, s1, s2, s3, s4, s5, s6, fb, lp) (
+  len = floor(T * 0.001 * srate); g = 10 ^ (-3 * len / (t60 * srate));
+  hl = s1 = s2 = s3 = s4 = s5 = s6 = fb = lp = 0;
+);
+
+// ---------- the electronics ----------
+// BAMAKO: solid-state driver (treble lift, a firm slightly asymmetric curve)
+sp_ssb = 0.05 - 0.148148 * 0.05 * 0.05 * 0.05;
+function sp_ss(u) local(v) ( v = min(max(u + 0.05, -1.5), 1.5); v - 0.148148 * v * v * v - sp_ssb; );
+// HAVANA: valve driver (a biased triode-like curve: even harmonics)
+sp_vtb = ost_tanh(1.3 * 0.2); sp_vtn = 1 / (1.3 * (1 - sp_vtb * sp_vtb));
+function sp_vt(u) ( (ost_tanh(1.3 * (u + 0.2)) - sp_vtb) * sp_vtn; );
+function sp_rt(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
+// a unit's driver: fw = 0 BAMAKO electronics, 1 HAVANA (cross-fades while the face changes)
+function sp_drv(x, fw) instance(pe, pv) local(xe, s) (
+  pe += (x - pe) * sp_pec; xe = x + (x - pe);            // the transistor driver's treble lift (+6 dB)
+  pv += (x - pv) * sp_pvc;                               // the valve driver's top roll-off
+  fw < 0.0001 ? sp_ss(xe) : fw > 0.9999 ? sp_vt(pv) : ( s = sp_ss(xe); s + (sp_vt(pv) - s) * fw; );
+);
+// a unit's recovery amp
+function sp_rec(u, fw) local(v, s) (
+  v = min(max(u * 0.8, -1.5), 1.5); s = (v - 0.148148 * v * v * v) * 1.25;
+  fw < 0.0001 ? s : ( v = sp_rt(u * 0.9) * 1.1111; fw > 0.9999 ? v : s + (v - s) * fw; );
+);
+
+// ---------- settings ----------
+function sp_update() local(t) (
+  sp_bon = slider1 >= 0.5; sp_bft = slider2 >= 0.5;
+  sp_dgB = 10 ^ ((-8 + 32 * min(max(slider3, 0), 100) / 100) / 20);
+  sp_tBt = min(max(slider4, 0.8), 4);
+  sp_toBt = min(max(slider5, 0), 100) / 100;
+  sp_hon = slider6 >= 0.5; sp_hft = slider7 >= 0.5;
+  sp_dgH = 10 ^ ((-8 + 32 * min(max(slider8, 0), 100) / 100) / 20);
+  sp_tHt = min(max(slider9, 1.5), 7);
+  sp_toHt = min(max(slider10, 0), 100) / 100;
+  sp_balt = min(max(slider11, 0), 100) / 100;
+  sp_mxt = min(max(slider12, 0), 100) / 100;
+  sp_pret = min(max(slider13, 0), 250) * 0.001 * srate;
+  slider14 != sp_lcl ? ( sp_lcl = slider14; lcL.bq_set(1, slider14, 0.7071, 0); lcR.bq_set(1, slider14, 0.7071, 0); );
+  sp_hcon = slider15 < 19950;
+  slider15 != sp_hcl ? ( sp_hcl = slider15; hcL.bq_set(0, slider15, 0.7071, 0); hcR.bq_set(0, slider15, 0.7071, 0); );
+  sp_wdt = min(max(slider16, 0), 150) / 100;
+  drift_macro(slider17);
+  sp_ot = 10 ^ (slider18 / 20);
+  ost_setup(slider19 / 100, slider20 / 100, slider21, slider22, slider23, slider24 | 0);
+  t = slider25 >= 0.5; t && !sp_kprev ? sp_kgo = 1; sp_kprev = t;
+);
+// the TONE shelf: 50 % flat, 0 = -10 dB, 100 = +6 dB
+function sp_tdb(t) ( t < 0.5 ? (t - 0.5) * 20 : (t - 0.5) * 12; );
+
+// ---------- presets (the language and the output stage are left alone) ----------
+function sp_set(bon, bf, bdw, bdc, bto, hon, hf, hdw, hdc, hto, bl, mx, pd, lc, hc, wd, dr) (
+  slider1 = bon; slider2 = bf; slider3 = bdw; slider4 = bdc; slider5 = bto;
+  slider6 = hon; slider7 = hf; slider8 = hdw; slider9 = hdc; slider10 = hto;
+  slider11 = bl; slider12 = mx; slider13 = pd; slider14 = lc; slider15 = hc; slider16 = wd; slider17 = dr;
+  slider25 = 0;
+  slider_automate(131071);                              // sliders 1-17
+);
+function load_preset(p) (
+  //                 2S on fc dwl dec  ton  3S on fc dwl dec  ton  bl  mx  pd   lc     hc  wd  dr
+  p == 1  ? sp_set(1, 0, 40, 2.0, 50,  1, 1, 35, 3.5, 50,  50, 30,  0,  60, 20000, 100, 50) :   // Init
+  p == 2  ? sp_set(1, 0, 62, 2.6, 64,  0, 1, 35, 3.5, 50,   0, 32,  0,  90, 20000, 100, 45) :   // Surf Drip
+  p == 3  ? sp_set(1, 0, 70, 3.2, 58,  1, 1, 60, 5.5, 52,  60, 34,  0, 140, 20000, 130, 60) :   // Dub Splash
+  p == 4  ? sp_set(0, 0, 40, 2.0, 50,  1, 1, 30, 2.4, 42, 100, 18, 28, 160,  9000, 100, 40) :   // Vocal Long Tank
+  p == 5  ? sp_set(1, 1, 45, 2.4, 46,  1, 1, 42, 3.2, 48,  60, 26,  8, 100, 12000, 110, 55) :   // Organ Springs
+  p == 6  ? sp_set(1, 0, 72, 1.6, 66,  0, 1, 35, 3.5, 50,   0, 24,  0, 200, 20000, 100, 40) :   // Snare Boing
+  p == 7  ? sp_set(1, 0, 28, 1.5, 52,  1, 1, 28, 2.6, 48,  50, 15, 12, 120, 11000, 100, 35) :   // Subtle Keys
+  p == 8  ? sp_set(1, 0, 55, 1.8, 58,  1, 1, 35, 3.5, 50,  20, 28,  0,  80, 20000, 100, 50) :   // Twang Combo
+  p == 9  ? sp_set(0, 0, 40, 2.0, 50,  1, 1, 40, 5.8, 44, 100, 30, 15, 110, 14000, 120, 50) :   // Long Studio Tank
+  p == 10 ? sp_set(1, 0, 92, 2.4, 60,  0, 1, 35, 3.5, 50,   0, 32,  0, 120, 20000, 100, 50) :   // Crunchy Drip
+  p == 11 ? sp_set(1, 0, 45, 2.2, 54,  1, 1, 40, 3.8, 50,  50, 30,  0,  80, 20000, 145, 60) :   // Wide Pair
+  p == 12 ? sp_set(1, 1, 55, 1.8, 24,  1, 1, 50, 2.8, 26,  65, 40,  0, 320,  4500,  60, 70) :   // Lo-Fi Radio
+  p == 13 ? sp_set(1, 0, 40, 2.0, 50,  1, 1, 35, 3.5, 50,  50,100,  0, 100, 20000, 100, 50) :   // Send 100%
+  p == 14 ? sp_set(1, 1, 60, 3.6, 46,  1, 1, 60, 7.0, 44,  70, 40, 60, 150, 12000, 140, 85) :   // Ghost Wash
+  p == 15 ? (                                           // Reset all to defaults
+    sp_set(1, 0, 40, 2.0, 50, 1, 1, 35, 3.5, 50, 50, 30, 0, 60, 20000, 100, 50);
+    slider18 = 0; slider19 = 0; slider20 = 30; slider21 = 120; slider22 = 6000; slider23 = -0.3; slider24 = 1;
+    slider_automate(16646144);                          // sliders 18-24
+  );
+);
+
+// ---------- state ----------
+// everything that depends on the sample rate (run again from @block if the rate changes)
+function sp_srinit() (
+  sp_sr = srate;
+  sp_kB = max(1, floor(srate / 9400 + 0.5)); sp_kH = max(1, floor(srate / 7000 + 0.5));
+  sp_fcB = srate / (2 * sp_kB); sp_fcH = srate / (2 * sp_kH);
+  sp_ixB = sp_ixH = 0; sp_dw = 0; sp_pw = 0;
+  // springs: trip (ms), dispersion, stretch, loss corner (Hz) and depth - 2S-78 bright, 3S-78 darker
+  spA.sp_sinit(23.3, 0.72, sp_kB, 4500, 0.4); spB.sp_sinit(29.1, 0.75, sp_kB, 4500, 0.4);
+  spC.sp_sinit(33.1, 0.76, sp_kH, 2600, 0.55); spD.sp_sinit(37.3, 0.78, sp_kH, 2600, 0.55); spE.sp_sinit(41.9, 0.74, sp_kH, 2600, 0.55);
+  hfB.sp_hinit(11.3, 0.7); hfH.sp_hinit(15.7, 1.1);
+  sp_hfc = 1 - exp(-2 * $pi * min(sp_fcB, 0.4 * srate) / srate);
+  // transducers (the springs are linear, so on the mono feed): high-pass, the ring under fc, and a 6-pole
+  // low-pass under fc so nothing reaches the stretched cascades' mirror images above it
+  eBh.bq_set(1, 170, 0.75, 0); eBp.bq_set(2, sp_fcB * 0.8, 1.6, 4);
+  eBa.bq_set(0, sp_fcB * 0.85, 0.5176, 0); eBb.bq_set(0, sp_fcB * 0.85, 0.7071, 0); eBc.bq_set(0, sp_fcB * 0.85, 1.9319, 0);
+  eHh.bq_set(1, 150, 0.7, 0); eHp.bq_set(2, sp_fcH * 0.82, 1.2, 2.5);
+  eHa.bq_set(0, sp_fcH * 0.85, 0.5176, 0); eHb.bq_set(0, sp_fcH * 0.85, 0.7071, 0); eHc.bq_set(0, sp_fcH * 0.85, 1.9319, 0);
+  sp_tdB = sp_tdH = -100;                               // rebuild the TONE shelves
+  sp_pec = 1 - exp(-2 * $pi * 900 / srate);             // BAMAKO driver treble lift
+  sp_pvc = 1 - exp(-2 * $pi * 7000 / srate);            // HAVANA driver roll-off
+  sp_mk = 1 - exp(-1 / (0.08 * srate));                 // spring length glide
+  sp_smk = 1 - exp(-1 / (0.03 * srate));                // knob glides
+  sp_swc = 1 - exp(-1 / (0.01 * srate));                // ON fades
+  sp_ffc = 1 - exp(-1 / (0.02 * srate));                // face (electronics) fades
+  sp_dcc = 1 - 2 * $pi * 5 / srate;
+  sp_lcl = sp_hcl = -1;
+  in_init(); in_setup(0, 0);
+  sp_kon = 0; sp_kt = 0; sp_kenv = 0; sp_kmod = 0; sp_kn = 0;
+  sp_kac = 1 / (0.0015 * srate); sp_kdc = exp(-1 / (0.04 * srate)); sp_kwc = exp(-1 / (0.28 * srate));
+  sp_kph = 0; sp_kpi = 5.5 / srate; sp_kti = 55 / srate; sp_knc = 1 - exp(-2 * $pi * 1400 / srate);
+);
+function sp_bclr() (
+  memset(sp_m0, 0, sp_m1 - sp_m0);
+  spA.sp_sclr(); spB.sp_sclr(); hfB.sp_hinit(11.3, 0.7);
+  eBh.x1 = eBh.x2 = eBh.y1 = eBh.y2 = 0; eBp.x1 = eBp.x2 = eBp.y1 = eBp.y2 = 0;
+  eBa.x1 = eBa.x2 = eBa.y1 = eBa.y2 = 0; eBb.x1 = eBb.x2 = eBb.y1 = eBb.y2 = 0;
+  eBc.x1 = eBc.x2 = eBc.y1 = eBc.y2 = 0;
+  eBLt.x1 = eBLt.x2 = eBLt.y1 = eBLt.y2 = 0; eBRt.x1 = eBRt.x2 = eBRt.y1 = eBRt.y2 = 0;
+  uB.pe = uB.pv = 0;
+);
+function sp_hclr() (
+  memset(sp_m2, 0, sp_m3 - sp_m2);
+  spC.sp_sclr(); spD.sp_sclr(); spE.sp_sclr(); hfH.sp_hinit(15.7, 1.1);
+  eHh.x1 = eHh.x2 = eHh.y1 = eHh.y2 = 0; eHp.x1 = eHp.x2 = eHp.y1 = eHp.y2 = 0;
+  eHa.x1 = eHa.x2 = eHa.y1 = eHa.y2 = 0; eHb.x1 = eHb.x2 = eHb.y1 = eHb.y2 = 0;
+  eHc.x1 = eHc.x2 = eHc.y1 = eHc.y2 = 0;
+  eHLt.x1 = eHLt.x2 = eHLt.y1 = eHLt.y2 = 0; eHRt.x1 = eHRt.x2 = eHRt.y1 = eHRt.y2 = 0;
+  uH.pe = uH.pv = 0;
+);
+sp_srinit();
+sp_update();
+sp_kprev = slider25 >= 0.5; sp_kgo = 0; sp_kreq = sp_kseen = 0;
+sp_tB = sp_tBt; sp_tH = sp_tHt; sp_toB = sp_toBt; sp_toH = sp_toHt;
+sp_bal = sp_balt; sp_mx = sp_mxt; sp_o_ = sp_ot; sp_pre = sp_pret; sp_wd = sp_wdt;
+sp_bw = sp_bon; sp_hw = sp_hon; sp_fwB = sp_bft; sp_fwH = sp_hft; sp_gdB = sp_dgB; sp_gdH = sp_dgH;
+sp_bz = sp_hz = 0;
+ostL.ost_ch_init(); ostR.ost_ch_init();
+sp_gB = 1.15; sp_gH = 1.45;                               // output calibration of the two tanks (set below)
+sp_gin = 0.35;                                          // driver -> springs
+
+ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                  // new instances open in Large, on Init
+ui_dflt = 1;
+
+@slider
+sp_update();
+
+@block
+srate != sp_sr ? ( sp_mem(); sp_srinit(); sp_update(); sp_bclr(); sp_hclr(); );
+sp_update();                                            // knobs moved on the panel do not run @slider
+sp_kreq != sp_kseen ? ( sp_kseen = sp_kreq; sp_kgo = 1; );   // the panel's KICK key
+// block-rate glides for what sets coefficients
+sp_bk = 1 - exp(-samplesblock / (0.06 * srate));
+sp_tB += (sp_tBt - sp_tB) * sp_bk; sp_tH += (sp_tHt - sp_tH) * sp_bk;
+sp_toB += (sp_toBt - sp_toB) * sp_bk; sp_toH += (sp_toHt - sp_toH) * sp_bk;
+abs(sp_tdb(sp_toB) - sp_tdB) > 0.02 ? ( sp_tdB = sp_tdb(sp_toB); eBLt.bq_set(3, 1600, 0.6, sp_tdB); eBRt.bq_set(3, 1600, 0.6, sp_tdB); );
+abs(sp_tdb(sp_toH) - sp_tdH) > 0.02 ? ( sp_tdH = sp_tdb(sp_toH); eHLt.bq_set(3, 1600, 0.6, sp_tdH); eHRt.bq_set(3, 1600, 0.6, sp_tdH); );
+// DRIFT: spring tension (fixed offsets, slow wander) and the loop gains
+sp_di = 0.2 * dm_s * samplesblock / srate;
+spA.sp_sblk(sp_tB, sp_kB, sp_di); spB.sp_sblk(sp_tB, sp_kB, sp_di);
+spC.sp_sblk(sp_tH, sp_kH, sp_di); spD.sp_sblk(sp_tH, sp_kH, sp_di); spE.sp_sblk(sp_tH, sp_kH, sp_di);
+// level: longer decays a touch quieter (equal loudness feel)
+sp_lvB = sp_gB * (2 / sp_tB) ^ 0.3; sp_lvH = sp_gH * (3.5 / sp_tH) ^ 0.3;
+// a unit switched off: clear it once its fade is done
+!sp_bon && sp_bw < 0.00001 && !sp_bz ? ( sp_bclr(); sp_bz = 1; ); sp_bon ? sp_bz = 0;
+!sp_hon && sp_hw < 0.00001 && !sp_hz ? ( sp_hclr(); sp_hz = 1; ); sp_hon ? sp_hz = 0;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+in_process(spl0, spl1);
+sp_l = in_l; sp_r = in_r;
+
+// ---------- glides ----------
+sp_mx += (sp_mxt - sp_mx) * sp_smk;
+sp_o_ += (sp_ot - sp_o_) * sp_smk;
+sp_bal += (sp_balt - sp_bal) * sp_smk;
+sp_wd += (sp_wdt - sp_wd) * sp_smk;
+sp_gdB += (sp_dgB - sp_gdB) * sp_smk; sp_gdH += (sp_dgH - sp_gdH) * sp_smk;
+sp_pre += (sp_pret - sp_pre) * 0.0004;
+sp_bw += (sp_bon - sp_bw) * sp_swc; sp_hw += (sp_hon - sp_hw) * sp_swc;
+sp_fwB += (sp_bft - sp_fwB) * sp_ffc; sp_fwH += (sp_hft - sp_fwH) * sp_ffc;
+sp_dn = -sp_dn;
+
+// ---------- KICK: a mechanical shock (smooth onset, thump + filtered noise, then the springs swinging) ----------
+sp_kgo ? ( sp_kgo = 0; sp_kon = 1; sp_kt = 0; sp_kenv = 1; sp_ksw = 1; sp_kph = 0; sp_ktp = 0; );
+sp_kx = 0; sp_kmod = 0;
+sp_kon ? (
+  sp_kt += 1;
+  sp_ka = sp_kt < 1 / sp_kac ? 0.5 - 0.5 * cos($pi * sp_kt * sp_kac) : 1;
+  sp_kenv *= sp_kdc; sp_ksw *= sp_kwc;
+  sp_kn += ((rand(2) - 1) - sp_kn) * sp_knc;
+  sp_ktp += sp_kti; sp_ktp >= 1 ? sp_ktp -= 1;
+  sp_kx = sp_ka * sp_kenv * (3.2 * sp_kn + 0.9 * sin(2 * $pi * sp_ktp));
+  sp_kph += sp_kpi; sp_kph >= 1 ? sp_kph -= 1;
+  sp_kmod = 0.016 * sp_ka * sp_ksw * sin(2 * $pi * sp_kph);
+  sp_ksw < 0.002 ? ( sp_kon = 0; sp_kmod = 0; );
+);
+sp_klit = sp_kon ? max(sp_ksw, 0.25) : 0;              // the panel's KICK lamp
+
+// ---------- pre-delay (mono into the tanks) ----------
+sp_x = 0.5 * (sp_l + sp_r);
+sp_pb[sp_pw] = sp_x;
+sp_rp = sp_pw - sp_pre; sp_rp < 0 ? sp_rp += sp_psz;
+sp_ri = floor(sp_rp); sp_rf = sp_rp - sp_ri;
+sp_x = sp_pb[sp_ri & sp_pm] + (sp_pb[(sp_ri + 1) & sp_pm] - sp_pb[sp_ri & sp_pm]) * sp_rf;
+sp_pw = (sp_pw + 1) & sp_pm;
+
+// ---------- 2S-78: the short tank ----------
+sp_bl = sp_br = 0;
+sp_bw > 0.00001 ? (
+  sp_u = sp_x * sp_gdB;
+  sp_dpB = max(sp_dpB, abs(sp_u));
+  sp_u = uB.sp_drv(sp_u, sp_fwB) * sp_gin * sp_gdB ^ -0.85 + sp_kx;
+  sp_yh = hfB.sp_hf(sp_u) * 0.3;
+  sp_u = eBc.bq_run(eBb.bq_run(eBa.bq_run(eBp.bq_run(eBh.bq_run(sp_u)))));
+  spA.sp_sglide(sp_kmod); spB.sp_sglide(-0.8 * sp_kmod);
+  sp_y1 = spA.sp_spr(sp_u, sp_kB, sp_ixB);
+  sp_y2 = spB.sp_spr(sp_u, sp_kB, sp_ixB);
+  sp_ixB += 1; sp_ixB >= sp_kB ? sp_ixB = 0;
+  sp_bl = sp_y1 + 0.3 * sp_y2 + sp_yh; sp_br = sp_y2 + 0.3 * sp_y1 - sp_yh;
+  sp_bl = eBLt.bq_run(sp_bl); sp_br = eBRt.bq_run(sp_br);
+  sp_bl = sp_rec(sp_bl * 1.4, sp_fwB) * sp_lvB * sp_bw; sp_br = sp_rec(sp_br * 1.4, sp_fwB) * sp_lvB * sp_bw;
+);
+// ---------- 3S-78: the long tank ----------
+sp_hl = sp_hr = 0;
+sp_hw > 0.00001 ? (
+  sp_u = sp_x * sp_gdH;
+  sp_dpH = max(sp_dpH, abs(sp_u));
+  sp_u = uH.sp_drv(sp_u, sp_fwH) * sp_gin * sp_gdH ^ -0.85 + sp_kx;
+  sp_yh = hfH.sp_hf(sp_u) * 0.12;
+  sp_u = eHc.bq_run(eHb.bq_run(eHa.bq_run(eHp.bq_run(eHh.bq_run(sp_u)))));
+  spC.sp_sglide(sp_kmod); spD.sp_sglide(-0.7 * sp_kmod); spE.sp_sglide(0.9 * sp_kmod);
+  sp_y1 = spC.sp_spr(sp_u, sp_kH, sp_ixH);
+  sp_y2 = spD.sp_spr(sp_u, sp_kH, sp_ixH);
+  sp_y3 = spE.sp_spr(sp_u, sp_kH, sp_ixH);
+  sp_ixH += 1; sp_ixH >= sp_kH ? sp_ixH = 0;
+  sp_hl = sp_y1 + 0.2 * sp_y2 + 0.55 * sp_y3 + sp_yh; sp_hr = sp_y2 + 0.2 * sp_y1 - 0.55 * sp_y3 - sp_yh;
+  sp_hl = eHLt.bq_run(sp_hl); sp_hr = eHRt.bq_run(sp_hr);
+  sp_hl = sp_rec(sp_hl * 1.4, sp_fwH) * sp_lvH * sp_hw; sp_hr = sp_rec(sp_hr * 1.4, sp_fwH) * sp_lvH * sp_hw;
+);
+sp_dw = (sp_dw + 1) & sp_dm;
+
+// ---------- BLEND, WIDTH, the return filters ----------
+sp_wb = sp_bw * (1 - sp_bal * sp_hw); sp_wh = sp_hw * (1 - (1 - sp_bal) * sp_bw);   // one unit on: it takes it all
+sp_wn = 1 / max(sqrt(sp_wb * sp_wb + sp_wh * sp_wh), 0.5);   // the tanks are uncorrelated: equal power
+sp_wl = (sp_wb * sp_bl + sp_wh * sp_hl) * sp_wn;
+sp_wr = (sp_wb * sp_br + sp_wh * sp_hr) * sp_wn;
+sp_m = 0.5 * (sp_wl + sp_wr); sp_s = 0.5 * (sp_wl - sp_wr) * sp_wd;
+sp_wl = sp_m + sp_s; sp_wr = sp_m - sp_s;
+sp_wl = lcL.bq_run(sp_wl); sp_wr = lcR.bq_run(sp_wr);
+sp_hcon ? ( sp_wl = hcL.bq_run(sp_wl); sp_wr = hcR.bq_run(sp_wr); );
+sp_dxl = sp_wl - sp_dcl + sp_dcc * sp_dxl; sp_dcl = sp_wl; sp_wl = sp_dxl;
+sp_dxr = sp_wr - sp_dcr + sp_dcc * sp_dxr; sp_dcr = sp_wr; sp_wr = sp_dxr;
+
+// ---------- MIX: dry full down to 50 %, wet full from 50 % ----------
+sp_gd = min(2 * (1 - sp_mx), 1); sp_gw = min(2 * sp_mx, 1);
+sp_ol = sp_l * sp_gd + sp_wl * sp_gw;
+sp_or = sp_r * sp_gd + sp_wr * sp_gw;
+
+// ---------- output stage ----------
+sp_ol = ostL.ost_band(sp_ol) * sp_o_;
+sp_or = ostR.ost_band(sp_or) * sp_o_;
+ost_out(sp_ol, sp_or);
+spl0 = abs(ost_l) < 0.00000000000000000001 ? 0 : ost_l;
+spl1 = abs(ost_r) < 0.00000000000000000001 ? 0 : ost_r;
+
+@gfx 1100 440
+ui_begin(1100, 440);
+//GFX_PLACEHOLDER
+pk_end();
+ui_end();
