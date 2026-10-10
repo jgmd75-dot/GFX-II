@@ -66,6 +66,7 @@ slider12:120<40,400,1>-Sat low band (Hz)
 slider13:6000<2000,16000,10>-Sat high band (Hz)
 slider14:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider15:1<0,2,1{Off,Clip,Limit}>-Output stage
+slider16:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -332,6 +333,7 @@ rq_th == 0 ? (                                          // ENAMEL: light industr
   RQRED = 0xBC3908;
 );
 RQGRN = 0x1E5631; RQOLV = 0x2C302E;                     // forest-green status blocks, olive-drab unlit cells
+rq_de = slider16 >= 0.5;                                // the language key: ENG / DE labels
 
 gfx_setfont(6,  "Trebuchet MS", 27 * sc, 'b');          // title
 gfx_setfont(11, "Trebuchet MS", 12 * sc, 'b');          // labels
@@ -435,6 +437,60 @@ function rq_big(x, y, w, h, s, on) local(hov, dn, k, c, i) (
   hov && pressed && drag_id == 0 ? ( drag_id = -1; 1; ) : 0;
 );
 
+// ---------- knobs (45 series: flat caps, smooth anti-aliased rings; no stepped or banded shading) ----------
+// the cap (pixels): kind 0 = main (ENAMEL: a flat machined-silver face on a dark skirt; VFD / MATRIX: flat dark
+// bakelite with a white line), kind 1 = small (a flat coloured cap on a dark skirt)
+function rq_cap(cx, cy, r, a, kind, col) local(ca, sa, k, i, pc, p0, p1) (
+  ca = sin(a); sa = -cos(a);
+  ui_cola(0x000000, rq_th == 0 ? 0.28 : 0.5); gfx_circle(cx + 1.5 * sc, cy + 2.5 * sc, r, 1, 1);
+  ui_col(kind == 0 && rq_th == 0 ? 0x2A2B2E : 0x141416); gfx_circle(cx, cy, r, 1, 1);
+  ui_cola(0xFFFFFF, 0.12); gfx_circle(cx, cy, r, 0, 1);
+  k = r * (kind == 0 ? 0.78 : 0.74);
+  pc = kind == 1 ? col : rq_th == 0 ? 0xC4C8CD : 0x2B2825;
+  ui_col(pc); gfx_circle(cx, cy, k, 1, 1);
+  ui_col(ui_mix(pc, 0x000000, 0.35)); gfx_circle(cx, cy, k, 0, 1);
+  pc = (kind == 0 && rq_th == 0) || (kind == 1 && (col & 255) + ((col >> 8) & 255) + ((col >> 16) & 255) > 380) ? 0x141416 : 0xF2EEE4;
+  p0 = k * 0.2; p1 = kind == 0 && rq_th == 0 ? k * 0.94 : r * 0.94;
+  ui_col(pc); i = -1;
+  loop(3, gfx_line(cx + ca * p0 - sa * i * 0.8 * sc, cy + sa * p0 + ca * i * 0.8 * sc,
+                   cx + ca * p1 - sa * i * 0.8 * sc, cy + sa * p1 + ca * i * 0.8 * sc, 1); i += 1; );
+);
+// a knob: drag (shift = fine), double-click = default, wheel. Main knobs (kind 0) get a thin smooth value ring,
+// small ones (kind 1) a printed tick ring. Its name below, replaced by the value while touched; returns 1 then.
+function rq_kn(cx, cy, r, idx, lo, hi, def, kind, col, name, val) local(v, n, dx, dy, hov, did, i, t, rr) (
+  did = 1700 + idx; v = slider(idx);
+  dx = mouse_x - cx * sc; dy = mouse_y - cy * sc; hov = dx * dx + dy * dy <= sqr((r + 5) * sc);
+  pressed && hov && drag_id == 0 ? (
+    time_precise() - rq_klt < 0.35 && rq_klid == idx ? ( slider(idx) = def; ui_auto(idx); drag_id = -1; rq_klt = 0; ) : (
+      drag_id = did; rq_ky = mouse_y; rq_klt = time_precise(); rq_klid = idx; rq_kv = (v - lo) / (hi - lo);
+    );
+  );
+  drag_id == did ? (
+    rq_kv = min(max(rq_kv + (rq_ky - mouse_y) / (((mouse_cap & 8) ? 1200 : 220) * sc), 0), 1); rq_ky = mouse_y;
+    v = lo + rq_kv * (hi - lo);
+    slider(idx) != v ? ( slider(idx) = v; ui_auto(idx); );
+  );
+  hov && mouse_wheel != 0 && drag_id == 0 ? (
+    n = min(max((v - lo) / (hi - lo) + mouse_wheel / 120 * ((mouse_cap & 8) ? 0.005 : 0.025), 0), 1);
+    slider(idx) = lo + n * (hi - lo); ui_auto(idx); mouse_wheel = 0;
+  );
+  v = slider(idx); n = min(max((v - lo) / (hi - lo), 0), 1);
+  kind == 0 ? (
+    rr = (r + 6) * sc;
+    ui_cola(RQI, 0.2); i = 0; loop(3, gfx_arc(cx * sc, cy * sc, rr - 0.5 + i * 0.5, -0.75 * $pi, 0.75 * $pi, 1); i += 1; );
+    n > 0.004 ? ( ui_col(RQI); i = 0; loop(4, gfx_arc(cx * sc, cy * sc, rr - 0.75 + i * 0.5, -0.75 * $pi, -0.75 * $pi + n * 1.5 * $pi, 1); i += 1; ); );
+  ) : (
+    ui_cola(RQI, 0.85); i = 0;
+    loop(11, t = -0.75 * $pi + i / 10 * 1.5 * $pi;
+      gfx_line((cx + sin(t) * (r + 4)) * sc, (cy - cos(t) * (r + 4)) * sc, (cx + sin(t) * (r + 8)) * sc, (cy - cos(t) * (r + 8)) * sc, 1); i += 1; );
+  );
+  rq_cap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, kind, col);
+  hov || drag_id == did ? ( ui_cola(0xFFFFFF, 0.07); gfx_circle(cx * sc, cy * sc, (r + 2) * sc, 1, 1); );
+  rq_ka = hov || drag_id == did;
+  gfx_setfont(11); ui_col(rq_ka ? (rq_th == 0 ? 0xB24A00 : RQA) : RQI); rq_ctxt(cx, cy + r + (kind == 0 ? 20 : 15), rq_ka ? val : name);
+  rq_ka;
+);
+
 // =====================================================================
 // Panel and header (the family layout)
 // =====================================================================
@@ -444,11 +500,14 @@ ui_col(rq_th == 0 ? RQI : RQA); rq_r(0, 54, 760, 2);
 ui_col(rq_th == 2 ? RQA : RQI); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(rq_th == 0 ? RQF : 0x111213); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); ui_col(RQI); rq_txt(58, 12, "RAUM 45");
-gfx_setfont(11); ui_col(RQI2); rq_txt(196, 15, "STEREO"); rq_txt(196, 29, "RAUMEFFEKT");
+gfx_setfont(11); ui_col(RQI2); rq_txt(196, 15, "STEREO"); rq_txt(196, 29, rq_de ? "RAUMEFFEKT" : "SPACE EFFECT");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
-k_ = pk_preset(300 * sc, 10 * sc, 386 * sc, 34 * sc, pr_cur,
+k_ = pk_preset(300 * sc, 10 * sc, 346 * sc, 34 * sc, pr_cur,
   "Init|Vocal Air|Keys Wide|Bass Safe|Guitar Double|1+4 Deep|Strings Bloom|Pad Halo|Backing Vocals|Drum Room|Mono Check");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 11 ? 1 : k_; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(666 * sc, 18 * sc, 27 * sc, 18 * sc, rq_de ? "DE" : "ENG", 0, 1) ? ( slider16 = rq_de ? 0 : 1; ui_auto(16); rq_de = slider16 >= 0.5; );
+rd_led(657, 27, 3, rq_de, 0xFFA126);
 ui_size_picker(694 * sc, 18 * sc);
 
 dy_ink = RQI; dy_bg = RQF; dy_ntick = 11;
@@ -456,22 +515,21 @@ dy_ink = RQI; dy_bg = RQF; dy_ntick = 11;
 // =====================================================================
 // INPUT section: INPUT trim (overload LED), DRIFT, MONO / STEREO
 // =====================================================================
-rq_sect(10, 64, 142, 144, RQF, "INPUT");
-dy_kst = 20; dy_nov = 1;
-sprintf(#rqv, "%+.1f dB", slider2); dy_knob(46, 114, 17, 2, -24, 12, 0, 0, 0x9DA2A8, "INPUT", #rqv);
+rq_sect(10, 64, 142, 144, RQF, rq_de ? "EINGANG" : "INPUT");
+sprintf(#rqv, "%+.1f dB", slider2); rq_kn(46, 114, 17, 2, -24, 12, 0, 1, 0x9DA2A8, rq_de ? "EINGANG" : "INPUT", #rqv);
 rq_ipk_ = rz_ipk; rz_ipk = 0;
 rq_ipk_ > 0.7079 ? rq_ovt = time_precise();
 rq_led(71, 89, time_precise() - rq_ovt < 0.3, RQRED);
-sprintf(#rqv, "%.0f%%", slider6); dy_knob(116, 114, 14, 6, 0, 100, 50, 0, rq_th == 0 ? 0x6F8794 : RQI2, "DRIFT", #rqv);
-rq_lbl(20, 171, "WET IN");
+sprintf(#rqv, "%.0f%%", slider6); rq_kn(116, 114, 14, 6, 0, 100, 50, 1, rq_th == 0 ? 0x6F8794 : RQI2, "DRIFT", #rqv);
+rq_lbl(20, 171, rq_de ? "EFFEKTEINGANG" : "WET IN");
 rq_key(20, 184, 60, 18, "MONO", slider5 < 0.5) ? ( slider5 = 0; ui_auto(5); );
 rq_key(84, 184, 60, 18, "STEREO", slider5 >= 0.5) ? ( slider5 = 1; ui_auto(5); );
 
 // =====================================================================
 // MODE section: the four buttons, COMBI / OFF and the readout
 // =====================================================================
-rq_sect(160, 64, 314, 144, RQS, "MODE");
-gfx_setfont(11); ui_col(RQI2); rq_rtxt(464, 12 + 64 - 6 + 6, "1 SUBTLE  >  4 STRONG");
+rq_sect(160, 64, 314, 144, RQS, rq_de ? "MODUS" : "MODE");
+gfx_setfont(11); ui_col(RQI2); rq_rtxt(464, 12 + 64 - 6 + 6, rq_de ? "1 DEZENT  >  4 STARK" : "1 SUBTLE  >  4 STRONG");
 rq_bits = rz_bits(slider1);
 rq_i = 0;
 loop(4,
@@ -497,14 +555,14 @@ loop(4,
   );
   rq_i += 1;
 );
-rq_key(176, 172, 58, 28, "COMBI", rq_combi) ? rq_combi = !rq_combi;
-rq_key(240, 172, 46, 28, "OFF", slider1 < 0.5) ? ( slider1 = 0; ui_auto(1); );
+rq_key(176, 172, 58, 28, rq_de ? "KOMBI" : "COMBI", rq_combi) ? rq_combi = !rq_combi;
+rq_key(240, 172, 46, 28, rq_de ? "AUS" : "OFF", slider1 < 0.5) ? ( slider1 = 0; ui_auto(1); );
 // the readout: mode, rate, depth and the two lines' sweep (A and B move in opposite directions)
 rq_dx = 296; rq_dy = 170; rq_dw = 166; rq_dh = 32;
 ui_col(rq_th == 1 ? 0x2E3235 : 0x0B0C0D); rq_r(rq_dx, rq_dy, rq_dw, rq_dh);
 ui_col(RQG); rq_r(rq_dx + 1, rq_dy + 1, rq_dw - 2, rq_dh - 2);
 gfx_setfont(13);
-slider1 < 0.5 ? strcpy(#rqm, "OFF") : (
+slider1 < 0.5 ? strcpy(#rqm, rq_de ? "AUS" : "OFF") : (
   rq_bits = rz_bits(slider1); strcpy(#rqm, "");
   rq_i = 0; loop(4, rq_bits & (2 ^ rq_i) ? ( strlen(#rqm) ? strcat(#rqm, "+"); sprintf(#rqn, "%d", rq_i + 1); strcat(#rqm, #rqn); ); rq_i += 1; );
 );
@@ -521,35 +579,43 @@ ui_cola(RQD, 0.7); rq_r(rq_tx + rq_tw * (0.5 - 0.5 * rq_sw) - 2, rq_ty + 2, 4, 4
 // =====================================================================
 // SPACE section: MIX and WIDTH
 // =====================================================================
-rq_sect(482, 64, 130, 144, RQF, "SPACE");
-dy_kst = 31; dy_nov = 1;
-sprintf(#rqv, "%.0f%%", slider3); dy_knob(516, 112, 20, 3, 0, 100, 100, 0, RQL, "MIX", #rqv);
-sprintf(#rqv, "%.0f%%", slider4); dy_knob(580, 112, 20, 4, 0, 100, 100, 0, RQL, "WIDTH", #rqv);
+rq_sect(482, 64, 130, 144, RQF, rq_de ? "RAUM" : "SPACE");
+sprintf(#rqv, "%.0f%%", slider3); rq_kn(516, 112, 20, 3, 0, 100, 100, 0, 0, rq_de ? "ANTEIL" : "MIX", #rqv);
+sprintf(#rqv, "%.0f%%", slider4); rq_kn(580, 112, 20, 4, 0, 100, 100, 0, 0, rq_de ? "BREITE" : "WIDTH", #rqv);
 gfx_setfont(11); ui_col(RQI2);
 rq_ctxt(547, 182, "L = D + A - kB"); rq_ctxt(547, 197, "R = D + B - kA");
 
 // =====================================================================
 // OUTPUT section: OUTPUT, SAT, OFF / CLIP / LIMIT, MONO SUM
 // =====================================================================
-rq_sect(620, 64, 130, 144, RQF, "OUTPUT");
-dy_kst = 20;
-sprintf(#rqv, "%+.1f dB", slider7); dy_knob(656, 108, 13, 7, -24, 12, 0, 0, 0x9DA2A8, "OUTPUT", #rqv);
-sprintf(#rqv, "%.0f%%", slider10); dy_knob(656, 168, 11, 10, 0, 100, 0, 0, 0xD8B040, "SAT", #rqv);
-ui_outkeys(690, 84, 50, 15, 4, 15);
-rq_key(690, 152, 50, 22, "SUM", slider8 >= 0.5) ? ( slider8 = slider8 >= 0.5 ? 0 : 1; ui_auto(8); );
+rq_sect(620, 64, 130, 144, RQF, rq_de ? "AUSGANG" : "OUTPUT");
+sprintf(#rqv, "%+.1f dB", slider7); rq_kn(656, 108, 13, 7, -24, 12, 0, 1, 0x9DA2A8, rq_de ? "AUSGANG" : "OUTPUT", #rqv);
+sprintf(#rqv, "%.0f%%", slider10); rq_kn(656, 168, 11, 10, 0, 100, 0, 1, 0xD8B040, rq_de ? "SÄTT." : "SAT", #rqv);
+// the house output stage keys (OFF / CLIP / LIMIT), captions in the panel's language
+ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
+gfx_setfont(8, "Trebuchet MS", ui_fs4 * ui_okfs, 'b');
+rq_i = 0;
+loop(3,
+  rq_c = rq_i == 0 ? 0x3A9CFF : rq_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
+  ui_okey(688, 84 + rq_i * 19, 54, 15, (slider15 | 0) == rq_i || (rq_i == 1 && ui_okclp > 0.1), rq_c) ? ( slider15 = rq_i; ui_auto(15); );
+  gfx_setfont(8); ui_col(0x141414);
+  ui_keytext(715 * sc, (91.5 + rq_i * 19) * sc, rq_i == 0 ? (rq_de ? "AUS" : "OFF") : rq_i == 1 ? "CLIP" : (rq_de ? "BEGR." : "LIMIT"));
+  rq_i += 1;
+);
+rq_key(688, 152, 54, 22, rq_de ? "SUMME" : "SUM", slider8 >= 0.5) ? ( slider8 = slider8 >= 0.5 ? 0 : 1; ui_auto(8); );
 gfx_setfont(11); ui_col(RQI2); rq_ctxt(715, 186, "MONO");
 dy_kst = 7; dy_nov = 0;
 
 // =====================================================================
 // bottom strip: THEME keys and the plate
 // =====================================================================
-rq_lbl(14, 228, "THEME");
-rq_key(64, 222, 66, 24, "ENAMEL", rq_th == 0) ? ( slider9 = 0; ui_auto(9); );
+rq_lbl(14, 228, rq_de ? "OPTIK" : "THEME");
+rq_key(64, 222, 66, 24, rq_de ? "EMAILLE" : "ENAMEL", rq_th == 0) ? ( slider9 = 0; ui_auto(9); );
 rq_key(134, 222, 52, 24, "VFD", rq_th == 1) ? ( slider9 = 1; ui_auto(9); );
 rq_key(190, 222, 64, 24, "MATRIX", rq_th == 2) ? ( slider9 = 2; ui_auto(9); );
 gfx_setfont(11); ui_col(RQI2);
-rq_txt(276, 228, "SHIFT-CLICK OR COMBI: TWO BUTTONS");
-rq_rtxt(748, 234, "BBD STEREO RAUMEFFEKT  TYP 45");
+rq_txt(276, 228, rq_de ? "SHIFT-KLICK ODER KOMBI: ZWEI TASTEN" : "SHIFT-CLICK OR COMBI: TWO BUTTONS");
+rq_rtxt(748, 234, rq_de ? "BBD STEREO-RAUMEFFEKT  TYP 45" : "BBD STEREO SPACE EFFECT  TYPE 45");
 ui_col(rq_th == 0 ? ui_mix(RQI, RQP, 0.6) : ui_mix(RQI, RQP, 0.75)); rq_r(10, 214, 740, 1);
 
 pk_end();

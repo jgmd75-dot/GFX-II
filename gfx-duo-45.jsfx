@@ -86,6 +86,7 @@ slider24:120<40,400,1>-Sat low band (Hz)
 slider25:6000<2000,16000,10>-Sat high band (Hz)
 slider26:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
 slider27:0<0,2,1{Off,Clip,Limit}>-Output stage
+slider28:0<0,1,1{ENG,DE}>-Label language
 
 in_pin:left input
 in_pin:right input
@@ -499,8 +500,10 @@ function kv_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = c
 function kv_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = rx * sc - tw; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function kv_ltxt(lx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = lx * sc; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
 function kv_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
-// BERLIN prints decimal commas
-function kv_dec(s) local(i) ( kv_b ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
+// the language key (slider28): ENG / DE labels; the TOKYO / BERLIN keys only set the look (and the sound)
+kv_de = slider28 >= 0.5;
+// DE prints decimal commas
+function kv_dec(s) local(i) ( kv_de ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
 
 // =====================================================================
 // The unit faces: u = 0 sampler / 1 limiter, b = BERLIN
@@ -651,9 +654,11 @@ function kv_n2v(kind, n, lo, hi) local(i, f) (
 // a printed tick and its number at n (0..1) round a knob
 function kv_tick(cx, cy, r, n, s, big) local(a, ca, sa) (
   a = -0.75 * $pi + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
-  ui_col(KI2);
-  gfx_line((cx + ca * (r + 4)) * sc, (cy + sa * (r + 4)) * sc, (cx + ca * (r + (big ? 8 : 6))) * sc, (cy + sa * (r + (big ? 8 : 6))) * sc, 1);
-  big ? gfx_line((cx + ca * (r + 4)) * sc + 1, (cy + sa * (r + 4)) * sc, (cx + ca * (r + 8)) * sc + 1, (cy + sa * (r + 8)) * sc, 1);
+  kv_b || kv_tl ? (                                     // (TOKYO main knobs: their value ring takes the place of the ticks)
+    ui_col(KI2);
+    gfx_line((cx + ca * (r + 4)) * sc, (cy + sa * (r + 4)) * sc, (cx + ca * (r + (big ? 8 : 6))) * sc, (cy + sa * (r + (big ? 8 : 6))) * sc, 1);
+    big ? gfx_line((cx + ca * (r + 4)) * sc + 1, (cy + sa * (r + 4)) * sc, (cx + ca * (r + 8)) * sc + 1, (cy + sa * (r + 8)) * sc, 1);
+  );
   strlen(s) ? ( gfx_setfont(10); ui_col(KI); kv_ctxt(cx + ca * (r + 14), cy + sa * (r + 13), s); );
 );
 // numbers from a list "a|b|c", evenly spread
@@ -666,24 +671,40 @@ function kv_scale(cx, cy, r, labels) local(i, k, k0, len, c, n) (
     k += 1;
   );
 );
-// TOKYO knob: black rubberised body, a ring of dots lit in the display colour up to the setting
-function kv_tcap(cx, cy, r, n) local(i, t, m, rr, a, ca, sa) (
-  rr = r + 5 * sc;
-  i = 0; loop(41, t = -0.75 * $pi + i / 40 * 1.5 * $pi; m = i / 40 <= n + 0.001;
-    ui_col(m ? KA : 0x2A2E30); gfx_circle(cx + sin(t) * rr, cy - cos(t) * rr, 1.3 * sc, 1, 1);
-    m ? ( ui_cola(KA, 0.16); gfx_circle(cx + sin(t) * rr, cy - cos(t) * rr, 3 * sc, 1, 1); );
-    i += 1; );
-  ui_cola(0x000000, 0.55); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
-  ui_col(0x0B0C0D); gfx_circle(cx, cy, r, 1, 1);
-  i = 0; loop(36, t = i / 36 * 2 * $pi; ui_cola(0xFFFFFF, i % 2 ? 0.03 : 0.09);
-    gfx_line(cx + sin(t) * r * 0.84, cy - cos(t) * r * 0.84, cx + sin(t) * r * 0.99, cy - cos(t) * r * 0.99, 1); i += 1; );
-  ui_col(0x1E2123); gfx_circle(cx, cy, r * 0.8, 1, 1);
-  gfx_gradrect(cx - r * 0.6, cy - r * 0.7, r * 1.2, r * 0.7, 1, 1, 1, 0.07, 0, 0, 0, 0, 0, 0, 0, -0.07 / (r * 0.7));
-  ui_cola(0x000000, 0.6); gfx_circle(cx, cy, r * 0.8, 0, 1);
-  a = -0.75 * $pi + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
-  ui_col(ui_mix(KA, 0xFFFFFF, 0.35)); i = -1;
-  loop(3, gfx_line(cx + ca * r * 0.3 - sa * i * 0.8 * sc, cy + sa * r * 0.3 + ca * i * 0.8 * sc,
-                   cx + ca * r * 0.76 - sa * i * 0.8 * sc, cy + sa * r * 0.76 + ca * i * 0.8 * sc, 1); i += 1; );
+kv_tl = 1;                                              // tick lines round the knobs (0: TOKYO main knobs)
+// a smooth thick arc (pixels): anti-aliased arcs every half pixel
+function kv_arcw(cx, cy, r, a1, a2, w) local(k) (
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+// a straight pointer line, w pixels wide (pixel coordinates)
+function kv_ptr(cx, cy, a, r1, r2, w) local(ca, sa, k) (
+  ca = sin(a); sa = -cos(a); k = -w * 0.5;
+  loop(max(1, floor(w * 2) + 1), gfx_line(cx + ca * r1 - sa * k, cy + sa * r1 + ca * k, cx + ca * r2 - sa * k, cy + sa * r2 + ca * k, 1); k += 0.5; );
+);
+// TOKYO knob: a smooth black rubber body with one soft highlight, a thin track with the value arc glowing in the
+// display colour
+function kv_tcap(cx, cy, r, n) local(rr, a, a0) (
+  a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; rr = r + 5 * sc;
+  ui_col(0x2A2E30); kv_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.4 * sc);
+  n > 0.004 ? (
+    ui_col(ui_mix(KA, KS, 0.78)); kv_arcw(cx, cy, rr, a0, a, 5 * sc);
+    ui_col(KA); kv_arcw(cx, cy, rr, a0, a, 2.2 * sc);
+    gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, 1.1 * sc, 1, 1); gfx_circle(cx + sin(a) * rr, cy - cos(a) * rr, 1.1 * sc, 1, 1);
+  );
+  ui_cola(0x000000, 0.5); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
+  ui_col(0x090A0B); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0x1B1E20); gfx_circle(cx, cy, r - 1.5 * sc, 1, 1);
+  ui_col(0x34383B); kv_arcw(cx, cy, r - 2.5 * sc, -0.66 * $pi, 0.06 * $pi, 1.2 * sc);
+  ui_col(ui_mix(KA, 0xFFFFFF, 0.35)); kv_ptr(cx, cy, a, r * 0.3, r - 4 * sc, 2 * sc);
+);
+// BERLIN knob: a plain dark skirt, a flat satin-silver face with one soft highlight on its edge, a black pointer
+function kv_bcap(cx, cy, r, a) (
+  ui_cola(0x000000, 0.35); gfx_circle(cx + 1.5 * sc, cy + 3 * sc, r, 1, 1);
+  ui_col(0x1A1B1E); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(0x5B6168); gfx_circle(cx, cy, r * 0.8, 1, 1);
+  ui_col(0xB7BCC2); gfx_circle(cx, cy, r * 0.8 - 1.2 * sc, 1, 1);
+  ui_col(0xDCDFE3); kv_arcw(cx, cy, r * 0.8 - 2.6 * sc, -0.66 * $pi, 0.06 * $pi, 1.3 * sc);
+  ui_col(0x141416); kv_ptr(cx, cy, a, r * 0.2, r * 0.95, 2 * sc);
 );
 // a knob: cap 0 = the unit's main knob (TOKYO rubber / BERLIN cast aluminium), 1 = black low-pass filter cap,
 // otherwise a small house knob with that cap colour. Its name below; the value replaces it while touched.
@@ -710,7 +731,7 @@ function kv_knob(cx, cy, r, idx, kind, lo, hi, def, cap, name, val) local(v, n, 
   );
   v = slider(idx); n = kv_v2n(kind, v, lo, hi); a = -0.75 * $pi + n * 1.5 * $pi;
   cap == 0 ? (
-    kv_b ? ( pk_kstyle = 1; pk_ptr = -1; pk_bkcap(cx * sc, cy * sc, r * sc, a); ) : kv_tcap(cx * sc, cy * sc, r * sc, n);
+    kv_b ? kv_bcap(cx * sc, cy * sc, r * sc, a) : kv_tcap(cx * sc, cy * sc, r * sc, n);
   ) : cap == 1 ? (
     strcpy(#kf_lo, ""); strcpy(#kf_hi, ""); ui_knob_filter(cx * sc, cy * sc, r * sc, a, 0, 2);
   ) : dy_fcap(cx * sc, cy * sc, r * sc, a, cap);
@@ -740,7 +761,7 @@ function kv_unit(x, y, w, h, model, s1, s2, sidx, oidx) local(tw, th) (
   // style keys and ON
   kv_key(x + w - 186, y + 10, 58, 26, "TOKYO", !kv_b) ? ( slider(sidx) = 0; ui_auto(sidx); );
   kv_key(x + w - 124, y + 10, 62, 26, "BERLIN", kv_b) ? ( slider(sidx) = 1; ui_auto(sidx); );
-  kv_key(x + w - 56, y + 10, 42, 26, kv_b ? "EIN" : "ON", slider(oidx) >= 0.5) ? ( slider(oidx) = slider(oidx) >= 0.5 ? 0 : 1; ui_auto(oidx); );
+  kv_key(x + w - 56, y + 10, 42, 26, kv_de ? "EIN" : "ON", slider(oidx) >= 0.5) ? ( slider(oidx) = slider(oidx) >= 0.5 ? 0 : 1; ui_auto(oidx); );
 );
 
 // =====================================================================
@@ -754,11 +775,14 @@ ui_col(0x111213); kv_r(0, 54, 980, 2);
 ui_col(KHI_); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(KH); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); ui_col(KHI_); kv_txt(58, 12, "DUO 45");
-gfx_setfont(11); ui_col(0xA99999); kv_txt(206, 14, "SAMPLER ENGINE"); kv_txt(206, 29, "+ DIGITAL LIMITER");
+gfx_setfont(11); ui_col(0xA99999); kv_txt(206, 14, kv_de ? "ABTASTEINHEIT" : "SAMPLER ENGINE"); kv_txt(206, 29, kv_de ? "+ DIGITALER BEGRENZER" : "+ DIGITAL LIMITER");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
-k_ = pk_preset(358 * sc, 10 * sc, 520 * sc, 34 * sc, pr_cur,
+k_ = pk_preset(370 * sc, 10 * sc, 490 * sc, 34 * sc, pr_cur,
   "Init|12-Bit Drums|Hip-Hop Crunch|8-Bit Grit|Tape-Fed Sampler|Berlin Dust|Data Squash|Glassy Highs|Pump Bus|Broadcast Brick|Warsaw Lab|Full Crush");
 k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 12 ? 1 : k_; );
+// the language key (ENG / DE) with its amber LED, left of the size picker
+ui_button(884 * sc, 18 * sc, 27 * sc, 18 * sc, kv_de ? "DE" : "ENG", 0, 1) ? ( slider28 = kv_de ? 0 : 1; ui_auto(28); kv_de = slider28 >= 0.5; );
+rd_led(875, 27, 3, kv_de, 0xFFA126);
 ui_size_picker(912 * sc, 18 * sc);
 
 // ---------- meter smoothing (frame-rate independent) ----------
@@ -774,7 +798,7 @@ kxa_ovp >= 1 ? kv_ovt = kv_now; kxa_ovp = 0;
 // =====================================================================
 kv_style(0, slider2 >= 0.5);
 kv_x = 8;
-kv_unit(kv_x, 60, 432, 254, kv_b ? "ZA-45" : "DS-45", kv_b ? "DIGITALE" : "DIGITAL SAMPLER", kv_b ? "ABTASTEINHEIT" : "ENGINE", 2, 1);
+kv_unit(kv_x, 60, 432, 254, kv_b ? "ZA-45" : "DS-45", kv_de ? "DIGITALE" : "DIGITAL SAMPLER", kv_de ? "ABTASTEINHEIT" : "ENGINE", 2, 1);
 kv_on = slider1 >= 0.5;
 // ---------- the display ----------
 kv_sect(kv_x + 12, 108, 268, 86);
@@ -794,11 +818,11 @@ kv_i = 0;
 loop(3,
   kv_f = kv_i == 0 ? slider8 >= 0.5 : kv_i == 1 ? slider6 >= 0.5 : slider5 >= 0.5;
   ui_col(kv_f && kv_on ? KD : ui_mix(KD, KW, 0.82));
-  kv_rtxt(kv_x + 267, 126 + kv_i * 19, kv_i == 0 ? "AA" : kv_i == 1 ? (kv_b ? "NL" : "NL") : (kv_b ? "FREI" : "FREE"));
+  kv_rtxt(kv_x + 267, 126 + kv_i * 19, kv_i == 0 ? "AA" : kv_i == 1 ? "NL" : (kv_de ? "FREI" : "FREE"));
   kv_i += 1;
 );
 // converter level: -36 .. 0 dBFS, CLIP lamp
-gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 28, 158, kv_b ? "EIN" : "IN");
+gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 28, 158, kv_de ? "EIN" : "IN");
 kv_bar(kv_x + 56, 158, 140, 12, kv_b ? 18 : 36, kv_on ? (kv_ipd + 36) / 36 : 0, 0, 30 / 36, 34 / 36);
 gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2);
 kv_i = 0; loop(4, kv_v = kv_i == 0 ? -36 : kv_i == 1 ? -24 : kv_i == 2 ? -12 : 0;
@@ -809,8 +833,8 @@ gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2); kv_ctxt(kv_x + 222, 1
 // ---------- keys and TRIM ----------
 kv_sect(kv_x + 286, 108, 134, 86);
 kv_key(kv_x + 296, 115, 82, 22, "ANTI-ALIAS", slider8 >= 0.5) ? ( slider8 = slider8 >= 0.5 ? 0 : 1; ui_auto(8); );
-kv_key(kv_x + 296, 141, 82, 22, kv_b ? "NICHTLIN." : "NON-LIN", slider6 >= 0.5) ? ( slider6 = slider6 >= 0.5 ? 0 : 1; ui_auto(6); );
-kv_key(kv_x + 296, 167, 82, 22, kv_b ? "FREI" : "FREE", slider5 >= 0.5) ? (
+kv_key(kv_x + 296, 141, 82, 22, kv_de ? "NICHTLIN." : "NON-LIN", slider6 >= 0.5) ? ( slider6 = slider6 >= 0.5 ? 0 : 1; ui_auto(6); );
+kv_key(kv_x + 296, 167, 82, 22, kv_de ? "FREI" : "FREE", slider5 >= 0.5) ? (
   slider5 = slider5 >= 0.5 ? 0 : 1;
   slider5 < 0.5 ? ( slider4 = kx_snap(kx_BTAB, 5, slider4); slider7 = kx_snap(kx_RTAB, 8, slider7); );   // back onto the detents
   ui_auto(5); ui_auto(4); ui_auto(7);
@@ -822,39 +846,42 @@ kv_knob(kv_x + 400, 142, 11, 11, 0, -24, 12, 0, 0x9DA2A8, "TRIM", #kvv);
 // ---------- the knob row ----------
 kv_sect(kv_x + 12, 200, 408, 106);
 kv_cy = 244; kv_kr = 22;
+kv_tl = 0;                                              // (TOKYO: no tick lines round the main knobs)
 sprintf(#kvv, "+%.1f dB", slider3); kv_dec(#kvv);
 kv_scale(kv_x + 58, kv_cy, kv_kr, "0||12||24");
-kv_knob(kv_x + 58, kv_cy, kv_kr, 3, 0, 0, 24, 0, 0, kv_b ? "EINGANG" : "DRIVE", #kvv);
+kv_knob(kv_x + 58, kv_cy, kv_kr, 3, 0, 0, 24, 0, 0, kv_de ? "EINGANG" : "DRIVE", #kvv);
 slider5 >= 0.5 ? sprintf(#kvv, "%.2f bit", slider4) : sprintf(#kvv, "%d bit", kx_snap(kx_BTAB, 5, slider4)); kv_dec(#kvv);
 kv_scale(kv_x + 136, kv_cy, kv_kr, "8|10|12|16|24");
 kv_knob(kv_x + 136, kv_cy, kv_kr, 4, 1, 8, 24, 12, 0, "BITS", #kvv);
 sprintf(#kvv, "%.2f kHz", (slider5 >= 0.5 ? slider7 : kx_snap(kx_RTAB, 8, slider7)) / 1000); kv_dec(#kvv);
 kv_i = 0; loop(8, kv_tick(kv_x + 214, kv_cy, kv_kr, kv_i / 7, kv_i == 0 ? "8" : kv_i == 3 ? "22" : kv_i == 5 ? "32" : kv_i == 7 ? "48" : "", 1); kv_i += 1; );
-kv_knob(kv_x + 214, kv_cy, kv_kr, 7, 2, 8000, 48000, 40000, 0, kv_b ? "TAKT" : "RATE", #kvv);
-slider8 >= 0.5 ? sprintf(#kvv, "%.0f %%", slider9) : strcpy(#kvv, "AA OFF");
+kv_knob(kv_x + 214, kv_cy, kv_kr, 7, 2, 8000, 48000, 40000, 0, kv_de ? "TAKT" : "RATE", #kvv);
+slider8 >= 0.5 ? sprintf(#kvv, "%.0f %%", slider9) : strcpy(#kvv, kv_de ? "AA AUS" : "AA OFF");
+kv_tl = 1;                                              // (the AA and FILTER filter caps keep their ticks)
 kv_scale(kv_x + 292, kv_cy, kv_kr - 2, "0|5|10");
 kv_knob(kv_x + 292, kv_cy, kv_kr - 2, 9, 0, 0, 100, 100, 1, "AA", #kvv);
 sprintf(#kvv, "%.0f %%  %.1f kHz", slider10, kx_fo / 1000); kv_dec(#kvv);
 kv_scale(kv_x + 370, kv_cy, kv_kr - 2, "0|5|10");
 kv_knob(kv_x + 370, kv_cy, kv_kr - 2, 10, 0, 0, 100, 85, 1, "FILTER", #kvv);
+kv_tl = 0;
 
 // =====================================================================
 // RIGHT UNIT: DL-45 / BG-45 digital limiter (x 540..972)
 // =====================================================================
 kv_style(1, slider13 >= 0.5);
 kv_x = 540;
-kv_unit(kv_x, 60, 432, 254, kv_b ? "BG-45" : "DL-45", kv_b ? "DIGITALER" : "DIGITAL LIMITER", kv_b ? "BEGRENZER" : "UNIT", 13, 12);
+kv_unit(kv_x, 60, 432, 254, kv_b ? "BG-45" : "DL-45", kv_de ? "DIGITALER" : "DIGITAL LIMITER", kv_de ? "BEGRENZER" : "UNIT", 13, 12);
 kv_on = slider12 >= 0.5;
 kv_sect(kv_x + 12, 108, 408, 86);
 kv_glass(kv_x + 20, 115, 392, 72);
 kv_dc = kv_on ? KD : ui_mix(KD, KW, 0.75);
 // GR ladder, lit from the right: 0 .. 20 dB
-gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 28, 120, "GR");
+gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 28, 120, kv_de ? "RED." : "GR");
 kv_bar(kv_x + 66, 121, 220, 13, kv_b ? 20 : 40, kv_on ? kv_grd / 20 : 0, 1, 0.3, 0.6);
 gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2);
 kv_i = 0; loop(5, sprintf(#kvs, "%d", kv_i * 5); kv_ctxt(kv_x + 66 + 220 * (1 - kv_i / 4), 143, #kvs); kv_i += 1; );
 // output peak: -30 .. 0 dBFS
-gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 28, 155, kv_b ? "AUS" : "OUT");
+gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 28, 155, kv_de ? "AUS" : "OUT");
 kv_bar(kv_x + 66, 156, 220, 13, kv_b ? 20 : 40, (kv_opd + 30) / 30, 0, 0.7, 0.94);
 gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2);
 kv_i = 0; loop(6, sprintf(#kvs, "%d", -30 + kv_i * 6); kv_ctxt(kv_x + 66 + 220 * kv_i / 5, 178, #kvs); kv_i += 1; );
@@ -864,7 +891,7 @@ kv_dec(#kvs);
 kv_digits(kv_x + 374, 132, #kvs, "88.8", kv_dc);
 gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 378, 133, "dB");
 kv_lamp(kv_x + 312, 167, 5, kv_now - kv_ovt < 0.4, 0xFF3A2A);
-gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_ltxt(kv_x + 324, 167, kv_b ? "ÜBERSTEUERT" : "OVER");
+gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_ltxt(kv_x + 324, 167, kv_de ? "ÜBERSTEUERT" : "OVER");
 // the HF bands the coder keeps (lit) or drops (dark)
 gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2); kv_ctxt(kv_x + 300, 152, "HF");
 kv_i = 0; loop(5, ui_col(kv_on && (kxa_bands & (1 << kv_i)) ? KD : ui_mix(KD, KW, 0.85)); kv_r(kv_x + 312 + kv_i * 18, 150, 13, 4); kv_i += 1; );
@@ -873,21 +900,21 @@ kv_i = 0; loop(5, ui_col(kv_on && (kxa_bands & (1 << kv_i)) ? KD : ui_mix(KD, KW
 kv_sect(kv_x + 12, 200, 408, 106);
 sprintf(#kvv, "+%.1f dB", slider14); kv_dec(#kvv);
 kv_scale(kv_x + 58, kv_cy, kv_kr, "0||12||24");
-kv_knob(kv_x + 58, kv_cy, kv_kr, 14, 0, 0, 24, 0, 0, kv_b ? "ANTRIEB" : "DRIVE", #kvv);
+kv_knob(kv_x + 58, kv_cy, kv_kr, 14, 0, 0, 24, 0, 0, kv_de ? "ANTRIEB" : "DRIVE", #kvv);
 sprintf(#kvv, "%.1f dBFS", slider15); kv_dec(#kvv);
 kv_scale(kv_x + 136, kv_cy, kv_kr, "-12||-6||0");
-kv_knob(kv_x + 136, kv_cy, kv_kr, 15, 0, -12, 0, -1, 0, kv_b ? "GRENZE" : "CEILING", #kvv);
-slider16 < 0.05 ? strcpy(#kvv, kv_b ? "SOFORT" : "INSTANT") : slider16 < 10 ? sprintf(#kvv, "%.1f ms", slider16) : sprintf(#kvv, "%.0f ms", slider16); kv_dec(#kvv);
+kv_knob(kv_x + 136, kv_cy, kv_kr, 15, 0, -12, 0, -1, 0, kv_de ? "GRENZE" : "CEILING", #kvv);
+slider16 < 0.05 ? strcpy(#kvv, kv_de ? "SOFORT" : "INSTANT") : slider16 < 10 ? sprintf(#kvv, "%.1f ms", slider16) : sprintf(#kvv, "%.0f ms", slider16); kv_dec(#kvv);
 kv_tick(kv_x + 214, kv_cy, kv_kr, 0, "0", 1); kv_tick(kv_x + 214, kv_cy, kv_kr, sqrt(10 / 300), "10", 1);
 kv_tick(kv_x + 214, kv_cy, kv_kr, sqrt(50 / 300), "50", 1); kv_tick(kv_x + 214, kv_cy, kv_kr, sqrt(150 / 300), "150", 1);
 kv_tick(kv_x + 214, kv_cy, kv_kr, 1, "300", 1);
-kv_knob(kv_x + 214, kv_cy, kv_kr, 16, 3, 0, 300, 30, 0, kv_b ? "RÜCKLAUF" : "RELEASE", #kvv);
+kv_knob(kv_x + 214, kv_cy, kv_kr, 16, 3, 0, 300, 30, 0, kv_de ? "RÜCKLAUF" : "RELEASE", #kvv);
 sprintf(#kvv, "%.0f %%", slider17);
 kv_scale(kv_x + 292, kv_cy, kv_kr, "0|5|10");
-kv_knob(kv_x + 292, kv_cy, kv_kr, 17, 0, 0, 100, 15, 0, kv_b ? "SPEKTRAL" : "SPECTRAL", #kvv);
+kv_knob(kv_x + 292, kv_cy, kv_kr, 17, 0, 0, 100, 15, 0, kv_de ? "SPEKTRAL" : "SPECTRAL", #kvv);
 sprintf(#kvv, "%.0f %%", slider18);
 kv_scale(kv_x + 370, kv_cy, kv_kr, "0|5|10");
-kv_knob(kv_x + 370, kv_cy, kv_kr, 18, 0, 0, 100, 0, 0, kv_b ? "SÄTTIG." : "SAT", #kvv);
+kv_knob(kv_x + 370, kv_cy, kv_kr, 18, 0, 0, 100, 0, 0, kv_de ? "SÄTTIG." : "SAT", #kvv);
 
 // =====================================================================
 // The central mounting bracket: the chain's MIX, DRIFT, OUTPUT, band SAT and the output stage (x 430..550)
@@ -899,22 +926,22 @@ ui_cola(0x000000, 0.45); kv_fr(430, 58, 120, 258);
 ui_cola(0xFFFFFF, 0.35); kv_r(431, 59, 118, 1);
 ui_cola(0x000000, 0.25); kv_r(441, 66, 1, 244); kv_r(538, 66, 1, 244);
 rd_screw(440, 72); rd_screw(540, 72); rd_screw(440, 302); rd_screw(540, 302);
-gfx_setfont(11); ui_col(0x1C1C1C); kv_ctxt(490, 76, "CHAIN");
+gfx_setfont(11); ui_col(0x1C1C1C); kv_ctxt(490, 76, kv_de ? "KETTE" : "CHAIN");
 sprintf(#kvv, "%.0f %%", slider19);
-kv_ticks(466, 114, 13); kv_knob(466, 114, 13, 19, 0, 0, 100, 100, 0xC7BEB3, "MIX", #kvv);
+kv_ticks(466, 114, 13); kv_knob(466, 114, 13, 19, 0, 0, 100, 100, 0xC7BEB3, kv_de ? "MISCH." : "MIX", #kvv);
 sprintf(#kvv, "%.0f %%", slider20);
 kv_ticks(514, 114, 13); kv_knob(514, 114, 13, 20, 0, 0, 100, 50, 0x6F8794, "DRIFT", #kvv);
 sprintf(#kvv, "%+.1f dB", slider21);
-kv_ticks(466, 172, 13); kv_knob(466, 172, 13, 21, 0, -24, 12, 0, 0x9DA2A8, "OUTPUT", #kvv);
+kv_ticks(466, 172, 13); kv_knob(466, 172, 13, 21, 0, -24, 12, 0, 0x9DA2A8, kv_de ? "AUSG." : "OUTPUT", #kvv);
 sprintf(#kvv, "%.0f %%", slider22);
-kv_ticks(514, 172, 13); kv_knob(514, 172, 13, 22, 0, 0, 100, 0, 0xD8B040, "SAT", #kvv);
+kv_ticks(514, 172, 13); kv_knob(514, 172, 13, 22, 0, 0, 100, 0, 0xD8B040, kv_de ? "SÄTT." : "SAT", #kvv);
 // the house output stage keys
 ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
 kv_i = 0;
 loop(3,
   kv_c = kv_i == 0 ? 0x3A9CFF : kv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
   ui_okey(456, 212 + kv_i * 24, 68, 20, (slider27 | 0) == kv_i || (kv_i == 1 && ui_okclp > 0.1), kv_c) ? ( slider27 = kv_i; ui_auto(27); );
-  gfx_setfont(12); ui_col(0x141414); ui_keytext(490 * sc, (212 + kv_i * 24 + 10) * sc, kv_i == 0 ? "OFF" : kv_i == 1 ? "CLIP" : "LIMIT");
+  gfx_setfont(12); ui_col(0x141414); ui_keytext(490 * sc, (212 + kv_i * 24 + 10) * sc, kv_i == 0 ? (kv_de ? "AUS" : "OFF") : kv_i == 1 ? "CLIP" : (kv_de ? "BEGR." : "LIMIT"));
   kv_i += 1;
 );
 
