@@ -17,14 +17,14 @@ desc:GFX Fullerton 65
 //     -> second 12AX7 stage -> the mixer.
 //   VIBRATO channel: the same two stages and tone stack, then
 //     REVERB: the send drives its own valve (a 12AT7 driver that saturates when hit hard) into a long tank of
-//        three springs (each a delay with a dispersive chirp in its loop: every round trip gets a little more
-//        'drip'; dark, about 2 s); the return is mixed by the REVERB pot into a third 12AX7 (the mixer stage)
+//        three coupled springs (each a delay with a dispersive chirp in its loop: every round trip gets a little
+//        more 'drip'; dark, about 2 s); the return is mixed by the REVERB pot into a third 12AX7 (the mixer stage)
 //     -> the 'vibrato', which is really an optical TREMOLO: an oscillator (SPEED) flashes a lamp onto a light-
 //        dependent resistor that shunts the signal (INTENSITY). The cell darkens quickly and recovers slowly, so the
 //        throb is smooth and slightly asymmetric. STEREO TREM: the right side throbs in opposite phase.
 //   JUMPER feeds the input to both channels (their outputs add up, in phase).
 //   -> phase inverter (12AT7, long-tailed pair) -> four 6L6-style power valves in push-pull with negative feedback
-//      (solved exactly per sample: very clean up to full power, then a firm clip) and a gentle supply sag when
+//      (the loop worked out exactly: very clean up to full power, then a firm clip) and a gentle supply sag when
 //      pushed -> output transformer -> SPEAKER: 12" open back, about 80 Hz - 5 kHz with a presence peak. The two
 //      speakers are not quite the same (different cone / mic), and the two reverb tanks are tuned apart.
 //   The amp runs at twice the sample rate (the reverb tanks at the host rate).
@@ -184,19 +184,24 @@ function fl_tsrun(x) instance(b0, b1, b2, b3, a1, a2, a3, x1, x2, x3, y1, y2, y3
 );
 
 // ---------- the power stage: push-pull pairs inside a negative-feedback loop ----------
-// y = S * (th(A (u - B y) / S + d) - th(d)), solved per sample (two Newton steps from the last value); S = the supply
-fl_paA = 8; fl_paB = 0.4;
-function fl_paset(d) instance(pd, t0) ( pd = d; t0 = fl_th(d); );
-function fl_pa(u) instance(y, yp, sup, sbase, env, pd, t0) local(v, g, a, y0) (
-  y0 = y; y = 2 * y - yp; yp = y0;                     // start from a straight-line guess
-  v = fl_paA * (u - fl_paB * y) / sup + pd;
-  g = y - sup * (fl_th(v) - t0);
-  y -= g / (1 + fl_paA * fl_paB * fl_thd(v));
-  abs(v) > 0.8 ? (                                     // a second step where the curve bends
-    v = fl_paA * (u - fl_paB * y) / sup + pd;
-    g = y - sup * (fl_th(v) - t0);
-    y -= g / (1 + fl_paA * fl_paB * fl_thd(v));
+// y = S * (th(A (u - B y) / S + d) - th(d)); S = the supply, d = the pairs' imbalance. With y = S Y, u = S U the loop
+// reduces to one curve, Y = Q(U + d / A + B th(d)) - th(d), Q solving Q = th(A (U - B Q)): the closed loop worked out
+// exactly once (a table, by bisection), so the feedback is exact and stable at any drive.
+fl_paA = 8; fl_paB = 0.4; fl_qn = 4096; fl_qr = 4; fl_qs = (fl_qn - 1) / (2 * fl_qr);
+function fl_qbuild() local(i, U, lo, hi, m) (
+  i = 0;
+  loop(fl_qn,
+    U = -fl_qr + i / fl_qs; lo = -1; hi = 1;
+    loop(44, m = 0.5 * (lo + hi); m - fl_th(fl_paA * (U - fl_paB * m)) > 0 ? hi = m : lo = m; );
+    fl_qt[i] = 0.5 * (lo + hi);
+    i += 1;
   );
+);
+function fl_paset(d) instance(pd, t0, ofs) ( pd = d; t0 = fl_th(d); ofs = d / fl_paA + fl_paB * t0; );
+function fl_pa(u) instance(y, sup, sbase, env, t0, ofs) local(p, i, a) (
+  p = min(max((u / sup + ofs + fl_qr) * fl_qs, 0), fl_qn - 1.001);
+  i = floor(p); p -= i;
+  y = sup * (fl_qt[i] + (fl_qt[i + 1] - fl_qt[i]) * p - t0);
   // supply sag: only when the valves are pushed hard
   a = abs(y);
   env += (a - env) * (a > env ? fl_sga : fl_sgr);
@@ -249,16 +254,20 @@ function fl_send(x) instance(sh1, sl0, drv, sl1, sh2) (
 
 // ---------- reverb tank: three springs, each a delay with a low-pass and a dispersive chirp in its loop ----------
 // the springs' memory and state: fl_tb (buffers), fl_tn (lengths), fl_tgk (loop gains), fl_tab (chirp buffers), fl_tst
-function fl_spr(x, i) local(b, s, st, v) (
+function fl_sread(i) local(b, s, st, v) (
   b = fl_tb[i]; s = b[(fl_tw - fl_tn[i]) & fl_tm];
   st = fl_tst + i; st[0] += (s - st[0]) * fl_tlc; s = st[0];
   b = fl_tab[i] + fl_tp;
   loop(6, st = b[0]; v = s - fl_ta * st; s = fl_ta * v + st; b[0] = v; b += fl_tK; );
-  b = fl_tb[i]; b[fl_tw] = min(max(x + fl_tgk[i] * s + fl_dn, -3), 3);
   s;
 );
-function fl_tank(x, k) instance(lo, hi) local(o) (
-  o = fl_spr(x, k) - fl_spr(x, k + 1) + fl_spr(-x, k + 2) * 0.9;
+function fl_swrite(i, v) local(b) ( b = fl_tb[i]; b[fl_tw] = min(max(v + fl_dn, -3), 3); );
+// the springs are coupled through the tank (an orthogonal mix): the first echoes stay clear, the tail thickens
+function fl_tank(x, k) instance(lo, hi) local(s0, s1, s2, m, o) (
+  s0 = fl_sread(k); s1 = fl_sread(k + 1); s2 = fl_sread(k + 2);
+  o = s0 - s1 + 0.9 * s2;
+  m = (s0 + s1 + s2) * 0.6666667;
+  fl_swrite(k, x + fl_tgk[k] * (s0 - m)); fl_swrite(k + 1, x + fl_tgk[k + 1] * (s1 - m)); fl_swrite(k + 2, -x + fl_tgk[k + 2] * (s2 - m));
   lo += (o - lo) * fl_tol;                             // the output transducer: dark, no boom
   hi += (lo - hi) * fl_toh;
   (lo - hi) * fl_trg;
@@ -286,6 +295,7 @@ function fl_mem() local(i, n) (
   fl_tK = max(1, floor(srate / 8600 + 0.5));           // the chirp: dispersion up to about 4.3 kHz
   fl_tb = alloc(6); fl_tn = alloc(6); fl_tgk = alloc(6); fl_tab = alloc(6); fl_tst = alloc(6);
   i = 0; loop(6, fl_tb[i] = alloc(fl_tsz); fl_tab[i] = alloc(6 * fl_tK); i += 1; );
+  fl_qt = alloc(fl_qn + 1);
   ost_init(alloc(4096));
 );
 // the fixed filters of one side
@@ -368,7 +378,7 @@ function fl_tone(force) local(k, ch) (
 );
 
 // the valves' operating points (DRIFT moves them); each side has its own wander
-function fl_bias(w1, w2, w3, w4) instance(v1a, v1b, v2a, v2b, v4b, drv, pin, pa, sp) local(a) (
+function fl_bias(w1, w2, w3, w4) instance(v1a, v1b, v2a, v2b, v4b, drv, pin, pa) local(a) (
   a = dm_a;
   v1a.fl_stset(-0.30 + 0.05 * a * w1); v1b.fl_stset(-0.25 + 0.05 * a * w2);
   v2a.fl_stset(-0.30 + 0.05 * a * w2); v2b.fl_stset(-0.25 + 0.05 * a * w1);
@@ -388,16 +398,16 @@ function fl_set(ch, jp, nv, nt, nm, nb, nbr, vv, vt, vm, vb, vbr, rv, sp, it, st
 function load_preset(p) (
   //               CH JP  N:VOL TRE  MID  BAS BR   V:VOL TRE  MID  BAS BR   REV  SPD  INT ST MO DRIFT OUTPUT
   p == 1  ? fl_set(1, 0,   4,   6,   5,   4,   0,   4,   6,   5,   4,   0,   3,   5,   1,  0, 0, 50,   0.0) :  // Init
-  p == 2  ? fl_set(1, 0,   4,   6,   5,   4,   0, 3.5, 7.5,   4, 3.5,   1, 2.5,   5,   1,  0, 0, 40,   2.0) :  // Sparkle Clean
+  p == 2  ? fl_set(1, 0,   4,   6,   5,   4,   0, 3.5, 7.5,   4, 3.5,   1, 2.5,   5,   1,  0, 0, 40,   0.0) :  // Sparkle Clean
   p == 3  ? fl_set(1, 0,   4,   6,   5,   4,   0,   5, 7.5,   6, 3.5,   1, 8.5,   5,   1,  0, 0, 50, -13.0) :  // Surf Reverb
   p == 4  ? fl_set(0, 0, 5.5,   8,   4, 4.5,   1,   4,   6,   5,   4,   0,   3,   5,   1,  0, 0, 45,  -8.0) :  // Country Twang
   p == 5  ? fl_set(1, 0,   4,   6,   5,   4,   0,   4, 3.5,   6,   6,   0,   2,   5,   1,  0, 0, 40,  -1.0) :  // Jazz Warm
   p == 6  ? fl_set(1, 0,   4,   6,   5,   4,   0,   4,   6,   5, 4.5,   0,   4, 3.5, 5.5,  0, 0, 50,   1.5) :  // Tremolo Ballad
-  p == 7  ? fl_set(1, 0,   4,   6,   5,   4,   0, 4.5, 6.5,   5,   4,   0, 3.5, 5.5,   7,  1, 0, 50,   2.0) :  // Stereo Throb
+  p == 7  ? fl_set(1, 0,   4,   6,   5,   4,   0, 4.5, 6.5,   5,   4,   0, 3.5, 5.5,   7,  1, 0, 50,   0.5) :  // Stereo Throb
   p == 8  ? fl_set(1, 0,   4,   6,   5,   4,   0, 7.5,   6, 6.5,   4,   1, 2.5,   5,   1,  0, 0, 60, -14.0) :  // Pushed Edge
   p == 9  ? fl_set(1, 1,   6,   5,   7,   5,   0,   5, 6.5,   5,   4,   1, 2.5,   5,   1,  0, 0, 50, -12.5) :  // Jumpered Fat
   p == 10 ? fl_set(1, 0,   4,   6,   5,   4,   0, 3.5, 5.5,   5,   5,   0,   2,   5,   1,  0, 0, 40,   2.5) :  // Keys Clean
-  p == 11 ? fl_set(1, 0,   4,   6,   5,   4,   0,   4, 5.5,   5,   5,   0, 2.5, 4.5,   6,  1, 0, 45,   3.5) :  // Keys Trem
+  p == 11 ? fl_set(1, 0,   4,   6,   5,   4,   0,   4, 5.5,   5,   5,   0, 2.5, 4.5,   6,  1, 0, 45,   1.5) :  // Keys Trem
   p == 12 ? fl_set(1, 0,   4,   6,   5,   4,   0, 6.5, 6.5,   6, 4.5,   0, 2.5,   5,   1,  0, 0, 55, -11.5) :  // Edge of Breakup
   p == 13 ? (                                           // Reset all to defaults
     fl_set(1, 0, 4, 6, 5, 4, 0, 4, 6, 5, 4, 0, 3, 5, 1, 0, 0, 50, 0);
@@ -409,7 +419,7 @@ function load_preset(p) (
 
 // ---------- state ----------
 function fl_start() (
-  fl_mem(); fl_srinit(); update(); fl_tone(1);
+  fl_mem(); fl_qbuild(); fl_srinit(); update(); fl_tone(1);
   cL.fl_bias(0, 0, 0, 0); cR.fl_bias(0, 0, 0, 0);
   fl_gN = fl_gNt; fl_gV = fl_gVt; fl_mn = fl_mt; fl_o = fl_ot_; fl_D = fl_Dt; fl_vh = fl_vhold;
   fl_rL = fl_rR = fl_rL1 = fl_rR1 = 0; fl_ph = 0; fl_g1 = fl_g2 = 0;
