@@ -79,11 +79,7 @@ ext_noinit = 1;
 // ---------- memory ----------
 nextmem = 0;
 function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
-rz_bsz = srate > 100000 ? 8192 : 4096; rz_mask = rz_bsz - 1;
-rz_bufA = alloc(rz_bsz);                                // line A
-rz_bufB = alloc(rz_bsz);                                // line B
-ost_init(alloc(4096));                                  // the house output stage
-rz_wp = 0;
+// the two lines (A, B) and the house output stage are allocated in rz_srinit() below (their size follows the rate)
 rz_den = 0.000000000000000001;                          // keeps the filter states clear of denormals
 
 // ---------- the buttons: mode index <-> button bits (1, 2, 4, 8) ----------
@@ -118,15 +114,13 @@ function rz_lpset(f, q) instance(b0, b1, b2, a1, a2) local(w, cw, al, n) (
   w = 2 * $pi * min(f, srate * 0.45) / srate; cw = cos(w); al = sin(w) / (2 * q); n = 1 + al;
   b0 = (1 - cw) * 0.5 / n; b1 = (1 - cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
 );
-rzP.rz_lpset(9500, 0.7071);                             // anti-alias (before the bucket brigade), 2-pole Butterworth
-rzQ.rz_lpset(9000, 0.5412);                             // reconstruction, 4-pole Butterworth in two sections
-rzR.rz_lpset(9000, 1.3066);
+// anti-alias (before the bucket brigade): 2-pole Butterworth, 9.5 kHz; reconstruction: 4-pole Butterworth, 9 kHz,
+// in two sections (set in rz_srinit() below)
 // the wet's low cut: 2-pole high-pass, 110 Hz, so the low end of each side stays dry, steady and centred
 function rz_hpset(f, q) instance(b0, b1, b2, a1, a2) local(w, cw, al, n) (
   w = 2 * $pi * f / srate; cw = cos(w); al = sin(w) / (2 * q); n = 1 + al;
   b0 = (1 + cw) * 0.5 / n; b1 = -(1 + cw) / n; b2 = b0; a1 = -2 * cw / n; a2 = (1 - al) / n;
 );
-rzH.rz_hpset(110, 0.7071);
 function rz_hp(x) instance(z1, z2) local(y) (
   y = rzH.b0 * x + z1; z1 = rzH.b1 * x - rzH.a1 * y + z2; z2 = rzH.b2 * x - rzH.a2 * y; y;
 );
@@ -194,13 +188,27 @@ function load_preset(p) (
 );
 
 // ---------- state ----------
-in_init(); ostL.ost_ch_init(); ostR.ost_ch_init();
-rz_msr = srate / 1000;
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function rz_srinit() (
+  rz_sr = srate;
+  rz_bsz = srate > 100000 ? 8192 : 4096; rz_mask = rz_bsz - 1;
+  nextmem = 0;
+  rz_bufA = alloc(rz_bsz);                              // line A
+  rz_bufB = alloc(rz_bsz);                              // line B
+  ost_init(alloc(4096));                                // the house output stage
+  rz_wp = 0;
+  rzP.rz_lpset(9500, 0.7071); rzQ.rz_lpset(9000, 0.5412); rzR.rz_lpset(9000, 1.3066);
+  rzH.rz_hpset(110, 0.7071);
+  in_init();
+  rz_msr = srate / 1000;
+  rz_sms = 1 - exp(-1 / (0.35 * srate));                // rate / depth glide on a button change
+  rz_smw = 1 - exp(-1 / (0.12 * srate));                // wet fade (OFF / ON)
+  rz_smk = 1 - exp(-1 / (0.03 * srate));                // the knobs
+  rz_smd = 1 - exp(-1 / (0.5 * srate));                 // clock drift smoothing
+);
+rz_srinit(); ostL.ost_ch_init(); ostR.ost_ch_init();
 rz_cen = 3.2;                                           // the lines' resting delay, ms (1024-stage line, clock ~160 kHz)
-rz_sms = 1 - exp(-1 / (0.35 * srate));                  // rate / depth glide on a button change
-rz_smw = 1 - exp(-1 / (0.12 * srate));                  // wet fade (OFF / ON)
-rz_smk = 1 - exp(-1 / (0.03 * srate));                  // the knobs
-rz_smd = 1 - exp(-1 / (0.5 * srate));                   // clock drift smoothing
 rz_hpc = 0;
 rz_ph = rand(1);
 drA.drift_init(0.8 + rand(0.5)); drB.drift_init(0.8 + rand(0.5)); drR.drift_init(0.8 + rand(0.5));
@@ -217,6 +225,7 @@ ui_dflt = 1;
 update();
 
 @block
+srate != rz_sr ? rz_srinit();
 update();                                               // knobs moved on the panel do not run @slider
 // DRIFT: BBD clock wander (each line its own clock) and LFO rate wander, eased per sample below
 rz_di = 0.2 * dm_s * samplesblock / srate;

@@ -91,26 +91,31 @@ ext_noinit = 1;
 nextmem = 0;
 function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
 function pl_p2(n) local(p) ( p = 1; while (p < n) ( p *= 2; ); p; );
-pl_bsz = pl_p2(0.16 * srate);  pl_bm = pl_bsz - 1;      // the 16 plate lines (up to 160 ms each)
-pl_asz = pl_p2(0.02 * srate);  pl_am = pl_asz - 1;      // the allpasses inside the lines, and the input diffusers
-pl_psz = pl_p2(0.26 * srate);  pl_pm = pl_psz - 1;      // pre-delay
-pl_ssz = pl_p2(0.06 * srate);  pl_sm = pl_ssz - 1;      // the two torsion springs
-pl_lb = alloc(16 * pl_bsz);
-pl_ab = alloc(16 * pl_asz);
-pl_ab2 = alloc(16 * pl_asz);
-pl_db = alloc(12 * pl_asz);
-pl_pb = alloc(2 * pl_psz);
-pl_sb = alloc(2 * pl_ssz);
-pl_tank0 = pl_lb; pl_tank1 = nextmem;                   // everything that rings (cleared on a WEST / EAST change)
-pl_len = alloc(16);  pl_apl = alloc(16);  pl_g = alloc(16);  pl_kl = alloc(16); pl_ja = alloc(16); pl_jb = alloc(16);
-pl_c = alloc(16);  pl_tpl = alloc(16); pl_tpr = alloc(16); pl_sgl = alloc(16); pl_sgr = alloc(16); pl_is = alloc(16);
-pl_o = alloc(16);  pl_dv = alloc(16); pl_dr = alloc(64); pl_dln = alloc(12); pl_dgn = alloc(12);  pl_sn = alloc(2);
-pl_sgk = alloc(2); pl_ap2n = alloc(16); pl_g2 = alloc(16);
-pl_st0 = nextmem;                                       // filter states (cleared with the tank)
-pl_lo = alloc(16); pl_y = alloc(16); pl_d1x = alloc(16); pl_d1y = alloc(16); pl_d2x = alloc(16); pl_d2y = alloc(16);
-pl_dc = alloc(32); pl_sst = alloc(64); pl_slp = alloc(2);
-pl_st1 = nextmem;
-ost_init(alloc(4096));
+// the buffer sizes follow the sample rate: pl_srinit() (below) lays the memory out again when it changes
+function pl_mem() (
+  nextmem = 0;
+  pl_bsz = pl_p2(0.16 * srate);  pl_bm = pl_bsz - 1;    // the 16 plate lines (up to 160 ms each)
+  pl_asz = pl_p2(0.02 * srate);  pl_am = pl_asz - 1;    // the allpasses inside the lines, and the input diffusers
+  pl_psz = pl_p2(0.26 * srate);  pl_pm = pl_psz - 1;    // pre-delay
+  pl_ssz = pl_p2(0.06 * srate);  pl_sm = pl_ssz - 1;    // the two torsion springs
+  pl_lb = alloc(16 * pl_bsz);
+  pl_ab = alloc(16 * pl_asz);
+  pl_ab2 = alloc(16 * pl_asz);
+  pl_db = alloc(12 * pl_asz);
+  pl_pb = alloc(2 * pl_psz);
+  pl_sb = alloc(2 * pl_ssz);
+  pl_tank0 = pl_lb; pl_tank1 = nextmem;                 // everything that rings (cleared on a WEST / EAST change)
+  pl_len = alloc(16);  pl_apl = alloc(16);  pl_g = alloc(16);  pl_kl = alloc(16); pl_ja = alloc(16); pl_jb = alloc(16);
+  pl_c = alloc(16);  pl_tpl = alloc(16); pl_tpr = alloc(16); pl_sgl = alloc(16); pl_sgr = alloc(16); pl_is = alloc(16);
+  pl_o = alloc(16);  pl_dv = alloc(16); pl_dr = alloc(64); pl_dln = alloc(12); pl_dgn = alloc(12);  pl_sn = alloc(2);
+  pl_sgk = alloc(2); pl_ap2n = alloc(16); pl_g2 = alloc(16);
+  pl_st0 = nextmem;                                     // filter states (cleared with the tank)
+  pl_lo = alloc(16); pl_y = alloc(16); pl_d1x = alloc(16); pl_d1y = alloc(16); pl_d2x = alloc(16); pl_d2y = alloc(16);
+  pl_dc = alloc(32); pl_sst = alloc(64); pl_slp = alloc(2);
+  pl_st1 = nextmem;
+  ost_init(alloc(4096));
+);
+pl_mem();
 
 pl_lsc = 1.6;                                           // line length scale
 pl_tsp = 70;                                            // the pickups' tap spread (ms)
@@ -184,7 +189,6 @@ function pl_dtick(p, inc) (
 function pl_satw(u) ( ost_tanh(u * 0.6) * 1.6666667 );
 // EAST: input transformer (the lows saturate the core first) into a double triode (asymmetric: even harmonics)
 pl_eb = ost_tanh(0.75 * 0.22); pl_en = 1 / (0.75 * (1 - pl_eb * pl_eb));
-pl_xc = 1 - exp(-2 * $pi * 140 / srate);
 function pl_sate(u) instance(lp) (
   lp += (u - lp) * pl_xc;
   u += 0.4 * (ost_tanh(lp * 1.3) * 0.7692308 - lp);
@@ -234,11 +238,8 @@ function pl_springs(x0, x1) local(b0, b1, s0, s1) (
 );
 
 // ---------- control rate (every 32 samples): decay -> the loss filters of all 16 lines ----------
-pl_clo = 1 - exp(-2 * $pi * 300 / srate);               // the loss filter: low shelf (pad) and high shelf (sheet loss) splits
-pl_chi = 1 - exp(-2 * $pi * 2500 / srate);
-pl_slc = 1 - exp(-2 * $pi * 4200 / srate);              // the springs' own low-pass
-pl_tk = 1 - exp(-32 / (0.12 * srate));                  // DAMPING glide (no zipper)
-pl_cdr = 0.035; pl_spg = 1.3; pl_shc = 1 - exp(-2 * $pi * 200 / srate);
+// (the loss filters' splits and the DAMPING glide are set in pl_srinit() below)
+pl_cdr = 0.035; pl_spg = 1.3;
                                         // modal detune range (dispersion coefficient wander)
 function pl_ctl() local(i, T, Tl, Th, Ts, L, gl, gm, gh) (
   pl_ts += (pl_tt - pl_ts) * pl_tk;
@@ -305,16 +306,28 @@ function load_preset(p) (
 );
 
 // ---------- state ----------
-in_init(); in_setup(0, 0);
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function pl_srinit() local(i) (
+  pl_sr = srate;
+  pl_xc = 1 - exp(-2 * $pi * 140 / srate);              // East: the input transformer's low band
+  pl_clo = 1 - exp(-2 * $pi * 300 / srate);             // the loss filter: low shelf (pad) and high shelf (sheet loss) splits
+  pl_chi = 1 - exp(-2 * $pi * 2500 / srate);
+  pl_slc = 1 - exp(-2 * $pi * 4200 / srate);            // the springs' own low-pass
+  pl_tk = 1 - exp(-32 / (0.12 * srate));                // DAMPING glide (no zipper)
+  pl_shc = 1 - exp(-2 * $pi * 200 / srate);
+  in_init(); in_setup(0, 0);
+  pl_lcl = -1; pl_hcl = -1;
+  drvA.bq_set(1, 55, 0.6, 0); drvB.bq_set(1, 55, 0.6, 0);  // the driver: the sheet barely moves below 60 Hz
+  eqL.bq_set(2, 1400, 0.8, 3); eqR.bq_set(2, 1400, 0.8, 3);  // East: mid-focused return
+  pl_elc = 1 - exp(-2 * $pi * 8000 / srate);            // East: darker return
+  pl_smk = 1 - exp(-1 / (0.03 * srate));
+  pl_vfs = 1 / (0.03 * srate);
+  pl_vuc = 1 - exp(-1 / (0.3 * srate));
+  i = 0; loop(16, pl_dinit(pl_dr + i * 4); i += 1; );
+);
+pl_srinit();
 ostL.ost_ch_init(); ostR.ost_ch_init();
-pl_lcl = -1; pl_hcl = -1;
-drvA.bq_set(1, 55, 0.6, 0); drvB.bq_set(1, 55, 0.6, 0);  // the driver: the sheet barely moves below 60 Hz
-eqL.bq_set(2, 1400, 0.8, 3); eqR.bq_set(2, 1400, 0.8, 3);  // East: mid-focused return
-pl_elc = 1 - exp(-2 * $pi * 8000 / srate);              // East: darker return
-pl_smk = 1 - exp(-1 / (0.03 * srate));
-pl_vfs = 1 / (0.03 * srate);
-pl_vuc = 1 - exp(-1 / (0.3 * srate));
-i = 0; loop(16, pl_dinit(pl_dr + i * 4); i += 1; );
 drD.drift_init(0.8 + rand(0.5)); drH.drift_init(0.8 + rand(0.5));
 update();
 pl_ver = pl_vtar; pl_lines(pl_ver); pl_clear(); pl_vf = 1;
@@ -331,6 +344,11 @@ ui_dflt = 1;
 update();
 
 @block
+srate != pl_sr ? (                                      // a new rate: lay the memory out again and rebuild the plate
+  pl_mem(); pl_srinit(); update();
+  pl_ver = pl_vtar; pl_lines(pl_ver); pl_clear(); pl_vf = 1; pl_ctl(); pl_cc = 0; pl_pre = pl_pret;
+  pl_w = 0; pl_aw = 0; pl_dw = 0; pl_pw = 0; pl_sw = 0;
+);
 update();
 // DRIFT: plate tension wander - the decay and every line's dispersion (modal detune) wander slowly
 pl_di = 0.12 * dm_s * samplesblock / srate;

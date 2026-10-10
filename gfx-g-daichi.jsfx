@@ -394,7 +394,10 @@ dh_bend = 0; dh_mw = 0; dh_pedal = 0; dh_hc = 0; dh_age = 0; dh_last = -1; dh_qc
 dh_wasarp = 0; dh_lastmode = -1; dh_ct = 0; dh_l1ph = dh_l2ph = 0; dh_l1h = dh_l2h = 0;
 dh_dcxl = dh_dcyl = dh_dcxr = dh_dcyr = 0; dh_vol = 1; dh_wp = 0; dh_cwp = 0; dh_dts = -1;
 dh_wasdly = 0; dh_wascho = 0; dh_phph = 0; dh_chph = 0; dh_vph = 0; dh_hold = 0; dh_holdr = 0; dh_hcnt = 0;
-dh_sm = 1 - exp(-1 / (0.03 * srate));
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function dh_srinit() ( dh_sr = srate; dh_sm = 1 - exp(-1 / (0.03 * srate)); ost_init(20000); dh_dts = -1; );
+dh_srinit();
 !ui_dflt ? ( ui_sz = 2; pr_cur = 1; );            // a new instance opens Large, on Init
 update();
 dh_vol = dh_volt;
@@ -404,6 +407,7 @@ ui_dflt = 1;
 update();
 
 @block
+srate != dh_sr ? dh_srinit();
 dh_treq > 0 ? ( load_preset(dh_treq); dh_treq = 0; );     // a preset asked for from outside the panel (test hook)
 update();
 arp_params(slider57, dh_arp_beats(slider59), slider58, slider60 / 100, 0, 16, 0, 1, 0, 0, 0, 100, 0);

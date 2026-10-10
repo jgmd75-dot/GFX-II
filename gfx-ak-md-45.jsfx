@@ -789,22 +789,22 @@ sprintf(#kvs, "%.1f", kv_rt / 1000); kv_dec(#kvs);
 kv_digits(kv_x + 196, 134, #kvs, "88.8", kv_dc);
 gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 200, 136, "kHz");
 // mode flags
-gfx_setfont(16);
+gfx_setfont(11);
 kv_i = 0;
 loop(3,
   kv_f = kv_i == 0 ? slider8 >= 0.5 : kv_i == 1 ? slider6 >= 0.5 : slider5 >= 0.5;
   ui_col(kv_f && kv_on ? KD : ui_mix(KD, KW, 0.82));
-  kv_rtxt(kv_x + 266, 126 + kv_i * 14, kv_i == 0 ? "AA" : kv_i == 1 ? (kv_b ? "NL" : "NL") : (kv_b ? "FREI" : "FREE"));
+  kv_rtxt(kv_x + 267, 126 + kv_i * 19, kv_i == 0 ? "AA" : kv_i == 1 ? (kv_b ? "NL" : "NL") : (kv_b ? "FREI" : "FREE"));
   kv_i += 1;
 );
 // converter level: -36 .. 0 dBFS, CLIP lamp
 gfx_setfont(16); ui_col(kv_b ? KD : KI2); kv_txt(kv_x + 28, 158, kv_b ? "EIN" : "IN");
-kv_bar(kv_x + 56, 158, 168, 12, kv_b ? 18 : 36, kv_on ? (kv_ipd + 36) / 36 : 0, 0, 30 / 36, 34 / 36);
+kv_bar(kv_x + 56, 158, 140, 12, kv_b ? 18 : 36, kv_on ? (kv_ipd + 36) / 36 : 0, 0, 30 / 36, 34 / 36);
 gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2);
 kv_i = 0; loop(4, kv_v = kv_i == 0 ? -36 : kv_i == 1 ? -24 : kv_i == 2 ? -12 : 0;
-  sprintf(#kvs, "%d", kv_v); kv_ctxt(kv_x + 56 + 168 * (kv_v + 36) / 36, 179, #kvs); kv_i += 1; );
-kv_lamp(kv_x + 248, 164, 4.5, kv_on && kv_now - kv_clt < 0.3, 0xFF3A2A);
-gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2); kv_ctxt(kv_x + 248, 179, "CLIP");
+  sprintf(#kvs, "%d", kv_v); kv_ctxt(kv_x + 56 + 140 * (kv_v + 36) / 36, 179, #kvs); kv_i += 1; );
+kv_lamp(kv_x + 222, 164, 4.5, kv_on && kv_now - kv_clt < 0.3, 0xFF3A2A);
+gfx_setfont(10); ui_col(kv_b ? ui_mix(KD, KW, 0.4) : KI2); kv_ctxt(kv_x + 222, 179, "CLIP");
 
 // ---------- keys and TRIM ----------
 kv_sect(kv_x + 286, 108, 134, 86);

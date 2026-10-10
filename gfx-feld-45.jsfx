@@ -223,18 +223,26 @@ function load_preset(p) (
 );
 
 // ---------- state ----------
-fd_sm  = 1 - exp(-1 / (0.02 * srate));                  // knob smoothing
-fd_smr = 1 - exp(-1 / (0.03 * srate));                  // ratio / mode glide
-fd_cs  = 1 - exp(-1 / (0.3 * srate));                   // slow release stage: charge
-fd_hd  = exp(-1 / (0.02 * srate));                      // signal-present hold, 20 ms
+// everything that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps @init
+// from running then)
+function fd_srinit() (
+  fd_sr = srate;
+  fd_sm  = 1 - exp(-1 / (0.02 * srate));                // knob smoothing
+  fd_smr = 1 - exp(-1 / (0.03 * srate));                // ratio / mode glide
+  fd_cs  = 1 - exp(-1 / (0.3 * srate));                 // slow release stage: charge
+  fd_hd  = exp(-1 / (0.02 * srate));                    // signal-present hold, 20 ms
+  fd_cl  = 1 - exp(-1 / (0.04 * srate));                // ALL: overshoot lag
+  fd_ce  = 1 - exp(-1 / (0.01 * 2 * srate));            // (2x) mean-square tracker, 10 ms
+  fd_clo = 1 - exp(-2 * $pi * 250 / (2 * srate));       // (2x) FET low-frequency weighting, 250 Hz
+  fd_cxf = 1 - exp(-2 * $pi * 90 / srate);              // transformer low band, 90 Hz
+  fd_dcr = 1 - 2 * $pi * 2 / srate;                     // DC blocker, 2 Hz
+  fd_vdt = 1 / srate;
+  ost_init(ost_buf);                                    // the output stage again, on its own buffer
+);
+fd_srinit();
 fd_kap = 0.7;                                           // how much of the slow stage's memory holds the fast stage
-fd_cl  = 1 - exp(-1 / (0.04 * srate));                  // ALL: overshoot lag
-fd_ce  = 1 - exp(-1 / (0.01 * 2 * srate));              // (2x) mean-square tracker, 10 ms
-fd_clo = 1 - exp(-2 * $pi * 250 / (2 * srate));         // (2x) FET low-frequency weighting, 250 Hz
-fd_cxf = 1 - exp(-2 * $pi * 90 / srate);                // transformer low band, 90 Hz
-fd_dcr = 1 - 2 * $pi * 2 / srate;                       // DC blocker, 2 Hz
 fd_vw = 13.6; fd_vz = 0.81;                             // VU needle (as Pegel 45): natural frequency, damping
-fd_vw2 = fd_vw * fd_vw; fd_vzw = 2 * fd_vz * fd_vw; fd_vdt = 1 / srate;
+fd_vw2 = fd_vw * fd_vw; fd_vzw = 2 * fd_vz * fd_vw;
 fd_vref = 1.5707963 / 0.125892541;                      // rectified x pi/2, 0 VU = a sine peaking at -18 dBFS
 drT.drift_init(0.8 + rand(0.4)); drR.drift_init(0.8 + rand(0.4));
 drL.drift_init(0.8 + rand(0.5)); drM.drift_init(0.8 + rand(0.5));
@@ -252,6 +260,7 @@ ui_dflt = 1;
 fd_update();
 
 @block
+srate != fd_sr ? fd_srinit();
 fd_update();                                            // knobs moved on the panel do not run @slider
 // DRIFT: FET bias wander (threshold, release timing, channel tracking)
 fd_di = 0.25 * dm_s * samplesblock / srate;

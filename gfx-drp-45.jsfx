@@ -115,65 +115,74 @@ function dp_prime(n) local(ok, d) (
   );
   n;
 );
-dp_bsz = dp_p2(0.2 * srate);   dp_bm = dp_bsz - 1;      // the 16 tank lines
-dp_asz = dp_p2(0.034 * srate); dp_am = dp_asz - 1;      // allpasses: in the lines, input diffusers, the cluster
-dp_psz = dp_p2(0.31 * srate);  dp_pm = dp_psz - 1;      // pre-delay
-dp_tsz = dp_p2(1.06 * srate);  dp_tm = dp_tsz - 1;      // the tap line (reflections, gate, reverse, echo)
-dp_lb = alloc(16 * dp_bsz);
-dp_ab = alloc(16 * dp_asz);
-dp_db = alloc(8 * dp_asz);
-dp_cb = alloc(10 * dp_asz);
-dp_tb = alloc(2 * dp_tsz);
-dp_tank0 = dp_lb; dp_tank1 = nextmem;                   // everything that rings (cleared on a change of machine)
-dp_pb = alloc(2 * dp_psz);
-dp_len = alloc(16); dp_ln = alloc(16); dp_lf = alloc(16); dp_apl = alloc(16); dp_kl = alloc(16); dp_ja = alloc(16);
-dp_jb = alloc(16); dp_tfl = alloc(16); dp_tfr = alloc(16); dp_tql = alloc(16); dp_tqr = alloc(16); dp_sgl = alloc(16);
-dp_sgr = alloc(16); dp_is = alloc(16); dp_o = alloc(16); dp_dv = alloc(16); dp_dr = alloc(64);
-dp_dln = alloc(8); dp_dbl = alloc(8); dp_cln = alloc(8); dp_cbl = alloc(8);
-dp_etl = alloc(16); dp_etr = alloc(16); dp_egl = alloc(16); dp_egr = alloc(16); dp_efl = alloc(16); dp_efr = alloc(16);
-dp_gtl = alloc(96); dp_gtr = alloc(96); dp_ggl = alloc(96); dp_ggr = alloc(96); dp_gjl = alloc(96); dp_gjr = alloc(96);
-dp_st0 = nextmem;                                       // filter states (cleared with the tank)
-dp_lo = alloc(16); dp_y = alloc(16); dp_d1x = alloc(16); dp_d1y = alloc(16); dp_d2x = alloc(16); dp_d2y = alloc(16);
-dp_st1 = nextmem;
-dp_his = alloc(6 * 32);                                 // the VFD's decay matrix (written by the panel only)
-i = 0; loop(6 * 32, dp_his[i] = -200; i += 1; );
-ost_init(alloc(4096));
+// the buffer sizes follow the sample rate: the @block rate check lays the memory out again when it changes
+function dp_mem() local(i) (
+  nextmem = 0; i = 0;
+  dp_bsz = dp_p2(0.2 * srate);   dp_bm = dp_bsz - 1;      // the 16 tank lines
+  dp_asz = dp_p2(0.034 * srate); dp_am = dp_asz - 1;      // allpasses: in the lines, input diffusers, the cluster
+  dp_psz = dp_p2(0.31 * srate);  dp_pm = dp_psz - 1;      // pre-delay
+  dp_tsz = dp_p2(1.06 * srate);  dp_tm = dp_tsz - 1;      // the tap line (reflections, gate, reverse, echo)
+  dp_lb = alloc(16 * dp_bsz);
+  dp_ab = alloc(16 * dp_asz);
+  dp_db = alloc(8 * dp_asz);
+  dp_cb = alloc(10 * dp_asz);
+  dp_tb = alloc(2 * dp_tsz);
+  dp_tank0 = dp_lb; dp_tank1 = nextmem;                   // everything that rings (cleared on a change of machine)
+  dp_pb = alloc(2 * dp_psz);
+  dp_len = alloc(16); dp_ln = alloc(16); dp_lf = alloc(16); dp_apl = alloc(16); dp_kl = alloc(16); dp_ja = alloc(16);
+  dp_jb = alloc(16); dp_tfl = alloc(16); dp_tfr = alloc(16); dp_tql = alloc(16); dp_tqr = alloc(16); dp_sgl = alloc(16);
+  dp_sgr = alloc(16); dp_is = alloc(16); dp_o = alloc(16); dp_dv = alloc(16); dp_dr = alloc(64);
+  dp_dln = alloc(8); dp_dbl = alloc(8); dp_cln = alloc(8); dp_cbl = alloc(8);
+  dp_etl = alloc(16); dp_etr = alloc(16); dp_egl = alloc(16); dp_egr = alloc(16); dp_efl = alloc(16); dp_efr = alloc(16);
+  dp_gtl = alloc(96); dp_gtr = alloc(96); dp_ggl = alloc(96); dp_ggr = alloc(96); dp_gjl = alloc(96); dp_gjr = alloc(96);
+  dp_st0 = nextmem;                                       // filter states (cleared with the tank)
+  dp_lo = alloc(16); dp_y = alloc(16); dp_d1x = alloc(16); dp_d1y = alloc(16); dp_d2x = alloc(16); dp_d2y = alloc(16);
+  dp_st1 = nextmem;
+  dp_his = alloc(6 * 32);                                 // the VFD's decay matrix (written by the panel only)
+  loop(6 * 32, dp_his[i] = -200; i += 1; );
+  ost_init(alloc(4096));
+);
+dp_mem();
 
 dp_dn = 0.000000000000001;                              // anti-denormal: a -300 dB alternating whisper in the loops
 
 // ---------- fixed tables ----------
 function dp_hash(i) local(v) ( v = sin(i * 12.9898 + 78.233) * 43758.5453; v - floor(v); );
-// the 16 tank lines (ms, before the algorithm's scale) and the allpass inside each (ms)
-i = 0;
-loop(16,
-  dp_len[i] = i == 0 ? 17.3 : i == 1 ? 19.9 : i == 2 ? 22.7 : i == 3 ? 24.1 : i == 4 ? 26.9 : i == 5 ? 29.3 : i == 6 ? 31.7 : i == 7 ? 33.1 :
-              i == 8 ? 35.9 : i == 9 ? 38.3 : i == 10 ? 40.1 : i == 11 ? 43.7 : i == 12 ? 46.1 : i == 13 ? 49.3 : i == 14 ? 52.7 : 56.9;
-  dp_dv[i] = 0;
-  // output taps: one per line and side, spread along the line
-  f = i * 0.6180339 + 0.13 - floor(i * 0.6180339 + 0.13); dp_tfl[i] = 0.06 + 0.9 * f;
-  f = i * 0.3819661 + 0.71 - floor(i * 0.3819661 + 0.71); dp_tfr[i] = 0.06 + 0.9 * f;
-  dp_sgl[i] = (i == 1 || i == 2 || i == 6 || i == 9 || i == 11 || i == 12 || i == 13 || i == 15) ? -1 : 1;
-  dp_sgr[i] = (i == 0 || i == 3 || i == 4 || i == 6 || i == 10 || i == 11 || i == 13 || i == 14) ? -1 : 1;
-  dp_is[i] = (i == 2 || i == 3 || i == 6 || i == 7 || i == 9 || i == 12 || i == 13 || i == 14) ? -1 : 1;
-  // reflection pattern: positions along the span (0..1, irregular, sparse first) and signs
-  dp_efl[i] = min(max(((i + 0.55 + 0.38 * (dp_hash(i + 3) - 0.5)) / 16) ^ 1.12, 0.01), 1);
-  dp_efr[i] = min(max(((i + 0.45 + 0.38 * (dp_hash(i + 41) - 0.5)) / 16) ^ 1.12, 0.01), 1);
-  i += 1;
+// (in memory, so they are made again with it: dp_cln follows the rate)
+function dp_tables() local(i, f) (
+  // the 16 tank lines (ms, before the algorithm's scale) and the allpass inside each (ms)
+  i = 0;
+  loop(16,
+    dp_len[i] = i == 0 ? 17.3 : i == 1 ? 19.9 : i == 2 ? 22.7 : i == 3 ? 24.1 : i == 4 ? 26.9 : i == 5 ? 29.3 : i == 6 ? 31.7 : i == 7 ? 33.1 :
+                i == 8 ? 35.9 : i == 9 ? 38.3 : i == 10 ? 40.1 : i == 11 ? 43.7 : i == 12 ? 46.1 : i == 13 ? 49.3 : i == 14 ? 52.7 : 56.9;
+    dp_dv[i] = 0;
+    // output taps: one per line and side, spread along the line
+    f = i * 0.6180339 + 0.13 - floor(i * 0.6180339 + 0.13); dp_tfl[i] = 0.06 + 0.9 * f;
+    f = i * 0.3819661 + 0.71 - floor(i * 0.3819661 + 0.71); dp_tfr[i] = 0.06 + 0.9 * f;
+    dp_sgl[i] = (i == 1 || i == 2 || i == 6 || i == 9 || i == 11 || i == 12 || i == 13 || i == 15) ? -1 : 1;
+    dp_sgr[i] = (i == 0 || i == 3 || i == 4 || i == 6 || i == 10 || i == 11 || i == 13 || i == 14) ? -1 : 1;
+    dp_is[i] = (i == 2 || i == 3 || i == 6 || i == 7 || i == 9 || i == 12 || i == 13 || i == 14) ? -1 : 1;
+    // reflection pattern: positions along the span (0..1, irregular, sparse first) and signs
+    dp_efl[i] = min(max(((i + 0.55 + 0.38 * (dp_hash(i + 3) - 0.5)) / 16) ^ 1.12, 0.01), 1);
+    dp_efr[i] = min(max(((i + 0.45 + 0.38 * (dp_hash(i + 41) - 0.5)) / 16) ^ 1.12, 0.01), 1);
+    i += 1;
+  );
+  i = 0;
+  loop(96,
+    dp_gjl[i] = (i + 0.5 + 0.84 * (dp_hash(i + 101) - 0.5)) / 96;
+    dp_gjr[i] = (i + 0.5 + 0.84 * (dp_hash(i + 211) - 0.5)) / 96;
+    i += 1;
+  );
+  // input diffusers (ms): four per side; the BERLIN cluster (ms, made prime in samples): four per side
+  i = 0;
+  loop(8,
+    dp_dbl[i] = i == 0 ? 1.13 : i == 1 ? 1.71 : i == 2 ? 2.93 : i == 3 ? 4.31 : i == 4 ? 1.29 : i == 5 ? 1.93 : i == 6 ? 3.17 : 4.67;
+    dp_cbl[i] = i == 0 ? 3.7 : i == 1 ? 5.3 : i == 2 ? 7.9 : i == 3 ? 11.3 : i == 4 ? 4.1 : i == 5 ? 6.1 : i == 6 ? 8.9 : 12.7;
+    dp_cln[i] = dp_prime(dp_cbl[i] * 0.001 * srate);
+    i += 1;
+  );
 );
-i = 0;
-loop(96,
-  dp_gjl[i] = (i + 0.5 + 0.84 * (dp_hash(i + 101) - 0.5)) / 96;
-  dp_gjr[i] = (i + 0.5 + 0.84 * (dp_hash(i + 211) - 0.5)) / 96;
-  i += 1;
-);
-// input diffusers (ms): four per side; the BERLIN cluster (ms, made prime in samples): four per side
-i = 0;
-loop(8,
-  dp_dbl[i] = i == 0 ? 1.13 : i == 1 ? 1.71 : i == 2 ? 2.93 : i == 3 ? 4.31 : i == 4 ? 1.29 : i == 5 ? 1.93 : i == 6 ? 3.17 : 4.67;
-  dp_cbl[i] = i == 0 ? 3.7 : i == 1 ? 5.3 : i == 2 ? 7.9 : i == 3 ? 11.3 : i == 4 ? 4.1 : i == 5 ? 6.1 : i == 6 ? 8.9 : 12.7;
-  dp_cln[i] = dp_prime(dp_cbl[i] * 0.001 * srate);
-  i += 1;
-);
+dp_tables();
 
 // ---------- the machines ----------
 // k: 0 HALL, 1 ROOM, 2 PLATE, 3 EARLY REF, 4 GATE, 5 REVERSE (TOKYO); 8 RAUM A, 9 RAUM B, 10 PLATTE B, 11 ECHO (BERLIN)
@@ -230,7 +239,6 @@ function dp_dtick(p, inc) (
 function dp_satt(u) local(a) ( a = abs(u); a < 0.8 ? u : sign(u) * (0.8 + 0.2 * ost_tanh((a - 0.8) * 5)); );
 // BERLIN: input transformer (the lows saturate the core first) into an asymmetric early-silicon stage
 dp_eb = ost_tanh(0.8 * 0.18); dp_en = 1 / (0.8 * (1 - dp_eb * dp_eb));
-dp_xc = 1 - exp(-2 * $pi * 120 / srate);
 function dp_sate(u) instance(lp) (
   lp += (u - lp) * dp_xc;
   u += 0.45 * (ost_tanh(lp * 1.4) * 0.7142857 - lp);
@@ -287,7 +295,7 @@ function dp_gtaps() local(i, f, e, sl, sr, L) (
 );
 
 // ---------- control rate (every 32 samples) ----------
-dp_tk = 1 - exp(-32 / (0.12 * srate));                  // decay / size glide
+// (the decay / size glide dp_tk is set in dp_srinit() below)
 function dp_ctl() local(i, T, Tl, Th, L, gl, gm, gh, d, sz, s2) (
   dp_ts += (dp_tt - dp_ts) * dp_tk;
   dp_szs += (dp_szt - dp_szs) * dp_tk;
@@ -397,21 +405,29 @@ function load_preset(p) (
 );
 
 // ---------- state ----------
-in_init(); in_setup(0, 0);
+// everything else that depends on the sample rate (run again from @block if the rate changes: ext_noinit keeps
+// @init from running then)
+function dp_srinit() local(i) (
+  dp_sr = srate;
+  dp_xc = 1 - exp(-2 * $pi * 120 / srate);              // BERLIN: the input transformer's low band
+  dp_tk = 1 - exp(-32 / (0.12 * srate));                // decay / size glide
+  in_init(); in_setup(0, 0);
+  dp_lcl = -1;
+  aaL1.bq_set(0, 9000, 0.5412, 0); aaL2.bq_set(0, 9000, 1.3066, 0);   // BERLIN: 4-pole anti-alias at 9 kHz
+  aaR1.bq_set(0, 9000, 0.5412, 0); aaR2.bq_set(0, 9000, 1.3066, 0);
+  rcL.bq_set(0, 9500, 0.7071, 0); rcR.bq_set(0, 9500, 0.7071, 0);     // BERLIN: reconstruction
+  dp_smk = 1 - exp(-1 / (0.03 * srate));
+  dp_vfs = 1 / (0.025 * srate);
+  dp_dcc = 1 - 2 * $pi * 4 / srate;
+  dp_enc = 1 - exp(-1 / (0.006 * srate));               // companding envelope (attack)
+  dp_enr = 1 - exp(-1 / (0.08 * srate));                // (release)
+  dp_bnc = 1 - exp(-1 / (0.04 * srate));                // VFD band envelopes
+  bpA.bq_set(5, 125, 1.4, 0); bpB.bq_set(5, 400, 1.4, 0); bpC.bq_set(5, 1000, 1.4, 0);   // the VFD's six analyser bands
+  bpD.bq_set(5, 2500, 1.4, 0); bpE.bq_set(5, 6000, 1.4, 0); bpF.bq_set(5, min(12000, srate * 0.42), 1.4, 0);
+  i = 0; loop(16, dp_dinit(dp_dr + i * 4); i += 1; );
+);
+dp_srinit();
 ostL.ost_ch_init(); ostR.ost_ch_init();
-dp_lcl = -1;
-aaL1.bq_set(0, 9000, 0.5412, 0); aaL2.bq_set(0, 9000, 1.3066, 0);   // BERLIN: 4-pole anti-alias at 9 kHz
-aaR1.bq_set(0, 9000, 0.5412, 0); aaR2.bq_set(0, 9000, 1.3066, 0);
-rcL.bq_set(0, 9500, 0.7071, 0); rcR.bq_set(0, 9500, 0.7071, 0);     // BERLIN: reconstruction
-dp_smk = 1 - exp(-1 / (0.03 * srate));
-dp_vfs = 1 / (0.025 * srate);
-dp_dcc = 1 - 2 * $pi * 4 / srate;
-dp_enc = 1 - exp(-1 / (0.006 * srate));                 // companding envelope (attack)
-dp_enr = 1 - exp(-1 / (0.08 * srate));                  // (release)
-dp_bnc = 1 - exp(-1 / (0.04 * srate));                  // VFD band envelopes
-bpA.bq_set(5, 125, 1.4, 0); bpB.bq_set(5, 400, 1.4, 0); bpC.bq_set(5, 1000, 1.4, 0);   // the VFD's six analyser bands
-bpD.bq_set(5, 2500, 1.4, 0); bpE.bq_set(5, 6000, 1.4, 0); bpF.bq_set(5, min(12000, srate * 0.42), 1.4, 0);
-i = 0; loop(16, dp_dinit(dp_dr + i * 4); i += 1; );
 drD.drift_init(0.8 + rand(0.5)); drH.drift_init(0.8 + rand(0.5));
 dp_key = dp_ktar = 0;
 update();
@@ -430,6 +446,12 @@ ui_dflt = 1;
 update();
 
 @block
+srate != dp_sr ? (                                      // a new rate: lay the memory out again and rebuild the machine
+  dp_mem(); dp_tables(); dp_srinit(); update();
+  dp_setup(dp_key); dp_clear(); dp_vf = 1; update();
+  dp_ctl(); dp_cc = 0; dp_pre = dp_pret; dp_et = dp_ett;
+  dp_w = 0; dp_aw = 0; dp_pw = 0; dp_tw = 0;
+);
 update();
 // DRIFT: BERLIN - every tank line's clock wanders on its own, hiss and hum; TOKYO - only the decay wanders a little
 dp_di = 0.15 * dm_s * samplesblock / srate;
@@ -1042,10 +1064,10 @@ sprintf(#dqs, "[0x%02X]", floor(min(max(dq_pn_, 0), 1) * 255 + 0.5)); ui_cola(DQ
 // status line
 gfx_setfont(16);
 sprintf(#dqs, "ALG %02d %-9s", dq_ta + 1, dq_ta == 0 ? "HALL" : dq_ta == 1 ? "ROOM" : dq_ta == 2 ? "PLATE" : dq_ta == 3 ? "EARLY REF" : dq_ta == 4 ? "GATE" : "REVERSE");
-dq_vtxt(dq_vx + 20, dq_vy + 58, #dqs, 0.85);
-dq_vtxt(dq_vx + 170, dq_vy + 58, dq_ta <= 2 ? "FDN 16x16" : dq_ta == 3 ? "ER 16 TAP" : "NL 96 TAP", 0.6);
-sprintf(#dqs, "16BIT %.1fkHz", srate / 1000); ui_cola(DQV, 0.6); dq_rtxt(dq_vx + dq_vw - 20, dq_vy + 58, #dqs);
-ui_cola(DQV, 0.25); dq_r(dq_vx + 18, dq_vy + 72, dq_vw - 36, 1);
+dq_vtxt(dq_vx + 20, dq_vy + 54, #dqs, 0.85);
+dq_vtxt(dq_vx + 170, dq_vy + 54, dq_ta <= 2 ? "FDN 16x16" : dq_ta == 3 ? "ER 16 TAP" : "NL 96 TAP", 0.6);
+sprintf(#dqs, "16BIT %.1fkHz", srate / 1000); ui_cola(DQV, 0.6); dq_rtxt(dq_vx + dq_vw - 20, dq_vy + 54, #dqs);
+ui_cola(DQV, 0.25); dq_r(dq_vx + 18, dq_vy + 67, dq_vw - 36, 1);
 // the decay-time matrix: six bands x time (newest on the right), RT60 per band on the right
 dq_now - dq_ht > 0.06 ? (
   dq_ht = dq_now; dq_hc = (dq_hc + 1) % 32;
@@ -1056,7 +1078,7 @@ dq_now - dq_ht > 0.06 ? (
     dq_i += 1;
   );
 );
-dq_mx = dq_vx + 62; dq_my = dq_vy + 82; dq_cw = 11.5; dq_chh = 12.5; dq_nc = 28;
+dq_mx = dq_vx + 62; dq_my = dq_vy + 75; dq_cw = 11.5; dq_chh = 12; dq_nc = 28;
 gfx_setfont(16);
 dq_i = 0;
 loop(6,
