@@ -4,7 +4,7 @@ GFX - free JSFX plug-ins for REAPER
 Designed by JGWizrad.
 Website: https://www.gardenfx.uk/
 
-102 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
+115 plug-ins - instruments, drum machines, amps, dynamics, EQ, modulation,
 space, mastering and summing - plus the CC-80 chord script. Every sound is
 synthesised: there are no samples. All plug-ins share one look, resizable
 S / M / L panels and the same output stage.
@@ -84,6 +84,8 @@ INSTRUMENTS
   G Bass 1X       gfx-g-bass-1x.jsfx
   G Chip 48       gfx-g-chip.jsfx
   G Cosmos        gfx-g-cosmos.jsfx
+  G Daichi        gfx-g-daichi.jsfx
+  G EB81          gfx-g-eb81.jsfx
   G Ensemble      gfx-g-ensemble.jsfx
   G Glow          gfx-g-glow.jsfx
   G Harbour Keys  gfx-g-harbour-keys.jsfx
@@ -105,8 +107,10 @@ DRUM MACHINES
   G Pulse         gfx-g-pulse.jsfx
 
 AMPS & DRIVE
+  AK-MD 45        gfx-ak-md-45.jsfx
   Bass Head       gfx-bass-head.jsfx
   Desert Ten      gfx-desert-ten.jsfx
+  Drive-45        gfx-drive-45.jsfx
   Grunt           gfx-grunt.jsfx
   Guitar Head     gfx-guitar-head.jsfx
   Head            gfx-head.jsfx
@@ -115,6 +119,7 @@ AMPS & DRIVE
   PenguinDrive    gfx-penguindrive.jsfx
   Preamp          gfx-preamp.jsfx
   Preamp Q        gfx-preamp-q.jsfx
+  Stimm 45        gfx-stimm-45.jsfx
   Ten Rack        gfx-ten-rack.jsfx
   TS-7            gfx-ts7.jsfx
 
@@ -126,10 +131,12 @@ DYNAMICS
   De-Ess          gfx-de-ess.jsfx
   Duplex          gfx-duplex.jsfx
   Duplex Q        gfx-duplex-q.jsfx
+  Feld 45         gfx-feld-45.jsfx
   Field 42        gfx-field-42.jsfx
   Gate            gfx-gate.jsfx
   Headsmoother    gfx-headsmoother.jsfx
   MK3             gfx-mk3.jsfx
+  MUTO            gfx-muto.jsfx
   Quad11          gfx-quad11.jsfx
   RND             gfx-rnd.jsfx
   Smooth          gfx-smooth.jsfx
@@ -160,6 +167,7 @@ MODULATION & SPACE
   Autopan         gfx-autopan.jsfx
   Chopper         gfx-chopper.jsfx
   Chorus          gfx-chorus.jsfx
+  DRP-45          gfx-drp-45.jsfx
   Dynatron        gfx-dynatron.jsfx
   E-Delay         gfx-e-delay.jsfx
   E-Verb          gfx-e-verb.jsfx
@@ -175,17 +183,22 @@ MODULATION & SPACE
   Mod Rack        gfx-modrack.jsfx
   Oontecho        gfx-oontecho.jsfx
   Phaser          gfx-phaser.jsfx
+  Platte 140      gfx-platte-140.jsfx
   Polyvibe        gfx-polyvibe.jsfx
+  Raum 45         gfx-raum-45.jsfx
   Rotary          gfx-rotary.jsfx
   Space           gfx-space.jsfx
   Squashball      gfx-squashball.jsfx
+  Vocoder-45      gfx-vocoder-45.jsfx
 
 MASTERING
   Aureus          gfx-aureus.jsfx
   Benthick 3B     gfx-benthick-3b.jsfx
+  KRT-45          gfx-krt-45.jsfx
   Master EQ       gfx-master-eq.jsfx
   MasterSuite     gfx-mastersuite.jsfx
   Optimiser       gfx-optimiser.jsfx
+  Pegel 45        gfx-pegel-45.jsfx
   Quad22          gfx-quad22.jsfx
 
 SUMMING
