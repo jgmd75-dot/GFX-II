@@ -338,9 +338,9 @@ pm_ = rd_sq(376, 17, 78, 32, 0, ORG, "PRESETS");
 rd_sq(458, 17, 32, 32, 0, ORG, "◄") ? load_patch(slider25 <= 0 ? 11 : slider25 - 1);
 rd_sq(494, 17, 32, 32, 0, ORG, "►") ? load_patch(slider25 >= 11 ? 0 : slider25 + 1);
 pk_lcd(534 * sc, 9 * sc, 236 * sc, 48 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-sprintf(#l1, edited ? "PATCH %02d/12 *" : "PATCH %02d/12", slider25 + 1); gfx_x = 546 * sc; gfx_y = 15 * sc; gfx_drawstr(#l1);
-pk_lcdfont(9, 15 * sc); gfx_x = 546 * sc; gfx_y = 31 * sc; gfx_drawstr(patch_name(slider25));
+ui_col(pk_lcdc);
+strcpy(#l1, patch_name(slider25)); edited ? strcat(#l1, " *");
+pk_lcdfont(9, 28 * sc); gfx_measurestr(#l1, pn_w, pn_h); pk_fitstr(#l1, 546 * sc, 33 * sc - pn_h * 0.5, 28 * sc, 216 * sc);
 pm_ || (pressed && drag_id == 0 && mouse_x >= 534 * sc && mouse_x < 770 * sc && mouse_y >= 9 * sc && mouse_y < 57 * sc) ? (
   drag_id = -1; strcpy(#pm, ""); k_ = 0;
   loop(12, k_ == slider25 ? strcat(#pm, "!"); strcat(#pm, patch_name(k_)); k_ < 11 ? strcat(#pm, "|"); k_ += 1; );

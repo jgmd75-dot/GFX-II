@@ -227,9 +227,8 @@ pm_ = rd_sq(10, 62, 64, 30, 0, KEY, "PRESETS");
 rd_sq(78, 62, 28, 30, 0, KEY, "◄") ? ( setv(10, (floor(slider10 + 0.5) + 7) % 8); apply_preset(slider10); lastp = slider10; );
 rd_sq(110, 62, 28, 30, 0, KEY, "►") ? ( setv(10, (floor(slider10 + 0.5) + 1) % 8); apply_preset(slider10); lastp = slider10; );
 pk_lcd(144 * sc, 56 * sc, 182 * sc, 42 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-sprintf(#plcd, "PRESET %02d/08", floor(slider10 + 0.5) + 1); gfx_x = 154 * sc; gfx_y = 61 * sc; gfx_drawstr(#plcd);
-pk_lcdfont(9, 14 * sc); gfx_x = 154 * sc; gfx_y = 76 * sc; gfx_drawstr(pname(slider10));
+ui_col(pk_lcdc);
+pk_lcdfont(9, 24 * sc); gfx_measurestr(pname(slider10), pn_w, pn_h); pk_fitstr(pname(slider10), 154 * sc, 77 * sc - pn_h * 0.5, 24 * sc, 164 * sc);
 pm_ || (pressed && drag_id == 0 && mouse_x >= 144 * sc && mouse_x < 326 * sc && mouse_y >= 56 * sc && mouse_y < 98 * sc) ? (
   drag_id = -1;
   strcpy(#pmenu, ""); k_ = 0;
