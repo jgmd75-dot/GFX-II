@@ -46,10 +46,10 @@ desc:GFX Sum 92 [summing mixer]
 //          DRIFT (50% = standard): battery sag. The supply wanders slowly and droops under heavy, sustained level (the
 //          whole mix draws on one battery), so the preamps' headroom, the limiter thresholds and the transformers'
 //          drive all move a little. 0% = a fresh battery, 100% = twice the standard amount. (Only FIELD drifts.)
-//          FIELD's output always clips softly at -0.3 dBFS (the house CLIP at its default ceiling, no band saturation)
-//          as part of the unit's circuit; there are no output stage controls. The cassette and the desk have no output
-//          stage at all, as on the originals. Parameter list only: FIELD input iron, limiter attack / release.
-//          No model adds latency.
+//          Parameter list only: FIELD input iron, limiter attack / release.
+//
+// OUTPUT: every model's output clips softly at -0.3 dBFS (the house CLIP at its ceiling, always on, no latency, no
+//   controls): part of the 92 chassis. Below about -2 dBFS it does nothing, so each model is its original there.
 //
 // MODEL SWITCH: only the selected model runs (CPU = that model). A change crossfades the outgoing model into the
 //   incoming one over 20 ms (both run for those 20 ms); the incoming model starts from a clean, reset state.
@@ -889,7 +889,7 @@ function fm_update() (
   fm_tone_on = slider127 > 0.5; fm_tone_f = slider128 < 0.5 ? 1000 : slider128 < 1.5 ? 400 : 100; fm_tone_a = 10 ^ ((slider129 - 20) / 20) * sqrt(2);
   drift_macro(slider130);
   fm_l_at = 1 - exp(-1 / (max(slider133, 0.05) * 0.001 * srate)); fm_l_rl = 1 - exp(-1 / (slider134 * 0.001 * srate));
-  ost_setup(0, 0.3, 120, 6000, -0.3, 1);   // the output clips softly at -0.3 dBFS: part of the unit (no output stage controls)
+
 );
 
 
@@ -923,7 +923,6 @@ function fm_reset() (
   fm_c4.fm_ir.fm_lf = fm_c4.fm_lim = fm_c4.fm_ms = fm_c4.fm_mute = fm_c4.fm_pk = fm_c4.fm_pl = fm_c4.fm_pol = 0;
   fm_c4.fm_pr = fm_c4.fm_solo = fm_c4.fm_trim = fm_c4.fm_wid = fm_drv.a = fm_drv.b = fm_drv.ph = fm_drv.rm = 0;
   fm_drv.v = fm_iol.fm_hf = fm_iol.fm_lf = fm_ior.fm_hf = fm_ior.fm_lf = 0;
-  ost_init(150000); fm_ostL.ost_ch_init(); fm_ostR.ost_ch_init();
   fm_drV.drift_init(0.8 + rand(0.5));
   fm_f4_ia = 1 - exp(-2 * $pi * 110 / srate);
   fm_f4_ha = 1 - exp(-2 * $pi * 14000 / srate);
@@ -955,9 +954,7 @@ function fm_run() (
   );
 
   fm_sL = fm_ioL.fm_f4_iron(fm_sL, fm_iron_o, fm_sup); fm_sR = fm_ioR.fm_f4_iron(fm_sR, fm_iron_o, fm_sup);
-  fm_sL = fm_ostL.ost_band(fm_sL); fm_sR = fm_ostR.ost_band(fm_sR);
-  ost_out(fm_sL, fm_sR);
-  fm_oL = ost_l; fm_oR = ost_r;
+  fm_oL = fm_sL; fm_oR = fm_sR;                   // its output stage is the 92 chassis clip
 );
 
 function fm_blockrun() (
@@ -980,8 +977,6 @@ function s92_run(m) (
   m == 2 ? ( cp_run(); s92_rL = cp_ml; s92_rR = cp_mr; ) :
            ( fm_run(); s92_rL = fm_oL; s92_rR = fm_oR; );
 );
-// no latency unless FIELD (with its output stage on LIMIT) is in the circuit
-function s92_pdc() ( s92_cur != 3 && !(s92_xf && s92_old == 3) ? ( pdc_bot_ch = 0; pdc_top_ch = 2; pdc_delay = 0; ); );
 // MODEL change: start the 20 ms crossfade (a change during a fade keeps whichever model is louder as the outgoing one)
 function s92_switch() local(m) (
   m = min(max(floor(slider1 + 0.5), 0), 3);
@@ -995,7 +990,8 @@ function s92_srinit() (
   s92_sr = srate;
   s92_cur = min(max(floor(slider1 + 0.5), 0), 3); s92_xf = 0; s92_xt = 0;
   s92_reset(s92_cur);
-  s92_pdc();
+  ost_init(150000); s92_ostL.ost_ch_init(); s92_ostR.ost_ch_init();
+  ost_setup(0, 0.3, 120, 6000, -0.3, 1);           // the chassis clip: CLIP at -0.3 dBFS, always on, no latency
   s92_xfc = 1 / (0.02 * srate);
   s92_vuc = 1 - exp(-1 / (0.3 * srate));
 );
@@ -1158,13 +1154,11 @@ s92_srinit();
 @slider
 s92_switch();
 s92_update(s92_cur); s92_xf ? s92_update(s92_old);
-s92_pdc();
 
 @block
 srate != s92_sr ? s92_srinit();
 s92_switch();
 s92_block(s92_cur); s92_xf ? s92_block(s92_old);
-s92_pdc();
 
 @serialize
 file_var(0, ui_sz);
@@ -1180,7 +1174,10 @@ s92_xf ? (
   s92_yL = s92_yL * s92_w + s92_rL * (1 - s92_w); s92_yR = s92_yR * s92_w + s92_rR * (1 - s92_w);
   s92_xt += s92_xfc; s92_xt >= 1 ? s92_xf = 0;
 );
-spl0 = s92_yL; spl1 = s92_yR;
+// the chassis clip (band saturation off: it passes the signal unchanged)
+s92_yL = s92_ostL.ost_band(s92_yL); s92_yR = s92_ostR.ost_band(s92_yR);
+ost_out(s92_yL, s92_yR);
+spl0 = ost_l; spl1 = ost_r;
 spl2 = spl3 = spl4 = spl5 = spl6 = spl7 = spl8 = spl9 = spl10 = spl11 = 0;
 // the selected model's meters (as its original)
 s92_cur <= 1 ? (
