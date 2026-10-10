@@ -203,6 +203,7 @@ drC.drift_init(0.8 + rand(0.5));
 ost_init(1000); ostL.ost_ch_init(); ostR.ost_ch_init();
 in_init();
 vuc = 1 - exp(-1 / (0.01 * srate)); vu_ms = 0;
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;   // fixed faceplate
 pkL = 0; pkR = 0;
 dispBias = 0;
@@ -365,7 +366,7 @@ gi = 0; loop(3,
   gi += 1; );
 
 // ---------- the VU, in the middle ----------
-vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18;
+vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18 + vu_sine;
 vud = vud + (vdb - vud) * 0.35;
 vu(336, 66, 240, 134, vud);
 txt(456, 210, slider1 == 0 ? "CLEAN  -  NO DRIVE" : slider1 == 1 ? (slider2 < 35 ? "VIBE  -  WARM" : slider2 < 70 ? "VIBE  -  PUSHED" : "VIBE  -  SATURATED") :

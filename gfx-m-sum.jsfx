@@ -164,6 +164,7 @@ bumpL.bq_set(2, 35, 1.2, 0.5); bumpR.bq_set(2, 35, 1.2, 0.5);   // +0.5 dB core 
 det_r = exp(-1 / (0.005 * srate));                  // peak detector decay
 sm = 1 - exp(-1 / (0.02 * srate));
 vuc = 1 - exp(-1 / (0.3 * srate));
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
 PNL = 0x74777C; INKW = 0xF4F2EA; YEL = 0xF2D04A; KDK = 0x3A3C40;
 update();
@@ -310,7 +311,7 @@ sprintf(#v, "%+.1f dB", slider10); dy_knob(504, 316, 18, 10, -24, 12, 0, 0, YEL,
 sect(548, 254, 336, 140, "METERS");
 grd = min(grm, grd * 0.85); grm = 0;
 vuG.ui_vu(558 * sc, 282 * sc, 156 * sc, 100 * sc, grd, "GR");
-vuO.ui_vu(720 * sc, 282 * sc, 156 * sc, 100 * sc, 10 * log10(vm + 0.0000000001) + 18, "BUS OUT");
+vuO.ui_vu(720 * sc, 282 * sc, 156 * sc, 100 * sc, 10 * log10(vm + 0.0000000001) + 18 + vu_sine, "BUS OUT");
 
 pk_end();
 ui_end();

@@ -121,6 +121,7 @@ function update() local(th) (
 f4_ia = 1 - exp(-2 * $pi * 110 / srate);           // the core's flux (low-frequency) band
 f4_ha = 1 - exp(-2 * $pi * 14000 / srate);
 vu_c = 1 - exp(-1 / (0.065 * srate));              // VU: about 300 ms to settle
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 sag_c = 1 - exp(-1 / (0.6 * srate));
 lastp = slider14;                                   // adopt the saved preset without re-applying it
 !ui_dflt ? ( ui_thm = 0; );
@@ -230,7 +231,7 @@ ui_size_picker(848 * sc, 24 * sc);
 // ---------- INPUT VU ----------
 sect(16, 76, 214, 208, SH1, "INPUT");
 hw_ = ui_hw; ui_hw = 1;
-vuI.ui_vu(26 * sc, 98 * sc, 194 * sc, 136 * sc, 10 * log10(max(vu_e, 0.0000000001)) + 20, "0 VU = -20 dBFS");
+vuI.ui_vu(26 * sc, 98 * sc, 194 * sc, 136 * sc, 10 * log10(max(vu_e, 0.0000000001)) + 20 + vu_sine, "0 VU = -20 dBFS");
 ui_hw = hw_;
 rd_led(62, 254, 5, pk_in > 0.89, REDL); rd_lbl(62, 264, "PEAK", DIMI, 1);
 rd_led(123, 254, 5, il_hit > 0.5, AMB); rd_lbl(123, 264, "IN LIM", DIMI, 1);

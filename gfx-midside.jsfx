@@ -132,6 +132,7 @@ scw = 0; scd = 0;
 // ---------- state ----------
 sm  = 1 - exp(-1 / (0.03 * srate));
 vuc = 1 - exp(-1 / (0.01 * srate));
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 crc = 1 - exp(-1 / (0.3 * srate));
 drW.drift_init(0.8 + rand(0.5));
 drA.drift_init(0.8 + rand(0.5));
@@ -280,7 +281,7 @@ gfx_x = 118 * sc; gfx_y = 94 * sc;  gfx_drawstr("MID");
 gfx_x = 118 * sc; gfx_y = 110 * sc; gfx_drawstr("SIDE");
 
 // ---------- input VU ----------
-vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18;   // 0 VU = -18 dBFS RMS
+vdb = 10 * log10(max(vu_ms, 0.0000000001)) + 18 + vu_sine;   // 0 VU = sine peaking at -18 dBFS
 vuIn.ui_vu(478 * sc, 52 * sc, 146 * sc, 80 * sc, vdb, "INPUT");
 
 // ---------- M/S group ----------

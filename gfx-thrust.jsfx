@@ -125,6 +125,7 @@ ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 det_r = exp(-1 / (0.008 * srate));                  // peak detector decay (8 ms)
 sm = 1 - exp(-1 / (0.03 * srate));
 vuc = 1 - exp(-1 / (0.3 * srate));
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;                              // fixed faceplate
 PNL = 0x141416; INKW = 0xF2F2EE; YEL = 0xF2C21B; BLU = 0x2F7FE0; LGRY = 0xD2D4D8; DGRY = 0x6C6F76;   // knob caps
 update();
@@ -209,7 +210,7 @@ dy_lbl(482, 276, "IN", 0.9);
 // ---------- STEREO ----------
 sect(534, 346, "STEREO", BLU);
 grdL = min(grmL, grdL * 0.85 + 0); grdR = min(grmR, grdR * 0.85 + 0); grmL = 0; grmR = 0;
-slider14 ? ( vaL = 10 * log10(vmL + 0.0000000001) + 18; vaR = 10 * log10(vmR + 0.0000000001) + 18; )
+slider14 ? ( vaL = 10 * log10(vmL + 0.0000000001) + 18 + vu_sine; vaR = 10 * log10(vmR + 0.0000000001) + 18 + vu_sine; )
          : ( vaL = grdL; vaR = grdR; );
 vuL.ui_vu(546 * sc, 100 * sc, 162 * sc, 98 * sc, vaL, slider14 ? "OUT L" : "GR L");
 vuR.ui_vu(716 * sc, 100 * sc, 162 * sc, 98 * sc, vaR, slider14 ? "OUT R" : "GR R");

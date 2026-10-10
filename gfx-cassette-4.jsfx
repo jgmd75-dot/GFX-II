@@ -194,6 +194,7 @@ function load_preset(p) (
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 sm = 1 - exp(-1 / (0.02 * srate));
 vuc = 1 - exp(-1 / (0.3 * srate));
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 dr_r = 1 - exp(-1 / (0.03 * srate));
 wpos = 0; drop_g = 1; drop_t = 1;
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
@@ -286,8 +287,8 @@ sprintf(#v, "%+.1f dB", slider(16 + gk)); dy_knob(cx, 194, 13, 16 + gk, -10, 10,
 );
 
 // ---------- meters ----------
-vuL.ui_vu(400 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmL + 0.0000000001) + 18, "L");
-vuR.ui_vu(576 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmR + 0.0000000001) + 18, "R");
+vuL.ui_vu(400 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmL + 0.0000000001) + 18 + vu_sine, "L");
+vuR.ui_vu(576 * sc, 72 * sc, 170 * sc, 104 * sc, 10 * log10(vmR + 0.0000000001) + 18 + vu_sine, "R");
 
 // ---------- tape + master ----------
 ui_cola(INK, 0.06); gfx_rect(400 * sc, 188 * sc, 346 * sc, 200 * sc);

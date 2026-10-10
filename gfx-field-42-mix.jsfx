@@ -179,6 +179,7 @@ function update() (
 f4_ia = 1 - exp(-2 * $pi * 110 / srate);
 f4_ha = 1 - exp(-2 * $pi * 14000 / srate);
 vu_c = 1 - exp(-1 / (0.065 * srate));
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 sag_c = 1 - exp(-1 / (0.6 * srate));
 lastp = slider45;
 !ui_dflt ? ( ui_thm = 0; );
@@ -296,7 +297,7 @@ strip(478, 28, "7 - 8", c4.pk, c4.lim); c4.pk *= 0.85; c4.lim *= 0.8;
 // ---------- master: VU, limiter, iron, tone, drift, fader, LED ladder ----------
 sect(636, 76, 388, 450, SH1, "MASTER");
 hw_ = ui_hw; ui_hw = 1;
-vuM.ui_vu(648 * sc, 98 * sc, 300 * sc, 160 * sc, 10 * log10(max(vu_e, 0.0000000001)) + 20, "MIX  0 VU = -20 dBFS");
+vuM.ui_vu(648 * sc, 98 * sc, 300 * sc, 160 * sc, 10 * log10(max(vu_e, 0.0000000001)) + 20 + vu_sine, "MIX  0 VU = -20 dBFS");
 ui_hw = hw_;
 rd_sq(650, 276, 40, 24, slider38 == 0, AMB, "OFF") ? setv(38, 0);
 rd_sq(693, 276, 40, 24, slider38 == 1, AMB, "ON") ? setv(38, 1);

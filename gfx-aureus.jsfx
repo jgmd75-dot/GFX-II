@@ -267,6 +267,7 @@ function apply_preset(n) (
 vuL = 0; vuR = 0; mOut = 0; mLim = 0; limEnv = 0;
 limRel = exp(-1/(0.15*srate));
 vuC = cms(0.3);
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 xfLp = 1 - exp(-TWO_PI*F1*PHI/srate);          // transformer low split: F1 * PHI
 vnd = alloc(2); memset(vnd, 0, 2);            // VU needle positions (GUI)
 drag_id = -1; pcap = 0; lastS = 0;
@@ -638,8 +639,8 @@ function vu(x, y, v, lbl, np) local(db, pos, a, px_, py_, k, tv, tp, rr, cxv, cy
     gfx_arc(ox + cxv*S, oy + cyv*S, (rr - 4)*S + k, (-48 + 96*(1 - 0.1)/(10^(3/20) - 0.1))*$pi/180, 48*$pi/180, 1); k += 1; );
   cnear(); gfx_setfont(3); TC(cxv, y + 76, "VU");
   gfx_setfont(5); TX(x + 8, y + 94, lbl);
-  // needle (0 VU = -18 dBFS RMS), simple ballistics per frame
-  db = v > 0.000000001 ? 10*log10(v) + 18 : -40;
+  // needle (0 VU = sine peaking at -18 dBFS), simple ballistics per frame
+  db = v > 0.000000001 ? 10*log10(v) + 18 + vu_sine : -40;
   pos = max(-0.04, min(1.06, (10^(max(-30, db)/20) - 0.1)/(10^(3/20) - 0.1)));
   np[0] += 0.35*(pos - np[0]);
   a = (-48 + 96*np[0])*$pi/180;

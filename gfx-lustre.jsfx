@@ -163,6 +163,7 @@ ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 sm = 1 - exp(-1 / (0.02 * srate));
 lm_c = 1 - exp(-2 * $pi * 400 / srate); hp_c = 1 - exp(-2 * $pi * 60 / srate);
 vuc = 1 - exp(-1 / (0.3 * srate));
+vu_sine = 10 * log10(2);   // +3.01 dB: RMS -> sine peak, so a sine peaking at the ref level reads 0 VU
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1;
 PNL = 0xE6DDC6; INK = 0x3E2818; BRN = 0x6E4428; AMB = 0xC8862E; CRM = 0xF4EEDC;
 update();
@@ -237,8 +238,8 @@ loop(8,
 
 // ---------- master: VUs, the transformer bus, master level ----------
 ui_cola(BRN, 0.14); gfx_rect(536 * sc, 70 * sc, 348 * sc, 274 * sc);
-vuL.ui_vu(544 * sc, 76 * sc, 166 * sc, 92 * sc, 10 * log10(vmL + 0.0000000001) + 18, "L");
-vuR.ui_vu(712 * sc, 76 * sc, 166 * sc, 92 * sc, 10 * log10(vmR + 0.0000000001) + 18, "R");
+vuL.ui_vu(544 * sc, 76 * sc, 166 * sc, 92 * sc, 10 * log10(vmL + 0.0000000001) + 18 + vu_sine, "L");
+vuR.ui_vu(712 * sc, 76 * sc, 166 * sc, 92 * sc, 10 * log10(vmR + 0.0000000001) + 18 + vu_sine, "R");
 dy_nov = 0;
 sprintf(#v, "%+.1f dB", slider1); dy_knob(570, 216, 15, 1, -6, 12, 0, 0, AMB, "DRIVE", #v);
 sprintf(#v, "%.0f", slider2); dy_knob(628, 216, 15, 2, 0, 100, 30, 0, AMB, "DENSITY", #v);
