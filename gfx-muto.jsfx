@@ -552,8 +552,9 @@ mg_u == 0 ? (
 
   FM = 0x172126;
   pk_inset(300 * sc, 72 * sc, 300 * sc, 252 * sc, FM);
-  mg_s = mu_ms ? "MID" : mu_lk >= 0.999 ? "LINKED" : "LEFT";
-  mg_t = mu_ms ? "SIDE" : mu_lk >= 0.999 ? "LINKED" : "RIGHT";
+  mg_ms = slider16 > 1.5; mg_lkd = slider16 < 0.5 && slider17 >= 99.5;
+  mg_s = mg_ms ? "MID" : mg_lkd ? "LINKED" : "LEFT";
+  mg_t = mg_ms ? "SIDE" : mg_lkd ? "LINKED" : "RIGHT";
   slider23 > 0.5 ? ( mg_s = "LEFT"; mg_t = "RIGHT"; );
   mgA.mg_meter(306, 78, 142, 122, slider23 > 0.5 ? mu_vuA : -mu_grA, 1, mg_s);
   mgB.mg_meter(452, 78, 142, 122, slider23 > 0.5 ? mu_vuB : -mu_grB, 1, mg_t);
@@ -584,8 +585,8 @@ mg_u == 0 ? (
     mg_x = 40 + mg_i * 74; mg_ix = 14 + mg_i;
     mg_ticks(mg_x, 270, 18, 5, 1);
     mg_knob(mg_x, 270, 18, mg_ix, 0, 4, 0, 0, 5, 20, 0xF2C21B);
-    mg_lbl(mg_x, 298, mu_ms ? (mg_i ? "HPF S" : "HPF M") : (mg_i ? "HPF R" : "HPF L"), 13);
-    mg_v = slider(mg_ix); mg_act ? mg_val(mg_x, 214, mg_v < 0.5 ? "OFF" : mg_v < 1.5 ? "60 Hz" : mg_v < 2.5 ? "90 Hz" : mg_v < 3.5 ? "150 Hz" : "250 Hz");
+    mg_lbl(mg_x, 298, mg_ms ? (mg_i ? "HPF S" : "HPF M") : (mg_i ? "HPF R" : "HPF L"), 13);
+    mg_hv = slider(mg_ix); mg_act ? mg_val(mg_x, 214, mg_hv < 0.5 ? "OFF" : mg_hv < 1.5 ? "60 Hz" : mg_hv < 2.5 ? "90 Hz" : mg_hv < 3.5 ? "150 Hz" : "250 Hz");
     mg_i += 1; );
   mg_lbl(77, 316, "SIDE-CHAIN", 11);
   mg_key(180, 240, 92, 22, slider16 == 0, mg_acc, "STEREO", 12) ? ( slider16 = 0; ui_auto(16); );

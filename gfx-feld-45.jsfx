@@ -121,7 +121,7 @@ function fd_C(u) local(c, d, ca, da) (
   c;
 );
 // one detector: lev = the peak level into the FET (linear), thr = threshold (dBFS). Returns the applied GR (dB).
-function fd_det(lev, thr) instance(G, Gs, Gl, Ga) local(P, t0, Gn, c, h, fl) (
+function fd_det(lev, thr) instance(G, Gs, Gl, Ga, Hd) local(P, t0, Gn, c, h, fl) (
   P = 8.68588963807 * log(max(lev, 0.000001)) - thr;    // input over the threshold
   t0 = fd_C(P - G);
   t0 > G ? (
@@ -141,13 +141,14 @@ function fd_det(lev, thr) instance(G, Gs, Gl, Ga) local(P, t0, Gn, c, h, fl) (
     G = max(G, t0);
   );
   // the slow stage charges only while the signal still holds the gain reduction (not while it is recovering)
-  G > Gs && t0 > 0.9 * G ? Gs += (G - Gs) * fd_cs : Gs *= fd_rs;
+  Hd = max(t0, Hd * fd_hd);                             // is the signal still there? (bridges the waveform's valleys)
+  G > Gs && Hd > 0.85 * G ? Gs += (G - Gs) * fd_cs : Gs *= fd_rs;
   Gl += (G - Gl) * fd_cl;                               // ALL: the lagging copy for the overshoot
-  G < 0.000001 ? G = 0; Gs < 0.000001 ? Gs = 0; abs(Gl) < 0.000001 ? Gl = 0;
+  G < 0.000001 ? G = 0; Gs < 0.000001 ? Gs = 0; Hd < 0.000001 ? Hd = 0; abs(Gl) < 0.000001 ? Gl = 0;
   Ga = max(G + fd_ov * (G - Gl), 0);
   Ga;
 );
-function fd_dcopy() instance(G, Gs, Gl, Ga) ( G = dL.G; Gs = dL.Gs; Gl = dL.Gl; Ga = dL.Ga; );
+function fd_dcopy() instance(G, Gs, Gl, Ga, Hd) ( G = dL.G; Gs = dL.Gs; Gl = dL.Gl; Ga = dL.Ga; Hd = dL.Hd; );
 
 // ---------- the nonlinear stage, at 2x: FET gain element + its colour, OUTPUT, class-A line amp ----------
 fd_ld = 0.4; fd_lb = 0.12;                              // line amp curve: drive, bias
@@ -224,6 +225,7 @@ function load_preset(p) (
 fd_sm  = 1 - exp(-1 / (0.02 * srate));                  // knob smoothing
 fd_smr = 1 - exp(-1 / (0.03 * srate));                  // ratio / mode glide
 fd_cs  = 1 - exp(-1 / (0.3 * srate));                   // slow release stage: charge
+fd_hd  = exp(-1 / (0.02 * srate));                      // signal-present hold, 20 ms
 fd_kap = 0.7;                                           // how much of the slow stage's memory holds the fast stage
 fd_cl  = 1 - exp(-1 / (0.04 * srate));                  // ALL: overshoot lag
 fd_ce  = 1 - exp(-1 / (0.01 * 2 * srate));              // (2x) mean-square tracker, 10 ms
