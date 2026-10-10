@@ -229,9 +229,8 @@ function sp_update() local(t) (
   sp_balt = min(max(slider11, 0), 100) / 100;
   sp_mxt = min(max(slider12, 0), 100) / 100;
   sp_pret = min(max(slider13, 0), 250) * 0.001 * srate;
-  slider14 != sp_lcl ? ( sp_lcl = slider14; lcL.bq_set(1, slider14, 0.7071, 0); lcR.bq_set(1, slider14, 0.7071, 0); );
-  sp_hcon = slider15 < 19950;
-  slider15 != sp_hcl ? ( sp_hcl = slider15; hcL.bq_set(0, slider15, 0.7071, 0); hcR.bq_set(0, slider15, 0.7071, 0); );
+  sp_lct = min(max(slider14, 20), 600);
+  sp_hct = slider15 >= 19950 ? 0.45 * srate : min(max(slider15, 2000), 20000);   // OFF: out of the way
   sp_wdt = min(max(slider16, 0), 150) / 100;
   drift_macro(slider17);
   sp_ot = 10 ^ (slider18 / 20);
@@ -299,9 +298,11 @@ function sp_srinit() (
   sp_ffc = 1 - exp(-1 / (0.02 * srate));                // face (electronics) fades
   sp_dcc = 1 - 2 * $pi * 5 / srate;
   sp_lcl = sp_hcl = -1;
+  oBL.bq_set(0, sp_fcB * 1.25, 0.6, 0); oBR.bq_set(0, sp_fcB * 1.25, 0.6, 0);   // after the tanks: what a crash adds up high
+  oHL.bq_set(0, sp_fcH * 1.3, 0.6, 0); oHR.bq_set(0, sp_fcH * 1.3, 0.6, 0);
   in_init(); in_setup(0, 0);
   sp_kon = 0; sp_kt = 0; sp_kenv = 0; sp_kmod = 0; sp_kn = 0;
-  sp_kac = 1 / (0.0015 * srate); sp_kdc = exp(-1 / (0.04 * srate)); sp_kwc = exp(-1 / (0.28 * srate));
+  sp_kac = 1 / (0.0015 * srate); sp_kdc = exp(-1 / (0.025 * srate)); sp_kpl = 0.005 * srate; sp_kg = 0.55; sp_kwc = exp(-1 / (0.28 * srate));
   sp_kph = 0; sp_kpi = 5.5 / srate; sp_kti = 55 / srate; sp_knc = 1 - exp(-2 * $pi * 1400 / srate);
 );
 function sp_bclr() (
@@ -311,6 +312,7 @@ function sp_bclr() (
   eBa.x1 = eBa.x2 = eBa.y1 = eBa.y2 = 0; eBb.x1 = eBb.x2 = eBb.y1 = eBb.y2 = 0;
   eBc.x1 = eBc.x2 = eBc.y1 = eBc.y2 = 0;
   eBLt.x1 = eBLt.x2 = eBLt.y1 = eBLt.y2 = 0; eBRt.x1 = eBRt.x2 = eBRt.y1 = eBRt.y2 = 0;
+  oBL.x1 = oBL.x2 = oBL.y1 = oBL.y2 = 0; oBR.x1 = oBR.x2 = oBR.y1 = oBR.y2 = 0;
   uB.pe = uB.pv = 0;
 );
 function sp_hclr() (
@@ -320,10 +322,12 @@ function sp_hclr() (
   eHa.x1 = eHa.x2 = eHa.y1 = eHa.y2 = 0; eHb.x1 = eHb.x2 = eHb.y1 = eHb.y2 = 0;
   eHc.x1 = eHc.x2 = eHc.y1 = eHc.y2 = 0;
   eHLt.x1 = eHLt.x2 = eHLt.y1 = eHLt.y2 = 0; eHRt.x1 = eHRt.x2 = eHRt.y1 = eHRt.y2 = 0;
+  oHL.x1 = oHL.x2 = oHL.y1 = oHL.y2 = 0; oHR.x1 = oHR.x2 = oHR.y1 = oHR.y2 = 0;
   uH.pe = uH.pv = 0;
 );
 sp_srinit();
 sp_update();
+sp_lcf = sp_lct; sp_hcf = sp_hct;
 sp_kprev = slider25 >= 0.5; sp_kgo = 0; sp_kreq = sp_kseen = 0;
 sp_tB = sp_tBt; sp_tH = sp_tHt; sp_toB = sp_toBt; sp_toH = sp_toHt;
 sp_bal = sp_balt; sp_mx = sp_mxt; sp_o_ = sp_ot; sp_pre = sp_pret; sp_wd = sp_wdt;
@@ -341,13 +345,17 @@ ui_dflt = 1;
 sp_update();
 
 @block
-srate != sp_sr ? ( sp_mem(); sp_srinit(); sp_update(); sp_bclr(); sp_hclr(); );
+srate != sp_sr ? ( sp_mem(); sp_srinit(); sp_update(); sp_lcf = sp_lct; sp_hcf = sp_hct; sp_bclr(); sp_hclr(); );
 sp_update();                                            // knobs moved on the panel do not run @slider
 sp_kreq != sp_kseen ? ( sp_kseen = sp_kreq; sp_kgo = 1; );   // the panel's KICK key
 // block-rate glides for what sets coefficients
 sp_bk = 1 - exp(-samplesblock / (0.06 * srate));
 sp_tB += (sp_tBt - sp_tB) * sp_bk; sp_tH += (sp_tHt - sp_tH) * sp_bk;
 sp_toB += (sp_toBt - sp_toB) * sp_bk; sp_toH += (sp_toHt - sp_toH) * sp_bk;
+// the return filters glide (no zipper, no click on a jump)
+sp_lcf *= (sp_lct / sp_lcf) ^ sp_bk; sp_hcf *= (sp_hct / sp_hcf) ^ sp_bk;
+abs(sp_lcf / sp_lcl - 1) > 0.002 ? ( sp_lcl = sp_lcf; lcL.bq_set(1, sp_lcf, 0.7071, 0); lcR.bq_set(1, sp_lcf, 0.7071, 0); );
+abs(sp_hcf / sp_hcl - 1) > 0.002 ? ( sp_hcl = sp_hcf; hcL.bq_set(0, sp_hcf, 0.7071, 0); hcR.bq_set(0, sp_hcf, 0.7071, 0); );
 abs(sp_tdb(sp_toB) - sp_tdB) > 0.02 ? ( sp_tdB = sp_tdb(sp_toB); eBLt.bq_set(3, 1600, 0.6, sp_tdB); eBRt.bq_set(3, 1600, 0.6, sp_tdB); );
 abs(sp_tdb(sp_toH) - sp_tdH) > 0.02 ? ( sp_tdH = sp_tdb(sp_toH); eHLt.bq_set(3, 1600, 0.6, sp_tdH); eHRt.bq_set(3, 1600, 0.6, sp_tdH); );
 // DRIFT: spring tension (fixed offsets, slow wander) and the loop gains
@@ -388,7 +396,8 @@ sp_kon ? (
   sp_kenv *= sp_kdc; sp_ksw *= sp_kwc;
   sp_kn += ((rand(2) - 1) - sp_kn) * sp_knc;
   sp_ktp += sp_kti; sp_ktp >= 1 ? sp_ktp -= 1;
-  sp_kx = sp_ka * sp_kenv * (3.2 * sp_kn + 0.9 * sin(2 * $pi * sp_ktp));
+  sp_kp = sp_kt < sp_kpl ? sin($pi * sp_kt / sp_kpl) : 0;   // the knock itself: one smooth 5 ms half-wave
+  sp_kx = sp_kg * (2.2 * sp_kp + sp_ka * sp_kenv * (1.3 * sp_kn + 0.5 * sin(2 * $pi * sp_ktp)));
   sp_kph += sp_kpi; sp_kph >= 1 ? sp_kph -= 1;
   sp_kmod = 0.016 * sp_ka * sp_ksw * sin(2 * $pi * sp_kph);
   sp_ksw < 0.002 ? ( sp_kon = 0; sp_kmod = 0; );
@@ -416,7 +425,7 @@ sp_bw > 0.00001 ? (
   sp_y2 = spB.sp_spr(sp_u, sp_kB, sp_ixB);
   sp_ixB += 1; sp_ixB >= sp_kB ? sp_ixB = 0;
   sp_bl = sp_y1 + 0.3 * sp_y2 + sp_yh; sp_br = sp_y2 + 0.3 * sp_y1 - sp_yh;
-  sp_bl = eBLt.bq_run(sp_bl); sp_br = eBRt.bq_run(sp_br);
+  sp_bl = oBL.bq_run(eBLt.bq_run(sp_bl)); sp_br = oBR.bq_run(eBRt.bq_run(sp_br));
   sp_bl = sp_rec(sp_bl * 1.4, sp_fwB) * sp_lvB * sp_bw; sp_br = sp_rec(sp_br * 1.4, sp_fwB) * sp_lvB * sp_bw;
 );
 // ---------- 3S-78: the long tank ----------
@@ -433,7 +442,7 @@ sp_hw > 0.00001 ? (
   sp_y3 = spE.sp_spr(sp_u, sp_kH, sp_ixH);
   sp_ixH += 1; sp_ixH >= sp_kH ? sp_ixH = 0;
   sp_hl = sp_y1 + 0.2 * sp_y2 + 0.55 * sp_y3 + sp_yh; sp_hr = sp_y2 + 0.2 * sp_y1 - 0.55 * sp_y3 - sp_yh;
-  sp_hl = eHLt.bq_run(sp_hl); sp_hr = eHRt.bq_run(sp_hr);
+  sp_hl = oHL.bq_run(eHLt.bq_run(sp_hl)); sp_hr = oHR.bq_run(eHRt.bq_run(sp_hr));
   sp_hl = sp_rec(sp_hl * 1.4, sp_fwH) * sp_lvH * sp_hw; sp_hr = sp_rec(sp_hr * 1.4, sp_fwH) * sp_lvH * sp_hw;
 );
 sp_dw = (sp_dw + 1) & sp_dm;
@@ -446,7 +455,7 @@ sp_wr = (sp_wb * sp_br + sp_wh * sp_hr) * sp_wn;
 sp_m = 0.5 * (sp_wl + sp_wr); sp_s = 0.5 * (sp_wl - sp_wr) * sp_wd;
 sp_wl = sp_m + sp_s; sp_wr = sp_m - sp_s;
 sp_wl = lcL.bq_run(sp_wl); sp_wr = lcR.bq_run(sp_wr);
-sp_hcon ? ( sp_wl = hcL.bq_run(sp_wl); sp_wr = hcR.bq_run(sp_wr); );
+sp_wl = hcL.bq_run(sp_wl); sp_wr = hcR.bq_run(sp_wr);
 sp_dxl = sp_wl - sp_dcl + sp_dcc * sp_dxl; sp_dcl = sp_wl; sp_wl = sp_dxl;
 sp_dxr = sp_wr - sp_dcr + sp_dcc * sp_dxr; sp_dcr = sp_wr; sp_wr = sp_dxr;
 
