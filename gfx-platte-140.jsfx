@@ -267,7 +267,7 @@ function update() (
   pl_tt = min(max(slider1, 0.4), 5);
   pl_pret = min(max(slider2, 0), 250) * 0.001 * srate;
   slider3 != pl_lcl ? ( pl_lcl = slider3; lcL.bq_set(1, slider3, 0.7071, 0); lcR.bq_set(1, slider3, 0.7071, 0); );
-  slider4 != pl_hcl ? ( pl_hcl = slider4; hcL.bq_set(0, min(slider4, srate * 0.45), 0.7071, 0); hcR.bq_set(0, min(slider4, srate * 0.45), 0.7071, 0); );
+  pl_hcf != pl_hcl ? ( pl_hcl = pl_hcf; hcL.bq_set(0, pl_hcf, 0.7071, 0); hcR.bq_set(0, pl_hcf, 0.7071, 0); );   // pl_hcf: glided in @sample
   pl_hcon = slider4 < 19950;
   pl_dg = 10 ^ (slider5 / 100 * 24 / 20);
   pl_mxt = slider6 / 100;
@@ -319,6 +319,8 @@ function pl_srinit() local(i) (
   pl_shc = 1 - exp(-2 * $pi * 200 / srate);
   in_init(); in_setup(0, 0);
   pl_lcl = -1; pl_hcl = -1;
+  pl_hcf = min(slider4, srate * 0.45); pl_hck = 1 - exp(-16 / (0.02 * srate)); pl_hcn = 0;   // HIGH CUT glide (~20 ms)
+  pl_hcw = slider4 < 19950; pl_hcxs = 1 / (0.02 * srate);                                     // and its on / off fade (20 ms)
   drvA.bq_set(1, 55, 0.6, 0); drvB.bq_set(1, 55, 0.6, 0);  // the driver: the sheet barely moves below 60 Hz
   eqL.bq_set(2, 1400, 0.8, 3); eqR.bq_set(2, 1400, 0.8, 3);  // East: mid-focused return
   pl_elc = 1 - exp(-2 * $pi * 8000 / srate);            // East: darker return
@@ -482,7 +484,12 @@ pl_ver ? (
 );
 // LOW CUT / HIGH CUT on the return
 pl_wl = lcL.bq_run(pl_wl); pl_wr = lcR.bq_run(pl_wr);
-pl_hcon ? ( pl_wl = hcL.bq_run(pl_wl); pl_wr = hcR.bq_run(pl_wr); );
+pl_hcw = pl_hcon ? min(pl_hcw + pl_hcxs, 1) : max(pl_hcw - pl_hcxs, 0);
+pl_hct = min(slider4, srate * 0.45);
+pl_hcf != pl_hct ? ( (pl_hcn += 1) >= 16 ? ( pl_hcn = 0; pl_hcf *= (pl_hct / pl_hcf) ^ pl_hck; abs(pl_hcf - pl_hct) < 0.0005 * pl_hct ? pl_hcf = pl_hct;
+  pl_hcl = pl_hcf; hcL.bq_set(0, pl_hcf, 0.7071, 0); hcR.bq_set(0, pl_hcf, 0.7071, 0); ); );
+pl_hal = hcL.bq_run(pl_wl); pl_har = hcR.bq_run(pl_wr);   // the high cut always runs (primed) and is faded in / out, never switched
+pl_hcw >= 1 ? ( pl_wl = pl_hal; pl_wr = pl_har; ) : pl_hcw > 0 ? ( pl_wl += (pl_hal - pl_wl) * pl_hcw; pl_wr += (pl_har - pl_wr) * pl_hcw; );
 // width
 pl_em = 0.5 * (pl_wl + pl_wr); pl_es = 0.5 * (pl_wl - pl_wr) * pl_wd;
 pl_wl = (pl_em + pl_es) * pl_vf; pl_wr = (pl_em - pl_es) * pl_vf;

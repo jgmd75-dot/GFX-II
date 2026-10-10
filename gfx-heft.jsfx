@@ -92,7 +92,7 @@ function update() (
   scL.sc_set(slider8, lfil); scR.sc_set(slider8, lfil);
   mk = 10 ^ (slider12 / 20); mix_t = slider13 / 100;
   in_setup(0, slider16);
-  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, -1);  // no GFX output stage on this unit: its own character does that job
 );
 
 // ---------- presets ----------

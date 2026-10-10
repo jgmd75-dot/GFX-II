@@ -191,6 +191,7 @@ function update() (
 
 in_init();
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
+ost_nolim = 1;   // OFF / CLIP only: no look-ahead delay, no latency
 rms_c = 1 - exp(-1 / (0.008 * srate));              // RMS integration (8 ms)
 rel_step = 120 / srate;                             // release: 120 dB per second
 sm = 1 - exp(-1 / (0.03 * srate));

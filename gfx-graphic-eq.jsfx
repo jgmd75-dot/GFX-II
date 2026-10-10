@@ -139,7 +139,7 @@ function update() local(b, k, cs) (
   lc_on = slider34 > 20.5; hc_on = slider35 < 21990;
   lc_on ? ( LC2L.bq_set(1, slider34, 1, 0); LC2R.bq_set(1, slider34, 1, 0);
             k = tan($pi * min(slider34, srate * 0.45) / srate); hp1_a = 1 / (1 + k); hp1_b = (1 - k) / (1 + k); );
-  hc_on ? ( HCL.bq_set(0, slider35, 0.707, 0); HCR.bq_set(0, slider35, 0.707, 0); );
+  HCL.bq_set(0, ge_hcf, 0.707, 0); HCR.bq_set(0, ge_hcf, 0.707, 0);   // ge_hcf: glided in @sample
   og = 10 ^ (slider36 / 20); eq_on = slider37;
   in_setup(slider38, slider39);
   ins_output_setup(40);
@@ -180,7 +180,9 @@ in_init();
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 !ui_dflt ? ui_thm = 16; !ui_dflt ? ui_hw = 0;                            // new instances: Honey, flat (saved projects keep their own)
 PNL = 0x1B1C1F; PRT = 0xD9D6CC; ORNG = 0xFF8A2A; YLW = 0xF6D25A; SCRN = 0x0A0B0C;
+ge_hcf = min(slider35, srate * 0.45); ge_hck = 1 - exp(-16 / (0.02 * srate)); ge_hcn = 0;   // high cut glide (~20 ms)
 update();
+ge_hcw = hc_on; ge_hcxs = 1 / (0.02 * srate);   // high cut on / off fade: 20 ms
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
@@ -197,11 +199,16 @@ file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older project
 
 @sample
 in_process(spl0, spl1);
+ge_hcw = hc_on ? min(ge_hcw + ge_hcxs, 1) : max(ge_hcw - ge_hcxs, 0);
+ge_hct = min(slider35, srate * 0.45);
+ge_hcf != ge_hct ? ( (ge_hcn += 1) >= 16 ? ( ge_hcn = 0; ge_hcf *= (ge_hct / ge_hcf) ^ ge_hck; abs(ge_hcf - ge_hct) < 0.0005 * ge_hct ? ge_hcf = ge_hct;
+  HCL.bq_set(0, ge_hcf, 0.707, 0); HCR.bq_set(0, ge_hcf, 0.707, 0); ); );
 xl = in_l; xr = in_r;
 eq_on ? (
   lc_on ? ( xl = LCL.hp1(LC2L.bq_run(xl)); xr = LCR.hp1(LC2R.bq_run(xr)); );
   nact > 0 ? ( xl = bands(xl, STL); xr = bands(xr, STR); );
-  hc_on ? ( xl = HCL.bq_run(xl); xr = HCR.bq_run(xr); );
+  ge_al = HCL.bq_run(xl); ge_ar = HCR.bq_run(xr);   // the high cut always runs (primed) and is faded in / out, never switched
+  ge_hcw >= 1 ? ( xl = ge_al; xr = ge_ar; ) : ge_hcw > 0 ? ( xl += (ge_al - xl) * ge_hcw; xr += (ge_ar - xr) * ge_hcw; );
 );
 xl *= og; xr *= og;
 oL = ostL.ost_band(xl * in_comp); oR = ostR.ost_band(xr * in_comp);

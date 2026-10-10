@@ -126,6 +126,7 @@ sag_c = 1 - exp(-1 / (0.6 * srate));
 lastp = slider14;                                   // adopt the saved preset without re-applying it
 !ui_dflt ? ( ui_thm = 0; );
 update();
+f4_trs = trim; f4_trc = 1 - exp(-1 / (0.02 * srate));   // TRIM glide (~20 ms)
 ui_dflt = 1;
 
 @slider
@@ -144,7 +145,8 @@ ol_t = ol_thr + 20 * log10(sup);
 // HPF (before the preamp), TRIM, input transformer, rail
 xL = spl0; xR = spl1;
 hp_on ? ( xL = hpL.f4_bq(xL); xR = hpR.f4_bq(xR); );
-xL *= trim; xR *= trim;
+f4_trs != trim ? ( f4_trs += (trim - f4_trs) * f4_trc; abs(trim - f4_trs) < 0.000001 * trim ? f4_trs = trim; );
+xL *= f4_trs; xR *= f4_trs;
 xL = iiL.f4_iron(xL, iron_i, sup); xR = iiR.f4_iron(xR, iron_i, sup);
 hv = 1.58 * sup;                                   // the rail: about +24 dBu
 xL = f4_rail(xL, hv); xR = f4_rail(xR, hv);

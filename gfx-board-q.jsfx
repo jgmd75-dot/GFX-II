@@ -67,20 +67,21 @@ function hp1set(f) local(k) ( k = tan($pi * min(f, srate * 0.45) / srate); hp1_a
 function hp1db(f) local(w, wc) ( wc = slider1; w = f / wc; 10 * log10(w * w / (1 + w * w)); );
 
 // one channel's chain
-function chain(x) instance() (
+function chain(x) instance() local(y) (
   hp_on ? x = this.h1.hp1(this.h2.bq_run(x));
   eq_on ? (
     x = this.lf.bq_run(x); lfx ? x = this.lx.bq_run(x);
     x = this.lm.bq_run(x); x = this.hm.bq_run(x);
     x = this.hf.bq_run(x); hfx ? x = this.hx.bq_run(x);
   );
-  lp_on ? x = this.lp.bq_run(x);
+  y = this.lp.bq_run(x);                     // the LPF always runs (primed) and is faded in / out, never switched
+  bd_lpw >= 1 ? x = y : bd_lpw > 0 ? x += (y - x) * bd_lpw;
   x;
 );
 
 function setch() instance() local(q) (
   hp_on ? this.h2.bq_set(1, slider1, 1, 0);
-  lp_on ? this.lp.bq_set(0, slider2, 0.707, 0);
+  this.lp.bq_set(0, bd_lpf, 0.707, 0);       // bd_lpf: the LPF frequency, glided in @sample
   // proportional Q on the black card
   this.lf.bq_set(slider5 ? 2 : 4, slider4, slider5 ? (blk ? 0.6 + abs(slider3) / 15 * 0.9 : 0.55) : (blk ? 1.15 : 0.6), slider3);
   this.lm.bq_set(2, slider7, slider8 * (blk ? 0.6 + abs(slider6) / 15 * 1.2 : 0.7), slider6);
@@ -101,7 +102,7 @@ function update() local(b, cs) (
   drv = slider17 / 100; dk = 1 + drv * 3; dbias = drv * 0.15; dtb = th(dbias);
   og = 10 ^ (slider18 / 20);
   in_setup(0, slider20);
-  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, -1);  // no GFX output stage on this unit: its own character does that job
 );
 
 // ---------- presets (leave INPUT and OUTPUT alone) ----------
@@ -132,7 +133,9 @@ in_init();
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 !ui_dflt ? ui_thm = 5; !ui_dflt ? ui_hw = 1; RSP = 30000;
 PNL = 0xB4B8BA; PRT = 0x1C1E21; SCR = 0x121517; CRED = 0xC8322A; CGRN = 0x2E8A4A; CBLU = 0x2C5FA8; CBRN = 0x6A4A32; CGRY = 0xE4E4E0; CBLK = 0x26272A; SLB = 0x3BA9E0; SDB = 0x34349A; SRD = 0xE0262B;
+bd_lpf = min(slider2, srate * 0.45); bd_lpk = 1 - exp(-16 / (0.02 * srate)); bd_lpn = 0;   // LPF glide (~20 ms)
 update();
+bd_lpw = lp_on; bd_lpxs = 1 / (0.02 * srate);   // LPF on / off fade: 20 ms
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
@@ -147,6 +150,10 @@ file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older project
 
 @sample
 in_process(spl0, spl1);
+bd_lpw = lp_on ? min(bd_lpw + bd_lpxs, 1) : max(bd_lpw - bd_lpxs, 0);
+bd_lpt = min(slider2, srate * 0.45);
+bd_lpf != bd_lpt ? ( (bd_lpn += 1) >= 16 ? ( bd_lpn = 0; bd_lpf *= (bd_lpt / bd_lpf) ^ bd_lpk; abs(bd_lpf - bd_lpt) < 0.0005 * bd_lpt ? bd_lpf = bd_lpt;
+  CL.lp.bq_set(0, bd_lpf, 0.707, 0); CR.lp.bq_set(0, bd_lpf, 0.707, 0); ); );
 xl = CL.chain(in_l); xr = CR.chain(in_r);
 drv > 0.001 ? (
   xl = (th(dk * xl + dbias) - dtb) / (dk * (1 - dtb * dtb));

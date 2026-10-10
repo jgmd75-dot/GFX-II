@@ -136,7 +136,7 @@ function update() local(i, any, a, d) (
     PGL[i] = min(1, 2 * (1 - a)); PGR[i] = min(1, 2 * a);
     i += 1;
   );
-  ost_setup(0, 0, 120, 6000, -0.3, 0);   // no GFX output stage on this unit: its own character does that job
+  ost_setup(0, 0, 120, 6000, -0.3, -1);  // no GFX output stage on this unit: its own character does that job
 );
 
 // ---------- presets (stems are left alone) ----------

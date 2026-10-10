@@ -109,7 +109,7 @@ function update() local(b, cs) (
   TLL.tl_set(); TLR.tl_set();
   hp_on = slider4 > 10.5; lp_on = slider6 < 21990;
   hp_on ? ( HPL.bw_set(1, slider4, ordr(slider5)); HPR.bw_set(1, slider4, ordr(slider5)); );
-  lp_on ? ( LPL.bw_set(0, slider6, ordr(slider7)); LPR.bw_set(0, slider6, ordr(slider7)); );
+  LPL.bw_set(0, te_lpf, ordr(slider7)); LPR.bw_set(0, te_lpf, ordr(slider7));   // te_lpf: glided in @sample
   tmode = slider8; og = 10 ^ (slider9 / 20); eq_on = slider10;
   in_setup(slider11, slider12);
   ins_output_setup(13);
@@ -142,7 +142,9 @@ in_init();
 ost_init(20000); ostL.ost_ch_init(); ostR.ost_ch_init();
 !ui_dflt ? ( ui_thm = 5; ui_hw = 1; tlook = 1; ); last_cs = -1;   // new instances: HORIZON look, hardware panel
 WIN = 0x161412; GOLD = 0xE2B24A; SKY = 0x7EA6CB; HAZE = 0xCFD9DD; SEA = 0x617487; SAND = 0xA48D70; WBAND = 0xFAF7EF;
+te_lpf = min(slider6, srate * 0.45); te_lpk = 1 - exp(-16 / (0.02 * srate)); te_lpn = 0;   // low-pass glide (~20 ms)
 update();
+te_lpw = lp_on; te_lpxs = 1 / (0.02 * srate);   // low-pass on / off fade: 20 ms
 ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
 
 @slider
@@ -160,10 +162,15 @@ file_avail(0) != 0 ? file_var(0, pr_cur);    // the preset in use (older project
 
 @sample
 in_process(spl0, spl1);
+te_lpw = lp_on ? min(te_lpw + te_lpxs, 1) : max(te_lpw - te_lpxs, 0);
+te_lpt = min(slider6, srate * 0.45);
+te_lpf != te_lpt ? ( (te_lpn += 1) >= 16 ? ( te_lpn = 0; te_lpf *= (te_lpt / te_lpf) ^ te_lpk; abs(te_lpf - te_lpt) < 0.0005 * te_lpt ? te_lpf = te_lpt;
+  LPL.bw_set(0, te_lpf, ordr(slider7)); LPR.bw_set(0, te_lpf, ordr(slider7)); ); );
 xl = in_l; xr = in_r;
 eq_on ? (
   hp_on ? ( xl = HPL.bw_run(xl); xr = HPR.bw_run(xr); );
-  lp_on ? ( xl = LPL.bw_run(xl); xr = LPR.bw_run(xr); );
+  te_al = LPL.bw_run(xl); te_ar = LPR.bw_run(xr);   // the low-pass always runs (primed) and is faded in / out, never switched
+  te_lpw >= 1 ? ( xl = te_al; xr = te_ar; ) : te_lpw > 0 ? ( xl += (te_al - xl) * te_lpw; xr += (te_ar - xr) * te_lpw; );
   tl_on ? (
     tmode == 0 ? ( xl = TLL.tl_run(xl); xr = TLR.tl_run(xr); ) : (
       tm_ = (xl + xr) * 0.5; ts_ = (xl - xr) * 0.5;

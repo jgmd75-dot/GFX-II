@@ -223,7 +223,7 @@ function kr_update() (
   kr_om   = slider12 | 0;
   ost_setup(0, 0, 120, 6000, -0.3, kr_om);
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = kr_om == 2 ? ost_N : 0;
+  pdc_delay = ost_N;                                    // the output stage has the same latency in every mode
 );
 
 // ---------- presets: drive, lo, hi, output, align, lo split, hi split, mix, drift ----------
@@ -331,7 +331,7 @@ kr_t = kr_yr - kr_ox1 + kr_dco * kr_oy1; kr_ox1 = kr_yr; kr_oy1 = kr_t; kr_yr = 
 ost_out(kr_yl, kr_yr);
 // ---------- BYPASS: crossfade to the input, delayed to match the output stage ----------
 kr_DL[kr_wp] = kr_il; kr_DR[kr_wp] = kr_ir;
-kr_rp = (kr_wp - (kr_om == 2 ? ost_N : 0) + 4096) & 4095;
+kr_rp = (kr_wp - ost_N + 4096) & 4095;
 kr_wp = (kr_wp + 1) & 4095;
 kr_bx = kr_tbyp ? min(kr_bx + kr_xf, 1) : max(kr_bx - kr_xf, 0);
 kr_bx > 0 ? (

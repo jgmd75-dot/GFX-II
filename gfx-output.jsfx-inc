@@ -6,7 +6,10 @@ desc:GFX Output stage (include)
 //   - Only the low and high bands are saturated; mids pass clean.
 //   - Saturation is a wide, soft biased curve. The bias floats with the signal
 //     envelope (loosens as level rises), giving even harmonics that breathe.
-//   - Final stage: Off, Clip (soft, zero latency) or Limit (3 ms lookahead, PDC reported).
+//   - Final stage: Off, Clip (soft) or Limit (3 ms lookahead). The 3 ms delay line is in the path in
+//     every mode (constant latency, PDC reported as ost_N), and mode changes crossfade over 25 ms.
+//     Mode -1: no output stage at all (plug-ins that never offer one): straight through, no latency.
+//     (Set ost_nolim = 1 after ost_init in a plug-in that offers only OFF / CLIP: no delay line, no latency.)
 //     CLIP: ceil_db is the ceiling the peaks are clipped at.
 //     LIMIT: ceil_db is the THRESHOLD of a brickwall limiter: the signal is raised by (-0.3 - threshold) dB
 //     into a fixed -0.3 dBFS ceiling, so pulling it down limits harder and gets louder, peaks held at -0.3.
@@ -16,7 +19,7 @@ desc:GFX Output stage (include)
 //   import gfx-output.jsfx-inc
 //   @init    ost_init(memory_offset);  ostL.ost_ch_init(); ostR.ost_ch_init();
 //            (needs 4096 free memory slots from memory_offset)
-//   @block   ost_setup(sat 0..1, bias 0..1, low_hz, high_hz, ceiling_db, mode 0/1/2);
+//   @block   ost_setup(sat 0..1, bias 0..1, low_hz, high_hz, ceiling_db, mode 0/1/2, or -1 = none);
 //   @sample  l = ostL.ost_band(l); r = ostR.ost_band(r);   // band saturation
 //            (apply output gain here)
 //            ost_out(l, r); spl0 = ost_l; spl1 = ost_r;      // clipper / limiter
@@ -51,6 +54,7 @@ function ost_init(mem) (
   ost_envc = 1 - exp(-1 / (0.15 * srate));
   ost_lastlf = -1; ost_lasthf = -1;
   ost_lg = 1; ost_lgs = 1; ost_lgc = 1 - exp(-1 / (0.03 * srate)); ost_ceilmode = 0;
+  ost_xs = 1 / (0.025 * srate); ost_xi = 0; ost_nolim = 0;                  // mode crossfade step (25 ms); first ost_setup snaps
 );
 
 function ost_setup(sat, bias, lf, hf, ceil_db, mode) local(w0, cw, alp, q0) (
@@ -58,12 +62,15 @@ function ost_setup(sat, bias, lf, hf, ceil_db, mode) local(w0, cw, alp, q0) (
   ost_drv = 1 + 12 * sat * sqrt(sat);                // starts biting around -20 dBFS at full SAT
   ost_wet = min(sat * 3, 1);
   ost_bias = bias * 0.3;
-  mode == 2 && !ost_ceilmode ? (
-    ost_ceil = 10 ^ (-0.3 / 20); ost_lg = 10 ^ ((-0.3 - ceil_db) / 20);   // threshold: gain into the limiter
+  ost_cc = 10 ^ (ceil_db / 20);                              // clipper ceiling
+  !ost_ceilmode ? (
+    ost_lc = 10 ^ (-0.3 / 20); ost_lg = 10 ^ ((-0.3 - ceil_db) / 20);   // threshold: gain into the limiter
   ) : (
-    ost_ceil = 10 ^ (ceil_db / 20); ost_lg = 1;
+    ost_lc = ost_cc; ost_lg = 1;
   );
+  ost_ceil = mode == 2 ? ost_lc : ost_cc;
   ost_mode = mode;
+  !ost_xi ? ( ost_w0 = mode != 1 && mode != 2; ost_w1 = mode == 1; ost_w2 = mode == 2; ost_xi = 1; );
   lf != ost_lastlf ? (
     ost_lastlf = lf;
     w0 = 2 * $pi * min(lf, srate * 0.45) / srate; cw = cos(w0); alp = sin(w0) / (2 * 0.70710678); q0 = 1 + alp;
@@ -77,7 +84,7 @@ function ost_setup(sat, bias, lf, hf, ceil_db, mode) local(w0, cw, alp, q0) (
     ost_ha1 = -2 * cw / q0; ost_ha2 = (1 - alp) / q0;
   );
   pdc_bot_ch = 0; pdc_top_ch = 2;
-  pdc_delay = mode == 2 ? ost_N : 0;
+  pdc_delay = mode < 0 || ost_nolim ? 0 : ost_N;            // same latency in every mode
 );
 
 function ost_ch_init() instance(lz1, lz2, hz1, hz2, dcx, dcy, env) (
@@ -107,24 +114,42 @@ function ost_band(x) instance(lz1, lz2, hz1, hz2, dcx, dcy, env) local(lo, rest,
 );
 
 // stereo-linked clipper / limiter; results in ost_l, ost_r
-function ost_out(l, r) local(c, pk, gt, rp, del_l, del_r) (
-  c = ost_ceil;
-  ost_mode == 2 ? (
-    ost_lgs += (ost_lg - ost_lgs) * ost_lgc; l *= ost_lgs; r *= ost_lgs;
+// The delay line and the limiter's gain computer always run, so every mode has the same 3 ms latency
+// and LIMIT is already settled when it is switched in; a mode change crossfades (linear, 25 ms).
+function ost_out(l, r) local(pk, gt, rp, dl, dr, ws, ol, rr) (
+  ost_mode >= 0 ? (                                       // -1: no output stage, straight through
+    ost_lgs += (ost_lg - ost_lgs) * ost_lgc;
     ost_buf[ost_wp] = l; ost_buf[ost_bsz + ost_wp] = r;
-    rp = (ost_wp - ost_N + ost_bsz) & ost_bmask;
-    del_l = ost_buf[rp]; del_r = ost_buf[ost_bsz + rp];
+    rp = (ost_wp - (ost_nolim ? 0 : ost_N) + ost_bsz) & ost_bmask;
+    dl = ost_buf[rp]; dr = ost_buf[ost_bsz + rp];
     ost_wp = (ost_wp + 1) & ost_bmask;
-    pk = max(abs(l), abs(r));
-    gt = pk > c ? c / pk : 1;
+    pk = max(abs(l), abs(r)) * ost_lgs;
+    gt = pk > ost_lc ? ost_lc / pk : 1;
     gt < ost_hg ? ( ost_hg = gt; ost_hc = ost_N; ) : ( ost_hc > 0 ? ost_hc -= 1 : ost_hg = gt; );
     ost_g += (ost_hg - ost_g) * (ost_hg < ost_g ? ost_att : ost_rel);
-    ost_gr = min(ost_gr, ost_g);
-    l = min(max(del_l * ost_g, -c), c);
-    r = min(max(del_r * ost_g, -c), c);
-  ) : ost_mode == 1 ? (
-    l = ost_clip(l, c);
-    r = ost_clip(r, c);
+    ost_w0 = (ost_mode != 1 && ost_mode != 2) ? min(ost_w0 + ost_xs, 1) : max(ost_w0 - ost_xs, 0);
+    ost_w1 = ost_mode == 1 ? min(ost_w1 + ost_xs, 1) : max(ost_w1 - ost_xs, 0);
+    ost_w2 = ost_mode == 2 ? min(ost_w2 + ost_xs, 1) : max(ost_w2 - ost_xs, 0);
+    ost_w2 == 1 ? (
+      ost_gr = min(ost_gr, ost_g);
+      l = min(max(dl * ost_lgs * ost_g, -ost_lc), ost_lc);
+      r = min(max(dr * ost_lgs * ost_g, -ost_lc), ost_lc);
+    ) : ost_w1 == 1 ? (
+      l = ost_clip(dl, ost_cc);
+      r = ost_clip(dr, ost_cc);
+    ) : ost_w0 == 1 ? (
+      l = dl; r = dr;
+    ) : (
+      ol = ost_w0 * dl; rr = ost_w0 * dr;
+      ost_w1 > 0 ? ( ol += ost_w1 * ost_clip(dl, ost_cc); rr += ost_w1 * ost_clip(dr, ost_cc); );
+      ost_w2 > 0 ? (
+        ost_gr = min(ost_gr, ost_g);
+        ol += ost_w2 * min(max(dl * ost_lgs * ost_g, -ost_lc), ost_lc);
+        rr += ost_w2 * min(max(dr * ost_lgs * ost_g, -ost_lc), ost_lc);
+      );
+      ws = ost_w0 + ost_w1 + ost_w2;
+      l = ol / ws; r = rr / ws;
+    );
   );
   ost_l = l; ost_r = r;
 );
