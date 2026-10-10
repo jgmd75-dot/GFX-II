@@ -813,11 +813,14 @@ mg_red = 0x5E1519; mg_s1 = 0x51121A; mg_s2 = 0x4A1016; mg_s3 = 0x430E14; mg_s4 =
 mg_ink = 0xEEEFEA; mg_dim = 0xC7BEB3; mg_acc = 0xE8C27A; mg_cream = 0xFFFDD0; mg_grey = 0x9DA2A8;
 dy_ink = mg_ink; dy_nov = 1; rd_sqbg = 0x22080B; dy_kst = 7;
 
-gfx_setfont(10, "Trebuchet MS", 12 * sc, 'b');           // section titles
+gfx_setfont(10, "Trebuchet MS", 14 * sc, 'b');           // section titles
 gfx_setfont(11, "Trebuchet MS", 11.5 * sc, 'b');         // small print
 gfx_setfont(12, "Trebuchet MS", 13 * sc, 'b');           // key captions
-gfx_setfont(13, "Trebuchet MS", 13 * sc, 'b');           // side labels (readable at M)
+gfx_setfont(13, "Trebuchet MS", 14 * sc, 'b');           // side labels (readable at M)
 gfx_setfont(14, "Trebuchet MS", 13.5 * sc, 'b');         // header subtitle
+// knob names and values, larger than the house default so they read at M (dy_knob uses fonts 5 and 4)
+gfx_setfont(5, "Trebuchet MS", 14 * sc, 'b');
+gfx_setfont(4, "Trebuchet MS", 12.5 * sc, 'b');
 
 function mg_r(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc); );
 function mg_t(x, y, s) ( gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
@@ -868,7 +871,7 @@ gfx_setfont(14); ui_col(mg_dim); mg_t(198, 12, "TINE ELECTRIC PIANO"); mg_t(198,
 mg_k = pk_preset(376 * sc, 8 * sc, 404 * sc, 44 * sc, pr_cur, #mk_pm);
 mg_k > 0 ? load_preset(mg_k);
 rd_led(812, 24, 4.5, ins_midi_lit(), 0x3ADF6A);
-gfx_setfont(13); ui_col(mg_dim); mg_ct(812, 44, "MIDI");
+gfx_setfont(5); ui_col(mg_dim); mg_ct(812, 44, "MIDI");
 sprintf(#mgl, slider25 < 0.5 ? "OMNI" : "CH %.0f", slider25);
 mg_key(834, 17, 74, 28, 0, #mgl) ? (
   strcpy(#mgm, ""); mg_n = 0;
@@ -887,9 +890,9 @@ mg_kn(293, mg_ky, 24, 2, 0, 100, 40, 0, mg_cream, "RELEASE", "%.0f%%");
 
 mg_sect(358, mg_y, 420, mg_h, mg_s2, "PICKUP");
 mg_kn(412, mg_ky, 27, 4, 0, 100, 50, 0, mg_acc, "VOICING", "%.0f%%");
-gfx_setfont(13); ui_cola(mg_dim, 0.95); mg_ct(378, mg_ky + 27, "DARK"); mg_ct(448, mg_ky + 27, "DYNO");
+gfx_setfont(5); ui_cola(mg_dim, 0.95); mg_ct(378, mg_ky + 27, "DARK"); mg_ct(448, mg_ky + 27, "DYNO");
 mg_kn(726, mg_ky, 27, 5, 0, 100, 50, 0, mg_cream, "GAP", "%.0f%%");
-gfx_setfont(13); ui_cola(mg_dim, 0.95); mg_ct(692, mg_ky + 27, "NEAR"); mg_ct(760, mg_ky + 27, "FAR");
+gfx_setfont(5); ui_cola(mg_dim, 0.95); mg_ct(692, mg_ky + 27, "NEAR"); mg_ct(760, mg_ky + 27, "FAR");
 // the pickup window: flux across the pole, where the tine rests, how far the last note is swinging
 mg_wx = 470; mg_wy = mg_y + 34; mg_ww = 192; mg_wh = 116;
 ui_col(0x0A0A0B); mg_r(mg_wx - 2, mg_wy - 2, mg_ww + 4, mg_wh + 4);
@@ -918,7 +921,7 @@ loop(97,
 mg_px = mg_cx + mg_off * mg_zs; mg_py = mg_base - (1 / (1 + mg_off * mg_off)) * (mg_wh - 36);
 ui_col(mg_acc); mg_r(mg_px - 0.75, mg_wy + 4, 1.5, mg_wh - 26);
 gfx_circle(mg_px * sc, mg_py * sc, 4 * sc, 1, 1);
-gfx_setfont(13); ui_cola(mg_dim, 0.9); mg_t(mg_wx + 6, mg_wy + 5, "FLUX");
+gfx_setfont(5); ui_cola(mg_dim, 0.9); mg_t(mg_wx + 6, mg_wy + 5, "FLUX");
 sprintf(#mgs, mg_sw > 0.002 ? "SWING %.2f" : "AT REST", mg_sw); mg_rt(mg_wx + mg_ww - 6, mg_wy + 11, #mgs);
 mg_t(mg_cx + 14, mg_base + 5, "POLE");
 
@@ -934,7 +937,7 @@ mg_sect(14, mg_y, 280, mg_h, mg_s2, "MODULATION");
 mg_lv = mk_mod != 0 ? mk_pc1 : 0;
 slider7 < -0.5 ? sprintf(#mgv, "PAN %.0f%%", -slider7) : slider7 > 0.5 ? sprintf(#mgv, "TREM %.0f%%", slider7) : strcpy(#mgv, "OFF");
 dy_knob(84, mg_ky, 30, 7, -100, 100, 0, 0, mg_acc, "MODULATION", #mgv);
-gfx_setfont(13); ui_cola(mg_dim, 0.95); mg_ct(40, mg_ky + 31, "PAN"); mg_ct(128, mg_ky + 31, "TREM");
+gfx_setfont(5); ui_cola(mg_dim, 0.95); mg_ct(40, mg_ky + 31, "PAN"); mg_ct(128, mg_ky + 31, "TREM");
 // the halfway mark: a clear tick at 12 o'clock (left = more pan, right = more tremolo)
 ui_col(mg_ink); mg_r(84 - 2, mg_ky - 30 - 15, 4, 12);
 mg_kn(222, mg_ky, 25, 8, 0.1, 12, 4.5, 1, mg_cream, "RATE", "%.2f Hz");
@@ -952,12 +955,12 @@ mg_kn(700, mg_ky, 23, 12, -50, 50, 0, 0, mg_grey, "FINE", "%+.1f ct");
 mg_kn(800, mg_ky, 23, 13, 0, 10, 0.5, 0, mg_grey, "RANDOM", "%.1f ct");
 
 mg_sect(862, mg_y, 224, mg_h, mg_s4, "MASTER");
-mg_kn(912, mg_y + 66, 25, 18, -24, 6, 0, 0, mg_cream, "VOLUME", "%+.1f dB");
-mg_small(892, mg_y + 132, 12, 17, 0, 100, 25, mg_grey, "DRIFT", "%.0f%%");
-mg_small(944, mg_y + 132, 12, 16, 0, 100, 35, mg_grey, "MECH", "%.0f%%");
-mg_small(996, mg_y + 132, 12, 19, 0, 100, 0, 0xD8B040, "SAT", "%.0f%%");
-gfx_setfont(13); ui_col(mg_dim); mg_ct(997, mg_y + 14, "OUT");
-mg_okf = ui_okfs; ui_okfs = 1.15; ui_outkeys(966, mg_y + 30, 62, 22, 5, 24); ui_okfs = mg_okf;
+mg_kn(912, mg_y + 60, 25, 18, -24, 6, 0, 0, mg_cream, "VOLUME", "%+.1f dB");
+mg_small(892, mg_y + 136, 12, 17, 0, 100, 25, mg_grey, "DRIFT", "%.0f%%");
+mg_small(944, mg_y + 136, 12, 16, 0, 100, 35, mg_grey, "MECH", "%.0f%%");
+mg_small(996, mg_y + 136, 12, 19, 0, 100, 0, 0xD8B040, "SAT", "%.0f%%");
+gfx_setfont(5); ui_col(mg_dim); mg_ct(997, mg_y + 14, "OUT");
+mg_okf = ui_okfs; ui_okfs = 1.7; ui_outkeys(964, mg_y + 30, 66, 24, 5, 24); ui_okfs = mg_okf;
 mgL.ui_ledm(1046 * sc, (mg_y + 34) * sc, 10 * sc, 116 * sc, mk_pk); mgR.ui_ledm(1060 * sc, (mg_y + 34) * sc, 10 * sc, 116 * sc, mk_pk);
 mk_pk *= 0.85;
 
