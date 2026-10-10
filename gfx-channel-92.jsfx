@@ -117,11 +117,9 @@ slider47:0<-15,15,0.1>-COMPACT Hi (dB)
 slider48:0<-12,12,0.1>-COMPACT Mid (dB)
 slider49:0<-15,15,0.1>-COMPACT Low (dB)
 slider50:0<0,10,0.1>-COMPACT Comp
-slider51:0<-100,100,1>-COMPACT Balance
-slider52:0<-60,10,0.1>-COMPACT Level (dB)
-slider53:0<-60,10,0.1>-COMPACT Main mix (dB)
-slider54:0<0,1,1{Off,On}>-COMPACT Hot
-slider55:0<0,1,1{Off,On}>-COMPACT Desk noise
+slider51:0<-60,10,0.1>-COMPACT Main mix (dB)
+slider52:0<0,1,1{Off,On}>-COMPACT Hot
+slider53:0<0,1,1{Off,On}>-COMPACT Desk noise
 
 in_pin:left input
 in_pin:right input
@@ -676,8 +674,10 @@ function f42_blockrun() (
 // One channel of the Compact 12 desk as a stereo channel strip (the desk's own circuit): each side through the desk's
 // channel EQ (HI 12 kHz shelf, MID 2.5 kHz peak, LOW 80 Hz shelf), then the one-knob COMP (as on Strip 102: 0 - 10
 // lowers the threshold 0 to -30 dB, raises the ratio 1:1 to 10:1 and adds make-up gain so the level stays even; a
-// linked detector; 0 = out of circuit), LEVEL (smoothed as on the desk) and BALANCE (as on the desk's stereo pairs),
-// then the desk's summing amp with MAIN MIX, HOT and the desk NOISE. A mono source arrives as L = R.
+// linked detector; 0 = out of circuit), then the desk's summing amp with MAIN MIX, HOT and the desk NOISE.
+// A mono source (L = R) gets the desk's -3 dB centre dip of its mono channels (constant-power pan at the centre): the
+// strip hears when the two sides are the same (L - R more than 90 dB below the signal over ~50 ms; back to stereo above
+// -80 dB) and glides the dip in or out over ~50 ms. Stereo sources pass at full level, as on the desk's stereo pairs.
 function cs_eq_set(cs_hi, cs_mid, cs_lo) instance(cs_h, cs_m, cs_l) ( cs_h.bq_set(3, 12000, 0.7, cs_hi); cs_m.bq_set(2, 2500, 0.9, cs_mid); cs_l.bq_set(4, 80, 0.7, cs_lo); );
 function cs_eq3(cs_x) instance(cs_h, cs_m, cs_l) ( cs_l.bq_run(cs_m.bq_run(cs_h.bq_run(cs_x))) );
 // the summing amp: clean until its rails; HOT pushes it there (asymmetric, op-amp style edge)
@@ -689,21 +689,23 @@ function cs_rail(cs_x) local(cs_a) (
 function cs_mkt(cs_i) ( cs_i <= 1 ? 0 : cs_i == 2 ? 0.15 : cs_i == 3 ? 1.05 : cs_i == 4 ? 2.65 : cs_i == 5 ? 4.95 : cs_i == 6 ? 7.55 :
   cs_i == 7 ? 10.3 : cs_i == 8 ? 13.2 : cs_i == 9 ? 16.15 : 19.1; );
 function cs_mkdb(cs_c) local(cs_i, cs_f) ( cs_c = min(max(cs_c, 0), 10); cs_i = min(floor(cs_c), 9); cs_f = cs_c - cs_i; cs_mkt(cs_i) * (1 - cs_f) + cs_mkt(cs_i + 1) * cs_f; );
-function cs_update() local(cs_a) (
-  cs_mm = slider53 <= -59.9 ? 0 : 10 ^ (slider53 / 20);
-  cs_hot = slider54; cs_nse = slider55;
+function cs_update() (
+  cs_mm = slider51 <= -59.9 ? 0 : 10 ^ (slider51 / 20);
+  cs_hot = slider52; cs_nse = slider53;
   cs_pl_.cs_eq_set(slider47, slider48, slider49); cs_pr_.cs_eq_set(slider47, slider48, slider49);
   cs_k = slider50 / 10;                                                                  // the one-knob COMP
   cs_thr = -30 * cs_k; cs_rat = 1 + 9 * cs_k ^ 1.6;
   cs_mk = 10 ^ (cs_mkdb(slider50) / 20);
   cs_con = cs_k > 0.001;
-  cs_gt = slider52 <= -59.9 ? 0 : 10 ^ (slider52 / 20);
-  cs_a = (slider51 + 100) / 200;
-  cs_bl = min(1, 2 * (1 - cs_a)); cs_br = min(1, 2 * cs_a);                             // balance
 );
 function cs_run() (
-  cs_g += (cs_gt - cs_g) * cs_sm;
   cs_pk = max(cs_pk, max(abs(spl0), abs(spl1)));
+  // mono or stereo? (the desk's mono channels sit 3 dB down at the centre)
+  cs_ed += (sqr(spl0 - spl1) - cs_ed) * cs_mc; cs_es += (spl0 * spl0 + spl1 * spl1 - cs_es) * cs_mc;
+  cs_es > 0.0000000001 ? ( cs_mono ? ( cs_ed > cs_es * 0.00000001 ? cs_mono = 0; ) : ( cs_ed < cs_es * 0.000000001 ? cs_mono = 1; ); );
+  cs_dt = cs_mono ? cs_dipm : 1;
+  cs_dip !== cs_dt ? ( cs_dip += (cs_dt - cs_dip) * cs_dc;   // (!== : exact, EEL's != has a tolerance)
+    abs(cs_dt - cs_dip) < 0.0000001 ? cs_dip = cs_dt; );
   cs_e0 = cs_pl_.cs_eq3(spl0); cs_e1 = cs_pr_.cs_eq3(spl1);
   // COMP: detector on both sides, smoothed level in dB, 6 dB soft knee, make-up gain
   cs_con ? (
@@ -717,7 +719,7 @@ function cs_run() (
     cs_e0 *= cs_cg; cs_e1 *= cs_cg;
   ) : cs_grs = 0;
   cs_grm = max(cs_grm, cs_grs);
-  cs_ml = cs_e0 * cs_g * cs_bl; cs_mr = cs_e1 * cs_g * cs_br;
+  cs_ml = cs_e0 * cs_dip; cs_mr = cs_e1 * cs_dip;
   // desk noise, the summing amp, main mix
   cs_nse ? ( cs_ml += (rand(2) - 1) * cs_nz_g; cs_mr += (rand(2) - 1) * cs_nz_g; );
   cs_ml = cs_rail(cs_ml * cs_mm); cs_mr = cs_rail(cs_mr * cs_mm);
@@ -725,23 +727,23 @@ function cs_run() (
 
 function cs_reset() (
   // all state back to zero, then the desk init
-  cs_bl = cs_br = cs_ca = cs_cg = cs_cm = cs_con = cs_cr = cs_db = cs_e0 = cs_e1 = cs_env = cs_g = cs_gr = 0;
-  cs_grm = cs_grs = cs_gs = cs_gt = cs_hot = cs_k = cs_mk = cs_ml = cs_mm = cs_mr = cs_nse = cs_nz_g = cs_ov = 0;
-  cs_pk = cs_rat = cs_sm = cs_thr = cs_pl_.cs_h.a1 = cs_pl_.cs_h.a2 = cs_pl_.cs_h.b0 = cs_pl_.cs_h.b1 = 0;
-  cs_pl_.cs_h.b2 = cs_pl_.cs_h.x1 = cs_pl_.cs_h.x2 = cs_pl_.cs_h.y1 = cs_pl_.cs_h.y2 = cs_pl_.cs_l.a1 = 0;
-  cs_pl_.cs_l.a2 = cs_pl_.cs_l.b0 = cs_pl_.cs_l.b1 = cs_pl_.cs_l.b2 = cs_pl_.cs_l.x1 = cs_pl_.cs_l.x2 = 0;
-  cs_pl_.cs_l.y1 = cs_pl_.cs_l.y2 = cs_pl_.cs_m.a1 = cs_pl_.cs_m.a2 = cs_pl_.cs_m.b0 = cs_pl_.cs_m.b1 = 0;
-  cs_pl_.cs_m.b2 = cs_pl_.cs_m.x1 = cs_pl_.cs_m.x2 = cs_pl_.cs_m.y1 = cs_pl_.cs_m.y2 = cs_pr_.cs_h.a1 = 0;
-  cs_pr_.cs_h.a2 = cs_pr_.cs_h.b0 = cs_pr_.cs_h.b1 = cs_pr_.cs_h.b2 = cs_pr_.cs_h.x1 = cs_pr_.cs_h.x2 = 0;
-  cs_pr_.cs_h.y1 = cs_pr_.cs_h.y2 = cs_pr_.cs_l.a1 = cs_pr_.cs_l.a2 = cs_pr_.cs_l.b0 = cs_pr_.cs_l.b1 = 0;
-  cs_pr_.cs_l.b2 = cs_pr_.cs_l.x1 = cs_pr_.cs_l.x2 = cs_pr_.cs_l.y1 = cs_pr_.cs_l.y2 = cs_pr_.cs_m.a1 = 0;
-  cs_pr_.cs_m.a2 = cs_pr_.cs_m.b0 = cs_pr_.cs_m.b1 = cs_pr_.cs_m.b2 = cs_pr_.cs_m.x1 = cs_pr_.cs_m.x2 = 0;
-  cs_pr_.cs_m.y1 = cs_pr_.cs_m.y2 = 0;
-  cs_sm = 1 - exp(-1 / (0.02 * srate));
+  cs_ca = cs_cg = cs_cm = cs_con = cs_cr = cs_db = cs_dc = cs_dip = cs_dipm = cs_dt = cs_e0 = cs_e1 = cs_ed = 0;
+  cs_env = cs_es = cs_gr = cs_grm = cs_grs = cs_gs = cs_hot = cs_k = cs_mc = cs_mk = cs_ml = cs_mm = cs_mono = 0;
+  cs_mr = cs_nse = cs_nz_g = cs_ov = cs_pk = cs_rat = cs_thr = cs_pl_.cs_h.a1 = cs_pl_.cs_h.a2 = 0;
+  cs_pl_.cs_h.b0 = cs_pl_.cs_h.b1 = cs_pl_.cs_h.b2 = cs_pl_.cs_h.x1 = cs_pl_.cs_h.x2 = cs_pl_.cs_h.y1 = 0;
+  cs_pl_.cs_h.y2 = cs_pl_.cs_l.a1 = cs_pl_.cs_l.a2 = cs_pl_.cs_l.b0 = cs_pl_.cs_l.b1 = cs_pl_.cs_l.b2 = 0;
+  cs_pl_.cs_l.x1 = cs_pl_.cs_l.x2 = cs_pl_.cs_l.y1 = cs_pl_.cs_l.y2 = cs_pl_.cs_m.a1 = cs_pl_.cs_m.a2 = 0;
+  cs_pl_.cs_m.b0 = cs_pl_.cs_m.b1 = cs_pl_.cs_m.b2 = cs_pl_.cs_m.x1 = cs_pl_.cs_m.x2 = cs_pl_.cs_m.y1 = 0;
+  cs_pl_.cs_m.y2 = cs_pr_.cs_h.a1 = cs_pr_.cs_h.a2 = cs_pr_.cs_h.b0 = cs_pr_.cs_h.b1 = cs_pr_.cs_h.b2 = 0;
+  cs_pr_.cs_h.x1 = cs_pr_.cs_h.x2 = cs_pr_.cs_h.y1 = cs_pr_.cs_h.y2 = cs_pr_.cs_l.a1 = cs_pr_.cs_l.a2 = 0;
+  cs_pr_.cs_l.b0 = cs_pr_.cs_l.b1 = cs_pr_.cs_l.b2 = cs_pr_.cs_l.x1 = cs_pr_.cs_l.x2 = cs_pr_.cs_l.y1 = 0;
+  cs_pr_.cs_l.y2 = cs_pr_.cs_m.a1 = cs_pr_.cs_m.a2 = cs_pr_.cs_m.b0 = cs_pr_.cs_m.b1 = cs_pr_.cs_m.b2 = 0;
+  cs_pr_.cs_m.x1 = cs_pr_.cs_m.x2 = cs_pr_.cs_m.y1 = cs_pr_.cs_m.y2 = 0;
   cs_ca = 1 - exp(-1 / (0.005 * srate)); cs_cr = 1 - exp(-1 / (0.150 * srate)); cs_gs = 1 - exp(-1 / (0.002 * srate));   // COMP detector / gain
   cs_nz_g = 10 ^ (-84 / 20);
+  cs_mc = 1 - exp(-1 / (0.05 * srate)); cs_dc = 1 - exp(-3 / (0.05 * srate));   // mono detector ~50 ms; the dip glides in ~50 ms
+  cs_dipm = cos(0.25 * $pi); cs_dip = 1;                                        // the desk centre: constant power, -3 dB
   cs_update();
-  cs_g = cs_gt;
 );
 
 // ================================================================ the 92 chassis
@@ -784,15 +786,15 @@ function s92_srinit() (
 );
 
 // ---------------------------------------------------------------- presets
-// COMPACT: EQ, COMP and the desk (BAL and LEVEL are left alone)
-function cs_set(hi, mid, lo, cmp, mm, hot, nse) ( slider47 = hi; slider48 = mid; slider49 = lo; slider50 = cmp; slider53 = mm; slider54 = hot; slider55 = nse; );
+// COMPACT: EQ, COMP and the desk
+function cs_set(hi, mid, lo, cmp, mm, hot, nse) ( slider47 = hi; slider48 = mid; slider49 = lo; slider50 = cmp; slider51 = mm; slider52 = hot; slider53 = nse; );
 function cs_preset(p) (
   p == 1 ? cs_set(0, 0, 0, 0, 0, 0, 0) :                  // Clean Channel
   p == 2 ? cs_set(0, 0, 0, 0, 0, 1, 0) :                  // Hot Channel
   p == 3 ? cs_set(0, 0, 0, 0, 0, 1, 1) :                  // Hot and Noisy (the real thing)
   p == 4 ? cs_set(2, 3, -3, 4, 0, 0, 0) :                 // Vocal Presence (COMP 4)
            cs_set(2, 0, 1, 2, 0, 0, 0);                   // Keys (COMP 2)
-  s92_autor(47, 55);
+  s92_autor(47, 53);
 );
 function s92_load(p) (
   p == 1 ? ( s92_cur == 0 ? m15_m15_dst = 1; slider1 = 0; m15_setp(6, 0, 0, 35, 25, 50, 15, 1, 100); s92_autor(2, 10); ) :  // Init = the 15 at its defaults
@@ -854,9 +856,7 @@ function s92_load(p) (
   slider51 = 0;
   slider52 = 0;
   slider53 = 0;
-  slider54 = 0;
-  slider55 = 0;
-    s92_autor(1, 55);
+    s92_autor(1, 53);
   );
   ui_auto(1);
   s92_pr = p > 24 ? 1 : p;
@@ -1065,8 +1065,10 @@ function s92_gui15() (
   sprintf(#v, "%+.1f dB", slider12); dy_knob(74, 242, 16, 12, -24, 12, 0, 0, 0xB8BCC2, "TRIM", #v);
   dy_btn(168, 226, slider13, dy_grn, "GUARD") ? ( slider13 = 1 - slider13; ui_auto(13); );
   sprintf(#v, "%.0f%%", slider10); dy_knob(294, 242, 16, 10, 0, 100, 100, 0, 0xF2F2EE, "MIX", #v);
-  m15_vuL.ui_vu(368 * sc, 74 * sc, 170 * sc, 100 * sc, 10 * log10(m15_vmL + 0.0000000001) + 18 + m15_vu_sine, "L");
-  m15_vuR.ui_vu(368 * sc, 182 * sc, 170 * sc, 100 * sc, 10 * log10(m15_vmR + 0.0000000001) + 18 + m15_vu_sine, "R");
+  // one VU: the louder side (house calibration: a sine peaking at -18 dBFS reads 0 VU)
+  s92_sec(368, 74, 170, 216, m15_INK, m15_ACC, "OUTPUT");
+  m15_vu.ui_vu(368 * sc, 108 * sc, 170 * sc, 104 * sc, 10 * log10(max(m15_vmL, m15_vmR) + 0.0000000001) + 18 + m15_vu_sine, "L / R");
+  dy_lbl(453, 232, "LOUDER SIDE", 0.6); dy_lbl(453, 248, "0 VU = -18 dBFS", 0.6);
   s92_sec(546, 74, 200, 216, m15_INK, m15_ACC, "TAPE");
   dy_nov = 0;
   sprintf(#v, "%.0f%%", slider5); dy_knob(584, 140, 17, 5, 0, 100, 35, 0, m15_ACC, "DRIVE", #v);
@@ -1093,8 +1095,10 @@ function s92_gui44() (
   sprintf(#v, "%+.1f dB", slider24); dy_knob(142, 242, 16, 24, -24, 12, 0, 0, 0xB8BCC2, "TRIM", #v);
   dy_btn(202, 226, slider25, dy_grn, "GUARD") ? ( slider25 = 1 - slider25; ui_auto(25); );
   sprintf(#v, "%.0f%%", slider22); dy_knob(302, 242, 16, 22, 0, 100, 100, 0, 0xF2F2EE, "MIX", #v);
-  m44_vuL.ui_vu(368 * sc, 74 * sc, 170 * sc, 100 * sc, 10 * log10(m44_vmL + 0.0000000001) + 18 + m44_vu_sine, "L");
-  m44_vuR.ui_vu(368 * sc, 182 * sc, 170 * sc, 100 * sc, 10 * log10(m44_vmR + 0.0000000001) + 18 + m44_vu_sine, "R");
+  // one VU: the louder side (house calibration: a sine peaking at -18 dBFS reads 0 VU)
+  s92_sec(368, 74, 170, 216, m44_INK, m44_ACC, "OUTPUT");
+  m44_vu.ui_vu(368 * sc, 108 * sc, 170 * sc, 104 * sc, 10 * log10(max(m44_vmL, m44_vmR) + 0.0000000001) + 18 + m44_vu_sine, "L / R");
+  dy_lbl(453, 232, "LOUDER SIDE", 0.6); dy_lbl(453, 248, "0 VU = -18 dBFS", 0.6);
   s92_sec(546, 74, 200, 216, m44_INK, m44_ACC, "TAPE");
   dy_nov = 0;
   sprintf(#v, "%.0f%%", slider19); dy_knob(594, 146, 20, 19, 0, 100, 35, 0, m44_ACC, "DRIVE", #v);
@@ -1106,24 +1110,22 @@ function s92_gui44() (
   dy_lbl(690, 82, m44_speed ? "3 3/4 IPS" : "1 7/8 IPS", 0.7);
   dy_lbl(700, 262, "COMPANDER NR", 0.7);
 );
-// the COMPACT faceplate: one Compact 12 channel and the desk's MAIN MIX, in the desk's own look
+// the COMPACT faceplate: one Compact 12 channel (EQ, COMP) and the desk's MAIN MIX, in the desk's own look
 function s92_compact() (
-  cs_PNL = 0x2A2B2E; cs_INK = 0xF0EEE8; cs_CHI = 0x3FB05C; cs_CMD = 0x2F7FD0; cs_CLO = 0xE0B02A; cs_CPN = 0xB8BCC2;
+  cs_PNL = 0x2A2B2E; cs_INK = 0xF0EEE8; cs_CHI = 0x3FB05C; cs_CMD = 0x2F7FD0; cs_CLO = 0xE0B02A;
   dy_ink = cs_INK; dy_bg = cs_PNL; dy_kst = 7; dy_nov = 1;
   pk_chassis(8 * sc, 68 * sc, 944 * sc, 228 * sc, cs_PNL);
   ui_cola(0xFFFFFF, 0.06); gfx_rect(16 * sc, 74 * sc, 456 * sc, 216 * sc);
   dy_title(28, 80, "CHANNEL");
+  sprintf(#v, "%+.1f", slider47); dy_knob(76, 160, 24, 47, -15, 15, 0, 0, cs_CHI, "HI", #v);
+  sprintf(#v, "%+.1f", slider48); dy_knob(184, 160, 24, 48, -12, 12, 0, 0, cs_CMD, "MID", #v);
+  sprintf(#v, "%+.1f", slider49); dy_knob(292, 160, 24, 49, -15, 15, 0, 0, cs_CLO, "LOW", #v);
+  sprintf(#v, "%.1f", slider50); dy_knob(408, 160, 24, 50, 0, 10, 0, 0, 0xE8742A, "COMP", #v);
+  // indicator row: signal, mono (the desk's -3 dB centre dip), the COMP's gain reduction
   cs_lhd = max(cs_pk, cs_lhd * 0.9); cs_pk = 0;
-  pk_led(76 * sc, 232 * sc, 3.5 * sc, cs_lhd > 0.001 && cs_gt > 0, dy_grn); dy_lbl(76, 244, "SIGNAL", 0.6);
-  sprintf(#v, "%+.1f", slider47); dy_knob(76, 150, 22, 47, -15, 15, 0, 0, cs_CHI, "HI", #v);
-  sprintf(#v, "%+.1f", slider48); dy_knob(184, 150, 22, 48, -12, 12, 0, 0, cs_CMD, "MID", #v);
-  sprintf(#v, "%+.1f", slider49); dy_knob(292, 150, 22, 49, -15, 15, 0, 0, cs_CLO, "LOW", #v);
-  sprintf(#v, "%.1f", slider50); dy_knob(408, 150, 22, 50, 0, 10, 0, 0, 0xE8742A, "COMP", #v);
-  pk_led(442 * sc, 120 * sc, 3.5 * sc, cs_grm > 1, dy_amb); cs_grm *= 0.8;
-  slider51 == 0 ? strcpy(#v, "C") : sprintf(#v, "%s%.0f", slider51 < 0 ? "L" : "R", abs(slider51));
-  dy_knob(184, 240, 22, 51, -100, 100, 0, 0, cs_CPN, "BAL", #v);
-  slider52 <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f", slider52);
-  dy_knob(292, 238, 26, 52, -60, 10, 0, 0, 0xF4F2EA, "LEVEL", #v);
+  pk_led(76 * sc, 252 * sc, 3.5 * sc, cs_lhd > 0.001, dy_grn); dy_lbl(76, 262, "SIGNAL", 0.6);
+  pk_led(238 * sc, 252 * sc, 3.5 * sc, cs_mono, dy_amb); dy_lbl(238, 262, "MONO  -3 dB", 0.6);
+  pk_led(408 * sc, 252 * sc, 3.5 * sc, cs_grm > 1, dy_amb); dy_lbl(408, 262, "COMP", 0.6); cs_grm *= 0.8;
   // the desk: MAIN MIX, HOT, NOISE, meters, and the soft clip's CEILING
   ui_cola(0xFFFFFF, 0.08); gfx_rect(480 * sc, 74 * sc, 464 * sc, 216 * sc);
   dy_title(492, 80, "MAIN MIX");
@@ -1131,10 +1133,10 @@ function s92_compact() (
   cs_pkdL = max(cs_pkL, cs_pkdL * 0.85); cs_pkdR = max(cs_pkR, cs_pkdR * 0.85); cs_pkL = cs_pkR = 0;
   dy_lbl(544, 270, "L", 0.7); dy_lbl(560, 270, "R", 0.7);
   dy_nov = 0;
-  slider53 <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider53);
-  dy_knob(670, 150, 30, 53, -60, 10, 0, 0, 0xF4F2EA, "MAIN MIX", #v);
-  dy_btn(616, 226, slider54, dy_red, "HOT") ? ( slider54 = 1 - slider54; ui_auto(54); );
-  dy_btn(684, 226, slider55, dy_amb, "NOISE") ? ( slider55 = 1 - slider55; ui_auto(55); );
+  slider51 <= -59.9 ? strcpy(#v, "OFF") : sprintf(#v, "%+.1f dB", slider51);
+  dy_knob(670, 150, 30, 51, -60, 10, 0, 0, 0xF4F2EA, "MAIN MIX", #v);
+  dy_btn(616, 226, slider52, dy_red, "HOT") ? ( slider52 = 1 - slider52; ui_auto(52); );
+  dy_btn(684, 226, slider53, dy_amb, "NOISE") ? ( slider53 = 1 - slider53; ui_auto(53); );
   sprintf(#v, "%+.1f dB", slider46); dy_knob(852, 150, 22, 46, -24, 0, -0.3, 0, 0xF4F2EA, "CEILING", #v);
   s92_cliplight(852, 236);
 );
