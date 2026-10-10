@@ -1,0 +1,746 @@
+desc:GFX Feld 45
+//tags: dynamics compressor limiter fet peak feedback broadcast vintage
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
+//
+// FELD 45 (from Feldeffekt). A peak limiting amplifier in the spirit of the classic ultra-fast FET limiters of
+// the late 60s / 70s, dressed as state radio / TV transmission gear of the mid-80s (fourth of the family with
+// Pegel 45, Stimm 45 and Raum 45). The FET is a voltage-controlled resistor; the threshold is fixed and the
+// amount of limiting is set by how hard INPUT drives the FET, balanced afterwards by OUTPUT.
+//
+// SIGNAL FLOW
+//   input -> INPUT (gain into the FET, -24 .. +24 dB; 0 dB = unity) -> 2x oversampled (47-tap Kaiser half-band)
+//   -> the FET gain element -> FET colour -> OUTPUT (-24 .. +24 dB) -> class-A line amp colour -> back to 1x
+//   -> output transformer (low-frequency saturation) -> DC blocker -> MIX with the dry input (latency matched)
+//   -> the house output stage (OFF / CLIP / LIMIT). Latency 23 samples (reported to the host; LIMIT adds 3 ms).
+//
+// THE DETECTOR (feedback style, as on the original: it hears the FET's output, not its input)
+//   THRESHOLD fixed at 0 VU = -18 dBFS peak (a sine peaking at -18 dBFS sits exactly on it).
+//   The loop is solved implicitly every sample (zero-delay feedback: the gain reduction G that the detector would
+//   settle on when it hears the reduced output), so it stays stable at 20 us attack with 20:1 in the loop.
+//   Gain law in the feedback domain: G = (R - 1) x soft(output over threshold). Because the knee sits on the
+//   OUTPUT level, it spreads out on the input side: the classic soft, curved FET knee (input-side knee width
+//   about 8 / 6 / 5 / 4 dB at 4 / 8 / 12 / 20 : 1). Above the knee the ratios are 4, 8, 12 and 20 : 1.
+//   ALL ("all buttons in"): about 40:1 just over the threshold, then the curve bends over to about 12:1 higher up
+//   (the over-easy, curved response), with a lazier attack (3x), a detector overshoot that digs in after every
+//   hit and then lets go (pumping), a quicker release and the FET's bias shifted (more 2nd and some 3rd harmonic).
+//   Transients punch through, everything else pumps.
+//   ATTACK  knob 1 .. 7 (7 = FASTEST, as on the original): 800 us .. 20 us (time constant of the gain reduction).
+//   RELEASE knob 1 .. 7 (7 = FASTEST): 1.1 s .. 50 ms, programme dependent, two stages: a fast stage recovers short
+//           peaks in the set time; a slow stage (charges in about 0.3 s) remembers sustained gain reduction, so
+//           after a long passage the last 70 % or so returns 2.5x more slowly.
+//   LINK    (on by default): one detector hears both channels (the louder one); off = two independent channels.
+//
+// COLOUR
+//   FET: 2nd-harmonic distortion that grows with the gain reduction (about 0.3 % at 10 dB GR, 1 kHz), with extra
+//        weight on the low frequencies that grows towards the slow release settings. At the fast release
+//        settings the gain also ripples with the waveform of low notes (the classic fast-release growl).
+//   Line amp (class A): a gentle biased curve, mostly 2nd harmonic, rising with level (about 0.1 % at 0 VU).
+//   Output transformer: low-frequency saturation, only at high levels (about 0.4 % at 50 Hz, -6 dBFS).
+//
+// METER  GR (needle rests at 0 and swings back to the left), OUT and IN (VU: a sine peaking at -18 dBFS reads 0 VU,
+//        the needle ballistics of Pegel 45), OFF. ENAMEL draws a needle meter (GR read on the printed VU scale, as on
+//        the hardware); VFD and MATRIX draw a ladder (GR 0 .. -20 dB, 1 dB blocks, lit from the right) and a readout.
+// MIX    parallel compression (100 % = all FET). DRIFT (0 - 100 %, 50 % = standard): FET bias wander - the threshold
+//        wanders by up to about +/-0.5 dB, the release timing by +/-8 %, and the two channels track the gain
+//        reduction slightly differently (+/-1.5 %; unlinked, each channel's threshold also wanders on its own).
+// THEME  ENAMEL (bone-grey baked enamel, knurled aluminium knobs), VFD (charcoal slate, cold turquoise glow, dark
+//        bakelite knobs with a white line), MATRIX (battleship grey, LED blocks). Saved in a slider.
+// GUI: drag a knob (shift = fine, double-click = default, wheel); click a key; click the LCD for the preset list.
+
+import gfx-drift.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+
+slider1:0<0,4,1{4:1,8:1,12:1,20:1,All}>-Ratio
+slider2:0<-24,24,0.5>-Input (dB)
+slider3:0<-24,24,0.1>-Output (dB)
+slider4:3<1,7,0.01>-Attack (1 slow .. 7 fastest)
+slider5:7<1,7,0.01>-Release (1 slow .. 7 fastest)
+slider6:0<0,3,1{GR,Output,Input,Off}>-Meter
+slider7:1<0,1,1{Off,On}>-Stereo link
+slider8:100<0,100,1>-Mix (%)
+slider9:50<0,100,1>-Drift (%)
+slider10:0<0,2,1{Enamel,VFD,Matrix}>-Theme
+slider11:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+#ui_man = "gfx-feld-45";                                // the ? pop-up links to this manual
+ext_noinit = 1;
+
+// ---------- memory ----------
+nextmem = 0;
+function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
+fd_H   = alloc(32);                                     // half-band odd taps
+fd_xbL = alloc(64); fd_xbR = alloc(64);                 // input history (mirrored rings of 32)
+fd_gbL = alloc(64); fd_gbR = alloc(64);                 // gain history (the detector runs ahead of the up-sampler)
+fd_veL = alloc(64); fd_veR = alloc(64);                 // 2x even-phase output history
+fd_voL = alloc(64); fd_voR = alloc(64);                 // 2x odd-phase output history
+fd_rbL = alloc(64); fd_rbR = alloc(64);                 // dry history (for MIX)
+ost_init(alloc(4096));                                  // the house output stage
+fd_wp = 0;
+fd_LAT = 23;                                            // total latency of the 2x stage, samples
+
+// ---------- the half-band (47 taps, Kaiser beta 7): the 24 non-zero odd taps h[2i - 23], i = 0..23 ----------
+function fd_i0(x) local(s, t, k) ( s = 1; t = 1; k = 1; loop(40, t *= sqr(x / (2 * k)); s += t; k += 1; ); s; );
+fd_i = 0; fd_s = 0; fd_bk = 7; fd_ib = fd_i0(fd_bk);
+loop(24,
+  fd_k = 2 * fd_i - 23;
+  fd_H[fd_i] = sin($pi * fd_k * 0.5) / ($pi * fd_k) * fd_i0(fd_bk * sqrt(max(1 - sqr(fd_k / 24), 0))) / fd_ib;
+  fd_s += fd_H[fd_i]; fd_i += 1;
+);
+fd_i = 0; loop(24, fd_H[fd_i] *= 0.5 / fd_s; fd_i += 1; );   // the odd taps sum to exactly 0.5 (unity at DC)
+// symmetric 24-tap convolution over a history pointer (b[0] = newest)
+function fd_conv(b) local(s, i, j) (
+  s = 0; i = 0; j = 23;
+  loop(12, s += fd_H[i] * (b[i] + b[j]); i += 1; j -= 1; );
+  s;
+);
+
+// ---------- the gain law (feedback domain: u = output level over the threshold, dB) ----------
+function fd_q(u, k)  ( u <= -0.5 * k ? 0 : u >= 0.5 * k ? u : sqr(u + 0.5 * k) / (2 * k) );
+function fd_qd(u, k) ( u <= -0.5 * k ? 0 : u >= 0.5 * k ? 1 : (u + 0.5 * k) / k );
+// C(u): the gain reduction (dB) the loop settles on; its slope goes to fd_cd
+function fd_C(u) local(c, d, ca, da) (
+  c = fd_Rm1 * fd_q(u, fd_kn); d = fd_Rm1 * fd_qd(u, fd_kn);
+  fd_wA > 0.0001 ? (
+    ca = 39 * fd_q(u, 0.3) - 30 * fd_q(u - 0.25, 0.5);  // ALL: ~40:1 at first, bending over to ~12:1
+    da = 39 * fd_qd(u, 0.3) - 30 * fd_qd(u - 0.25, 0.5);
+    c += (ca - c) * fd_wA; d += (da - d) * fd_wA;
+  );
+  fd_cd = d;
+  c;
+);
+// one detector: lev = the peak level into the FET (linear), thr = threshold (dBFS). Returns the applied GR (dB).
+function fd_det(lev, thr) instance(G, Gs, Gl, Ga) local(P, t0, Gn, c, h, fl) (
+  P = 8.68588963807 * log(max(lev, 0.000001)) - thr;    // input over the threshold
+  t0 = fd_C(P - G);
+  t0 > G ? (
+    // attack: implicit (zero-delay) step of the feedback loop, Gn = G + a (C(P - Gn) - Gn), by Newton
+    Gn = G;
+    loop(4,
+      c = fd_C(P - Gn);
+      h = Gn - G - fd_a * (c - Gn);
+      Gn -= h / (1 + fd_a + fd_a * fd_cd);
+      Gn = min(max(Gn, G), max(P, G) + 1);
+    );
+    G = Gn;
+  ) : (
+    // release: the fast stage falls towards the slow stage's memory, then both let go
+    fl = fd_kap * Gs;
+    G = G > fl ? fl + (G - fl) * fd_rf : G * fd_rs;
+    G = max(G, t0);
+  );
+  // the slow stage charges only while the signal still holds the gain reduction (not while it is recovering)
+  G > Gs && t0 > 0.9 * G ? Gs += (G - Gs) * fd_cs : Gs *= fd_rs;
+  Gl += (G - Gl) * fd_cl;                               // ALL: the lagging copy for the overshoot
+  G < 0.000001 ? G = 0; Gs < 0.000001 ? Gs = 0; abs(Gl) < 0.000001 ? Gl = 0;
+  Ga = max(G + fd_ov * (G - Gl), 0);
+  Ga;
+);
+function fd_dcopy() instance(G, Gs, Gl, Ga) ( G = dL.G; Gs = dL.Gs; Gl = dL.Gl; Ga = dL.Ga; );
+
+// ---------- the nonlinear stage, at 2x: FET gain element + its colour, OUTPUT, class-A line amp ----------
+fd_ld = 0.4; fd_lb = 0.12;                              // line amp curve: drive, bias
+fd_ltb = ost_tanh(fd_ld * fd_lb); fd_lnorm = 1 / (fd_ld * (1 - fd_ltb * fd_ltb));
+function fd_nl(y, g) instance(e2, lo, e2l) local(v, s, s2, l2, gr1) (
+  v = y * g; gr1 = 1 - g;
+  s = v / sqrt(1 + v * v); s2 = s * s;                  // bounded copy for the distortion terms
+  e2 += (s2 - e2) * fd_ce;                              // its running mean square (keeps the even terms DC-free)
+  lo += (s - lo) * fd_clo; l2 = lo * lo; e2l += (l2 - e2l) * fd_ce;
+  v += gr1 * (fd_cF * (s2 - e2) + fd_cFL * (l2 - e2l) - fd_c3 * s * s2);
+  v *= fd_og;
+  (ost_tanh(fd_ld * (v + fd_lb)) - fd_ltb) * fd_lnorm;   // class-A line amp: unity small-signal gain
+);
+// output transformer (1x): low-frequency saturation, then a 5 Hz DC blocker
+function fd_xfm(x) instance(lo, dx, dy) local(y) (
+  lo += (x - lo) * fd_cxf;
+  x += lo / sqrt(1 + sqr(0.45 * lo)) - lo;
+  y = x - dx + fd_dcr * dy; dx = x; dy = y;
+  y;
+);
+function fd_flush() instance(G, Gs, Gl, e2, lo, e2l, dx, dy) (
+  abs(e2) < 0.000000000001 ? e2 = 0; abs(lo) < 0.000000000001 ? lo = 0; abs(e2l) < 0.000000000001 ? e2l = 0;
+  abs(dx) < 0.000000000001 ? dx = 0; abs(dy) < 0.000000000001 ? dy = 0;
+);
+
+// ---------- settings ----------
+function fd_update() local(rt, rs) (
+  rt = slider1 | 0;
+  fd_tRm1 = rt == 0 ? 3 : rt == 1 ? 7 : rt == 2 ? 11 : 19;
+  fd_tkn  = rt == 0 ? 3.2 : rt == 1 ? 1.3333 : rt == 2 ? 0.7692 : 0.381;   // knee width on the output side
+  fd_twA  = rt == 4;
+  fd_tin  = 10 ^ (slider2 / 20);
+  fd_tog  = 10 ^ (slider3 / 20);
+  fd_att  = 0.0008 * 0.025 ^ ((min(max(slider4, 1), 7) - 1) / 6);           // 800 us (1) .. 20 us (7)
+  fd_rel  = 1.1 * (0.05 / 1.1) ^ ((min(max(slider5, 1), 7) - 1) / 6);      // 1.1 s (1) .. 50 ms (7)
+  fd_mtr  = slider6 | 0;
+  fd_link = slider7 >= 0.5;
+  fd_tmix = slider8 / 100;
+  drift_macro(slider9);
+  ost_setup(0, 0, 120, 6000, -0.3, slider11 | 0);
+  pdc_bot_ch = 0; pdc_top_ch = 2;
+  pdc_delay = fd_LAT + ((slider11 | 0) == 2 ? ost_N : 0);
+  rs = (7 - min(max(slider5, 1), 7)) / 6;               // 0 = fastest release .. 1 = slowest
+  fd_cF  = 0.09 * (1 + 2 * fd_twA);
+  fd_cFL = 0.13 * (0.3 + 0.7 * rs) * (1 + fd_twA);
+  fd_c3  = 0.6 * fd_twA;
+);
+
+// ---------- presets: ratio, input, output, attack, release, meter, link, mix, drift ----------
+function fd_set(r, i, o, a, l, m, k, x, d) (
+  slider1 = r; slider2 = i; slider3 = o; slider4 = a; slider5 = l; slider6 = m; slider7 = k; slider8 = x; slider9 = d;
+  slider_automate(511);                                 // sliders 1-9
+);
+function load_preset(p) (
+  p == 1  ? fd_set(0,   0,  0,   3, 7,   0, 1, 100, 50) :   // Init
+  p == 2  ? fd_set(0,   8, -4,   4, 6,   0, 1, 100, 50) :   // Vocal Grab
+  p == 3  ? fd_set(1,   6, -4,   2, 2.5, 0, 1, 100, 40) :   // Bass Even
+  p == 4  ? fd_set(0,  10, -6,   1, 7,   0, 1, 100, 50) :   // Snare Crack
+  p == 5  ? fd_set(4,  14, -9,   3, 7,   0, 1, 100, 60) :   // Room Smash (ALL)
+  p == 6  ? fd_set(4,  12, -6,   4, 6,   0, 1,  35, 50) :   // Drum Bus Parallel
+  p == 7  ? fd_set(1,  12, -7,   5, 3,   0, 1, 100, 50) :   // Guitar Sustain
+  p == 8  ? fd_set(3,   4,  0,   7, 5,   1, 1, 100, 30) :   // Broadcast Limit 20
+  p == 9  ? fd_set(2,   8, -3,   6, 4,   0, 1, 100, 85) :   // Ost Rundfunk
+  p == 10 ? fd_set(0,  10, -5,   5, 6,   0, 1, 100, 30) :   // Tokio Vocal
+  p == 11 ? fd_set(0,   8, -3,   1, 6,   0, 1,  80, 50) :   // Kick Punch
+  p == 12 ? fd_set(0,  -4,  1,   2, 3,   0, 1, 100, 40) :   // Gentle 4
+  p == 13 ? (                                           // Reset all to defaults
+    fd_set(0, 0, 0, 3, 7, 0, 1, 100, 50);
+    slider10 = 0; slider11 = 1; slider_automate(1535);
+  );
+);
+
+// ---------- state ----------
+fd_sm  = 1 - exp(-1 / (0.02 * srate));                  // knob smoothing
+fd_smr = 1 - exp(-1 / (0.03 * srate));                  // ratio / mode glide
+fd_cs  = 1 - exp(-1 / (0.3 * srate));                   // slow release stage: charge
+fd_kap = 0.7;                                           // how much of the slow stage's memory holds the fast stage
+fd_cl  = 1 - exp(-1 / (0.04 * srate));                  // ALL: overshoot lag
+fd_ce  = 1 - exp(-1 / (0.01 * 2 * srate));              // (2x) mean-square tracker, 10 ms
+fd_clo = 1 - exp(-2 * $pi * 250 / (2 * srate));         // (2x) FET low-frequency weighting, 250 Hz
+fd_cxf = 1 - exp(-2 * $pi * 90 / srate);                // transformer low band, 90 Hz
+fd_dcr = 1 - 2 * $pi * 5 / srate;                       // DC blocker, 5 Hz
+fd_vw = 13.6; fd_vz = 0.81;                             // VU needle (as Pegel 45): natural frequency, damping
+fd_vw2 = fd_vw * fd_vw; fd_vzw = 2 * fd_vz * fd_vw; fd_vdt = 1 / srate;
+fd_vref = 1.5707963 / 0.125892541;                      // rectified x pi/2, 0 VU = a sine peaking at -18 dBFS
+drT.drift_init(0.8 + rand(0.4)); drR.drift_init(0.8 + rand(0.4));
+drL.drift_init(0.8 + rand(0.5)); drM.drift_init(0.8 + rand(0.5));
+drA.drift_init(0.9 + rand(0.5)); drB.drift_init(0.9 + rand(0.5));
+fd_update();
+fd_gin = fd_tin; fd_og = fd_tog; fd_mix = fd_tmix;
+fd_Rm1 = fd_tRm1; fd_kn = fd_tkn; fd_wA = fd_twA;
+fd_vy = fd_vv = 0; fda_grp = 0; fda_blk = 0;
+
+ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                  // new instances open in Large, on Init
+ui_dflt = 1;
+
+@slider
+fd_update();
+
+@block
+fd_update();                                            // knobs moved on the panel do not run @slider
+// DRIFT: FET bias wander (threshold, release timing, channel tracking)
+fd_di = 0.25 * dm_s * samplesblock / srate;
+fd_thr = -18 + 0.5 * dm_a * drT.drift_tick(fd_di);
+fd_tsl = fd_thr + 0.25 * dm_a * drA.drift_tick(fd_di);
+fd_tsr = fd_thr + 0.25 * dm_a * drB.drift_tick(fd_di);
+fd_drr = 1 + 0.08 * dm_a * drR.drift_tick(fd_di);
+fd_mL = 0.015 * dm_a * drL.drift_tick(fd_di);
+fd_mR = 0.015 * dm_a * drM.drift_tick(fd_di);
+// timing coefficients (from the gliding ratio / mode)
+fd_Rn = 1 + fd_Rm1 * (1 - fd_wA) + 39 * fd_wA;          // loop gain: the attack time stays the set time at any ratio
+fd_a  = (exp(1 / (fd_att * (1 + 2 * fd_wA) * srate)) - 1) / fd_Rn;
+fd_tr = fd_rel * (1 - 0.3 * fd_wA) * fd_drr;
+fd_rf = exp(-1 / (fd_tr * srate));
+fd_rs = exp(-1 / (2.5 * fd_tr * srate));
+fd_ov = 0.45 * fd_wA;
+// denormal housekeeping
+nL.fd_flush(); nR.fd_flush(); tL.fd_flush(); tR.fd_flush();
+abs(fd_vy) + abs(fd_vv) < 0.000000001 ? fd_vy = fd_vv = 0;
+// the meter's block values for the panel
+fda_gr = fda_grp; fda_grp = 0;
+fda_v = fd_vy;
+fda_blk += 1;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+fd_il = spl0; fd_ir = spl1;
+// ---------- glides ----------
+fd_gin += (fd_tin - fd_gin) * fd_sm;
+fd_og  += (fd_tog - fd_og) * fd_sm;
+fd_mix += (fd_tmix - fd_mix) * fd_sm;
+fd_Rm1 += (fd_tRm1 - fd_Rm1) * fd_smr;
+fd_kn  += (fd_tkn - fd_kn) * fd_smr;
+fd_wA  += (fd_twA - fd_wA) * fd_smr;
+fd_wA < 0.00001 ? fd_wA = 0;
+
+// ---------- INPUT and the detector ----------
+fd_xl = fd_il * fd_gin; fd_xr = fd_ir * fd_gin;
+fd_link ? (
+  fd_G = dL.fd_det(max(abs(fd_xl), abs(fd_xr)), fd_thr);
+  dR.fd_dcopy();
+  fd_GL = fd_G * (1 + fd_mL); fd_GR = fd_G * (1 + fd_mR);
+) : (
+  fd_GL = dL.fd_det(abs(fd_xl), fd_tsl) * (1 + fd_mL);
+  fd_GR = dR.fd_det(abs(fd_xr), fd_tsr) * (1 + fd_mR);
+);
+fd_kgl = exp(-0.115129255 * fd_GL); fd_kgr = exp(-0.115129255 * fd_GR);
+fda_grp = max(fda_grp, max(fd_GL, fd_GR));
+
+// ---------- 2x: up-sample, FET + line amp, down-sample ----------
+fd_wp = (fd_wp + 31) & 31;
+fd_xbL[fd_wp] = fd_xbL[fd_wp + 32] = fd_xl;  fd_xbR[fd_wp] = fd_xbR[fd_wp + 32] = fd_xr;
+fd_gbL[fd_wp] = fd_gbL[fd_wp + 32] = fd_kgl;  fd_gbR[fd_wp] = fd_gbR[fd_wp + 32] = fd_kgr;
+fd_rbL[fd_wp] = fd_rbL[fd_wp + 32] = fd_il;  fd_rbR[fd_wp] = fd_rbR[fd_wp + 32] = fd_ir;
+// left
+fd_v = nL.fd_nl(2 * fd_conv(fd_xbL + fd_wp), 0.5 * (fd_gbL[fd_wp + 11] + fd_gbL[fd_wp + 12]));
+fd_veL[fd_wp] = fd_veL[fd_wp + 32] = fd_v;
+fd_v = nL.fd_nl(fd_xbL[fd_wp + 11], fd_gbL[fd_wp + 11]);
+fd_voL[fd_wp] = fd_voL[fd_wp + 32] = fd_v;
+fd_ol = tL.fd_xfm(0.5 * fd_voL[fd_wp + 12] + fd_conv(fd_veL + fd_wp));
+// right
+fd_v = nR.fd_nl(2 * fd_conv(fd_xbR + fd_wp), 0.5 * (fd_gbR[fd_wp + 11] + fd_gbR[fd_wp + 12]));
+fd_veR[fd_wp] = fd_veR[fd_wp + 32] = fd_v;
+fd_v = nR.fd_nl(fd_xbR[fd_wp + 11], fd_gbR[fd_wp + 11]);
+fd_voR[fd_wp] = fd_voR[fd_wp + 32] = fd_v;
+fd_or = tR.fd_xfm(0.5 * fd_voR[fd_wp + 12] + fd_conv(fd_veR + fd_wp));
+
+// ---------- MIX (dry delayed to match) and the house output stage ----------
+fd_dl = fd_rbL[fd_wp + fd_LAT]; fd_dr = fd_rbR[fd_wp + fd_LAT];
+ost_out(fd_dl + (fd_ol - fd_dl) * fd_mix, fd_dr + (fd_or - fd_dr) * fd_mix);
+spl0 = ost_l; spl1 = ost_r;
+
+// ---------- the meter's needle (mass + spring + damping, as Pegel 45) ----------
+fd_md = fd_mtr == 0 ? 0.5 * (fd_kgl + fd_kgr) :
+        fd_mtr == 1 ? max(abs(spl0), abs(spl1)) * fd_vref :
+        fd_mtr == 2 ? max(abs(fd_il), abs(fd_ir)) * fd_vref : 0;
+fd_vv += (fd_vw2 * (fd_md - fd_vy) - fd_vzw * fd_vv) * fd_vdt; fd_vy += fd_vv * fd_vdt;
+
+@gfx 820 340
+ui_begin(820, 340);
+
+// =====================================================================
+// Theme colours (the family palette: Pegel 45 / Stimm 45 / Raum 45)
+// =====================================================================
+fdv_th = slider10 | 0; fdv_m = slider6 | 0;
+fdv_th == 0 ? (                                         // ENAMEL: light industrial laboratory
+  FDF  = 0xD6D2C4;                                      // bone-grey baked enamel (the section faces)
+  FDP  = ui_mix(FDF, 0x000000, 0.10);                   // the panel around them, a shade deeper
+  FDH  = ui_mix(FDF, 0x000000, 0.20);                   // header strip
+  FDS  = ui_mix(FDF, 0xFFFFFF, 0.08);                   // the button field, a shade lighter
+  FDI  = 0x1C1C1C;                                      // deep charcoal print
+  FDI2 = 0x4A4842;
+  FDA  = 0xFF7900;                                      // safety orange
+  FDL  = 0xFFA126;                                      // lamp: warm amber behind a milky cap
+  FDG  = 0x141414;                                      // readout glass
+  FDD  = 0xFF8C00;                                      // readout glow
+  FDN  = 0x101010;                                      // matte black needle
+  FDRED = 0xE0281A;
+) : fdv_th == 1 ? (                                     // VFD: cold gas-discharge
+  FDF  = 0x0F1112;
+  FDP  = 0x181A1B;                                      // charcoal slate
+  FDH  = ui_mix(FDP, 0x000000, 0.35);
+  FDS  = ui_mix(FDP, 0x000000, 0.22);
+  FDI  = 0x4EE1DC;                                      // cold turquoise glow
+  FDI2 = ui_mix(0x4EE1DC, FDP, 0.45);
+  FDA  = 0xFF8C00;                                      // neon amber
+  FDL  = 0x4EE1DC;
+  FDG  = 0x070808;
+  FDD  = 0x4EE1DC;
+  FDRED = 0xFF3A2A;
+) : (                                                   // MATRIX: military LED matrix
+  FDP  = 0x222528;                                      // battleship grey
+  FDF  = ui_mix(FDP, 0x000000, 0.25);
+  FDH  = ui_mix(FDP, 0x000000, 0.30);
+  FDS  = ui_mix(FDP, 0x000000, 0.40);
+  FDI  = 0xC7BEB3;                                      // print: elephant's breath
+  FDI2 = ui_mix(0xC7BEB3, FDP, 0.4);
+  FDA  = 0xD4A373;                                      // mustard amber
+  FDL  = 0xD4A373;
+  FDG  = 0x0E0F10;
+  FDD  = 0xD4A373;
+  FDRED = 0xBC3908;
+);
+FDGRN = 0x1E5631; FDOLV = 0x2C302E; FDGH = 0x0D0E0F;    // forest-green blocks, olive-drab cells, VFD ghosts
+
+gfx_setfont(6,  "Trebuchet MS", 27 * sc, 'b');          // title
+gfx_setfont(10, "Trebuchet MS", 14 * sc, 'b');          // scale numbers
+gfx_setfont(11, "Trebuchet MS", 13 * sc, 'b');          // labels
+gfx_setfont(12, "Trebuchet MS", 13 * sc, 'b');          // key captions
+gfx_setfont(13, "Courier New", 26 * sc, 'b');           // readout digits
+gfx_setfont(14, "Trebuchet MS", 15 * sc, 'b');          // knob names
+gfx_setfont(15, "Trebuchet MS", 30 * sc, 'b');          // ratio numerals
+gfx_setfont(16, "Trebuchet MS", 22 * sc, 'b');          // ALL
+
+function fd_r(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc); );
+function fd_txt(x, y, s) ( gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function fd_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = cx * sc - tw * 0.5; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
+function fd_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = rx * sc - tw; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
+function fd_lbl(x, y, s) ( gfx_setfont(11); ui_col(FDI2); fd_txt(x, y, s); );
+function fd_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
+
+// a flat, sharp-cornered lit key in the theme's manner (as on Pegel 45); returns 1 when clicked
+function fd_key(x, y, w, h, lbl, on) local(hov, hit) (
+  hov = fd_hov(x, y, w, h);
+  hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;
+  fdv_th == 0 ? (
+    ui_col(FDI); fd_r(x, y, w, h);
+    on ? ui_col(FDA) : ui_col(hov ? 0xEDEAE0 : ui_mix(FDF, 0xFFFFFF, 0.35)); fd_r(x + 1, y + 1, w - 2, h - 2);
+    on ? ( ui_cola(0xFFFFFF, 0.25); fd_r(x + 1, y + 1, w - 2, 1); );
+    ui_col(FDI);
+  ) : fdv_th == 1 ? (
+    ui_col(on ? FDI : ui_mix(FDI, FDP, 0.7)); fd_r(x, y, w, h);
+    ui_col(0x0A0B0C); fd_r(x + 1, y + 1, w - 2, h - 2);
+    on ? ( ui_cola(FDI, 0.22); fd_r(x + 1, y + 1, w - 2, h - 2); ui_cola(FDI, 0.12); fd_r(x - 2, y - 2, w + 4, h + 4); )
+       : hov ? ( ui_cola(FDI, 0.08); fd_r(x + 1, y + 1, w - 2, h - 2); );
+    on ? ui_col(ui_mix(FDI, 0xFFFFFF, 0.35)) : ui_cola(FDI, 0.55);
+  ) : (
+    ui_col(0x0B0C0D); fd_r(x, y, w, h);
+    on ? ui_col(FDA) : ui_col(hov ? ui_mix(FDOLV, 0xFFFFFF, 0.06) : FDOLV); fd_r(x + 1, y + 1, w - 2, h - 2);
+    on ? ( ui_cola(FDA, 0.25); fd_r(x - 2, y - 2, w + 4, h + 4); ui_cola(0xFFFFFF, 0.3); fd_r(x + 1, y + 1, w - 2, 1); );
+    on ? ui_col(0x17191B) : ui_cola(FDI, 0.85);
+  );
+  gfx_setfont(12); fd_ctxt(x + w * 0.5, y + h * 0.5 + 0.5, lbl);
+  hit;
+);
+
+// a section: sharp-cornered face with a thin frame and its name
+function fd_sect(x, y, w, h, col, name) (
+  fdv_th == 0 ? ( ui_col(ui_mix(col, 0x000000, 0.45)); fd_r(x, y, w, h); ui_col(col); fd_r(x + 1, y + 1, w - 2, h - 2); )
+              : ( ui_col(fdv_th == 1 ? ui_mix(FDI, FDP, 0.78) : 0x0B0C0D); fd_r(x, y, w, h); ui_col(col); fd_r(x + 1, y + 1, w - 2, h - 2); );
+  strlen(name) ? fd_lbl(x + 9, y + 6, name);
+);
+
+// ---------- the five heavy square lit push-buttons (as Raum 45) ----------
+function fd_big(x, y, w, h, s, fnt, on) local(hov, dn, k, i) (
+  hov = fd_hov(x, y, w, h);
+  dn = on ? 2 : 0;                                      // a latched key sits a little lower
+  ui_cola(0x000000, fdv_th == 0 ? 0.28 : 0.5); fd_r(x + 1, y + 3, w, h);
+  ui_col(0x0A0A0B); fd_r(x - 2, y - 2, w + 4, h + 4);
+  fdv_th == 0 ? (                                       // ENAMEL: milky cap, amber lamp behind it
+    on ? (
+      ui_cola(FDL, 0.30); fd_r(x - 5, y - 5, w + 10, h + 10);
+      ui_col(ui_mix(FDL, 0xFFF4DC, 0.35)); fd_r(x, y + dn, w, h - dn);
+      i = 0; loop(8, ui_cola(0xFFFFFF, 0.05); gfx_circle((x + w * 0.5) * sc, (y + dn + (h - dn) * 0.5) * sc, (w * 0.46 - i * 3) * sc, 1, 1); i += 1; );
+      gfx_gradrect(x * sc, (y + dn) * sc, w * sc, (h - dn) * 0.35 * sc, 1, 1, 1, 0.25, 0, 0, 0, 0, 0, 0, 0, -0.25 / ((h - dn) * 0.35 * sc));
+      ui_col(0x3A1E00);
+    ) : (
+      ui_col(0xC9C4B5); fd_r(x, y, w, h);
+      ui_col(hov ? 0xF3F0E6 : 0xEAE6DA); fd_r(x + 1, y + 1, w - 2, h - 5);
+      ui_cola(0xFFFFFF, 0.5); fd_r(x + 1, y + 1, w - 2, 1);
+      ui_col(0x34322D);
+    );
+  ) : fdv_th == 1 ? (                                   // VFD: smoked glass, turquoise glow
+    on ? (
+      ui_cola(FDL, 0.10); fd_r(x - 4, y - 4, w + 8, h + 8);
+      ui_col(ui_mix(FDL, 0x000000, 0.72)); fd_r(x, y + dn, w, h - dn);
+      i = 0; loop(8, ui_cola(FDL, 0.045); gfx_circle((x + w * 0.5) * sc, (y + dn + (h - dn) * 0.5) * sc, (w * 0.48 - i * 3) * sc, 1, 1); i += 1; );
+      ui_col(FDL); gfx_rect(x * sc, (y + dn) * sc, w * sc, h * sc - dn * sc, 0);
+      ui_col(ui_mix(FDL, 0xFFFFFF, 0.55));
+    ) : (
+      ui_col(ui_mix(FDL, FDP, 0.82)); fd_r(x, y, w, h);
+      ui_col(hov ? 0x1A1E1F : 0x121516); fd_r(x + 1, y + 1, w - 2, h - 2);
+      ui_cola(0xFFFFFF, 0.05); fd_r(x + 1, y + 1, w - 2, (h - 2) * 0.45);
+      ui_col(ui_mix(FDL, 0x121516, 0.72));
+    );
+  ) : (                                                 // MATRIX: chunky block key, deep side walls
+    k = on ? 2 : 5;
+    ui_col(on ? ui_mix(FDL, 0x000000, 0.45) : 0x1A1C1B); fd_r(x, y, w, h);
+    on ? ( ui_cola(FDL, 0.22); fd_r(x - 5, y - 5, w + 10, h + 10); );
+    ui_col(on ? FDL : (hov ? ui_mix(FDOLV, 0xFFFFFF, 0.07) : FDOLV)); fd_r(x + 2, y + 2 + dn, w - 4, h - k - 2 - dn);
+    ui_cola(0xFFFFFF, on ? 0.35 : 0.1); fd_r(x + 2, y + 2 + dn, w - 4, 1);
+    ui_cola(0x000000, 0.25); fd_r(x + 2, y + h - k - 1, w - 4, 1);
+    ui_col(on ? 0x17191B : ui_mix(FDI, FDOLV, 0.35));
+  );
+  gfx_setfont(fnt); fd_ctxt(x + w * 0.5, y + h * 0.5 + dn * 0.5 - (fdv_th == 2 ? 1.5 : 0), s);
+  fdv_th == 1 && on ? ( ui_cola(FDL, 0.25); fd_ctxt(x + w * 0.5 + 0.6, y + h * 0.5 + dn * 0.5 + 0.6, s); );
+  hov ? ( ui_cola(0xFFFFFF, 0.06); fd_r(x, y, w, h); );
+  hov && pressed && drag_id == 0 ? ( drag_id = -1; 1; ) : 0;
+);
+
+// printed scale round a knob: n numbers from the list ("a|b|c"), a tick at each
+function fd_scale(cx, cy, r, n, labels) local(i, k, k0, len, c, a, ca, sa) (
+  len = strlen(labels); k0 = 0; i = 0; k = 0;
+  gfx_setfont(10);
+  loop(len + 1,
+    c = k < len ? str_getchar(labels, k) : 124;
+    c == 124 ? (
+      strcpy_substr(#fdv_sl, labels, k0, k - k0);
+      a = -0.75 * $pi + i / max(n - 1, 1) * 1.5 * $pi; ca = sin(a); sa = -cos(a);
+      ui_col(FDI2);
+      gfx_line((cx + ca * (r + 3)) * sc, (cy + sa * (r + 3)) * sc, (cx + ca * (r + 7)) * sc, (cy + sa * (r + 7)) * sc, 1);
+      ui_col(FDI); fd_ctxt(cx + ca * (r + 16), cy + sa * (r + 16), #fdv_sl);
+      i += 1; k0 = k + 1;
+    );
+    k += 1;
+  );
+);
+// a main knob: house dy_knob, the cap per theme (ENAMEL knurled aluminium, VFD / MATRIX dark bakelite with a white
+// line); its name below, which shows the value while the knob is touched
+function fd_knob(cx, cy, r, idx, lo, hi, def, name, val) (
+  dy_ink = FDI; dy_bg = FDF; dy_ntick = 0;
+  dy_kst = fdv_th == 0 ? 1 : 0;
+  dy_knob(cx, cy, r, idx, lo, hi, def, 0, 0xF2F0EA, "", "");
+  gfx_setfont(14); ui_col(dy_act ? (fdv_th == 0 ? 0xB24A00 : FDA) : FDI); fd_ctxt(cx, cy + r + 22, dy_act ? val : name);
+);
+// a small house knob (DRIFT, MIX)
+function fd_small(cx, cy, r, idx, lo, hi, def, cap, name, val) (
+  dy_ink = FDI; dy_bg = FDF; dy_ntick = 11; dy_kst = 20;
+  dy_knob(cx, cy, r, idx, lo, hi, def, 0, cap, "", "");
+  gfx_setfont(11); ui_col(dy_act ? (fdv_th == 0 ? 0xB24A00 : FDA) : FDI); fd_ctxt(cx, cy + r + 15, dy_act ? val : name);
+);
+
+// =====================================================================
+// Panel and header (the family layout)
+// =====================================================================
+ui_col(FDP); gfx_rect(0, 0, gfx_w, gfx_h);
+ui_col(FDH); fd_r(0, 0, 820, 54);
+ui_col(fdv_th == 0 ? FDI : FDA); fd_r(0, 54, 820, 2);
+ui_col(fdv_th == 2 ? FDA : FDI); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
+gfx_setfont(4); ui_col(fdv_th == 0 ? FDF : 0x111213); ui_text(31 * sc, 21.5 * sc, "GFX");
+gfx_setfont(6); ui_col(FDI); fd_txt(58, 12, "FELD 45");
+gfx_setfont(11); ui_col(FDI2); fd_txt(186, 14, "FET-BEGRENZER"); fd_txt(186, 29, "VERSTÄRKER");
+pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
+k_ = pk_preset(300 * sc, 10 * sc, 446 * sc, 34 * sc, pr_cur,
+  "Init|Vocal Grab|Bass Even|Snare Crack|Room Smash (ALL)|Drum Bus Parallel|Guitar Sustain|Broadcast Limit 20|Ost Rundfunk|Tokio Vocal|Kick Punch|Gentle 4");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 12 ? 1 : k_; );
+ui_size_picker(754 * sc, 18 * sc);
+
+// =====================================================================
+// INPUT (x 10..150)
+// =====================================================================
+fd_sect(10, 64, 140, 166, FDF, "INPUT");
+fdv_s2 = slider2;
+sprintf(#fdv_v, "%+.1f dB", slider2);
+fd_scale(80, 146, 34, 9, "-24|-18|-12|-6|0|+6|+12|+18|+24");
+fd_knob(80, 146, 34, 2, -24, 24, 0, "dB", #fdv_v);
+slider2 != fdv_s2 ? ( slider2 = floor(slider2 * 2 + 0.5) / 2; );   // a stepped feel: half-dB detents
+
+// =====================================================================
+// ATTACK / RELEASE (x 158..342)
+// =====================================================================
+fd_sect(158, 64, 184, 166, FDF, "TIME");
+gfx_setfont(11); ui_col(FDI2); fd_rtxt(334, 13 + 64 - 6, "7 = FASTEST");
+fdv_t = 800 * 0.025 ^ ((slider4 - 1) / 6);
+sprintf(#fdv_v, "%.0f µs", fdv_t);
+fd_scale(204, 140, 24, 7, "1|2|3|4|5|6|7");
+fd_knob(204, 140, 24, 4, 1, 7, 3, "ATTACK", #fdv_v);
+fdv_t = 1100 * (50 / 1100) ^ ((slider5 - 1) / 6);
+fdv_t >= 1000 ? sprintf(#fdv_v, "%.2f s", fdv_t / 1000) : sprintf(#fdv_v, "%.0f ms", fdv_t);
+fd_scale(296, 140, 24, 7, "1|2|3|4|5|6|7");
+fd_knob(296, 140, 24, 5, 1, 7, 7, "RELEASE", #fdv_v);
+
+// =====================================================================
+// OUTPUT (x 608..748) and MIX / DRIFT (x 756..810)
+// =====================================================================
+fd_sect(608, 64, 140, 166, FDF, "OUTPUT");
+sprintf(#fdv_v, "%+.1f dB", slider3);
+fd_scale(678, 146, 34, 9, "-24|-18|-12|-6|0|+6|+12|+18|+24");
+fd_knob(678, 146, 34, 3, -24, 24, 0, "dB", #fdv_v);
+
+fd_sect(756, 64, 54, 166, FDF, "");
+sprintf(#fdv_v, "%.0f%%", slider8);
+fd_small(783, 98, 15, 8, 0, 100, 100, fdv_th == 0 ? 0xD8B040 : FDL, "MIX", #fdv_v);
+sprintf(#fdv_v, "%.0f%%", slider9);
+fd_small(783, 176, 13, 9, 0, 100, 50, fdv_th == 0 ? 0x6F8794 : FDI2, "DRIFT", #fdv_v);
+
+// =====================================================================
+// METER (x 350..600, y 64..230)
+// =====================================================================
+fdv_now = time_precise();
+fdv_dt = fdv_t0 > 0 ? min(max(fdv_now - fdv_t0, 0), 0.25) : 1;
+fdv_t0 = fdv_now;
+fdv_k = 1 - exp(-fdv_dt / 0.012);
+function fd_vpos(v) ( (min(max(v, 0.02), 1.45) - 0.1) / 1.3125 );   // VU scale: deflection with voltage
+fdv_q += ((fdv_m == 3 ? -0.06 : fd_vpos(fda_v)) - fdv_q) * fdv_k;
+fdv_gr = max(fda_gr, fdv_gr - 25 * fdv_dt);             // GR ladder: instant rise, 25 dB/s fall
+fdv_vdb = 20 * log10(max(fda_v, 0.0000001));            // VU reading (IN / OUT)
+
+fdv_mx = 350; fdv_my = 64; fdv_mw = 250; fdv_mh = 166;
+fdv_m == 0 ? strcpy(#fdv_mn, "GR") : fdv_m == 1 ? strcpy(#fdv_mn, "OUT") : fdv_m == 2 ? strcpy(#fdv_mn, "IN") : strcpy(#fdv_mn, "OFF");
+
+// VU tick table (value, numbered)
+function fd_vtick(i) (
+  fdv_tv = i == 0 ? -20 : i == 1 ? -15 : i == 2 ? -10 : i == 3 ? -7 : i == 4 ? -5 : i == 5 ? -4 : i == 6 ? -3 : i == 7 ? -2 :
+           i == 8 ? -1 : i == 9 ? -0.5 : i == 10 ? 0 : i == 11 ? 0.5 : i == 12 ? 1 : i == 13 ? 1.5 : i == 14 ? 2 : i == 15 ? 2.5 : 3;
+  fdv_tn = !(i == 1 || i == 5 || i == 9 || i == 11 || i == 13 || i == 15);
+);
+
+fdv_th == 0 ? (
+  // ---------- ENAMEL: the needle meter ----------
+  fdv_span = 0.80;
+  ui_col(FDI); fd_r(fdv_mx, fdv_my, fdv_mw, fdv_mh);
+  ui_col(FDF); fd_r(fdv_mx + 1.5, fdv_my + 1.5, fdv_mw - 3, fdv_mh - 3);
+  fdv_cx = fdv_mx + fdv_mw * 0.5; fdv_py = fdv_my + fdv_mh - 12; fdv_R = 122;
+  fdv_z0 = fd_vpos(1);
+  ui_col(FDA); fdv_i = 0;
+  loop(6 * sc, gfx_arc(fdv_cx * sc, fdv_py * sc, fdv_R * sc + fdv_i, -fdv_span + 2 * fdv_span * fdv_z0, fdv_span, 1); fdv_i += 1; );
+  ui_col(FDI); gfx_arc(fdv_cx * sc, fdv_py * sc, fdv_R * sc, -fdv_span, fdv_span, 1);
+  gfx_arc(fdv_cx * sc, fdv_py * sc, fdv_R * sc - 1, -fdv_span, fdv_span, 1);
+  gfx_setfont(10);
+  fdv_i = 0;
+  loop(17,
+    fd_vtick(fdv_i);
+    fdv_p = fd_vpos(10 ^ (fdv_tv / 20)); fdv_a = -fdv_span + 2 * fdv_span * fdv_p; fdv_ca = cos(fdv_a); fdv_sa = sin(fdv_a);
+    fdv_r1 = fdv_R - (fdv_tn ? 10 : 5); fdv_r2 = fdv_R + (fdv_tn ? 6 : 3);
+    ui_col(FDI);
+    gfx_line((fdv_cx + fdv_sa * fdv_r1) * sc, (fdv_py - fdv_ca * fdv_r1) * sc, (fdv_cx + fdv_sa * fdv_r2) * sc, (fdv_py - fdv_ca * fdv_r2) * sc, 1);
+    fdv_tn ? gfx_line((fdv_cx + fdv_sa * fdv_r1) * sc + 1, (fdv_py - fdv_ca * fdv_r1) * sc, (fdv_cx + fdv_sa * fdv_r2) * sc + 1, (fdv_py - fdv_ca * fdv_r2) * sc, 1);
+    fdv_tn ? ( ui_col(fdv_tv > 0 ? 0xB24A00 : FDI); sprintf(#fdv_tl, "%d", abs(fdv_tv));
+               fd_ctxt(fdv_cx + fdv_sa * (fdv_R + 16), fdv_py - fdv_ca * (fdv_R + 16), #fdv_tl); );
+    fdv_i += 1;
+  );
+  gfx_setfont(14); ui_col(FDI); fd_txt(fdv_mx + 12, fdv_my + fdv_mh - 74, fdv_m == 0 ? "GR" : "VU");
+  gfx_setfont(11); ui_col(FDI2); fd_rtxt(fdv_mx + fdv_mw - 12, fdv_my + fdv_mh - 62, fdv_m == 0 ? "dB" : "");
+  // needle: tapered, matte black, a faint flat shadow
+  fdv_a = -fdv_span + 2 * fdv_span * min(max(fdv_q, -0.06), 1.03); fdv_ca = cos(fdv_a); fdv_sa = sin(fdv_a);
+  fdv_r1 = 30; fdv_r2 = fdv_R + 5; fdv_bw = 2.1; fdv_bt = 0.8;
+  ui_cola(0x000000, 0.12);
+  gfx_triangle((fdv_cx + fdv_sa * fdv_r1 - fdv_ca * fdv_bw + 2) * sc, (fdv_py - fdv_ca * fdv_r1 - fdv_sa * fdv_bw + 3) * sc,
+               (fdv_cx + fdv_sa * fdv_r1 + fdv_ca * fdv_bw + 2) * sc, (fdv_py - fdv_ca * fdv_r1 + fdv_sa * fdv_bw + 3) * sc,
+               (fdv_cx + fdv_sa * fdv_r2 + fdv_ca * fdv_bt + 2) * sc, (fdv_py - fdv_ca * fdv_r2 + fdv_sa * fdv_bt + 3) * sc,
+               (fdv_cx + fdv_sa * fdv_r2 - fdv_ca * fdv_bt + 2) * sc, (fdv_py - fdv_ca * fdv_r2 - fdv_sa * fdv_bt + 3) * sc);
+  ui_col(FDN);
+  gfx_triangle((fdv_cx + fdv_sa * fdv_r1 - fdv_ca * fdv_bw) * sc, (fdv_py - fdv_ca * fdv_r1 - fdv_sa * fdv_bw) * sc,
+               (fdv_cx + fdv_sa * fdv_r1 + fdv_ca * fdv_bw) * sc, (fdv_py - fdv_ca * fdv_r1 + fdv_sa * fdv_bw) * sc,
+               (fdv_cx + fdv_sa * fdv_r2 + fdv_ca * fdv_bt) * sc, (fdv_py - fdv_ca * fdv_r2 + fdv_sa * fdv_bt) * sc,
+               (fdv_cx + fdv_sa * fdv_r2 - fdv_ca * fdv_bt) * sc, (fdv_py - fdv_ca * fdv_r2 - fdv_sa * fdv_bt) * sc);
+  // bottom band: the pivot cover, the mode and the alignment
+  ui_col(FDI); fd_r(fdv_mx + 1.5, fdv_my + fdv_mh - 40, fdv_mw - 3, 38.5);
+  gfx_setfont(14); ui_col(FDF); fd_txt(fdv_mx + 12, fdv_my + fdv_mh - 31, #fdv_mn);
+  gfx_setfont(11); ui_col(ui_mix(FDF, FDI, 0.2));
+  fd_rtxt(fdv_mx + fdv_mw - 12, fdv_my + fdv_mh - 21, fdv_m == 0 ? "GR 0 .. -20 dB" : fdv_m == 3 ? "METER OFF" : "0 VU = -18 dBFS");
+) : (
+  // ---------- VFD / MATRIX: ladder + readout ----------
+  ui_col(fdv_th == 1 ? 0x2E3235 : 0x0B0C0D); fd_r(fdv_mx, fdv_my, fdv_mw, fdv_mh);
+  ui_col(fdv_th == 1 ? 0x070808 : ui_mix(FDP, 0x000000, 0.45)); fd_r(fdv_mx + 1, fdv_my + 1, fdv_mw - 2, fdv_mh - 2);
+  fdv_bx = fdv_mx + 14; fdv_bw = fdv_mw - 28;
+  gfx_setfont(11); ui_col(FDI); fd_txt(fdv_bx, 72, "PEGEL");
+  ui_col(FDI2); fd_txt(fdv_bx + 50, 72, fdv_m == 0 ? "GR dB" : fdv_m == 3 ? "" : "VU");
+  ui_col(FDI2); fd_rtxt(fdv_bx + fdv_bw, 79, fdv_m == 0 ? "0 .. -20 dB" : fdv_m == 3 ? "AUS" : "0 VU = -18 dBFS");
+  fdv_n = fdv_th == 1 ? 40 : 20; fdv_sw = fdv_bw / fdv_n;
+  fdv_by = 92; fdv_bh = 46;
+  fdv_i = 0;
+  loop(fdv_n,
+    fdv_sx = fdv_bx + fdv_i * fdv_sw; fdv_p = (fdv_i + 0.5) / fdv_n;
+    fdv_m == 0 ? (
+      fdv_lit = fdv_p >= 1 - fdv_gr / 20;               // GR: lit from the right (0 dB) towards the left
+      fdv_c = fdv_th == 1 ? (fdv_p < 0.5 ? FDA : FDI) : (fdv_p < 0.4 ? 0xBC3908 : fdv_p < 0.7 ? 0xD4A373 : FDGRN);
+    ) : (
+      fdv_lit = fdv_m < 3 && fdv_q >= fdv_p;
+      fdv_c = fdv_th == 1 ? (fdv_p >= fd_vpos(1) ? FDA : FDI) : (fdv_p >= fd_vpos(1) ? 0xBC3908 : fdv_p >= fd_vpos(0.7079) ? 0xD4A373 : FDGRN);
+    );
+    fdv_th == 1 ? (
+      fdv_lit ? (
+        ui_cola(fdv_c, 0.22); fd_r(fdv_sx - 0.5, fdv_by - 2, fdv_sw, fdv_bh + 4);
+        ui_col(fdv_c); fd_r(fdv_sx + 0.5, fdv_by, fdv_sw - 2, fdv_bh);
+        ui_cola(0xFFFFFF, 0.28); fd_r(fdv_sx + 0.5 + (fdv_sw - 2) * 0.5 - 0.5, fdv_by + 2, 1, fdv_bh - 4);
+      ) : (
+        ui_col(FDGH); fd_r(fdv_sx + 0.5, fdv_by, fdv_sw - 2, fdv_bh);
+        ui_cola(fdv_c, 0.05); fd_r(fdv_sx + 0.5, fdv_by, fdv_sw - 2, fdv_bh);
+      );
+    ) : (
+      fdv_ch = (fdv_bh - 4) * 0.5; fdv_cy = fdv_by;
+      loop(2,
+        fdv_lit ? (
+          ui_cola(fdv_c, 0.16); fd_r(fdv_sx - 0.5, fdv_cy - 1, fdv_sw, fdv_ch + 2);
+          ui_col(fdv_c); fd_r(fdv_sx + 1, fdv_cy, fdv_sw - 3, fdv_ch);
+          ui_cola(0xFFFFFF, 0.22); fd_r(fdv_sx + 1, fdv_cy, fdv_sw - 3, 1.5);
+          ui_cola(0x000000, 0.18); fd_r(fdv_sx + 1, fdv_cy + fdv_ch - 1.5, fdv_sw - 3, 1.5);
+        ) : (
+          ui_col(FDOLV); fd_r(fdv_sx + 1, fdv_cy, fdv_sw - 3, fdv_ch);
+          ui_cola(0x000000, 0.25); fd_r(fdv_sx + 1, fdv_cy + fdv_ch - 1, fdv_sw - 3, 1);
+        );
+        fdv_cy += fdv_ch + 4;
+      );
+    );
+    fdv_i += 1;
+  );
+  // scale band
+  gfx_setfont(10);
+  fdv_m == 0 ? (
+    fdv_i = 0;
+    loop(11,
+      fdv_xx = fdv_bx + fdv_bw * (1 - fdv_i / 10);
+      ui_col(FDI2); fd_r(fdv_xx - 0.5, 142, 1, 5);
+      sprintf(#fdv_tl, "%d", fdv_i * 2); ui_col(FDI); fd_ctxt(fdv_xx, 156, #fdv_tl);
+      fdv_i += 1;
+    );
+  ) : (
+    fdv_i = 0;
+    loop(17,
+      fd_vtick(fdv_i); fdv_p = fd_vpos(10 ^ (fdv_tv / 20)); fdv_xx = fdv_bx + fdv_p * fdv_bw;
+      ui_col(fdv_tv > 0 ? FDA : FDI2); fd_r(fdv_xx - 0.5, 142, 1, fdv_tn ? 5 : 3);
+      fdv_tn && fdv_i != 7 && fdv_i != 12 && fdv_i != 3 ? ( sprintf(#fdv_tl, "%d", abs(fdv_tv)); ui_col(fdv_tv > 0 ? FDA : FDI); fd_ctxt(fdv_xx, 156, #fdv_tl); );
+      fdv_i += 1;
+    );
+  );
+  // readout
+  ui_col(fdv_th == 1 ? 0x1E2224 : 0x2C302E); fd_r(fdv_mx + 1, 170, fdv_mw - 2, 1);
+  gfx_setfont(14); ui_col(FDI2); fd_txt(fdv_bx, 186, #fdv_mn);
+  fdv_m == 0 ? sprintf(#fdv_num, "%5.1f", -fdv_gr) : fdv_m == 3 ? strcpy(#fdv_num, "  ---") :
+    fdv_vdb < -40 ? strcpy(#fdv_num, " -oo ") : sprintf(#fdv_num, "%+5.1f", fdv_vdb);
+  gfx_setfont(13); ui_col(fdv_th == 1 ? FDI : FDA); fd_rtxt(fdv_bx + fdv_bw - 34, 198, #fdv_num);
+  gfx_setfont(11); ui_col(FDI2); fd_rtxt(fdv_bx + fdv_bw, 202, fdv_m == 0 ? "dB" : "VU");
+);
+
+// =====================================================================
+// RATIO (x 10..342, y 238..330)
+// =====================================================================
+fd_sect(10, 238, 332, 92, FDS, "RATIO");
+gfx_setfont(11); ui_col(FDI2); fd_rtxt(334, 251, ": 1");
+fdv_i = 0;
+loop(5,
+  fd_big(24 + fdv_i * 62, 264, 54, 54, fdv_i == 0 ? "4" : fdv_i == 1 ? "8" : fdv_i == 2 ? "12" : fdv_i == 3 ? "20" : "ALL",
+         fdv_i == 4 ? 16 : 15, (slider1 | 0) == fdv_i) ? ( slider1 = fdv_i; ui_auto(1); );
+  fdv_i += 1;
+);
+
+// =====================================================================
+// METER keys (x 350..600)
+// =====================================================================
+fd_sect(350, 238, 250, 92, FDF, "METER");
+fdv_i = 0;
+loop(4,
+  fd_key(360 + fdv_i * 59, 262, 53, 28, fdv_i == 0 ? "GR" : fdv_i == 1 ? "OUT" : fdv_i == 2 ? "IN" : "OFF", fdv_m == fdv_i) ?
+    ( slider6 = fdv_i; ui_auto(6); );
+  fdv_i += 1;
+);
+gfx_setfont(11); ui_col(FDI2);
+fd_txt(360, 302, "0 VU = -18 dBFS SINE");
+fd_rtxt(590, 309, "THR = 0 VU");
+
+// =====================================================================
+// THEME, LINK, output stage (x 608..810)
+// =====================================================================
+fd_sect(608, 238, 202, 92, FDF, "THEME");
+fd_key(616, 262, 64, 24, "ENAMEL", fdv_th == 0) ? ( slider10 = 0; ui_auto(10); );
+fd_key(684, 262, 46, 24, "VFD",    fdv_th == 1) ? ( slider10 = 1; ui_auto(10); );
+fd_key(734, 262, 66, 24, "MATRIX", fdv_th == 2) ? ( slider10 = 2; ui_auto(10); );
+fd_key(616, 296, 56, 24, "LINK", slider7 >= 0.5) ? ( slider7 = slider7 >= 0.5 ? 0 : 1; ui_auto(7); );
+// the house output stage keys, side by side
+ui_okclp = ost_clipped ? 1 : ui_okclp * 0.88; ost_clipped = 0;
+fdv_i = 0;
+loop(3,
+  fdv_c = fdv_i == 0 ? 0x3A9CFF : fdv_i == 1 ? (ui_okclp > 0.1 ? 0xFF3A2A : 0xF4D23C) : 0xFF9A22;
+  ui_okey(680 + fdv_i * 41, 296, 38, 24, (slider11 | 0) == fdv_i || (fdv_i == 1 && ui_okclp > 0.1), fdv_c) ? ( slider11 = fdv_i; ui_auto(11); );
+  gfx_setfont(12); ui_col(0x141414); ui_keytext((680 + fdv_i * 41 + 19) * sc, (296 + 12) * sc, fdv_i == 0 ? "OFF" : fdv_i == 1 ? "CLIP" : "LIM");
+  fdv_i += 1;
+);
+
+pk_end();
+ui_end();

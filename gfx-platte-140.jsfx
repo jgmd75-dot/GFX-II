@@ -4,7 +4,50 @@ desc:GFX Platte 140
 //
 // Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn and gfx-faceplate (.jsfx-inc) in the same folder.
 //
-// PLATTE 140 (work in progress)
+// PLATTE 140. A stereo plate reverb with two plates in one case, switched by the WEST / EAST key:
+//   WEST - in the spirit of the classic late-50s West German studio plate: a 2 m x 1 m steel sheet in a big wooden
+//          case, one moving-coil driver, two contact pickups, a motorised damping pad (about 0.4 s to 5 s) worked
+//          from a grey-green remote box. Pristine, bright, dense, a smooth decay.
+//   EAST - in the spirit of the Eastern Bloc state-built broadcast plates: thick, unyielding sheet steel in a welded
+//          angle-iron frame, a military-grade magnetic driver fed by a valve (double-triode) amp through an input
+//          transformer. Darker, denser and more mid-focused, a little grittier and more metallic, with the faint
+//          50 Hz hum and hiss of the valve amps (both follow DRIFT). Bone-grey enamel laboratory panel (45 family).
+//
+// SIGNAL FLOW
+//   input -> MONO IN (on by default: one driver, fed L + R, as on the hardware; off: L and R drive the sheet at two
+//   points) -> the send amplifier, DRIVE 0 - 100 % = 0 to +24 dB into the amp's curve and the same back out, so
+//   DRIVE adds saturation and density, not level (WEST: a clean, symmetric soft curve; EAST: the transformer core
+//   saturates the lows first, then an asymmetric triode stage adds even harmonics). The meter reads the amp's level
+//   (0 = nominal, the red / orange zone = where it starts to saturate).
+//   -> the driver (2-pole high-pass at 55 Hz: the sheet barely moves below 60 Hz) -> PRE-DELAY 0 - 250 ms (glides)
+//   -> a short dispersion chain (the highs reach the pickups first) and six short allpass diffusers per side
+//   -> THE SHEET: 16 delay lines (WEST 28 - 91 ms; EAST 22 % longer, the heavier plate) mixed by a 16 x 16 Hadamard
+//      matrix; inside each line two allpasses (density without discrete echoes) and two first-order dispersion
+//      allpasses (the plate's bending waves: high frequencies travel faster - the shimmer), and a loss filter per line:
+//        low shelf (300 Hz) and high shelf (2.5 kHz) round a mid gain set by the decay time. DAMPING sets the mid
+//        decay (500 Hz - 1 kHz, measured within about 3 %); like the real pad it mostly shortens the lows and mids -
+//        the sheet's own high-frequency loss stays, so a short setting comes out relatively bright and a long one
+//        rolls the top off (WEST 5 s: ~2.7 s at 8 kHz; EAST 5 s: ~1.7 s).
+//      No early reflections: the two pickups tap all 16 lines at spread points (0.3 - 70 ms), so the onset is
+//      dense within a few ms. Left and right use different taps and signs (correlation of the tail about 0).
+//   -> SPRING (blend): two torsion springs in steel transit cases (a delay, a low-pass and a 12-stage chirp chain in
+//      each loop, decay following DAMPING up to about 2.7 s), mixed in as the plate gives way.
+//   -> the return: EAST colour (+3 dB at 1.4 kHz, a gentle 8 kHz roll-off, hum / hiss), LOW CUT (yellow cap,
+//      2-pole, 20 - 600 Hz), HIGH CUT (black cap, 2-pole, 2 - 20 kHz, fully up = off), WIDTH (0 - 150 %)
+//   -> MIX (default 30 % for an insert: dry stays full up to 50 %, wet full from 50 %; set 100 % on a send)
+//   -> OUTPUT -> the house output stage (band SAT, OFF / CLIP / LIMIT).
+//   A WEST / EAST change fades the return out, changes the plate and fades back in (30 ms each way).
+//
+// DAMPING - the big dial, numbered 1 - 10 like the remote: 1 = the pad lifted (5 s), 10 = pressed fully (0.4 s),
+//   in equal ratios between. It clicks into the numbers (detents); SHIFT-drag = fine, without detents; the mouse
+//   wheel steps one number (SHIFT: a tenth); double-click = 2.2 s. The decay glides (no zipper).
+// DRIFT (0 - 100 %, 50 % = standard): plate tension wander. The decay wanders slowly (+/- 4.5 % at 50 %), and every
+//   line's dispersion wanders on its own (modal detune: the plate's resonances move a little, never a pitch
+//   wobble). EAST adds the valve amp's 50 Hz mains hum (with its rectifier buzz, about -86 dBFS at 50 %, -80 dBFS
+//   at 100 %, its level wandering) and hiss on the return. 0 % = perfectly steady and silent.
+//
+// GUI: drag a knob (SHIFT = fine, double-click = default, wheel); values show while a knob is touched.
+//   S / M / L / ? = size and help. Click the LCD (or PRESETS) for the preset list.
 
 import gfx-drift.jsfx-inc
 import gfx-input.jsfx-inc
@@ -48,26 +91,31 @@ ext_noinit = 1;
 nextmem = 0;
 function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
 function pl_p2(n) local(p) ( p = 1; while (p < n) ( p *= 2; ); p; );
-pl_bsz = pl_p2(0.1 * srate);   pl_bm = pl_bsz - 1;      // the 16 plate lines (up to 100 ms each)
+pl_bsz = pl_p2(0.16 * srate);  pl_bm = pl_bsz - 1;      // the 16 plate lines (up to 160 ms each)
 pl_asz = pl_p2(0.02 * srate);  pl_am = pl_asz - 1;      // the allpasses inside the lines, and the input diffusers
 pl_psz = pl_p2(0.26 * srate);  pl_pm = pl_psz - 1;      // pre-delay
 pl_ssz = pl_p2(0.06 * srate);  pl_sm = pl_ssz - 1;      // the two torsion springs
 pl_lb = alloc(16 * pl_bsz);
 pl_ab = alloc(16 * pl_asz);
-pl_db = alloc(8 * pl_asz);
+pl_ab2 = alloc(16 * pl_asz);
+pl_db = alloc(12 * pl_asz);
 pl_pb = alloc(2 * pl_psz);
 pl_sb = alloc(2 * pl_ssz);
 pl_tank0 = pl_lb; pl_tank1 = nextmem;                   // everything that rings (cleared on a WEST / EAST change)
 pl_len = alloc(16);  pl_apl = alloc(16);  pl_g = alloc(16);  pl_kl = alloc(16); pl_ja = alloc(16); pl_jb = alloc(16);
 pl_c = alloc(16);  pl_tpl = alloc(16); pl_tpr = alloc(16); pl_sgl = alloc(16); pl_sgr = alloc(16); pl_is = alloc(16);
-pl_o = alloc(16);  pl_dv = alloc(16); pl_dr = alloc(64); pl_dln = alloc(8);  pl_dgn = alloc(8);  pl_sn = alloc(2);
-pl_sgk = alloc(2);
+pl_o = alloc(16);  pl_dv = alloc(16); pl_dr = alloc(64); pl_dln = alloc(12); pl_dgn = alloc(12);  pl_sn = alloc(2);
+pl_sgk = alloc(2); pl_ap2n = alloc(16); pl_g2 = alloc(16);
 pl_st0 = nextmem;                                       // filter states (cleared with the tank)
 pl_lo = alloc(16); pl_y = alloc(16); pl_d1x = alloc(16); pl_d1y = alloc(16); pl_d2x = alloc(16); pl_d2y = alloc(16);
-pl_dc = alloc(32); pl_sst = alloc(48); pl_slp = alloc(2);
+pl_dc = alloc(32); pl_sst = alloc(64); pl_slp = alloc(2);
 pl_st1 = nextmem;
 ost_init(alloc(4096));
 
+pl_lsc = 1.6;                                           // line length scale
+pl_tsp = 70;                                            // the pickups' tap spread (ms)
+pl_dsc = 0.35;                                          // input diffuser length scale
+pl_ag2 = 0.5;                                           // gain of the second allpass in each line
 pl_dn = 0.000000000000001;                              // anti-denormal: a -300 dB alternating whisper in the loops
 
 // ---------- the plate: line lengths (ms) for the West plate; the East plate is the same sheet, thicker and longer ----------
@@ -79,12 +127,15 @@ function pl_lines(v) local(i, s, ms, ap, f) (
          i == 8 ? 35.9 : i == 9 ? 38.3 : i == 10 ? 40.1 : i == 11 ? 43.7 : i == 12 ? 46.1 : i == 13 ? 49.3 : i == 14 ? 52.7 : 56.9;
     ap = i == 0 ? 3.1 : i == 1 ? 4.3 : i == 2 ? 5.3 : i == 3 ? 6.1 : i == 4 ? 2.7 : i == 5 ? 3.7 : i == 6 ? 4.9 : i == 7 ? 5.7 :
          i == 8 ? 2.3 : i == 9 ? 3.3 : i == 10 ? 4.1 : i == 11 ? 5.9 : i == 12 ? 6.7 : i == 13 ? 2.9 : i == 14 ? 3.9 : 4.7;
-    pl_len[i] = floor(ms * s * 0.001 * srate) | 1;
+    pl_len[i] = floor(ms * s * pl_lsc * 0.001 * srate) | 1;
     pl_apl[i] = floor(ap * s * 0.001 * srate) | 1;
     pl_g[i] = (i & 1 ? -1 : 1) * (v ? 0.66 : 0.62);
+    ap = 7.3 + 5.8 * (i * 0.7548777 + 0.31 - floor(i * 0.7548777 + 0.31));       // a second, longer allpass in each line
+    pl_ap2n[i] = floor(ap * s * 0.001 * srate) | 1;
+    pl_g2[i] = (i & 2 ? -1 : 1) * pl_ag2;
     // the two pickups: one tap per line each, spread along the line (some early, so the onset is immediate)
-    f = 0.04 + 0.9 * (i * 0.6180339 + 0.13 - floor(i * 0.6180339 + 0.13)); pl_tpl[i] = max(floor(f * pl_len[i]), 1);
-    f = 0.04 + 0.9 * (i * 0.3819661 + 0.71 - floor(i * 0.3819661 + 0.71)); pl_tpr[i] = max(floor(f * pl_len[i]), 1);
+    f = i * 0.6180339 + 0.13 - floor(i * 0.6180339 + 0.13); pl_tpl[i] = max(floor((0.3 + pl_tsp * f * f) * 0.001 * srate), 1);
+    f = i * 0.3819661 + 0.71 - floor(i * 0.3819661 + 0.71); pl_tpr[i] = max(floor((0.3 + pl_tsp * f * f) * 0.001 * srate), 1);
     pl_sgl[i] = (i == 1 || i == 2 || i == 6 || i == 9 || i == 11 || i == 12 || i == 13 || i == 15) ? -1 : 1;
     pl_sgr[i] = (i == 0 || i == 3 || i == 4 || i == 6 || i == 10 || i == 11 || i == 13 || i == 14) ? -1 : 1;
     pl_is[i] = (i == 2 || i == 3 || i == 6 || i == 7 || i == 9 || i == 12 || i == 13 || i == 14) ? -1 : 1;
@@ -92,24 +143,25 @@ function pl_lines(v) local(i, s, ms, ap, f) (
   );
   // input diffusers: four short allpasses per side (driver -> sheet)
   i = 0;
-  loop(8,
-    ms = i == 0 ? 0.93 : i == 1 ? 1.41 : i == 2 ? 2.73 : i == 3 ? 3.97 : i == 4 ? 1.07 : i == 5 ? 1.63 : i == 6 ? 2.39 : 4.31;
-    pl_dln[i] = floor(ms * 0.001 * srate) | 1;
-    pl_dgn[i] = (i & 3) < 2 ? 0.72 : 0.64;
+  loop(12,
+    ms = i == 0 ? 0.31 : i == 1 ? 0.53 : i == 2 ? 0.89 : i == 3 ? 1.37 : i == 4 ? 2.11 : i == 5 ? 3.23 :
+         i == 6 ? 0.37 : i == 7 ? 0.61 : i == 8 ? 0.97 : i == 9 ? 1.53 : i == 10 ? 2.33 : 3.61;
+    pl_dln[i] = floor(ms * pl_dsc * 0.001 * srate) | 1;
+    pl_dgn[i] = 0.7;
     i += 1;
   );
   pl_sn[0] = floor(0.0331 * srate); pl_sn[1] = floor(0.0397 * srate);
   // the character of each plate
   v ? (
     pl_c0 = -0.55;      // dispersion (first-order allpasses in each line: the highs travel faster)
-    pl_hipad = 1.45;    // how far the pad's effect reaches into the highs
-    pl_thf = 1.35;      // the sheet's own high-frequency loss (s): darker
+    pl_hipad = 1.4;     // how far the pad's effect reaches into the highs
+    pl_thf = 1.6;       // the sheet's own high-frequency loss (s): darker
     pl_lomul = 1.0;
-    pl_cal = 1.0;
+    pl_cal = 1.04;      // calibrated: the measured mid decay matches DAMPING
   ) : (
     pl_c0 = -0.42;
-    pl_hipad = 2.4;
-    pl_thf = 2.9;
+    pl_hipad = 2.2;
+    pl_thf = 3.0;
     pl_lomul = 1.1;
     pl_cal = 1.0;
   );
@@ -142,7 +194,7 @@ function pl_sate(u) instance(lp) (
 // ---------- input diffusion: four allpasses (k0 = 0 side A, 4 side B) ----------
 function pl_diff(x, k0) local(j, b, d, g, y) (
   j = 0;
-  loop(4,
+  loop(6,
     b = pl_db + (k0 + j) * pl_asz; g = pl_dgn[k0 + j];
     d = b[(pl_dw - pl_dln[k0 + j]) & pl_am];
     y = d - g * x; b[pl_dw] = x + g * y; x = y;
@@ -161,47 +213,52 @@ function pl_disp(x, k0) local(j, p, y) (
   x;
 );
 
-// ---------- one torsion spring (k = 0 / 1): delay, low-pass, a chirp chain (the highs travel slower) ----------
-function pl_spr(x, k) local(b, s, j, y, yy, p) (
-  b = pl_sb + k * pl_ssz;
-  s = b[(pl_sw - pl_sn[k]) & pl_sm];
-  pl_slp[k] += (s - pl_slp[k]) * pl_slc;
-  y = pl_slp[k];
+// ---------- the torsion springs: two lines feeding each other through a low-pass and a chirp chain ----------
+// (each spring's return runs through 16 first-order allpasses: the highs travel slower, the spring's "drip")
+function pl_chirp(y, k) local(j, yy, p) (
   j = 0;
-  loop(12,
-    p = pl_sst + k * 24 + j * 2;
-    yy = 0.62 * y + p[0] - 0.62 * p[1]; p[0] = y; p[1] = yy; y = yy;
+  loop(16,
+    p = pl_sst + k * 32 + j * 2;
+    yy = 0.7 * y + p[0] - 0.7 * p[1]; p[0] = y; p[1] = yy; y = yy;
     j += 1;
   );
-  b[pl_sw] = min(max(x + pl_sgk[k] * y + pl_dn, -4), 4);
-  s;
+  y;
+);
+function pl_springs(x0, x1) local(b0, b1, s0, s1) (
+  b0 = pl_sb; b1 = pl_sb + pl_ssz;
+  s0 = b0[(pl_sw - pl_sn[0]) & pl_sm]; s1 = b1[(pl_sw - pl_sn[1]) & pl_sm];
+  pl_slp[0] += (s0 - pl_slp[0]) * pl_slc; pl_slp[1] += (s1 - pl_slp[1]) * pl_slc;
+  b0[pl_sw] = min(max(x0 + pl_sgk[0] * pl_chirp(pl_slp[1], 0) + pl_dn, -4), 4);
+  b1[pl_sw] = min(max(x1 + pl_sgk[1] * pl_chirp(pl_slp[0], 1) + pl_dn, -4), 4);
+  pl_s0 = s0; pl_s1 = s1;
 );
 
 // ---------- control rate (every 32 samples): decay -> the loss filters of all 16 lines ----------
-pl_clo = 1 - exp(-2 * $pi * 300 / srate);               // the low-band split of the loss filter
+pl_clo = 1 - exp(-2 * $pi * 300 / srate);               // the loss filter: low shelf (pad) and high shelf (sheet loss) splits
+pl_chi = 1 - exp(-2 * $pi * 2500 / srate);
 pl_slc = 1 - exp(-2 * $pi * 4200 / srate);              // the springs' own low-pass
 pl_tk = 1 - exp(-32 / (0.12 * srate));                  // DAMPING glide (no zipper)
-pl_cdr = 0.035;                                         // modal detune range (dispersion coefficient wander)
-function pl_ctl() local(i, T, Tl, Th, Ts, L, gl, gm, gh, a) (
+pl_cdr = 0.035; pl_spg = 1.3; pl_shc = 1 - exp(-2 * $pi * 200 / srate);
+                                        // modal detune range (dispersion coefficient wander)
+function pl_ctl() local(i, T, Tl, Th, Ts, L, gl, gm, gh) (
   pl_ts += (pl_tt - pl_ts) * pl_tk;
   T = pl_ts * pl_cal * (1 + pl_ddv);
   Tl = T * pl_lomul;
   Th = 1 / (1 / (T * pl_hipad) + 1 / pl_thf);
   i = 0;
   loop(16,
-    L = (pl_len[i] + pl_apl[i]) * -6.9077553 / srate;
+    L = (pl_len[i] + pl_apl[i] + pl_ap2n[i]) * -6.9077553 / srate;
     gl = exp(L / Tl); gm = exp(L / T); gh = exp(L / Th);
     pl_kl[i] = gl / gm - 1;
-    a = (gm - gh) / (gm + gh); pl_ja[i] = a; pl_jb[i] = gm * (1 - a);
+    pl_ja[i] = gh / gm - 1; pl_jb[i] = gm;              // high shelf ratio, mid gain
     pl_c[i] = pl_c0 + pl_cdr * pl_dv[i];
     i += 1;
   );
   Ts = min(T, 3.2) * 0.85;
-  pl_sgk[0] = exp(-6.9077553 * pl_sn[0] / (Ts * srate));
-  pl_sgk[1] = exp(-6.9077553 * pl_sn[1] / (Ts * srate));
-  pl_wg = pl_wcal * (2.2 / pl_ts) ^ 0.3;                // longer plates are louder, but not by as much as the energy says
+  pl_sgk[0] = exp(-6.9077553 * pl_sn[1] / (Ts * srate));   // the loop runs through both springs
+  pl_sgk[1] = exp(-6.9077553 * pl_sn[0] / (Ts * srate));
+  pl_wg = (pl_ver ? 1.72 : 1.26) * (2.2 / pl_ts) ^ 0.12; // return level: longer plates a little louder, as on the hardware
 );
-pl_wcal = 1;
 
 // ---------- settings ----------
 function update() (
@@ -219,6 +276,32 @@ function update() (
   pl_spt = slider11 / 100;
   pl_ot = 10 ^ (slider12 / 20);
   ost_setup(slider13 / 100, slider14 / 100, slider15, slider16, slider17, slider18);
+);
+
+// ---------- presets (the output stage is left alone) ----------
+function pl_set(v, d, pd, lc, hc, dr, mx, wd, dft, mono, spr) (
+  slider10 = v; slider1 = d; slider2 = pd; slider3 = lc; slider4 = hc; slider5 = dr; slider6 = mx; slider7 = wd;
+  slider8 = dft; slider9 = mono; slider11 = spr;
+  slider_automate(2047);                                // sliders 1-11
+);
+function load_preset(p) (
+  p == 1  ? pl_set(0, 2.2,  10, 100, 16000, 20,  30, 100, 50, 1,  0) :   // Init
+  p == 2  ? pl_set(0, 2.6,  40, 150, 12000, 25,  25, 100, 40, 1,  0) :   // Vocal Plate
+  p == 3  ? pl_set(0, 1.4,   5, 200, 14000, 40,  25, 100, 50, 1,  0) :   // Snare Plate
+  p == 4  ? pl_set(0, 0.8,   0, 180, 16000, 20,  20, 100, 40, 1,  0) :   // Short Plate
+  p == 5  ? pl_set(0, 5.0,  60, 120, 10000, 15,  35, 120, 60, 0,  0) :   // Long Wash
+  p == 6  ? pl_set(0, 1.0,   0, 250,  9000, 50,  12, 110, 40, 0,  0) :   // Drum Bus
+  p == 7  ? pl_set(0, 2.4,  20, 110, 16000, 20, 100, 100, 50, 1,  0) :   // Plate Send (100 % wet, for an aux)
+  p == 8  ? pl_set(1, 2.4,  30, 140,  9000, 35,  25, 100, 50, 1,  0) :   // Ost Vocal
+  p == 9  ? pl_set(1, 1.2,   0, 220,  8000, 60,  25, 100, 50, 1,  0) :   // Ost Snare
+  p == 10 ? pl_set(1, 4.5,  20, 100,  7000, 70,  35, 110, 80, 1,  0) :   // Iron Curtain
+  p == 11 ? pl_set(1, 3.2,  45, 160, 10000, 30,  30, 120, 50, 0,  0) :   // Broadcast Hall
+  p == 12 ? pl_set(1, 2.0,  10, 200,  7500, 45,  30, 100, 60, 1, 55) :   // Spring Hybrid
+  p == 13 ? (                                           // Reset all to defaults
+    pl_set(0, 2.2, 10, 100, 16000, 20, 30, 100, 50, 1, 0);
+    slider12 = 0; slider13 = 0; slider14 = 30; slider15 = 120; slider16 = 6000; slider17 = -0.3; slider18 = 1;
+    slider_automate(262143);                            // sliders 1-18
+  );
 );
 
 // ---------- state ----------
@@ -301,7 +384,7 @@ pl_pw = (pl_pw + 1) & pl_pm;
 // ---------- driver -> sheet: dispersion and diffusion ----------
 pl_sx = 0.5 * (pl_xa + pl_xb);
 pl_da = pl_diff(pl_disp(pl_xa, 0), 0) * 0.5;
-pl_db_ = pl_diff(pl_disp(pl_xb, 16), 4) * 0.5;
+pl_db_ = pl_diff(pl_disp(pl_xb, 16), 6) * 0.5;
 pl_dw = (pl_dw + 1) & pl_am;
 
 // ---------- the plate: 16 lines, loss filters, a 16 x 16 Hadamard, allpass + dispersion in each line ----------
@@ -314,24 +397,40 @@ loop(16,
   pl_tr += pl_sgr[i] * pl_bb[(pl_w - pl_tpr[i]) & pl_bm];
   pl_lo[i] += (pl_v - pl_lo[i]) * pl_clo;
   pl_v += pl_kl[i] * pl_lo[i];
-  pl_y[i] = pl_o[i] = pl_jb[i] * pl_v + pl_ja[i] * pl_y[i];
+  pl_y[i] += (pl_v - pl_y[i]) * pl_chi;
+  pl_o[i] = pl_jb[i] * (pl_v + pl_ja[i] * (pl_v - pl_y[i]));
   i += 1;
 );
-pl_h = 1;
-loop(4,
-  i = 0;
-  loop(16,
-    (i & pl_h) == 0 ? ( pl_u = pl_o[i]; pl_v = pl_o[i + pl_h]; pl_o[i] = pl_u + pl_v; pl_o[i + pl_h] = pl_u - pl_v; );
-    i += 1;
-  );
-  pl_h *= 2;
-);
+// 16 x 16 Hadamard (four butterfly stages, unrolled)
+pl_ha0 = pl_o[0] + pl_o[1]; pl_ha1 = pl_o[0] - pl_o[1]; pl_ha2 = pl_o[2] + pl_o[3]; pl_ha3 = pl_o[2] - pl_o[3];
+pl_ha4 = pl_o[4] + pl_o[5]; pl_ha5 = pl_o[4] - pl_o[5]; pl_ha6 = pl_o[6] + pl_o[7]; pl_ha7 = pl_o[6] - pl_o[7];
+pl_ha8 = pl_o[8] + pl_o[9]; pl_ha9 = pl_o[8] - pl_o[9]; pl_ha10 = pl_o[10] + pl_o[11]; pl_ha11 = pl_o[10] - pl_o[11];
+pl_ha12 = pl_o[12] + pl_o[13]; pl_ha13 = pl_o[12] - pl_o[13]; pl_ha14 = pl_o[14] + pl_o[15]; pl_ha15 = pl_o[14] - pl_o[15];
+pl_hb0 = pl_ha0 + pl_ha2; pl_hb2 = pl_ha0 - pl_ha2; pl_hb1 = pl_ha1 + pl_ha3; pl_hb3 = pl_ha1 - pl_ha3;
+pl_hb4 = pl_ha4 + pl_ha6; pl_hb6 = pl_ha4 - pl_ha6; pl_hb5 = pl_ha5 + pl_ha7; pl_hb7 = pl_ha5 - pl_ha7;
+pl_hb8 = pl_ha8 + pl_ha10; pl_hb10 = pl_ha8 - pl_ha10; pl_hb9 = pl_ha9 + pl_ha11; pl_hb11 = pl_ha9 - pl_ha11;
+pl_hb12 = pl_ha12 + pl_ha14; pl_hb14 = pl_ha12 - pl_ha14; pl_hb13 = pl_ha13 + pl_ha15; pl_hb15 = pl_ha13 - pl_ha15;
+pl_ha0 = pl_hb0 + pl_hb4; pl_ha4 = pl_hb0 - pl_hb4; pl_ha1 = pl_hb1 + pl_hb5; pl_ha5 = pl_hb1 - pl_hb5;
+pl_ha2 = pl_hb2 + pl_hb6; pl_ha6 = pl_hb2 - pl_hb6; pl_ha3 = pl_hb3 + pl_hb7; pl_ha7 = pl_hb3 - pl_hb7;
+pl_ha8 = pl_hb8 + pl_hb12; pl_ha12 = pl_hb8 - pl_hb12; pl_ha9 = pl_hb9 + pl_hb13; pl_ha13 = pl_hb9 - pl_hb13;
+pl_ha10 = pl_hb10 + pl_hb14; pl_ha14 = pl_hb10 - pl_hb14; pl_ha11 = pl_hb11 + pl_hb15; pl_ha15 = pl_hb11 - pl_hb15;
+pl_hb0 = pl_ha0 + pl_ha8; pl_hb8 = pl_ha0 - pl_ha8; pl_hb1 = pl_ha1 + pl_ha9; pl_hb9 = pl_ha1 - pl_ha9;
+pl_hb2 = pl_ha2 + pl_ha10; pl_hb10 = pl_ha2 - pl_ha10; pl_hb3 = pl_ha3 + pl_ha11; pl_hb11 = pl_ha3 - pl_ha11;
+pl_hb4 = pl_ha4 + pl_ha12; pl_hb12 = pl_ha4 - pl_ha12; pl_hb5 = pl_ha5 + pl_ha13; pl_hb13 = pl_ha5 - pl_ha13;
+pl_hb6 = pl_ha6 + pl_ha14; pl_hb14 = pl_ha6 - pl_ha14; pl_hb7 = pl_ha7 + pl_ha15; pl_hb15 = pl_ha7 - pl_ha15;
+pl_o[0] = pl_hb0; pl_o[1] = pl_hb1; pl_o[2] = pl_hb2; pl_o[3] = pl_hb3;
+pl_o[4] = pl_hb4; pl_o[5] = pl_hb5; pl_o[6] = pl_hb6; pl_o[7] = pl_hb7;
+pl_o[8] = pl_hb8; pl_o[9] = pl_hb9; pl_o[10] = pl_hb10; pl_o[11] = pl_hb11;
+pl_o[12] = pl_hb12; pl_o[13] = pl_hb13; pl_o[14] = pl_hb14; pl_o[15] = pl_hb15;
 i = 0;
 loop(16,
   pl_u = pl_o[i] * 0.25 + pl_is[i] * (i & 1 ? pl_db_ : pl_da);
   pl_bb = pl_ab + i * pl_asz;
   pl_v = pl_bb[(pl_aw - pl_apl[i]) & pl_am];
   pl_y_ = pl_v - pl_g[i] * pl_u; pl_bb[pl_aw] = pl_u + pl_g[i] * pl_y_;
+  pl_bb = pl_ab2 + i * pl_asz;
+  pl_v = pl_bb[(pl_aw - pl_ap2n[i]) & pl_am];
+  pl_u = pl_v - pl_g2[i] * pl_y_; pl_bb[pl_aw] = pl_y_ + pl_g2[i] * pl_u; pl_y_ = pl_u;
   pl_cf = pl_c[i];
   pl_u = pl_cf * pl_y_ + pl_d1x[i] - pl_cf * pl_d1y[i]; pl_d1x[i] = pl_y_; pl_d1y[i] = pl_u;
   pl_v = pl_cf * pl_u + pl_d2x[i] - pl_cf * pl_d2y[i]; pl_d2x[i] = pl_u; pl_d2y[i] = pl_v;
@@ -345,10 +444,11 @@ pl_wl = pl_tl * 0.25 * pl_wg; pl_wr = pl_tr * 0.25 * pl_wg;
 
 // ---------- springs (blend) ----------
 pl_sp > 0.0005 ? (
-  pl_shp += (pl_sx - pl_shp) * 0.026;
-  pl_s0 = pl_spr(pl_sx - pl_shp, 0); pl_s1 = pl_spr(pl_sx - pl_shp, 1);
-  pl_wl += pl_sp * (pl_s0 + 0.35 * pl_s1 - pl_wl * 0.5);
-  pl_wr += pl_sp * (pl_s1 + 0.35 * pl_s0 - pl_wr * 0.5);
+  pl_shp += (pl_da - pl_shp) * pl_shc;
+  pl_shq += (pl_db_ - pl_shq) * pl_shc;
+  pl_springs(pl_da - pl_shp, pl_db_ - pl_shq);           // fed from the diffused send, 200 Hz up
+  pl_wl += pl_sp * (pl_spg * (pl_s0 + 0.3 * pl_s1) - pl_wl * 0.5);
+  pl_wr += pl_sp * (pl_spg * (pl_s1 + 0.3 * pl_s0) - pl_wr * 0.5);
 );
 pl_sw = (pl_sw + 1) & pl_sm;
 
@@ -377,10 +477,274 @@ pl_or = pl_r * pl_gd + pl_wr * pl_gw;
 pl_ol = ostL.ost_band(pl_ol) * pl_o_;
 pl_or = ostR.ost_band(pl_or) * pl_o_;
 ost_out(pl_ol, pl_or);
-spl0 = ost_l; spl1 = ost_r;
+spl0 = abs(ost_l) < 0.00000000000000000001 ? 0 : ost_l;      // nothing below -400 dB reaches the host
+spl1 = abs(ost_r) < 0.00000000000000000001 ? 0 : ost_r;
 pl_opkL = max(pl_opkL, abs(spl0)); pl_opkR = max(pl_opkR, abs(spl1));
 
 @gfx 820 320
 ui_begin(820, 320);
-ui_col(0x5E6B63); gfx_rect(0, 0, gfx_w, gfx_h);
+
+// =====================================================================
+// The two faceplates (they follow the WEST / EAST key)
+// =====================================================================
+pv_e = slider10 >= 0.5;
+pv_e ? (                                                // EAST: bone-grey baked-enamel laboratory panel (the 45 family)
+  PVF  = 0xD6D2C4;                                      // section faces
+  PVP  = ui_mix(PVF, 0x000000, 0.10);                   // the panel around them
+  PVH  = ui_mix(PVF, 0x000000, 0.20);                   // header strip
+  PVI  = 0x1C1C1C;                                      // deep charcoal print
+  PVI2 = 0x4A4842;
+  PVA  = 0xFF7900;                                      // safety orange
+  PVL  = 0xFFA126;                                      // amber lamp
+  PVRED = 0xD8341C;                                     // brick-red lamp
+) : (                                                   // WEST: grey-green studio remote-control box
+  PVP  = 0x7C8A7E;                                      // grey-green hammer finish
+  PVF  = ui_mix(PVP, 0x000000, 0.12);                   // recessed trays
+  PVH  = ui_mix(PVP, 0x000000, 0.26);
+  PVI  = 0xF4FDFF;                                      // engraved white (cool white)
+  PVI2 = ui_mix(0xEEEFEA, PVP, 0.22);
+  PVA  = 0xFFFDD0;                                      // cream (meter face, lit keys)
+  PVL  = 0x46D86A;
+  PVRED = 0xFF3A2A;
+);
+
+gfx_setfont(6,  "Trebuchet MS", 27 * sc, 'b');          // title
+gfx_setfont(10, "Trebuchet MS", 11.5 * sc, 'b');        // meter scale
+gfx_setfont(11, "Trebuchet MS", 12 * sc, 'b');          // labels
+gfx_setfont(12, "Trebuchet MS", 12.5 * sc, 'b');        // key captions
+gfx_setfont(13, "Trebuchet MS", 15 * sc, 'b');          // section titles
+gfx_setfont(14, "Trebuchet MS", 17 * sc, 'b');          // the dial's numbers
+gfx_setfont(15, "Trebuchet MS", 20 * sc, 'b');          // meter caption
+
+function pv_r(x, y, w, h) ( gfx_rect(x * sc, y * sc, w * sc, h * sc); );
+function pv_txt(x, y, s) ( gfx_x = x * sc; gfx_y = y * sc; gfx_drawstr(s); );
+function pv_ctxt(cx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = cx * sc - tw * 0.5; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s); );
+// EAST prints decimal commas
+function pv_dec(s) local(i) ( pv_e ? ( i = 0; loop(strlen(s), str_getchar(s, i) == '.' ? str_setchar(s, i, ','); i += 1; ); ); s; );
+function pv_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
+// print: WEST engraved (a dark cut under the white fill), EAST plain charcoal
+function pv_ptxt(cx, cy, s, c) local(tw, th) (
+  gfx_measurestr(s, tw, th);
+  !pv_e ? ( ui_cola(0x000000, 0.45); gfx_x = cx * sc - tw * 0.5 + max(1, sc * 0.8); gfx_y = cy * sc - th * 0.5 + max(1, sc * 0.8); gfx_drawstr(s); );
+  ui_col(c); gfx_x = cx * sc - tw * 0.5; gfx_y = cy * sc - th * 0.5; gfx_drawstr(s);
+);
+
+// a key in the faceplate's manner; returns 1 when clicked
+function pv_key(x, y, w, h, lbl, on) local(hov, hit) (
+  hov = pv_hov(x, y, w, h);
+  hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;
+  pv_e ? (
+    ui_col(PVI); pv_r(x, y, w, h);
+    on ? ui_col(PVA) : ui_col(hov ? 0xEDEAE0 : ui_mix(PVF, 0xFFFFFF, 0.35)); pv_r(x + 1, y + 1, w - 2, h - 2);
+    on ? ( ui_cola(0xFFFFFF, 0.25); pv_r(x + 1, y + 1, w - 2, 1); );
+    ui_col(PVI);
+  ) : (
+    ui_cola(0x000000, 0.4); pv_r(x + 1, y + 2, w, h);
+    ui_col(0x1B1E1B); pv_r(x, y, w, h);
+    on ? (
+      ui_cola(PVA, 0.25); pv_r(x - 2, y - 2, w + 4, h + 4);
+      ui_col(PVA); pv_r(x + 1, y + 1, w - 2, h - 2);
+      ui_cola(0xFFFFFF, 0.5); pv_r(x + 1, y + 1, w - 2, 1);
+      ui_col(0x22261F);
+    ) : (
+      ui_col(hov ? 0x4A524A : 0x3C433C); pv_r(x + 1, y + 1, w - 2, h - 3);
+      ui_cola(0xFFFFFF, 0.14); pv_r(x + 1, y + 1, w - 2, 1);
+      ui_col(PVI);
+    );
+  );
+  gfx_setfont(12); pv_ctxt(x + w * 0.5, y + h * 0.5 + 0.5, lbl);
+  hit;
+);
+
+// a section: WEST a recessed tray with sloped walls, EAST a sharp enamel face with a charcoal frame
+function pv_sect(x, y, w, h, name) (
+  pv_e ? (
+    ui_col(ui_mix(PVF, 0x000000, 0.45)); pv_r(x, y, w, h);
+    ui_col(PVF); pv_r(x + 1, y + 1, w - 2, h - 2);
+    gfx_setfont(13); ui_col(PVI); pv_txt(x + 10, y + 7, name);
+    ui_col(PVA); pv_r(x + 10, y + 26, 22, 3);
+  ) : (
+    pk_inset((x + 5) * sc, (y + 5) * sc, (w - 10) * sc, (h - 10) * sc, PVF);
+    gfx_setfont(13); pv_ptxt(x + w * 0.5, y + 18, name, PVI);
+  );
+);
+
+// a status lamp with its name under it
+function pv_lamp(x, y, on, col, s) (
+  pv_e ? (
+    ui_col(0x141414); gfx_circle(x * sc, y * sc, 7.5 * sc, 1, 1);
+    ui_col(0x8A867A); gfx_circle(x * sc, y * sc, 6 * sc, 1, 1);
+    rd_lamp(x, y, 5, on, col);
+  ) : rd_led(x, y, 4, on > 0.5, col);
+  gfx_setfont(11); pv_ptxt(x, y + 16, s, pv_e ? PVI : PVI2);
+);
+
+// =====================================================================
+// Panel and header
+// =====================================================================
+ui_col(PVP); gfx_rect(0, 0, gfx_w, gfx_h);
+!pv_e ? gfx_gradrect(0, 56 * sc, gfx_w, 120 * sc, 1, 1, 1, 0.06, 0, 0, 0, 0, 0, 0, 0, -0.06 / (120 * sc));
+ui_col(PVH); pv_r(0, 0, 820, 54);
+pv_e ? ( ui_col(PVI); pv_r(0, 54, 820, 2); ) : ( ui_cola(0x000000, 0.35); pv_r(0, 54, 820, 1); ui_cola(0xFFFFFF, 0.18); pv_r(0, 55, 820, 1); );
+ui_col(PVI); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
+gfx_setfont(4); ui_col(PVH); ui_text(31 * sc, 21.5 * sc, "GFX");
+gfx_setfont(6); pv_e ? ( ui_col(PVI); pv_txt(58, 12, "PLATTE 140"); ) : ( ui_cola(0x000000, 0.4); pv_txt(59, 13, "PLATTE 140"); ui_col(PVI); pv_txt(58, 12, "PLATTE 140"); );
+gfx_setfont(11); ui_col(PVI2); pv_txt(228, 15, "STEREO"); pv_txt(228, 29, pv_e ? "HALLPLATTE" : "PLATE REVERB");
+pv_key(330, 14, 48, 26, "WEST", !pv_e) ? ( slider10 = 0; ui_auto(10); );
+pv_key(382, 14, 48, 26, "EAST", pv_e) ? ( slider10 = 1; ui_auto(10); );
+pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
+k_ = pk_preset(440 * sc, 10 * sc, 310 * sc, 34 * sc, pr_cur,
+  "Init|Vocal Plate|Snare Plate|Short Plate|Long Wash|Drum Bus|Plate Send|Ost Vocal|Ost Snare|Iron Curtain|Broadcast Hall|Spring Hybrid");
+k_ > 0 ? ( load_preset(k_); pr_cur = k_ > 12 ? 1 : k_; );
+ui_size_picker(758 * sc, 18 * sc);
+
+dy_ink = PVI; dy_bg = PVF; dy_ntick = 11;
+
+// =====================================================================
+// DAMPING: the big dial, numbered 1 - 10 like the remote (1 = pad off, longest; 10 = pad pressed, shortest)
+// =====================================================================
+function pv_pos(t) ( 1 + 9 * log(5 / t) / log(12.5) );
+function pv_tim(p) ( 5 * 12.5 ^ (-(p - 1) / 9) );
+pv_sect(10, 64, 256, 248, pv_e ? "DÄMPFUNG" : "DAMPING");
+pv_cx = 138; pv_cy = 190; pv_kr = 50;
+pv_dx = mouse_x - pv_cx * sc; pv_dy = mouse_y - pv_cy * sc;
+pv_dh = pv_dx * pv_dx + pv_dy * pv_dy <= sqr((pv_kr + 8) * sc);
+pressed && pv_dh && drag_id == 0 ? (
+  time_precise() - pv_lt < 0.35 ? ( slider1 = 2.2; ui_auto(1); drag_id = -1; pv_lt = 0; ) : (
+    drag_id = 1701; pv_my = mouse_y; pv_lt = time_precise(); pv_dp = pv_pos(slider1);
+  );
+);
+drag_id == 1701 ? (
+  pv_dp = min(max(pv_dp + (pv_my - mouse_y) / (((mouse_cap & 8) ? 900 : 160) * sc) * 9, 1), 10); pv_my = mouse_y;
+  pv_q = floor(pv_dp + 0.5);
+  pv_p = abs(pv_dp - pv_q) < 0.17 && !(mouse_cap & 8) ? pv_q : pv_dp;   // detents at 1 .. 10 (SHIFT = fine, no detents)
+  pv_t = floor(pv_tim(pv_p) * 1000 + 0.5) / 1000;
+  slider1 != pv_t ? ( slider1 = pv_t; ui_auto(1); );
+);
+pv_dh && mouse_wheel != 0 && drag_id == 0 ? (
+  pv_p = pv_pos(slider1);
+  pv_p = (mouse_cap & 8) ? pv_p + sign(mouse_wheel) * 0.1 : floor(pv_p + 0.5 + 0.001) + sign(mouse_wheel);
+  slider1 = floor(pv_tim(min(max(pv_p, 1), 10)) * 1000 + 0.5) / 1000; ui_auto(1); mouse_wheel = 0;
+);
+pv_p = min(max(pv_pos(slider1), 1), 10); pv_n = (pv_p - 1) / 9;
+// the printed scale
+pv_i = 0;
+loop(19,
+  pv_a = -0.75 * $pi + pv_i / 18 * 1.5 * $pi; pv_ca = sin(pv_a); pv_sa = -cos(pv_a);
+  pv_r1 = pv_kr + 9; pv_r2 = pv_kr + (pv_i % 2 ? 14 : 19);
+  ui_col(pv_e ? PVI : PVI2);
+  gfx_line((pv_cx + pv_ca * pv_r1) * sc, (pv_cy + pv_sa * pv_r1) * sc, (pv_cx + pv_ca * pv_r2) * sc, (pv_cy + pv_sa * pv_r2) * sc, 1);
+  pv_i % 2 == 0 ? (
+    gfx_line((pv_cx + pv_ca * pv_r1) * sc + 1, (pv_cy + pv_sa * pv_r1) * sc, (pv_cx + pv_ca * pv_r2) * sc + 1, (pv_cy + pv_sa * pv_r2) * sc, 1);
+    sprintf(#pvs, "%d", pv_i / 2 + 1); gfx_setfont(14);
+    pv_ptxt(pv_cx + pv_ca * (pv_kr + 32), pv_cy + pv_sa * (pv_kr + 32), #pvs, abs(pv_p - (pv_i / 2 + 1)) < 0.5 && pv_e ? 0xB24A00 : PVI);
+  );
+  pv_i += 1;
+);
+pv_e ? (
+  // EAST: an orange band over the pressed-pad end, the laboratory knob with its glowing ring
+  ui_col(PVA); pv_i = 0; loop(3 * sc, gfx_arc(pv_cx * sc, pv_cy * sc, (pv_kr + 21) * sc + pv_i, 0.45 * $pi, 0.75 * $pi, 1); pv_i += 1; );
+  dy_lcap(pv_cx * sc, pv_cy * sc, pv_kr * sc, pv_n, PVA);
+) : (
+  ui_cola(PVI2, 0.7); gfx_arc(pv_cx * sc, pv_cy * sc, (pv_kr + 9) * sc, -0.75 * $pi, 0.75 * $pi, 1);
+  pk_kstyle = 0; pk_ptr = 0xF4FDFF; pk_ink = PVI;
+  pk_bkcap(pv_cx * sc, pv_cy * sc, pv_kr * sc, -0.75 * $pi + pv_n * 1.5 * $pi);
+  pk_ptr = -1;
+);
+(pv_dh || drag_id == 1701) ? ( ui_cola(0xFFFFFF, 0.08); gfx_circle(pv_cx * sc, pv_cy * sc, (pv_kr + 4) * sc, 1, 1); );
+// the legend; the value replaces it while the dial is touched
+gfx_setfont(11);
+(pv_dh || drag_id == 1701) ? (
+  sprintf(#pvs, pv_e ? "%.2f s   STUFE %.1f" : "%.2f s   POS %.1f", slider1, pv_p);
+  pv_dec(#pvs);
+  pv_ptxt(pv_cx, 290, #pvs, PVI);
+) : pv_ptxt(pv_cx, 290, pv_e ? "1 = 5 s    10 = 0,4 s" : "1 = 5 s    10 = 0.4 s", PVI2);
+
+// =====================================================================
+// DRIVE: the send amplifier, its meter, pre-delay and the spring blend
+// =====================================================================
+pv_sect(272, 64, 262, 248, pv_e ? "ANTRIEB" : "DRIVE");
+// meter (0 = the send amp's nominal level; the red / orange zone is where it starts to saturate)
+pv_now = time_precise(); pv_dt = pv_t0 > 0 ? min(max(pv_now - pv_t0, 0), 0.25) : 1; pv_t0 = pv_now;
+pv_vdb = 10 * log10(max(pl_vums, 0.0000000001)) + 12.04;
+pv_vq += (min(max(pv_vdb, -24), 5) - pv_vq) * (1 - exp(-pv_dt / 0.08));
+function pv_vpos(d) ( d = min(max(d, -20), 3.3); (10 ^ (d / 20) - 0.1) / (1.4125375 - 0.1) );
+pv_mx = 286; pv_my_ = 96; pv_mw = 234; pv_mh = 88;
+ui_col(pv_e ? PVI : 0x101210); pv_r(pv_mx - 2, pv_my_ - 2, pv_mw + 4, pv_mh + 4);
+ui_col(pv_e ? ui_mix(PVF, 0xFFFFFF, 0.25) : PVA); pv_r(pv_mx, pv_my_, pv_mw, pv_mh);
+pv_px = pv_mx + pv_mw * 0.5; pv_py = pv_my_ + pv_mh + 30; pv_rad = 94; pv_sp = 0.72;
+// zone band and arc
+ui_col(pv_e ? PVA : 0xD8281C); pv_i = 0;
+loop(5 * sc, gfx_arc(pv_px * sc, pv_py * sc, pv_rad * sc + pv_i, -pv_sp + 2 * pv_sp * pv_vpos(0), pv_sp, 1); pv_i += 1; );
+ui_col(0x1A1A1A); gfx_arc(pv_px * sc, pv_py * sc, pv_rad * sc, -pv_sp, pv_sp, 1); gfx_arc(pv_px * sc, pv_py * sc, pv_rad * sc - 1, -pv_sp, pv_sp, 1);
+gfx_setfont(10);
+pv_i = 0;
+loop(11,
+  pv_d = pv_i == 0 ? -20 : pv_i == 1 ? -10 : pv_i == 2 ? -7 : pv_i == 3 ? -5 : pv_i == 4 ? -3 : pv_i == 5 ? -2 : pv_i == 6 ? -1 : pv_i == 7 ? 0 : pv_i == 8 ? 1 : pv_i == 9 ? 2 : 3;
+  pv_a = -pv_sp + 2 * pv_sp * pv_vpos(pv_d); pv_ca = sin(pv_a); pv_sa = -cos(pv_a);
+  ui_col(pv_d > 0 ? (pv_e ? 0xB24A00 : 0xC0201A) : 0x1A1A1A);
+  gfx_line((pv_px + pv_ca * (pv_rad - 6)) * sc, (pv_py + pv_sa * (pv_rad - 6)) * sc, (pv_px + pv_ca * (pv_rad + 6)) * sc, (pv_py + pv_sa * (pv_rad + 6)) * sc, 1);
+  pv_d == -20 || pv_d == -10 || pv_d == -5 || pv_d == 0 || pv_d == 3 ? (
+    pv_d > 0 ? sprintf(#pvs, "+%d", pv_d) : sprintf(#pvs, "%d", abs(pv_d));
+    pv_ctxt(pv_px + pv_ca * (pv_rad + 15), pv_py + pv_sa * (pv_rad + 15), #pvs);
+  );
+  pv_i += 1;
+);
+gfx_setfont(15); ui_col(0x1A1A1A); pv_ctxt(pv_mx + 22, pv_my_ + 56, pv_e ? "dB" : "VU");
+// the needle
+pv_a = -pv_sp + 2 * pv_sp * min(max(pv_vpos(pv_vq), -0.03), 1.04); pv_ca = sin(pv_a); pv_sa = -cos(pv_a);
+ui_cola(0x000000, 0.15); gfx_line((pv_px + pv_ca * 40) * sc + 2, (pv_py + pv_sa * 40) * sc + 3, (pv_px + pv_ca * (pv_rad + 4)) * sc + 2, (pv_py + pv_sa * (pv_rad + 4)) * sc + 3, 1);
+ui_col(0x101010); pv_i = 0;
+loop(2, gfx_line((pv_px + pv_ca * 40) * sc + pv_i, (pv_py + pv_sa * 40) * sc, (pv_px + pv_ca * (pv_rad + 4)) * sc + pv_i, (pv_py + pv_sa * (pv_rad + 4)) * sc, 1); pv_i += 1; );
+// bottom band over the pivot
+ui_col(pv_e ? PVI : 0x1E221E); pv_r(pv_mx, pv_my_ + pv_mh - 20, pv_mw, 20);
+gfx_setfont(11); ui_col(pv_e ? PVF : PVA);
+pv_ctxt(pv_px, pv_my_ + pv_mh - 10, pv_e ? "AUSSTEUERUNG" : "DRIVE LEVEL");
+ui_cola(0xFFFFFF, pv_e ? 0.0 : 0.16); pv_r(pv_mx, pv_my_, pv_mw, 1);
+
+dy_kst = pv_e ? 31 : 0; dy_nov = 1;
+sprintf(#pvv, "%.0f%%", slider5);  dy_knob(318, 218, 20, 5, 0, 100, 20, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "ANTRIEB" : "DRIVE", #pvv);
+sprintf(#pvv, "%.0f ms", slider2); dy_knob(403, 218, 20, 2, 0, 250, 10, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "VERZÖG." : "PRE-DELAY", #pvv);
+sprintf(#pvv, "%.0f%%", slider11); dy_knob(487, 218, 17, 11, 0, 100, 0, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "FEDER" : "SPRING", #pvv);
+// status lamps
+pv_ov = pl_ovl; pl_ovl = 0;
+pv_ov > 1.6 ? pv_ovt = pv_now;
+pv_wp = pl_wpk; pl_wpk = 0;
+pv_wp > 0.003 ? pv_sgt = pv_now;
+pv_e ? (
+  pv_lamp(306, 282, 1, PVL, "POWER");
+  pv_lamp(376, 282, min(max((pv_vq + 20) / 20, 0), 1), PVL, "ANTRIEB");
+  pv_lamp(474, 282, pv_now - pv_ovt < 0.25, PVRED, "ÜBERSTEUERUNG");
+) : (
+  pv_lamp(320, 282, pv_now - pv_sgt < 0.15, PVL, "SIGNAL");
+  pv_lamp(403, 282, pv_vq > -3, 0xFFB030, "NOMINAL");
+  pv_lamp(487, 282, pv_now - pv_ovt < 0.25, PVRED, "PEAK");
+);
+
+// =====================================================================
+// TONE: LOW CUT (yellow cap) and HIGH CUT (black cap) on the return, MIX, WIDTH, MONO IN
+// =====================================================================
+pv_sect(540, 64, 148, 248, pv_e ? "FILTER" : "TONE");
+sprintf(#pvv, "%.0f Hz", slider3); dy_kf = 1; dy_knob(579, 116, 17, 3, 20, 600, 100, 1, 0, pv_e ? "TIEFEN" : "LOW CUT", #pvv);
+slider4 >= 19950 ? strcpy(#pvv, "OFF") : ( sprintf(#pvv, "%.1f kHz", slider4 / 1000); pv_dec(#pvv); );
+dy_kf = 2; dy_knob(649, 116, 17, 4, 2000, 20000, 16000, 1, 0, pv_e ? "HÖHEN" : "HIGH CUT", #pvv);
+sprintf(#pvv, "%.0f%%", slider6);  dy_knob(579, 216, 19, 6, 0, 100, 30, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "MISCHUNG" : "MIX", #pvv);
+sprintf(#pvv, "%.0f%%", slider7);  dy_knob(649, 216, 19, 7, 0, 150, 100, 0, pv_e ? PVA : 0xF4FDFF, pv_e ? "BREITE" : "WIDTH", #pvv);
+pv_key(552, 276, 124, 24, pv_e ? "MONO EIN" : "MONO IN", slider9 >= 0.5) ? ( slider9 = slider9 >= 0.5 ? 0 : 1; ui_auto(9); );
+
+// =====================================================================
+// OUTPUT: level, the house output stage, SAT, DRIFT and the output meter
+// =====================================================================
+pv_sect(694, 64, 116, 248, pv_e ? "AUSGANG" : "OUTPUT");
+dy_kst = 20;
+sprintf(#pvv, "%+.1f dB", slider12); pv_dec(#pvv); dy_knob(726, 122, 15, 12, -24, 12, 0, 0, 0x9DA2A8, pv_e ? "PEGEL" : "OUTPUT", #pvv);
+ui_outkeys(756, 98, 44, 16, 5, 18);
+sprintf(#pvv, "%.0f%%", slider13); dy_knob(726, 198, 12, 13, 0, 100, 0, 0, 0xD8B040, "SAT", #pvv);
+sprintf(#pvv, "%.0f%%", slider8);  dy_knob(776, 198, 12, 8, 0, 100, 50, 0, pv_e ? 0x6F8794 : 0x9DA2A8, "DRIFT", #pvv);
+dy_kst = 7; dy_nov = 0;
+gfx_setfont(11); pv_ptxt(752, 252, pv_e ? "SPITZE" : "PEAK", PVI2);
+mtL.ui_ledm(708 * sc, 266 * sc, 88 * sc, 8 * sc, pl_opkL); mtR.ui_ledm(708 * sc, 280 * sc, 88 * sc, 8 * sc, pl_opkR);
+pl_opkL = 0; pl_opkR = 0;
+
+pk_end();
 ui_end();
