@@ -1,0 +1,494 @@
+desc:GFX Fullerton 65
+//tags: amp amplifier guitar combo valve tube stereo reverb spring tremolo vibrato clean keys cabinet
+//author: JGWizrad / Garden FX (GFX)
+//
+// Requires gfx-drift, gfx-input, gfx-output, gfx-ui, gfx-panel, gfx-dyn, gfx-faceplate and gfx-amp (.jsfx-inc) in the
+// same folder.
+//
+// FULLERTON 65. A stereo two-channel valve combo with two 12" speakers in an open-back cabinet, in the spirit of the
+// mid-60s American black-panel 2x12 reverb combos: huge clean headroom, a sparkling top, a scooped middle, a long
+// three-spring reverb and an optical tremolo (personal use; the sound is designed from scratch).
+//
+// SIGNAL FLOW (each side, L and R, runs its own complete, identical amp; MONO IN feeds both with L + R)
+//   NORMAL channel:  input -> first 12AX7 stage (asymmetric triode curve, cathode-bypass shelf)
+//     -> the passive TREBLE / BASS / MIDDLE tone stack (a third-order filter worked out from the parts: 250 pF,
+//        100 nF and 47 nF, 250 k treble and bass pots, a 10 k middle pot, 100 k slope resistor; its natural mid
+//        scoop included) -> VOLUME (1 M audio pot; BRIGHT = a 120 pF cap across it, strongest at low volume)
+//     -> second 12AX7 stage -> the mixer.
+//   VIBRATO channel: the same two stages and tone stack, then
+//     REVERB: the send drives its own valve (a 12AT7 driver that saturates when hit hard) into a long tank of
+//        three springs (each a delay with a dispersive chirp in its loop: every round trip gets a little more
+//        'drip'; dark, about 2 s); the return is mixed by the REVERB pot into a third 12AX7 (the mixer stage)
+//     -> the 'vibrato', which is really an optical TREMOLO: an oscillator (SPEED) flashes a lamp onto a light-
+//        dependent resistor that shunts the signal (INTENSITY). The cell darkens quickly and recovers slowly, so the
+//        throb is smooth and slightly asymmetric. STEREO TREM: the right side throbs in opposite phase.
+//   JUMPER feeds the input to both channels (their outputs add up, in phase).
+//   -> phase inverter (12AT7, long-tailed pair) -> four 6L6-style power valves in push-pull with negative feedback
+//      (solved exactly per sample: very clean up to full power, then a firm clip) and a gentle supply sag when
+//      pushed -> output transformer -> SPEAKER: 12" open back, about 80 Hz - 5 kHz with a presence peak. The two
+//      speakers are not quite the same (different cone / mic), and the two reverb tanks are tuned apart.
+//   The amp runs at twice the sample rate (the reverb tanks at the host rate).
+// IN / OUT: INPUT trim (click the knob for the house GUARD), OUTPUT, band SAT and the OFF / CLIP / LIMIT stage.
+// DRIFT (0 - 100 %, 50 % = standard): valve and supply wander. The valves' bias wanders (each side on its own),
+//   the supply 'breathes' a little, the power valves drift out of balance, and the tremolo rate wanders slightly.
+//   0 % = perfectly steady.
+//
+// GUI: drag a knob (SHIFT = fine, double-click = default, wheel); values show while a knob is touched.
+//   The NORMAL / VIBRATO keys pick the channel (the input you plug into). S / M / L / ? = size and help.
+//   Click the LCD (or PRESETS) for the preset list.
+
+import gfx-drift.jsfx-inc
+import gfx-input.jsfx-inc
+import gfx-output.jsfx-inc
+import gfx-ui.jsfx-inc
+import gfx-panel.jsfx-inc
+import gfx-dyn.jsfx-inc
+import gfx-faceplate.jsfx-inc
+import gfx-amp.jsfx-inc
+
+slider1:1<0,1,1{Normal,Vibrato}>-Channel
+slider2:0<0,1,1{Off,On}>-Jumper (both channels)
+slider3:4<1,10,0.1>-Normal volume
+slider4:6<1,10,0.1>-Normal treble
+slider5:5<1,10,0.1>-Normal middle
+slider6:4<1,10,0.1>-Normal bass
+slider7:0<0,1,1{Off,On}>-Normal bright
+slider8:4<1,10,0.1>-Vibrato volume
+slider9:6<1,10,0.1>-Vibrato treble
+slider10:5<1,10,0.1>-Vibrato middle
+slider11:4<1,10,0.1>-Vibrato bass
+slider12:0<0,1,1{Off,On}>-Vibrato bright
+slider13:3<1,10,0.1>-Reverb
+slider14:5<1,10,0.1>-Speed
+slider15:1<1,10,0.1>-Intensity
+slider16:0<0,1,1{Off,On}>-Stereo tremolo
+slider17:0<0,1,1{Off,On}>-Mono in
+slider18:0<-24,12,0.1>-Input trim (dB)
+slider19:0<0,1,1{Off,On}>-Input guard
+slider20:50<0,100,1>-Drift (%)
+slider21:0<-24,12,0.1>-Output (dB)
+slider22:0<0,100,1>-Band sat (%)
+slider23:30<0,100,1>-Bias (%)
+slider24:120<40,400,1>-Sat low band (Hz)
+slider25:6000<2000,16000,10>-Sat high band (Hz)
+slider26:-0.3<-24,0,0.1>-Ceiling / limit threshold (dB)
+slider27:1<0,2,1{Off,Clip,Limit}>-Output stage
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+options:maxmem=4194304
+
+@init
+#ui_man = "gfx-fullerton-65";                          // the ? pop-up links to this manual
+ext_noinit = 1;
+
+// ---------- memory ----------
+nextmem = 0;
+function alloc(n) local(p) ( p = nextmem; nextmem += n; memset(p, 0, n); p; );
+function fl_p2(n) local(p) ( p = 1; while (p < n) ( p *= 2; ); p; );
+
+// ---------- valve curves ----------
+// a smooth saturator (rational, exactly 1 from |x| = 3) and its slope
+function fl_th(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
+function fl_thd(x) local(q) ( abs(x) >= 3 ? 0 : ( q = 27 + 9 * x * x; ((27 + 3 * x * x) * q - 18 * x * x * (27 + x * x)) / (q * q); ); );
+// triode: the grid-conduction side (positive) clips firmly at 1, the cutoff side runs softer and further (1.8)
+function fl_tg(u) ( u >= 0 ? fl_th(u) : 1.8 * fl_th(u * 0.5555556) );
+function fl_tgd(u) ( u >= 0 ? fl_thd(u) : fl_thd(u * 0.5555556) );
+// a stage at operating point b: unity small-signal gain, nothing out at rest (inverting is done by the caller)
+function fl_stset(b) instance(b0, g0, n0) ( b0 = b; g0 = fl_tg(b); n0 = 1 / max(fl_tgd(b), 0.05); );
+function fl_strun(x) instance(b0, g0, n0) ( (fl_tg(x + b0) - g0) * n0 );
+// the long-tailed pair: nearly symmetric
+function fl_syset(b) instance(b0, g0, n0) ( b0 = b; g0 = fl_th(b); n0 = 1 / max(fl_thd(b), 0.05); );
+function fl_syrun(x) instance(b0, g0, n0) ( (fl_th(x + b0) - g0) * n0 );
+
+// ---------- first-order sections (bilinear, c = 2 fs) ----------
+function fl_1run(x) instance(b0, b1, a1, x1, y1) local(y) ( y = b0 * x + b1 * x1 - a1 * y1; x1 = x; y1 = y; y; );
+// cathode bypass: the gain falls by F below fz (Rk Ck), a shelf between fz and F * fz
+function fl_shset(fz, F, fs) instance(b0, b1, a1) local(c, wz, wp) (
+  c = 2 * fs; wz = 2 * $pi * fz; wp = wz * F;
+  b0 = (c + wz) / (c + wp); b1 = (wz - c) / (c + wp); a1 = (wp - c) / (c + wp);
+);
+function fl_hpset(f, fs) instance(b0, b1, a1) local(c, w) (
+  c = 2 * fs; w = 2 * $pi * f;
+  b0 = c / (c + w); b1 = -b0; a1 = (w - c) / (c + w);
+);
+function fl_lpset(f, fs) instance(b0, b1, a1) local(c, w) (
+  c = 2 * fs; w = 2 * $pi * min(f, 0.45 * fs);
+  b0 = w / (c + w); b1 = b0; a1 = (w - c) / (c + w);
+);
+// VOLUME: a 1 M audio-taper pot (p = 0..1); BRIGHT = 120 pF from the top of the pot to the wiper, which works out as
+// the pot's gain k plus (1 - k) of a high-pass at 1 / (2 pi tp), tp = Ra Rb C / (Ra + Rb): strongest at low volume.
+// br (0..1) fades the cap in and out.
+function fl_volset(p, br, fs) instance(k, hb0, ha1, kb) local(fr, Ra, Rb, tp, c, w) (
+  fr = p <= 0 ? 0 : (10 ^ (2 * p) - 1) / 99;
+  Rb = fr * 1000000; Ra = (1 - fr) * 1000000;
+  k = fr; kb = br * (1 - fr);
+  tp = max(Ra * Rb / (Ra + Rb + 1) * 0.00000000012, 0.0000000001);
+  c = 2 * fs; w = 1 / tp;
+  hb0 = c / (c + w); ha1 = (w - c) / (c + w);
+);
+function fl_volrun(x) instance(k, hb0, ha1, kb, x1, y1) local(h) (
+  h = hb0 * (x - x1) - ha1 * y1; x1 = x; y1 = h;
+  k * x + kb * h;
+);
+
+// ---------- the passive tone stack (third order, from the component values) ----------
+// t, m, l = treble, middle, bass pot positions 0..1 (middle and bass audio taper)
+function fl_tsset(t, m, l, fs) instance(b0, b1, b2, b3, a1, a2, a3)
+  local(C1, C2, C3, R1, R2, R3, R4, nb1, nb2, nb3, da0, da1, da2, da3, c, cc2, cc3, k0, k1, k2, k3, q) (
+  C1 = 0.00000000025; C2 = 0.0000001; C3 = 0.000000047;
+  R1 = 250000; R2 = 250000; R3 = 10000; R4 = 100000;
+  m = exp((m - 1) * 3.4); l = exp((l - 1) * 3.4);
+  nb1 = t*C1*R1 + m*C3*R3 + l*(C1*R2 + C2*R2) + (C1*R3 + C2*R3);
+  nb2 = t*(C1*C2*R1*R4 + C1*C3*R1*R4) - m*m*(C1*C3*R3*R3 + C2*C3*R3*R3)
+     + m*(C1*C3*R1*R3 + C1*C3*R3*R3 + C2*C3*R3*R3)
+     + l*(C1*C2*R1*R2 + C1*C2*R2*R4 + C1*C3*R2*R4)
+     + l*m*(C1*C3*R2*R3 + C2*C3*R2*R3)
+     + (C1*C2*R1*R3 + C1*C2*R3*R4 + C1*C3*R3*R4);
+  nb3 = l*m*(C1*C2*C3*R1*R2*R3 + C1*C2*C3*R2*R3*R4)
+     - m*m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
+     + m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
+     + t*C1*C2*C3*R1*R3*R4 - t*m*C1*C2*C3*R1*R3*R4
+     + t*l*C1*C2*C3*R1*R2*R4;
+  da0 = 1;
+  da1 = (C1*R1 + C1*R3 + C2*R3 + C2*R4 + C3*R4) + m*C3*R3 + l*(C1*R2 + C2*R2);
+  da2 = m*(C1*C3*R1*R3 - C2*C3*R3*R4 + C1*C3*R3*R3 + C2*C3*R3*R3)
+     + l*m*(C1*C3*R2*R3 + C2*C3*R2*R3)
+     - m*m*(C1*C3*R3*R3 + C2*C3*R3*R3)
+     + l*(C1*C2*R2*R4 + C1*C2*R1*R2 + C1*C3*R2*R4 + C2*C3*R2*R4)
+     + (C1*C2*R1*R4 + C1*C3*R1*R4 + C1*C2*R3*R4 + C1*C2*R1*R3 + C1*C3*R3*R4 + C2*C3*R3*R4);
+  da3 = l*m*(C1*C2*C3*R1*R2*R3 + C1*C2*C3*R2*R3*R4)
+     - m*m*(C1*C2*C3*R1*R3*R3 + C1*C2*C3*R3*R3*R4)
+     + m*(C1*C2*C3*R3*R3*R4 + C1*C2*C3*R1*R3*R3 - C1*C2*C3*R1*R3*R4)
+     + l*C1*C2*C3*R1*R2*R4
+     + C1*C2*C3*R1*R3*R4;
+  c = 2 * fs; cc2 = c * c; cc3 = cc2 * c;
+  k0 = -da0 - da1*c - da2*cc2 - da3*cc3;
+  k1 = -3*da0 - da1*c + da2*cc2 + 3*da3*cc3;
+  k2 = -3*da0 + da1*c + da2*cc2 - 3*da3*cc3;
+  k3 = -da0 + da1*c - da2*cc2 + da3*cc3;
+  q = 1 / k0;
+  b0 = (-nb1*c - nb2*cc2 - nb3*cc3) * q;
+  b1 = (-nb1*c + nb2*cc2 + 3*nb3*cc3) * q;
+  b2 = (nb1*c + nb2*cc2 - 3*nb3*cc3) * q;
+  b3 = (nb1*c - nb2*cc2 + nb3*cc3) * q;
+  a1 = k1 * q; a2 = k2 * q; a3 = k3 * q;
+);
+function fl_tsrun(x) instance(b0, b1, b2, b3, a1, a2, a3, x1, x2, x3, y1, y2, y3) local(y) (
+  y = b0 * x + b1 * x1 + b2 * x2 + b3 * x3 - a1 * y1 - a2 * y2 - a3 * y3;
+  x3 = x2; x2 = x1; x1 = x; y3 = y2; y2 = y1; y1 = y;
+  y;
+);
+
+// ---------- the power stage: push-pull pairs inside a negative-feedback loop ----------
+// y = S * (th(A (u - B y) / S + d) - th(d)), solved per sample (two Newton steps from the last value); S = the supply
+fl_paA = 8; fl_paB = 0.4;
+function fl_paset(d) instance(pd, t0) ( pd = d; t0 = fl_th(d); );
+function fl_pa(u) instance(y, sup, sbase, env, pd, t0) local(v, g, a) (
+  loop(2,
+    v = fl_paA * (u - fl_paB * y) / sup + pd;
+    g = y - sup * (fl_th(v) - t0);
+    y -= g / (1 + fl_paA * fl_paB * fl_thd(v));
+  );
+  // supply sag: only when the valves are pushed hard
+  a = abs(y);
+  env += (a - env) * (a > env ? fl_sga : fl_sgr);
+  sup = sbase * (1 - 0.14 * min(max(env - 0.55, 0) * 2.2, 1));
+  y;
+);
+// output transformer: the core saturates on flux (integrate, saturate, differentiate)
+function fl_ot(x) instance(ph, sp) local(s, y) (
+  ph = ph * fl_xlk + x * fl_xc; s = fl_th(ph * 0.55) / 0.55; y = (s - sp * fl_xlk) / fl_xc; sp = s; y;
+);
+
+// ---------- one side of the amp, at twice the rate: x in, the speaker drive out; rv = reverb return, tg = tremolo ----------
+function fl_core(x, rv, tg) instance(v1a, cs1, ts1, vo1, v1b, cs2, hp1, v2a, cs3, ts2, vo2, v2b, cs4, hp2,
+                                     sh1, drv, sl1, sh2, v4b, hp3, pin, pa, ot, sacc) local(n, v, u, m) (
+  x += fl_dn;
+  n = 0;
+  fl_nrun ? (                                          // NORMAL
+    u = cs1.fl_1run(x * fl_gN * fl_kin);
+    u = -70 * v1a.fl_strun(u);
+    u = ts1.fl_tsrun(u);
+    u = vo1.fl_volrun(u);
+    u = cs2.fl_1run(u);
+    n = -45 * v1b.fl_strun(u);
+    n = hp1.fl_1run(n);
+  );
+  v = 0;
+  fl_vrun ? (                                          // VIBRATO
+    u = cs3.fl_1run(x * fl_gV * fl_kin);
+    u = -70 * v2a.fl_strun(u);
+    u = ts2.fl_tsrun(u);
+    u = vo2.fl_volrun(u);
+    u = cs4.fl_1run(u);
+    u = -45 * v2b.fl_strun(u);
+    u = hp2.fl_1run(u);
+    // the reverb send: its own driver valve, then the tank's input transducer
+    m = sh1.fl_1run(u * fl_ksend);
+    m = drv.fl_strun(m);
+    m = sh2.am_run(sl1.am_run(m));
+    sacc += m * 0.5;                                   // the tank runs at the host rate
+    // the mixer stage: the dry signal and the reverb return, then the optical cell
+    v = -30 * v4b.fl_strun(u * 0.035 + rv * fl_rvg);
+    v = hp3.fl_1run(v) * tg;
+    v = -v;                                            // polarity matched to NORMAL, so JUMPER adds up
+  );
+  m = (n + v) * 0.026;                                 // the mixing resistors into the phase inverter
+  m = pin.fl_syrun(m);
+  m = pa.fl_pa(m);
+  ot.fl_ot(m);
+);
+
+// ---------- reverb tank: three springs, each a delay with a low-pass and a dispersive chirp in its loop ----------
+// the springs' memory and state: fl_tb (buffers), fl_tn (lengths), fl_tgk (loop gains), fl_tab (chirp buffers), fl_tst
+function fl_spr(x, i) local(b, s, st, v) (
+  b = fl_tb[i]; s = b[(fl_tw - fl_tn[i]) & fl_tm];
+  st = fl_tst + i; st[0] += (s - st[0]) * fl_tlc; s = st[0];
+  b = fl_tab[i] + fl_tp;
+  loop(8, st = b[0]; v = s - fl_ta * st; s = fl_ta * v + st; b[0] = v; b += fl_tK; );
+  b = fl_tb[i]; b[fl_tw] = min(max(x + fl_tgk[i] * s + fl_dn, -3), 3);
+  s;
+);
+function fl_tank(x, k) instance(lo, hi) local(o) (
+  o = fl_spr(x, k) - fl_spr(x, k + 1) + fl_spr(-x, k + 2) * 0.9;
+  lo += (o - lo) * fl_tol;                             // the output transducer: dark, no boom
+  hi += (lo - hi) * fl_toh;
+  (lo - hi) * fl_trg;
+);
+
+// ---------- the speakers: one 12" each side, open back, not quite matched ----------
+function fl_cabset(side) instance(c1, c2, c3, c4, c5, c6, c7) local(lp) (
+  side == 0 ? (
+    c1.am_bq(1, 78, 0.75, 0, srate);  c2.am_bq(2, 105, 1.2, 2.0, srate); c3.am_bq(2, 480, 0.9, -2.5, srate);
+    c4.am_bq(2, 2400, 1.4, 3.5, srate); lp = 5200; c7.am_bq(2, 7600, 2.2, -8, srate);
+  ) : (
+    c1.am_bq(1, 84, 0.8, 0, srate);   c2.am_bq(2, 96, 1.3, 2.5, srate);  c3.am_bq(2, 560, 1.0, -2.0, srate);
+    c4.am_bq(2, 3000, 1.7, 4.0, srate); lp = 5700; c7.am_bq(2, 8200, 2.2, -7, srate);
+  );
+  c5.am_bq(0, lp, 0.5412, 0, srate); c6.am_bq(0, lp, 1.3066, 0, srate);
+);
+function fl_cabrun(x) instance(c1, c2, c3, c4, c5, c6, c7) (
+  c7.am_run(c6.am_run(c5.am_run(c4.am_run(c3.am_run(c2.am_run(c1.am_run(x)))))));
+);
+
+// ---------- memory and everything that depends on the sample rate ----------
+function fl_mem() local(i, n) (
+  nextmem = 0;
+  fl_tsz = fl_p2(0.08 * srate); fl_tm = fl_tsz - 1;
+  fl_tK = max(1, floor(srate / 8600 + 0.5));           // the chirp: dispersion up to about 4.3 kHz
+  fl_tb = alloc(6); fl_tn = alloc(6); fl_tgk = alloc(6); fl_tab = alloc(6); fl_tst = alloc(6);
+  i = 0; loop(6, fl_tb[i] = alloc(fl_tsz); fl_tab[i] = alloc(8 * fl_tK); i += 1; );
+  ost_init(alloc(4096));
+);
+// the fixed filters of one side
+function fl_fix(fs2) instance(cs1, cs2, hp1, cs3, cs4, hp2, sh1, sl1, sh2, hp3, pa) (
+  cs1.fl_shset(4.2, 1.9, fs2); cs2.fl_shset(7.8, 1.6, fs2); hp1.fl_hpset(16, fs2);
+  cs3.fl_shset(4.2, 1.9, fs2); cs4.fl_shset(7.8, 1.6, fs2); hp2.fl_hpset(16, fs2);
+  sh1.fl_hpset(260, fs2); sl1.am_bq(0, 4800, 0.7, 0, fs2); sh2.am_bq(1, 380, 0.7, 0, fs2);
+  hp3.fl_hpset(14, fs2);
+  pa.sup = 1; pa.sbase = 1;
+);
+
+function fl_srinit() local(i, ms, fs2) (
+  fl_sr = srate; fs2 = 2 * srate;
+  // spring lengths (ms): left tank, right tank (tuned apart so the two sides decorrelate)
+  i = 0;
+  loop(6,
+    ms = i == 0 ? 33.1 : i == 1 ? 38.9 : i == 2 ? 45.7 : i == 3 ? 35.3 : i == 4 ? 41.3 : 47.9;
+    fl_tn[i] = floor(ms * 0.001 * srate);
+    fl_tgk[i] = 10 ^ (-3 * (ms + 3) * 0.001 / 3.5);       // about 2.1 s, with the loop losses
+    i += 1;
+  );
+  fl_ta = 0.7;
+  fl_tlc = 1 - exp(-2 * $pi * 4200 / srate);
+  fl_tol = 1 - exp(-2 * $pi * 3000 / srate); fl_toh = 1 - exp(-2 * $pi * 180 / srate);
+  fl_trg = 1.0;
+  fl_tw = 0; fl_tp = 0;
+  memset(fl_tst, 0, 6);
+  // the amp
+  upL.am_aa(); dnL.am_aa(); upR.am_aa(); dnR.am_aa();
+  cL.fl_fix(fs2); cR.fl_fix(fs2);
+  fl_xc = 2 * $pi * 40 / fs2; fl_xlk = 1 - 2 * $pi * 5 / fs2;
+  fl_sga = 1 - exp(-1 / (0.012 * fs2)); fl_sgr = 1 - exp(-1 / (0.16 * fs2));
+  cabL.fl_cabset(0); cabR.fl_cabset(1);
+  fl_smk = 1 - exp(-1 / (0.02 * srate));
+  fl_ldra = 1 - exp(-1 / (0.004 * srate)); fl_ldrr = 1 - exp(-1 / (0.045 * srate));
+  fl_vhold = floor(5 * srate);
+  in_init(); in_setup(0, 0);
+  fl_lts = -1;
+);
+// ---------- settings ----------
+fl_kin = 1 / 1.3;                                      // input (0 dBFS = about 1 V at the jack) to the first grid
+fl_ksend = 0.05;
+function update() (
+  fl_gNt = slider2 >= 0.5 || slider1 < 0.5 ? 1 : 0;
+  fl_gVt = slider2 >= 0.5 || slider1 >= 0.5 ? 1 : 0;
+  fl_mt = slider17 >= 0.5;
+  fl_stt = slider16 >= 0.5;
+  fl_rate = 1.5 * 6 ^ ((slider14 - 1) / 9);            // SPEED: 1.5 - 9 Hz
+  fl_Dt = 10 * sqr((slider15 - 1) / 9);                 // INTENSITY: the cell's pull (up to about -21 dB)
+  fl_rvt = 1.5 * ((slider13 - 1) / 9) ^ 1.6;            // REVERB pot
+  in_setup(slider18, slider19);
+  drift_macro(slider20);
+  fl_ot_ = 10 ^ (slider21 / 20) * fl_kout;
+  ost_setup(slider22 / 100, slider23 / 100, slider24, slider25, slider26, slider27);
+);
+fl_kout = 0.75;
+
+// the tone stacks, VOLUME and BRIGHT follow the knobs smoothly (recomputed every block from glided values)
+function fl_tone(force) local(k, ch) (
+  k = force ? 1 : 1 - exp(-samplesblock / (0.03 * srate));
+  fl_s3 += (slider3 - fl_s3) * k; fl_s4 += (slider4 - fl_s4) * k; fl_s5 += (slider5 - fl_s5) * k; fl_s6 += (slider6 - fl_s6) * k;
+  fl_s7 += ((slider7 >= 0.5) - fl_s7) * k;
+  fl_s8 += (slider8 - fl_s8) * k; fl_s9 += (slider9 - fl_s9) * k; fl_s10 += (slider10 - fl_s10) * k; fl_s11 += (slider11 - fl_s11) * k;
+  fl_s12 += ((slider12 >= 0.5) - fl_s12) * k;
+  fl_rvg += (fl_rvt - fl_rvg) * k;
+  ch = fl_s3 + 2 * fl_s4 + 3 * fl_s5 + 5 * fl_s6 + 7 * fl_s7 + 11 * fl_s8 + 13 * fl_s9 + 17 * fl_s10 + 19 * fl_s11 + 23 * fl_s12;
+  force || abs(ch - fl_lts) > 0.00001 ? (
+    fl_lts = ch;
+    cL.ts1.fl_tsset((fl_s4 - 1) / 9, (fl_s5 - 1) / 9, (fl_s6 - 1) / 9, 2 * srate);
+    cL.ts2.fl_tsset((fl_s9 - 1) / 9, (fl_s10 - 1) / 9, (fl_s11 - 1) / 9, 2 * srate);
+    cL.vo1.fl_volset((fl_s3 - 1) / 9, fl_s7, 2 * srate);
+    cL.vo2.fl_volset((fl_s8 - 1) / 9, fl_s12, 2 * srate);
+    cR.ts1.b0 = cL.ts1.b0; cR.ts1.b1 = cL.ts1.b1; cR.ts1.b2 = cL.ts1.b2; cR.ts1.b3 = cL.ts1.b3;
+    cR.ts1.a1 = cL.ts1.a1; cR.ts1.a2 = cL.ts1.a2; cR.ts1.a3 = cL.ts1.a3;
+    cR.ts2.b0 = cL.ts2.b0; cR.ts2.b1 = cL.ts2.b1; cR.ts2.b2 = cL.ts2.b2; cR.ts2.b3 = cL.ts2.b3;
+    cR.ts2.a1 = cL.ts2.a1; cR.ts2.a2 = cL.ts2.a2; cR.ts2.a3 = cL.ts2.a3;
+    cR.vo1.k = cL.vo1.k; cR.vo1.kb = cL.vo1.kb; cR.vo1.hb0 = cL.vo1.hb0; cR.vo1.ha1 = cL.vo1.ha1;
+    cR.vo2.k = cL.vo2.k; cR.vo2.kb = cL.vo2.kb; cR.vo2.hb0 = cL.vo2.hb0; cR.vo2.ha1 = cL.vo2.ha1;
+  );
+);
+
+// the valves' operating points (DRIFT moves them); each side has its own wander
+function fl_bias(w1, w2, w3, w4) instance(v1a, v1b, v2a, v2b, v4b, drv, pin, pa, sp) local(a) (
+  a = dm_a;
+  v1a.fl_stset(-0.30 + 0.05 * a * w1); v1b.fl_stset(-0.25 + 0.05 * a * w2);
+  v2a.fl_stset(-0.30 + 0.05 * a * w2); v2b.fl_stset(-0.25 + 0.05 * a * w1);
+  v4b.fl_stset(-0.20 + 0.05 * a * w3); drv.fl_stset(-0.10 + 0.04 * a * w3);
+  pin.fl_syset(0.04 + 0.03 * a * w4);
+  pa.fl_paset(0.025 * a * w4);                         // the power valves drift out of balance
+  pa.sbase = 1 + 0.012 * a * w3;                        // the supply breathes
+);
+
+// ---------- presets (the input and output sections are left alone) ----------
+function fl_set(ch, jp, nv, nt, nm, nb, nbr, vv, vt, vm, vb, vbr, rv, sp, it, st, mo, df) (
+  slider1 = ch; slider2 = jp; slider3 = nv; slider4 = nt; slider5 = nm; slider6 = nb; slider7 = nbr;
+  slider8 = vv; slider9 = vt; slider10 = vm; slider11 = vb; slider12 = vbr;
+  slider13 = rv; slider14 = sp; slider15 = it; slider16 = st; slider17 = mo; slider20 = df;
+  slider_automate(131071 + 524288);                    // sliders 1-17 and 20
+);
+function load_preset(p) (
+  //               CH JP  N:VOL TRE  MID  BAS BR   V:VOL TRE  MID  BAS BR   REV  SPD  INT ST MO DRIFT
+  p == 1  ? fl_set(1, 0,   4,   6,   5,   4,   0,   4,   6,   5,   4,   0,   3,   5,   1,  0, 0, 50) :  // Init
+  p == 2  ? fl_set(1, 0,   4,   6,   5,   4,   0, 3.5, 7.5,   4, 3.5,   1, 2.5,   5,   1,  0, 0, 40) :  // Sparkle Clean
+  p == 3  ? fl_set(1, 0,   4,   6,   5,   4,   0,   5, 7.5,   6, 3.5,   1, 8.5,   5,   1,  0, 0, 50) :  // Surf Reverb
+  p == 4  ? fl_set(0, 0, 5.5,   8,   4, 4.5,   1,   4,   6,   5,   4,   0,   3,   5,   1,  0, 0, 45) :  // Country Twang
+  p == 5  ? fl_set(1, 0,   4,   6,   5,   4,   0,   4, 3.5,   6,   6,   0,   2,   5,   1,  0, 0, 40) :  // Jazz Warm
+  p == 6  ? fl_set(1, 0,   4,   6,   5,   4,   0,   4,   6,   5, 4.5,   0,   4, 3.5, 5.5,  0, 0, 50) :  // Tremolo Ballad
+  p == 7  ? fl_set(1, 0,   4,   6,   5,   4,   0, 4.5, 6.5,   5,   4,   0, 3.5, 5.5,   7,  1, 0, 50) :  // Stereo Throb
+  p == 8  ? fl_set(1, 0,   4,   6,   5,   4,   0, 7.5,   6, 6.5,   4,   1, 2.5,   5,   1,  0, 0, 60) :  // Pushed Edge
+  p == 9  ? fl_set(1, 1,   6,   5,   7,   5,   0,   5, 6.5,   5,   4,   1, 2.5,   5,   1,  0, 0, 50) :  // Jumpered Fat
+  p == 10 ? fl_set(1, 0,   4,   6,   5,   4,   0, 3.5, 5.5,   5,   5,   0,   2,   5,   1,  0, 0, 40) :  // Keys Clean
+  p == 11 ? fl_set(1, 0,   4,   6,   5,   4,   0,   4, 5.5,   5,   5,   0, 2.5, 4.5,   6,  1, 0, 45) :  // Keys Trem
+  p == 12 ? fl_set(1, 0,   4,   6,   5,   4,   0, 6.5, 6.5,   6, 4.5,   0, 2.5,   5,   1,  0, 0, 55) :  // Edge of Breakup
+  p == 13 ? (                                           // Reset all to defaults
+    fl_set(1, 0, 4, 6, 5, 4, 0, 4, 6, 5, 4, 0, 3, 5, 1, 0, 0, 50);
+    slider18 = 0; slider19 = 0; slider21 = 0; slider22 = 0; slider23 = 30; slider24 = 120; slider25 = 6000;
+    slider26 = -0.3; slider27 = 1;
+    slider_automate(134217727);                         // sliders 1-27
+  );
+);
+
+// ---------- state ----------
+function fl_start() (
+  fl_mem(); fl_srinit(); update(); fl_tone(1);
+  cL.fl_bias(0, 0, 0, 0); cR.fl_bias(0, 0, 0, 0);
+  fl_gN = fl_gNt; fl_gV = fl_gVt; fl_mn = fl_mt; fl_o = fl_ot_; fl_D = fl_Dt; fl_vh = fl_vhold;
+  fl_rL = fl_rR = fl_rL1 = fl_rR1 = 0; fl_ph = 0; fl_g1 = fl_g2 = 0;
+);
+fl_dn = 0.000000000000000001;
+fl_start();
+ostL.ost_ch_init(); ostR.ost_ch_init();
+dw1.drift_init(0.8 + rand(0.5)); dw2.drift_init(0.8 + rand(0.5)); dw3.drift_init(0.8 + rand(0.5)); dw4.drift_init(0.8 + rand(0.5));
+dw5.drift_init(0.8 + rand(0.5)); dw6.drift_init(0.8 + rand(0.5)); dw7.drift_init(0.8 + rand(0.5)); dw8.drift_init(0.8 + rand(0.5));
+dwr.drift_init(0.8 + rand(0.5));
+fl_pkL = fl_pkR = 0;
+
+ui_thm = 5; ui_hw = 1;                                  // house keycaps for the preset bar and size picker
+!ui_dflt ? ( ui_sz = 2; pr_cur = 1; );                  // new instances open in Large, on Init
+ui_dflt = 1;
+
+@slider
+update();
+
+@block
+srate != fl_sr ? fl_start();
+update();
+fl_tone(0);
+// DRIFT: valve bias, supply and power-valve balance per side, and the tremolo rate
+fl_di = 0.2 * dm_s * samplesblock / srate;
+cL.fl_bias(dw1.drift_tick(fl_di), dw2.drift_tick(fl_di), dw3.drift_tick(fl_di), dw4.drift_tick(fl_di));
+cR.fl_bias(dw5.drift_tick(fl_di), dw6.drift_tick(fl_di), dw7.drift_tick(fl_di), dw8.drift_tick(fl_di));
+fl_rw = 1 + 0.025 * dm_a * dwr.drift_tick(fl_di * 1.5);
+fl_isr = fl_rate * fl_rw / srate;
+
+@serialize
+file_var(0, ui_sz);
+file_var(0, pr_cur);
+
+@sample
+in_process(spl0, spl1);
+fl_xl = in_l; fl_xr = in_r;
+// MONO IN, the channel select / JUMPER (glides, no clicks)
+fl_mn += (fl_mt - fl_mn) * fl_smk;
+fl_xm = 0.5 * (fl_xl + fl_xr); fl_xl += (fl_xm - fl_xl) * fl_mn; fl_xr += (fl_xm - fl_xr) * fl_mn;
+fl_gN += (fl_gNt - fl_gN) * fl_smk; fl_gV += (fl_gVt - fl_gV) * fl_smk;
+fl_nrun = fl_gN > 0.00001;
+fl_gV > 0.00001 ? fl_vh = fl_vhold : fl_vh > 0 ? fl_vh -= 1;
+fl_vrun = fl_vh > 0;                                   // the vibrato channel keeps running while its reverb rings out
+fl_dn = -fl_dn;
+
+// the tremolo: the oscillator flashes the lamp, the cell darkens fast and recovers slowly
+fl_D += (fl_Dt - fl_D) * fl_smk;
+fl_st += (fl_stt - fl_st) * fl_smk;
+fl_ph += fl_isr; fl_ph >= 1 ? fl_ph -= 1;
+fl_s = sin(2 * $pi * fl_ph);
+fl_lv = max((fl_s - 0.15) * 1.1764706, 0); fl_lv *= sqrt(fl_lv);
+fl_g1 += (fl_lv - fl_g1) * (fl_lv > fl_g1 ? fl_ldra : fl_ldrr);
+fl_lv = max((-fl_s - 0.15) * 1.1764706, 0); fl_lv *= sqrt(fl_lv);  // the opposite phase (STEREO TREM)
+fl_g2 += (fl_lv - fl_g2) * (fl_lv > fl_g2 ? fl_ldra : fl_ldrr);
+fl_tgL = 1 / (1 + fl_D * fl_g1);
+fl_tgR = 1 / (1 + fl_D * (fl_g1 + (fl_g2 - fl_g1) * fl_st));
+
+// the reverb tanks (host rate; fed with the send of the last sample)
+fl_vrun ? (
+  fl_rL1 = fl_rL; fl_rR1 = fl_rR;
+  fl_rL = tkL.fl_tank(cL.sacc, 0); fl_rR = tkR.fl_tank(cR.sacc, 3);
+  cL.sacc = 0; cR.sacc = 0;
+  fl_tw = (fl_tw + 1) & fl_tm; fl_tp += 1; fl_tp >= fl_tK ? fl_tp = 0;
+);
+
+// the amps at twice the rate
+fl_z = upL.am_aa_run(fl_xl * 2); dnL.am_aa_run(cL.fl_core(fl_z, 0.5 * (fl_rL + fl_rL1), fl_tgL));
+fl_z = upR.am_aa_run(fl_xr * 2); dnR.am_aa_run(cR.fl_core(fl_z, 0.5 * (fl_rR + fl_rR1), fl_tgR));
+fl_z = upL.am_aa_run(0); fl_yl = dnL.am_aa_run(cL.fl_core(fl_z, fl_rL, fl_tgL)) * 2;
+fl_z = upR.am_aa_run(0); fl_yr = dnR.am_aa_run(cR.fl_core(fl_z, fl_rR, fl_tgR)) * 2;
+
+// the speakers, the output section
+fl_yl = cabL.fl_cabrun(fl_yl); fl_yr = cabR.fl_cabrun(fl_yr);
+fl_o += (fl_ot_ - fl_o) * fl_smk;
+fl_yl = ostL.ost_band(fl_yl) * fl_o; fl_yr = ostR.ost_band(fl_yr) * fl_o;
+ost_out(fl_yl, fl_yr);
+spl0 = abs(ost_l) < 0.00000000000000000001 ? 0 : ost_l;
+spl1 = abs(ost_r) < 0.00000000000000000001 ? 0 : ost_r;
+fl_pkL = max(fl_pkL, abs(spl0)); fl_pkR = max(fl_pkR, abs(spl1));
+
+@gfx 1000 300
+ui_begin(1000, 300);
+ui_col(0x101010); gfx_rect(0, 0, gfx_w, gfx_h);
+pk_end();
+ui_end();
