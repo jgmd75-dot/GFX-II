@@ -561,8 +561,9 @@ function lcd(x, y, w, h) (
     gfx_setfont(10); TX(x + 16, y + 10, #lcdn);
     gfx_setfont(9); TX(x + 16, y + 32, #lcdv);
   ) : (
-    gfx_setfont(10); sprintf(#lcd1, "PRESET %02d/12", slider1 + 1); TX(x + 16, y + 10, #lcd1);
-    gfx_setfont(9); TX(x + 16, y + 32, pname(slider1));
+    lcf_ = 38*qs; gfx_setfont(14, "Courier New", lcf_, 'b'); gfx_measurestr(pname(slider1), lcw_, lch_);
+    lcw_ > (w - 32)*qs ? ( gfx_setfont(14, "Courier New", lcf_*(w - 32)*qs/lcw_, 'b'); gfx_measurestr(pname(slider1), lcw_, lch_); );
+    gfx_x = (x + 16)*qs; gfx_y = (y + h*0.5)*qs - lch_*0.5; gfx_drawstr(pname(slider1));
   );
 );
 

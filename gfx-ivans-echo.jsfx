@@ -210,9 +210,8 @@ pm_ = rd_sq(392, 16, 78, 30, 0, KEY, "PRESETS");
 rd_sq(476, 16, 30, 30, 0, KEY, "◄") ? ( setv(10, (floor(slider10 + 0.5) + 7) % 8); apply_preset(slider10); lastp = slider10; );
 rd_sq(510, 16, 30, 30, 0, KEY, "►") ? ( setv(10, (floor(slider10 + 0.5) + 1) % 8); apply_preset(slider10); lastp = slider10; );
 pk_lcd(548 * sc, 9 * sc, 220 * sc, 46 * sc, 0);
-pk_lcdfont(9, 10 * sc); ui_col(pk_lcdc);
-sprintf(#plcd, "PRESET %02d/08", floor(slider10 + 0.5) + 1); gfx_x = 560 * sc; gfx_y = 15 * sc; gfx_drawstr(#plcd);
-pk_lcdfont(9, 15 * sc); gfx_x = 560 * sc; gfx_y = 30 * sc; gfx_drawstr(pname(slider10));
+ui_col(pk_lcdc); pk_lcdfont(9, 27 * sc); gfx_measurestr(pname(slider10), lcw_, lch_);
+pk_fitstr(pname(slider10), 560 * sc, 32 * sc - lch_ * 0.5, 27 * sc, 198 * sc);
 pm_ || (pressed && drag_id == 0 && mouse_x >= 548 * sc && mouse_x < 768 * sc && mouse_y >= 9 * sc && mouse_y < 55 * sc) ? (
   drag_id = -1;
   strcpy(#pmenu, ""); k_ = 0;
