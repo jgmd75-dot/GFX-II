@@ -36,7 +36,7 @@ desc:GFX MUTO
 // BOTH: DRIFT (valve ageing: slow wander of bias / threshold and recovery, a small L / R mismatch; the vintage
 //   unit's mains hum), 0 - 100 % (50 % = standard). The GFX output stage OFF / CLIP / LIMIT.
 //   Two needle meters: GR (the needle rests at 0 and swings left by the gain reduction in dB) or OUT
-//   (VU ballistics, Pegel 45 calibration: a sine peaking at -18 dBFS reads 0 VU).
+//   (VU ballistics, Meter 45 calibration: a sine peaking at -18 dBFS reads 0 VU).
 //
 // GUI: drag knobs (Shift = fine), mouse wheel, double-click = default. Values show while a knob is touched.
 // PRESETS / LCD = list, the arrows step. S / M / L / ? = size and help.
@@ -203,7 +203,7 @@ mdG1.drift_init(0.8 + rand(0.5)); mdG2.drift_init(0.8 + rand(0.5));
 mdR1.drift_init(0.8 + rand(0.5)); mdR2.drift_init(0.8 + rand(0.5)); mdH.drift_init(1);
 mu_mmA = rand(2) - 1; mu_mmB = rand(2) - 1; mu_mgA = rand(2) - 1; mu_mgB = rand(2) - 1;
 mu_hc = 1; mu_hs = 0;
-// VU needle (output meter): mass + spring + damping, as Pegel 45
+// VU needle (output meter): mass + spring + damping, as Meter 45
 mu_w2 = 13.6 * 13.6; mu_zw = 2 * 0.81 * 13.6; mu_dt = 1 / srate;
 mu_hpal = mu_hpbl = -1;
 mu_setup();
@@ -314,6 +314,28 @@ function mg_val(cx, y, s) local(w, h) (
   ui_col(mg_vcol); gfx_x = cx * sc - w * 0.5; gfx_y = y * sc + 1 * sc; gfx_drawstr(s);
 );
 
+// ---------- MODERN: the house white cap - a thin smooth track, an anti-aliased value arc in the accent colour, a flat
+// satin cap with one soft highlight on its upper-left edge, a thin dark rim, a dark pointer (pixel coordinates);
+// yel = the yellow-capped (HPF) version of the same knob ----------
+function mg_arcw(cx, cy, r, a1, a2, w) local(k) (
+  k = -w * 0.5; loop(max(1, floor(w * 2) + 1), gfx_arc(cx, cy, r + k, a1, a2, 1); k += 0.5; );
+);
+function mg_wcap(cx, cy, r, n, yel) local(rr, a, a0, ca, sa, w, i) (
+  rr = r + 6 * sc; w = 3 * sc; a0 = -0.75 * $pi; a = a0 + n * 1.5 * $pi; ca = sin(a); sa = -cos(a);
+  ui_col(ui_mix(FV, 0x000000, 0.35)); mg_arcw(cx, cy, rr, a0, 0.75 * $pi, 1.3 * sc);
+  n > 0.004 ? (
+    ui_col(mg_acc); mg_arcw(cx, cy, rr, a0, a, w);
+    gfx_circle(cx + sin(a0) * rr, cy - cos(a0) * rr, w * 0.5, 1, 1); gfx_circle(cx + ca * rr, cy + sa * rr, w * 0.5, 1, 1);
+  );
+  ui_cola(0x000000, 0.25); gfx_circle(cx + 1 * sc, cy + 2 * sc, r, 1, 1);
+  ui_col(yel ? 0x6E5408 : 0x50565E); gfx_circle(cx, cy, r, 1, 1);
+  ui_col(yel ? 0xF2C21B : 0xB3B9C0); gfx_circle(cx, cy, r - 1.5 * sc, 1, 1);
+  ui_col(yel ? 0xFADF7A : 0xD9DDE1); mg_arcw(cx, cy, r - 3 * sc, -0.66 * $pi, 0.06 * $pi, 1.4 * sc);
+  ui_col(0x1A1E24); i = -1;
+  loop(3, gfx_line(cx + ca * r * 0.3 - sa * i * 0.7 * sc, cy + sa * r * 0.3 + ca * i * 0.7 * sc,
+                   cx + ca * (r - 3 * sc) - sa * i * 0.7 * sc, cy + sa * (r - 3 * sc) + ca * i * 0.7 * sc, 1); i += 1; );
+);
+
 // ---------- knob: drag (Shift = fine), wheel, double-click = default; ns > 0 = stepped (ns positions) ----------
 // sty: a pk_bkcap style (0 black, 1 machined aluminium, 2 chicken-head), or 20 = small filter-style cap (cap colour)
 function mg_knob(cx, cy, r, idx, lo, hi, def, lg, ns, sty, cap) local(v, n, dx, dy, hov, did, k) (
@@ -340,6 +362,7 @@ function mg_knob(cx, cy, r, idx, lo, hi, def, lg, ns, sty, cap) local(v, n, dx, 
     slider(idx) = v; ui_auto(idx); mouse_wheel = 0;
   );
   v = slider(idx); n = min(max(lg ? log(v / lo) / log(hi / lo) : (v - lo) / (hi - lo), 0), 1);
+  mg_u ? mg_wcap(cx * sc, cy * sc, r * sc, n, cap == 0xF2C21B) :
   sty == 20 ? dy_fcap(cx * sc, cy * sc, r * sc, -0.75 * $pi + n * 1.5 * $pi, cap) : (
     pk_kstyle = sty; pk_kcol = cap; pk_ptr = sty == 1 ? -1 : 0xF2EEE4; pk_ink = 0xF2EEE4;
     sty == 1 ? pk_ptr = 0x141416;
@@ -350,14 +373,16 @@ function mg_knob(cx, cy, r, idx, lo, hi, def, lg, ns, sty, cap) local(v, n, dx, 
   mg_act ? ( ui_cola(0xFFFFFF, 0.07); gfx_circle(cx * sc, cy * sc, (r + 3) * sc, 1, 1); );
   n;
 );
-// printed scale: nt ticks over the travel; every mj-th one longer
+// printed scale: nt ticks over the travel; every mj-th one longer (MODERN: the knob's own ring takes their place)
 function mg_ticks(cx, cy, r, nt, mj) local(i, a, l) (
+  !mg_u ? (
   ui_col(mg_ink);
   i = 0; loop(nt,
     a = -0.75 * $pi + i / (nt - 1) * 1.5 * $pi; l = i % mj ? 5 : 9;
     gfx_line((cx + sin(a) * (r + 4)) * sc, (cy - cos(a) * (r + 4)) * sc, (cx + sin(a) * (r + 4 + l)) * sc, (cy - cos(a) * (r + 4 + l)) * sc, 1);
     l == 9 ? gfx_line((cx + sin(a) * (r + 4)) * sc + 0.7, (cy - cos(a) * (r + 4)) * sc, (cx + sin(a) * (r + 4 + l)) * sc + 0.7, (cy - cos(a) * (r + 4 + l)) * sc, 1);
     i += 1; );
+  );
 );
 // a number printed round a knob at position n (0..1)
 function mg_num(cx, cy, r, n, s, sz) local(a, w, h) (
@@ -575,13 +600,13 @@ mg_u == 0 ? (
 
   // lower row: SC HPF x2, MODE | LINK, IRON, MIX, METER | AUTO, DRIFT, OUTPUT, OUT stage
   mg_i = 0; loop(2,
-    mg_x = 40 + mg_i * 74; mg_ix = 14 + mg_i;
+    mg_x = 44 + mg_i * 72; mg_ix = 14 + mg_i;
     mg_ticks(mg_x, 274, 17, 5, 1);
     mg_knob(mg_x, 274, 17, mg_ix, 0, 4, 0, 0, 5, 20, 0xF2C21B);
     mg_lbl(mg_x, 296, mg_ms ? (mg_i ? "HPF S" : "HPF M") : (mg_i ? "HPF R" : "HPF L"), 13);
     mg_hv = slider(mg_ix); mg_act ? mg_val(mg_x, 214, mg_hv < 0.5 ? "OFF" : mg_hv < 1.5 ? "60 Hz" : mg_hv < 2.5 ? "90 Hz" : mg_hv < 3.5 ? "150 Hz" : "250 Hz");
     mg_i += 1; );
-  mg_lbl(77, 314, "SIDE-CHAIN", 11);
+  mg_lbl(80, 314, "SIDE-CHAIN", 11);
   mg_key(180, 242, 92, 22, slider16 == 0, mg_acc, "STEREO", 12) ? ( slider16 = 0; ui_auto(16); );
   mg_key(180, 266, 92, 22, slider16 == 1, mg_acc, "DUAL MONO", 12) ? ( slider16 = 1; ui_auto(16); );
   mg_key(180, 290, 92, 22, slider16 == 2, mg_acc, "M-S", 12) ? ( slider16 = 2; ui_auto(16); );

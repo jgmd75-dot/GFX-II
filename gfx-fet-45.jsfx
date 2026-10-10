@@ -6,7 +6,7 @@ desc:GFX Fet 45
 //
 // FET 45 (from Feldeffekt). A peak limiting amplifier in the spirit of the classic ultra-fast FET limiters of
 // the late 60s / 70s, dressed as state radio / TV transmission gear of the mid-80s (fourth of the family with
-// Pegel 45, Stimm 45 and Raum 45). The FET is a voltage-controlled resistor; the threshold is fixed and the
+// Meter 45, Tuner 45 and Raum 45). The FET is a voltage-controlled resistor; the threshold is fixed and the
 // amount of limiting is set by how hard INPUT drives the FET, balanced afterwards by OUTPUT.
 //
 // SIGNAL FLOW
@@ -42,7 +42,7 @@ desc:GFX Fet 45
 //   Output transformer: low-frequency saturation, only at high levels (about 0.4 % at 50 Hz, -6 dBFS).
 //
 // METER  GR (needle rests at 0 and swings back to the left), OUT and IN (after INPUT; VU: a sine peaking at -18 dBFS reads 0 VU,
-//        the needle ballistics of Pegel 45), OFF. ENAMEL draws a needle meter (GR read on the printed VU scale, as on
+//        the needle ballistics of Meter 45), OFF. ENAMEL draws a needle meter (GR read on the printed VU scale, as on
 //        the hardware); VFD and MATRIX draw a ladder (GR 0 .. -20 dB, 1 dB blocks, lit from the right) and a readout.
 // MIX    parallel compression (100 % = all FET). DRIFT (0 - 100 %, 50 % = standard): FET bias wander - the threshold
 //        wanders by up to about +/-0.5 dB, the release timing by +/-8 %, and the two channels track the gain
@@ -244,7 +244,7 @@ function fd_srinit() (
 );
 fd_srinit();
 fd_kap = 0.7;                                           // how much of the slow stage's memory holds the fast stage
-fd_vw = 13.6; fd_vz = 0.81;                             // VU needle (as Pegel 45): natural frequency, damping
+fd_vw = 13.6; fd_vz = 0.81;                             // VU needle (as Meter 45): natural frequency, damping
 fd_vw2 = fd_vw * fd_vw; fd_vzw = 2 * fd_vz * fd_vw;
 fd_vref = 1.5707963 / 0.125892541;                      // rectified x pi/2, 0 VU = a sine peaking at -18 dBFS
 drT.drift_init(0.8 + rand(0.4)); drR.drift_init(0.8 + rand(0.4));
@@ -339,7 +339,7 @@ fd_dl = fd_rbL[fd_wp + fd_LAT]; fd_dr = fd_rbR[fd_wp + fd_LAT];
 ost_out(fd_dl + (fd_ol - fd_dl) * fd_mix, fd_dr + (fd_or - fd_dr) * fd_mix);
 spl0 = ost_l; spl1 = ost_r;
 
-// ---------- the meter's needle (mass + spring + damping, as Pegel 45) ----------
+// ---------- the meter's needle (mass + spring + damping, as Meter 45) ----------
 fd_md = fd_mtr == 0 ? 0.5 * (fd_kgl + fd_kgr) :
         fd_mtr == 1 ? max(abs(spl0), abs(spl1)) * fd_vref :
         fd_mtr == 2 ? max(abs(fd_xl), abs(fd_xr)) * fd_vref : 0;   // IN: after INPUT (what drives the FET)
@@ -349,7 +349,7 @@ fd_vv += (fd_vw2 * (fd_md - fd_vy) - fd_vzw * fd_vv) * fd_vdt; fd_vy += fd_vv * 
 ui_begin(820, 340);
 
 // =====================================================================
-// Theme colours (the family palette: Pegel 45 / Stimm 45 / Raum 45)
+// Theme colours (the family palette: Meter 45 / Tuner 45 / Raum 45)
 // =====================================================================
 fdv_th = slider10 | 0; fdv_m = slider6 | 0;
 fdv_th == 0 ? (                                         // ENAMEL: light industrial laboratory
@@ -409,7 +409,7 @@ function fd_rtxt(rx, cy, s) local(tw, th) ( gfx_measurestr(s, tw, th); gfx_x = r
 function fd_lbl(x, y, s) ( gfx_setfont(11); ui_col(FDI2); fd_txt(x, y, s); );
 function fd_hov(x, y, w, h) ( mouse_x >= x * sc && mouse_x < (x + w) * sc && mouse_y >= y * sc && mouse_y < (y + h) * sc; );
 
-// a flat, sharp-cornered lit key in the theme's manner (as on Pegel 45); returns 1 when clicked
+// a flat, sharp-cornered lit key in the theme's manner (as on Meter 45); returns 1 when clicked
 function fd_key(x, y, w, h, lbl, on) local(hov, hit) (
   hov = fd_hov(x, y, w, h);
   hit = hov && pressed && drag_id == 0; hit ? drag_id = -1;

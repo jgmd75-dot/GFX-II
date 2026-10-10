@@ -119,9 +119,9 @@ AMPS & DRIVE
   PenguinDrive    gfx-penguindrive.jsfx
   Preamp          gfx-preamp.jsfx
   Preamp Q        gfx-preamp-q.jsfx
-  Stimm 45        gfx-stimm-45.jsfx
   Ten Rack        gfx-ten-rack.jsfx
   TS-7            gfx-ts7.jsfx
+  Tuner 45        gfx-tuner-45.jsfx
 
 DYNAMICS
   Compressor      gfx-compressor.jsfx
@@ -197,8 +197,8 @@ MASTERING
   KRT-45          gfx-krt-45.jsfx
   Master EQ       gfx-master-eq.jsfx
   MasterSuite     gfx-mastersuite.jsfx
+  Meter 45        gfx-meter-45.jsfx
   Optimiser       gfx-optimiser.jsfx
-  Pegel 45        gfx-pegel-45.jsfx
   Quad22          gfx-quad22.jsfx
 
 SUMMING

@@ -1,10 +1,10 @@
-desc:GFX Pegel 45
+desc:GFX Meter 45
 //tags: meter ppm vu peak correlation phase broadcast mastering analyser
 //author: JGWizrad / Garden FX (GFX)
 //
 // Requires gfx-ui and gfx-panel (.jsfx-inc) in the same folder.
 //
-// PEGEL 45. A stereo level meter in the spirit of the 1980s / 90s Eastern European broadcast and studio test
+// METER 45. A stereo level meter in the spirit of the 1980s / 90s Eastern European broadcast and studio test
 // gear: baked-enamel needle meters, vacuum-fluorescent bargraphs and chunky LED-block ladders.
 // The audio is NOT touched: the plug-in only reads spl0 / spl1 and never writes them, so the output is
 // bit-exact with the input. No output stage is needed (it is a meter), and the latency is 0.
@@ -52,7 +52,7 @@ out_pin:left output
 out_pin:right output
 
 @init
-#ui_man = "gfx-pegel-45";                               // the ? pop-up links to this manual
+#ui_man = "gfx-meter-45";                               // the ? pop-up links to this manual
 ext_nodenorm = 1;                                       // no anti-denormal noise added to the input: the pass-through stays bit-exact
 
 // ---------- helpers ----------
@@ -303,8 +303,8 @@ ui_col(pgv_th == 0 ? PGI : PGA); pg_r(0, 54, 760, 2);
 // GFX badge and the name
 ui_col(pgv_th == 0 ? PGI : pgv_th == 1 ? PGI : PGA); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(pgv_th == 0 ? PGF : 0x111213); ui_text(31 * sc, 21.5 * sc, "GFX");
-gfx_setfont(6); ui_col(pgv_th == 0 ? PGI : PGI); pg_txt(58, 12, "PEGEL 45");
-gfx_setfont(11); ui_col(PGI2); pg_txt(196, 15, "STEREO"); pg_txt(196, 29, pgv_de ? "PEGELMESSER" : "LEVEL METER");
+gfx_setfont(6); ui_col(pgv_th == 0 ? PGI : PGI); pg_txt(58, 12, "METER 45");
+gfx_setfont(11); ui_col(PGI2); pg_txt(204, 15, "STEREO"); pg_txt(204, 29, pgv_de ? "PEGELMESSER" : "LEVEL METER");
 // the house preset bar: PRESETS, prev / next, LCD (click it for the list)
 k_ = pk_preset(300 * sc, 10 * sc, 346 * sc, 34 * sc, pr_cur,
   "Init|Broadcast PPM -9|PPM Align -18|Live Desk PPM -12|Tracking VU -18|Mix VU -14|Hot Master VU -12|Mastering Peak|VFD Peak|VFD PPM|Matrix PPM|Matrix VU");
