@@ -111,7 +111,7 @@ slider51:120<40,400,1>-Sat low band (Hz)
 slider52:6000<2000,16000,10>-Sat high band (Hz)
 slider53:-0.3<-24,0,0.1>-Ceiling (dB)
 slider54:1<0,1,1{Off,Clip}>-(unused, was output stage)
-slider55:0<0,2,1{Enamel,VFD,Matrix}>-Skin
+slider55:1<0,2,1{Enamel,VFD,Matrix}>-Skin
 slider56:0<0,1,1{Ratio,Telemetry}>-Display page
 
 in_pin:left input
