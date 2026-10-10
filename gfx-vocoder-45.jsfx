@@ -17,7 +17,8 @@ desc:GFX Vocoder-45
 //      (side-chain: route a synth, pad, guitar ... into channels 3/4). Stereo out.
 //      CARRIER keys (bracket): EXT = the side-chain on 3/4; SYNTH = the internal carrier played by MIDI
 //      (8-voice poly: SAW / PULSE / SUPER (three detuned saws), a breath of noise, LEVEL, TUNE, OCTAVE, GLIDE on
-//      the SV-45 face); HOLD latches the chord (a drone) until the next chord is played.
+//      the SV-45 face; GLIDE slides each voice from its last pitch); HOLD latches the chord (a drone) until the
+//      next chord is played.
 //      No MIDI notes with SYNTH, or nothing on 3/4 with EXT = no carrier = no vocoder output (the SV-45 display
 //      says so). MIDI is passed through. Pitch bend +/-2 semitones; CC120 / CC123 release all notes.
 //
@@ -39,14 +40,17 @@ desc:GFX Vocoder-45
 //   V/UV SENS   the voiced / unvoiced detector: the energy above 3.5 kHz against the energy under 800 Hz, and the
 //               zero-crossing rate. Unvoiced (s, t, f, sh) = both high: noise (following the carrier's level)
 //               is injected into the carrier of the bands above 2.5 kHz, shaped by the modulator. 0 = off.
-//   TILT        a high shelf on SV-45's bands (about 2.5 kHz, +/-12 dB).
+//   TILT        a high shelf on SV-45's bands (about 2.5 kHz, +/-12 dB; the lows move a little the other way, so the
+//               loudness stays roughly the same).
 //   LEVEL / TUNE / OCTAVE / GLIDE and the SAW / PULSE / SUPER keys: the internal synth carrier (shared by both
 //   units, heard when the bracket's SYNTH key is lit).
 // STYLE keys (each unit): TOKYO / BERLIN change the unit's faceplate and a touch of its voice: BERLIN adds an
 //   output transformer (low-frequency core saturation, a gentle biased curve: even harmonics); TOKYO is clean.
 //   KR-45 opens in BERLIN (bone-grey enamel), SV-45 in TOKYO (charcoal, VFD glow).
-// The stereo image: the bands alternate a little left / right (KR-45 a narrow spread, SV-45 wider); the carrier
-//   is analysed in mono (EXT 3/4 summed), which keeps the cost down (about 6-8 % of a core at 48 kHz).
+// The stereo image: the bands alternate a little left / right above about 300 Hz (KR-45 a narrow spread, SV-45
+//   wider; the bass stays in the middle), and every other band is polarity-inverted so that neighbouring bands
+//   sum without a phase hole. The carrier is processed in mono (EXT 3/4 summed), which keeps the cost down:
+//   about 13 % of one core at 48 kHz (24 + 16 bands), 15 % with 24 + 24 bands and all 8 synth voices.
 // BRACKET   CARRIER keys, KR / SV BALANCE, MIX (dry modulator <-> vocoder), DRIFT, OUTPUT, band SAT and the house
 //           output stage (OFF / CLIP / LIMIT).
 // DRIFT (0 - 100 %, 50 % = standard): filter-bank tolerance. Every KR-45 filter sits a little off its nominal
@@ -165,9 +169,8 @@ function kr_band(m, c) instance(mc0, ma1, ma2, ms1, ms2, ms3, ms4, cc0, ca1, ca2
   c += nw * vc_nz;
   y = cc0 * c + cs1; cs1 = cs2 - ca1 * y; cs2 = -cc0 * c - ca2 * y;
   u = cc0 * y + cs3; cs3 = cs4 - ca1 * u; cs4 = -cc0 * y - ca2 * u;
-  v = min(max(u * vc_kdg, -3), 3);
-  vc_kpk = max(vc_kpk, abs(v));
-  v = v * (27 + v * v) / (27 + 9 * v * v) * e2;
+  v = min(max(u * vc_kdg, -1.5), 1.5);                 // op-amp soft clip: unity at first, flat at 1.0
+  v = (v - 0.148148 * v * v * v) * e2;
   vc_kl += v * gl; vc_kr += v * gr;
 );
 // per block: drift, coefficients, follower times, gains, denormal housekeeping, the panel's mailbox
@@ -188,7 +191,8 @@ function kr_blk(b) instance(mc0, ma1, ma2, ms1, ms2, ms3, ms4, cc0, ca1, ca2, cs
   es = 1 - exp(-2 * $pi * min(max(f * 0.25, 25), 70) / srate);
   hf = 10 ^ (vc_khf * f * f / (f * f + 9000000) / 20);
   g = vc_kcal * vc_kmk * vc_kqn * min(max((f / 1000) ^ 0.25, 0.5), 1.8) * hf * fd;
-  pn = b & 1 ? -vc_kwd : vc_kwd;
+  pn = (b & 1 ? -vc_kwd : vc_kwd) * min(max((f - 120) / 700, 0), 1);   // the bass stays in the middle
+  b & 1 ? g = -g;                                       // every other band inverted: neighbours sum without a phase hole
   gl = g * (1 + pn); gr = g * (1 - pn);
   nw = f > 2500 ? vc_knw * min((f - 2500) / 3000, 1) : 0;
   abs(ms1) < 0.000000000001 ? ms1 = 0; abs(ms2) < 0.000000000001 ? ms2 = 0;
@@ -226,9 +230,10 @@ function sv_blk(b) instance(ka0, ka1, ka2, kb0, kb1, kb2, ms1, ms2, ms3, ms4, cs
     ea = vc_sea;
     er = 1 - exp(-1 / (max(vc_srel, 9000 / f) * 0.001 * srate));
     es = vc_ses;
-    tl = 10 ^ (vc_stl * f * f / (f * f + 6250000) / 20);
-    g = vc_scal * vc_sg * vc_sg * vc_sqn * min(max((f / 1000) ^ 0.25, 0.5), 1.8) * tl;
-    pn = b & 1 ? -vc_swd : vc_swd;
+    tl = 10 ^ (vc_stl * (f * f / (f * f + 6250000) - 0.3) / 20);   // the shelf, loudness roughly kept
+    g = vc_scal * vc_srg * vc_sg * vc_sg * vc_sqn * min(max((f / 1000) ^ 0.25, 0.5), 1.8) * tl;
+    pn = (b & 1 ? -vc_swd : vc_swd) * min(max((f - 120) / 700, 0), 1);
+    b & 1 ? g = -g;
     gl = g * (1 + pn); gr = g * (1 - pn);
     nw = f > 2500 ? vc_snw * min((f - 2500) / 3000, 1) : 0;
     abs(ms1) < 0.000000000001 ? ms1 = 0; abs(ms2) < 0.000000000001 ? ms2 = 0;
@@ -268,11 +273,14 @@ function tp_blk(f, rel, nwt) instance(p0, p1, p2, p3, p4, q0, q1, q2, q3, q4, ms
 function tp_clr() instance(ms1, ms2, ms3, ms4, cs1, cs2, cs3, cs4, e1, e2) ( ms1 = ms2 = ms3 = ms4 = cs1 = cs2 = cs3 = cs4 = e1 = e2 = 0; );
 
 // ---------- BERLIN output transformer: low-frequency core saturation, then a gentle biased curve ----------
-function vc_xfm(x, k, d) instance(lo) local(t) (
+function vc_rt(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
+function vc_xfm(x, k, d, tb, sn) instance(lo) local(t) (
   lo += (x - lo) * vc_xlc;
   t = x + lo / sqrt(1 + sqr(k * lo)) - lo;
-  ost_curve(t, d, 0.08);
+  (vc_rt(d * (t + 0.08)) - tb) * sn;                    // a biased curve, unity small-signal gain, no static offset
 );
+// its constants for drive d (bias 0.08): results in vc_xtb, vc_xsn
+function vc_xset(d) local(t) ( t = vc_rt(d * 0.08); vc_xtb = t; t = (vc_rt(d * 0.08 + 0.0001) - t) / 0.0001; vc_xsn = 1 / (t * d); );
 
 // ---------- the synth carrier ----------
 function vc_blep(t, dt) ( t < dt ? ( t /= dt; 2 * t - t * t - 1; ) : t > 1 - dt ? ( t = (t - 1) / dt; t * t + 2 * t + 1; ) : 0; );
@@ -287,7 +295,7 @@ function vc_non(n, v) local(p, q, i, best, lo) (
   q < 0 ? ( best = 1000000000; p = vc_VO; loop(8, p[8] < best ? ( best = p[8]; q = p; ); p += 16; ); );   // the oldest
   q[0] < 0 ? ( q[2] = 0; q[5] = rand(1); q[6] = rand(1); q[7] = rand(1); );
   q[4] = 440 * 2 ^ ((n - 69) / 12) / srate;
-  q[3] = vc_glon && vc_linc > 0 ? vc_linc : q[4];
+  q[3] = vc_glon ? ( q[3] > 0 ? q[3] : vc_linc > 0 ? vc_linc : q[4] ) : q[4];   // GLIDE: from the voice's last pitch
   q[0] = n; q[1] = 1; q[10] = 1; q[9] = 0.55 + 0.45 * v / 127;
   vc_age += 1; q[8] = vc_age;
   vc_linc = q[4]; vc_vact = 1; vc_mhit += 1;
@@ -311,15 +319,16 @@ function vc_update() local(w, sv) (
   vc_von = slider8 >= 0.5; vc_vbt = slider9 >= 0.5;
   vc_svt = slider10 >= 0.5 ? 24 : 16;
   vc_srel = slider11 >= 0.5 ? 160 : 30;
+  vc_srg = slider11 >= 0.5 ? 0.75 : 1;                  // SLOW holds the envelopes higher: level kept
   vc_ses = 1 - exp(-2 * $pi * (slider11 >= 0.5 ? 12 : 40) / srate);
   sv = min(max(slider12, 0), 100) / 100;
   vc_uvon = sv > 0.004;
   vc_uvr = 10 ^ (1.2 - 2.4 * sv);                       // high / low energy ratio threshold
   vc_uvz = 0.24 - 0.16 * sv;                            // zero-crossing rate threshold (per sample)
-  vc_uvg = 10 ^ ((-56 - 20 * sv) / 10);                 // the high band must be above this (power)
+  vc_uvg = 10 ^ ((-50 - 20 * sv) / 10);                 // the high band must be above this (power)
   vc_stlt = min(max(slider13, -12), 12);
   // synth carrier
-  vc_levt = 0.25 * 10 ^ (min(max(slider14, -24), 6) / 20);
+  vc_levt = 0.36 * 10 ^ (min(max(slider14, -24), 6) / 20);
   vc_tun = 2 ^ ((min(max(slider15, -12), 12) + 12 * floor(min(max(slider16, -2), 2) + 0.5)) / 12);
   vc_glon = slider17 >= 0.5;
   vc_glc = vc_glon ? 1 - exp(-1 / (slider17 * 0.001 * srate)) : 1;
@@ -355,7 +364,7 @@ function load_preset(p) (
   p == 3  ? ( vc_setK(1, 1, 38,  0,    10,  3,  0); vc_setS(1, 0, 1, 1, 45, -2); vc_setC( -2, 0,  0,  60, 2, 1, 0); vc_setM( 70, 100,  45); ) : // Choir Pad (Synth)
   p == 4  ? ( vc_setK(1, 0, 35,  0,    15,  4,  0); vc_setS(1, 0, 1, 1, 40,  1); vc_setC(  0, 0,  0,   0, 0, 0, 0); vc_setM( 60, 100,  40); ) : // Talking Strings
   p == 5  ? ( vc_setK(1, 1, 76,  0,    85,  8,  0); vc_setS(0, 1, 0, 0, 50,  0); vc_setC(  0, 0,  0,   0, 0, 0, 0); vc_setM(  0, 100,  70); ) : // Labor Grit
-  p == 6  ? ( vc_setK(0, 1, 50,  0,    25,  4,  0); vc_setS(1, 0, 1, 0, 65,  4); vc_setC(  0, 0,  0,   0, 0, 0, 0); vc_setM(100, 100,  20); ) : // Broadcast Clear
+  p == 6  ? ( vc_setK(0, 1, 50,  0,    25,  4,  0); vc_setS(1, 0, 1, 0, 60,  2); vc_setC(  0, 0,  0,   0, 0, 0, 0); vc_setM(100, 100,  20); ) : // Broadcast Clear
   p == 7  ? ( vc_setK(1, 1, 30,  0,    10, 10,  0); vc_setS(1, 0, 1, 0, 95,  6); vc_setC( -6, 0,  0,   0, 2, 1, 0); vc_setM( 65, 100,  40); ) : // Whisper Noise
   p == 8  ? ( vc_setK(1, 1, 50,  0.5,  20,  4,  0); vc_setS(1, 0, 0, 0, 50,  0); vc_setC(  0, 0,  0,   0, 0, 0, 0); vc_setM( 15, 100,  50); ) : // Formant Up
   p == 9  ? ( vc_setK(1, 1, 45, -0.6,  30,  3,  0); vc_setS(1, 0, 0, 0, 50,  0); vc_setC(  0, 0,  0,   0, 0, 0, 0); vc_setM( 15, 100,  50); ) : // Formant Down
@@ -372,7 +381,7 @@ function load_preset(p) (
 // ---------- state ----------
 // everything that depends on the sample rate (run again from @block if the rate changes)
 function vc_srinit() (
-  vc_sr = srate;
+  vc_fs = srate;
   vc_sm  = 1 - exp(-1 / (0.02 * srate));                // knob glides (per sample)
   vc_swc = 1 - exp(-1 / (0.01 * srate));                // ON / source / style fades
   vc_kea = 1 - exp(-1 / (0.0008 * srate));              // KR-45 attack
@@ -389,6 +398,7 @@ function vc_srinit() (
   vc_uzc = 1 - exp(-1 / (0.006 * srate));               // zero-crossing rate
   vc_uua = 1 - exp(-1 / (0.0015 * srate)); vc_uur = 1 - exp(-1 / (0.025 * srate));
   vc_svn = 0;                                           // rebuild the SV-45 bank
+  vc_xset(0.55); vc_kxt = vc_xtb; vc_kxs = vc_xsn; vc_xset(0.35); vc_sxt = vc_xtb; vc_sxs = vc_xsn;
 );
 vc_srinit();
 vc_update();
@@ -396,8 +406,8 @@ vc_kq = vc_kqt * 0.6436; vc_ksm = vc_ksht; vc_kdg = vc_kdgt; vc_khf = vc_khft; v
 vc_kdi = vc_kdit; vc_bal = vc_balt; vc_mix = vc_mixt; vc_og = vc_ogt; vc_lev = vc_levt; vc_pm = vc_tun;
 vc_kw = vc_kon; vc_vw = vc_von; vc_srw = vc_src; vc_kbw = vc_kbt; vc_vbw = vc_vbt; vc_sxf = 1;
 vc_bend = 1; vc_nheld = 0; vc_hold = 0; vc_age = 0; vc_linc = 0;
-vc_kcal = 6; vc_scal = 15;                                   // output calibration of the two units
-vc_kwd = 0.25; vc_swd = 0.45;                           // band spread (left / right alternation)
+vc_kcal = 11.5; vc_scal = 7.2;                                   // output calibration of the two units
+vc_kwd = 0.25; vc_swd = 0.4;                           // band spread (left / right alternation)
 kxL.lo = kxR.lo = sxL.lo = sxR.lo = 0;
 vcoL.ost_ch_init(); vcoR.ost_ch_init();
 vca_uv = 0; vca_cpk = 0; vca_kpk = 0; vca_mpk = 0;
@@ -412,7 +422,7 @@ ui_dflt = 1;
 vc_update();
 
 @block
-srate != vc_sr ? vc_srinit();
+srate != vc_fs ? vc_srinit();
 vc_update();                                            // knobs moved on the panel do not run @slider
 // block-rate glides for everything that sets coefficients
 vc_bk = 1 - exp(-samplesblock / (0.03 * srate));
@@ -427,7 +437,7 @@ vc_kmk = 1 / vc_kdg ^ 0.75;                             // drive make-up
 vc_dinc = 0.25 * dm_s * samplesblock / srate;
 vc_kdr = 0.02 * dm_a; vc_sdr = 0.003 * dm_a;
 // the V/UV noise weights (SV-45 full, KR-45 lighter)
-vc_snw = vc_uvon ? 0.5 : 0; vc_knw = vc_uvon ? 0.25 : 0;
+vc_snw = vc_uvon ? 0.3 : 0; vc_knw = vc_uvon ? 0.18 : 0;
 // the SV-45 band count: fade out, rebuild, fade back in
 vc_sclr = 0;
 vc_svn != vc_svt && (vc_sxf < 0.001 || vc_svn == 0) ? ( vc_svn = vc_svt; vc_svtab(vc_svn); vc_sclr = 1; );
@@ -456,6 +466,9 @@ abs(vc_ulp) < 0.000000000001 ? vc_ulp = 0; abs(vc_uzl) < 0.000000000001 ? vc_uzl
 vc_uv < 0.000001 ? vc_uv = 0; vc_cen < 0.000000000001 ? vc_cen = 0;
 abs(kxL.lo) < 0.000000000001 ? kxL.lo = 0; abs(kxR.lo) < 0.000000000001 ? kxR.lo = 0;
 abs(sxL.lo) < 0.000000000001 ? sxL.lo = 0; abs(sxR.lo) < 0.000000000001 ? sxR.lo = 0;
+
+// the panel's DRIVE lamp: how hard the carrier bands push the op-amps
+vca_kpk = max(vca_kpk, vc_kon * vc_cen * vc_kdg * 0.8);
 
 // ---------- MIDI: notes into the queue (sample-accurate), everything passed on ----------
 vc_qn = 0;
@@ -570,8 +583,8 @@ vc_kw > 0.00001 ? (
   kr20.kr_band(vc_m, vc_c); kr21.kr_band(vc_m, vc_c); kr22.kr_band(vc_m, vc_c); kr23.kr_band(vc_m, vc_c);
   vc_v = krtp.tp_band(vc_m, vc_c) * vc_kTg; vc_kl += vc_v; vc_kr += vc_v;
   vc_kbw > 0.0001 ? (
-    vc_kl += (kxL.vc_xfm(vc_kl, 1.6, 0.55) - vc_kl) * vc_kbw;
-    vc_kr += (kxR.vc_xfm(vc_kr, 1.6, 0.55) - vc_kr) * vc_kbw;
+    vc_kl += (kxL.vc_xfm(vc_kl, 1.6, 0.55, vc_kxt, vc_kxs) - vc_kl) * vc_kbw;
+    vc_kr += (kxR.vc_xfm(vc_kr, 1.6, 0.55, vc_kxt, vc_kxs) - vc_kr) * vc_kbw;
   );
   vc_kl += vc_ml * vc_kdi; vc_kr += vc_mr * vc_kdi;
 );
@@ -590,8 +603,8 @@ vc_vw > 0.00001 ? (
   vc_v = svtp.tp_band(vc_m, vc_c) * vc_sTg; vc_sl += vc_v; vc_sr += vc_v;
   vc_sl *= vc_sxf; vc_sr *= vc_sxf;
   vc_vbw > 0.0001 ? (
-    vc_sl += (sxL.vc_xfm(vc_sl, 1.0, 0.35) - vc_sl) * vc_vbw;
-    vc_sr += (sxR.vc_xfm(vc_sr, 1.0, 0.35) - vc_sr) * vc_vbw;
+    vc_sl += (sxL.vc_xfm(vc_sl, 1.0, 0.35, vc_sxt, vc_sxs) - vc_sl) * vc_vbw;
+    vc_sr += (sxR.vc_xfm(vc_sr, 1.0, 0.35, vc_sxt, vc_sxs) - vc_sr) * vc_vbw;
   );
 );
 
@@ -857,7 +870,7 @@ ui_col(0x111213); vg_r(0, 54, 1000, 2);
 ui_col(vqHW); gfx_circle(31 * sc, 27 * sc, 16 * sc, 1, 1);
 gfx_setfont(4); ui_col(vqH); ui_text(31 * sc, 21.5 * sc, "GFX");
 gfx_setfont(6); ui_col(vqHW); vg_txt(58, 12, "VOCODER-45");
-gfx_setfont(11); ui_col(0xA99999); vg_txt(236, 14, "DUAL HALF-RACK"); vg_txt(236, 29, "VOCODER SYSTEM");
+gfx_setfont(11); ui_col(0xA99999); vg_txt(252, 14, "DUAL HALF-RACK"); vg_txt(252, 29, "VOCODER SYSTEM");
 pk_pextra = "Reset all to defaults";                    // the house preset bar: PRESETS, prev / next, LCD
 vg_k = pk_preset(388 * sc, 10 * sc, 518 * sc, 34 * sc, pr_cur,
   "Init|Robot Voice|Choir Pad (Synth)|Talking Strings|Labor Grit|Broadcast Clear|Whisper Noise|Formant Up|Formant Down|Space Station|Drum Vocoder|Synth Solo");
@@ -869,9 +882,9 @@ vg_now = time_precise();
 vg_dt = vg_t0 > 0 ? min(max(vg_now - vg_t0, 0), 0.25) : 1; vg_t0 = vg_now;
 vg_i = 0;
 loop(25,
-  vg_q = (20 * log10(max(vc_KMB[vg_i] * 9, 0.000001)) + 48) / 48; vc_KMB[vg_i] = 0;
+  vg_q = (20 * log10(max(vc_KMB[vg_i] * 4, 0.000001)) + 48) / 48; vc_KMB[vg_i] = 0;
   vg_LK[vg_i] = max(vg_q, vg_LK[vg_i] - 1.6 * vg_dt);
-  vg_q = (20 * log10(max(vc_SMB[vg_i] * 9, 0.000001)) + 48) / 48; vc_SMB[vg_i] = 0;
+  vg_q = (20 * log10(max(vc_SMB[vg_i] * 4, 0.000001)) + 48) / 48; vc_SMB[vg_i] = 0;
   vg_LS[vg_i] = max(vg_q, vg_LS[vg_i] - (slider11 >= 0.5 ? 0.8 : 1.6) * vg_dt);
   vg_i += 1;
 );
@@ -894,7 +907,7 @@ vg_ladder(vg_x + 28, 121, 325, 52, 25, vg_LK, 11, vg_on);
 gfx_setfont(10); ui_col(vg_b ? ui_mix(vqD, vqW, 0.3) : vqI2);
 vg_i = 0;
 loop(8,
-  vg_f = vg_i == 0 ? 0 : vg_i == 1 ? 5.0 : vg_i == 2 ? 8.4 : vg_i == 3 ? 12.1 : vg_i == 4 ? 15.8 : vg_i == 5 ? 19.4 : vg_i == 6 ? 23 : 24;
+  vg_f = vg_i == 0 ? 0 : vg_i == 1 ? 5.0 : vg_i == 2 ? 8.4 : vg_i == 3 ? 12.1 : vg_i == 4 ? 15.8 : vg_i == 5 ? 19.4 : vg_i == 6 ? 22.6 : 24.4;
   vg_ctxt(vg_x + 28 + (vg_f + 0.5) * 13, 185, vg_i == 0 ? "100" : vg_i == 1 ? "250" : vg_i == 2 ? "500" : vg_i == 3 ? "1k" : vg_i == 4 ? "2k" : vg_i == 5 ? "4k" : vg_i == 6 ? "8k" : "HF");
   vg_i += 1;
 );
@@ -905,8 +918,8 @@ vg_lamp(vg_x + 372, 165, 4.5, vg_on * min(max((vg_kp - 1) * 1.5, 0), 1), 0xFF3A2
 gfx_setfont(16); ui_col(vg_b ? vqD : vqI2); vg_ltxt(vg_x + 382, 165, "SAT");
 
 // ---------- the knob row ----------
-vg_sect(vg_x + 12, 210, 408, 116);
-vg_cy = 258; vg_kr = 23;
+vg_sect(vg_x + 12, 210, 408, 104);
+vg_cy = 256; vg_kr = 23;
 sprintf(#vgv, "%.0f %%  Q %.1f", slider3, 10 * 0.26 ^ (slider3 / 100)); vg_dec(#vgv);
 vg_scale(vg_x + 58, vg_cy, vg_kr, "0||5||10");
 vg_knob(vg_x + 58, vg_cy, vg_kr, 3, 0, 0, 100, 50, 1, 0, vg_b ? "BREITE" : "WIDTH", #vgv);
@@ -928,7 +941,7 @@ vg_knob(vg_x + 370, vg_cy, vg_kr, 7, 0, 0, 100, 0, 1, 0, vg_b ? "DIREKT" : "DIRE
 // =====================================================================
 vg_style(1, slider9 >= 0.5);
 vg_x = 560;
-vg_unit(vg_x, 60, 432, 272, "SV-45", "BROADCAST VOCODER", "SYSTEM", 9, 8);
+vg_unit(vg_x, 60, 432, 272, "SV-45", "BROADCAST", "VOCODER SYSTEM", 9, 8);
 vg_on = slider8 >= 0.5;
 // ---------- the display: ladders, lamps and the carrier line ----------
 vg_sect(vg_x + 12, 108, 240, 96);
@@ -950,7 +963,7 @@ slider19 >= 0.5 ? (
   vg_cl ? strcpy(#vgc, vg_b ? "TRÄGER  EXT 3/4" : "CARRIER  EXT 3/4") : strcpy(#vgc, vg_b ? "KEIN TRÄGER AUF 3/4" : "NO CARRIER ON 3/4");
 );
 vg_ok = slider19 >= 0.5 ? vca_nv > 0 : vg_cl;
-ui_col(vg_ok ? vqD : (vg_b ? 0xFF6A3A : ui_mix(vqD, vqW, 0.25))); vg_ltxt(vg_x + 28, 186, #vgc);
+ui_col(vg_ok ? vqD : 0xFF6A3A); vg_ltxt(vg_x + 28, 186, #vgc);
 
 // ---------- keys: release, bands, synth wave ----------
 vg_sect(vg_x + 258, 108, 162, 96);
@@ -963,28 +976,26 @@ vg_key(vg_x + 316, 169, 46, 22, vg_b ? "PULS" : "PULSE", (slider18 | 0) == 1) ? 
 vg_key(vg_x + 366, 169, 45, 22, "SUPER", (slider18 | 0) == 2) ? ( slider18 = 2; ui_auto(18); );
 
 // ---------- the knob rows: analysis, synth carrier ----------
-vg_sect(vg_x + 12, 210, 138, 116);
-vg_sect(vg_x + 156, 210, 264, 116);
-vg_cy = 258; vg_kr = 20;
+vg_sect(vg_x + 12, 210, 126, 104);
+vg_sect(vg_x + 144, 210, 276, 104);
+vg_cy = 256; vg_kr = 20;
 sprintf(#vgv, "%.0f %%", slider12);
-vg_scale(vg_x + 48, vg_cy, vg_kr, "0||5||10");
-vg_knob(vg_x + 48, vg_cy, vg_kr, 12, 0, 0, 100, 50, 1, 0, "V/UV", #vgv);
+vg_ticks(vg_x + 46, vg_cy, vg_kr); vg_tick(vg_x + 46, vg_cy, vg_kr, 0.5, "5", 1);
+vg_knob(vg_x + 46, vg_cy, vg_kr, 12, 0, 0, 100, 50, 1, 0, "V/UV", #vgv);
 sprintf(#vgv, "%+.1f dB", slider13); vg_dec(#vgv);
-vg_scale(vg_x + 114, vg_cy, vg_kr, "-12|0|+12");
-vg_knob(vg_x + 114, vg_cy, vg_kr, 13, 0, -12, 12, 0, 0.1, 0, vg_b ? "NEIGUNG" : "TILT", #vgv);
+vg_ticks(vg_x + 106, vg_cy, vg_kr); vg_tick(vg_x + 106, vg_cy, vg_kr, 0.5, "0", 1);
+vg_knob(vg_x + 106, vg_cy, vg_kr, 13, 0, -12, 12, 0, 0.1, 0, vg_b ? "NEIGUNG" : "TILT", #vgv);
 sprintf(#vgv, "%+.1f dB", slider14); vg_dec(#vgv);
-vg_tick(vg_x + 190, vg_cy, vg_kr, 0, "-24", 1); vg_tick(vg_x + 190, vg_cy, vg_kr, 0.4, "-12", 1);
-vg_tick(vg_x + 190, vg_cy, vg_kr, 0.8, "0", 1); vg_tick(vg_x + 190, vg_cy, vg_kr, 1, "", 1);
-vg_knob(vg_x + 190, vg_cy, vg_kr, 14, 0, -24, 6, 0, 0.1, 0, vg_b ? "PEGEL" : "LEVEL", #vgv);
+vg_ticks(vg_x + 178, vg_cy, vg_kr);
+vg_knob(vg_x + 178, vg_cy, vg_kr, 14, 0, -24, 6, 0, 0.1, 0, vg_b ? "PEGEL" : "LEVEL", #vgv);
 sprintf(#vgv, "%+.2f st", slider15); vg_dec(#vgv);
-vg_scale(vg_x + 254, vg_cy, vg_kr, "-12|0|+12");
-vg_knob(vg_x + 254, vg_cy, vg_kr, 15, 0, -12, 12, 0, 0.01, 0, vg_b ? "STIMMUNG" : "TUNE", #vgv);
+vg_ticks(vg_x + 246, vg_cy, vg_kr); vg_tick(vg_x + 246, vg_cy, vg_kr, 0.5, "0", 1);
+vg_knob(vg_x + 246, vg_cy, vg_kr, 15, 0, -12, 12, 0, 0.01, 0, vg_b ? "STIMMEN" : "TUNE", #vgv);
 sprintf(#vgv, "%+d oct", slider16);
-vg_scale(vg_x + 318, vg_cy, vg_kr, "-2|-1|0|+1|+2");
-vg_knob(vg_x + 318, vg_cy, vg_kr, 16, 1, -2, 2, 0, 1, 0, vg_b ? "OKTAVE" : "OCTAVE", #vgv);
+vg_i = 0; loop(5, vg_tick(vg_x + 314, vg_cy, vg_kr, vg_i / 4, vg_i == 2 ? "0" : "", 1); vg_i += 1; );
+vg_knob(vg_x + 314, vg_cy, vg_kr, 16, 1, -2, 2, 0, 1, 0, vg_b ? "OKTAVE" : "OCTAVE", #vgv);
 slider17 < 0.5 ? strcpy(#vgv, vg_b ? "AUS" : "OFF") : sprintf(#vgv, "%.0f ms", slider17);
-vg_tick(vg_x + 382, vg_cy, vg_kr, 0, "0", 1); vg_tick(vg_x + 382, vg_cy, vg_kr, sqrt(0.1), "", 1);
-vg_tick(vg_x + 382, vg_cy, vg_kr, 0.5, "", 1); vg_tick(vg_x + 382, vg_cy, vg_kr, 1, "1s", 1);
+vg_ticks(vg_x + 382, vg_cy, vg_kr);
 vg_knob(vg_x + 382, vg_cy, vg_kr, 17, 2, 0, 1000, 0, 1, 0, vg_b ? "GLEITEN" : "GLIDE", #vgv);
 
 // =====================================================================
