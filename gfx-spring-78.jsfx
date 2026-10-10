@@ -288,7 +288,7 @@ function sp_srinit() (
   // low-pass under fc so nothing reaches the stretched cascades' mirror images above it
   eBh.bq_set(1, 170, 0.75, 0); eBp.bq_set(2, sp_fcB * 0.8, 1.6, 4);
   eBa.bq_set(0, sp_fcB * 0.85, 0.5176, 0); eBb.bq_set(0, sp_fcB * 0.85, 0.7071, 0); eBc.bq_set(0, sp_fcB * 0.85, 1.9319, 0);
-  eHh.bq_set(1, 150, 0.7, 0); eHp.bq_set(2, sp_fcH * 0.82, 1.2, 2.5);
+  eHh.bq_set(1, 210, 0.6, 0); eHp.bq_set(2, sp_fcH * 0.82, 1.2, 2.5);
   eHa.bq_set(0, sp_fcH * 0.85, 0.5176, 0); eHb.bq_set(0, sp_fcH * 0.85, 0.7071, 0); eHc.bq_set(0, sp_fcH * 0.85, 1.9319, 0);
   sp_tdB = sp_tdH = -100;                               // rebuild the TONE shelves
   sp_pec = 1 - exp(-2 * $pi * 900 / srate);             // BAMAKO driver treble lift
