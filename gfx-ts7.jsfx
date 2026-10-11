@@ -162,7 +162,7 @@ function setup() local(fso) (
   byp = slider8 > 0.5;
   osLat = os4 ? 36 : 31;
   ost_setup(0, 0, 120, 6000, -0.3, 0);   // output stage: straight through
-  pdc_delay += osLat; pdc_bot_ch = 0; pdc_top_ch = 2;
+  pdc_delay = osLat; pdc_bot_ch = 0; pdc_top_ch = 2;
 );
 
 // ---------- presets: input, output, warmth, comp, iron, mix ----------

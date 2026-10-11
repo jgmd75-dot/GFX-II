@@ -190,6 +190,20 @@ slider161:120<5,1000,1>-Gate Drum: release (ms)
 slider162:150<40,8000,1>-Gate Drum: key (Hz)
 slider163:0<0,1,1{Fast,Soft}>-Gate Drum: attack
 slider171:20<0,100,1>-Sat Iron / Transistor: drive (%)
+slider177:3<0,10,0.01>-Sat Head: Head drive
+slider178:0<-24,6,0.1>-Sat Head: Head trim (dB)
+slider179:0<0,2,1{Normal,Medium,Bright}>-Sat Head: Head voice
+slider180:0<0,100,1>-Sat Head: boost (%)
+slider196:0<-12,24,0.1>-Sat TS-7: Input (dB)
+slider197:0<-24,12,0.1>-Sat TS-7: Output (dB)
+slider198:0<0,6,1{Off,1,2,3,4,5,6}>-Sat TS-7: Warmth
+slider199:0<0,3,1{Off,Tx,Bus,Slam}>-Sat TS-7: Comp
+slider200:1<0,1,1{Off,On}>-Sat TS-7: Iron
+slider201:100<0,100,1>-Sat TS-7: Mix (%)
+slider202:0<0,1,1{Off,On}>-Sat TS-7: Bypass
+slider203:1<0,1,1{Off,Clip}>-Sat TS-7: (unused, was output stage)
+slider204:1<0,1,1{2x,4x}>-Sat TS-7: Oversampling
+slider205:20<0,100,1>-Sat TS-7: Drift (%)
 
 in_pin:left input
 in_pin:right input
@@ -201,8 +215,8 @@ ext_noinit = 1;
 #ui_man = "gfx-channel-45";
 
 // ---------- memory: the dry delay lines here; each engine has its own region (its nextmem starts there) ----------
-CH_DQ = 0;                                                // 8 rings of 512: the slots' dry signals (latency matched), the drum gate's look-ahead
-CH_DN = 512;
+CH_DQ = 0;                                                // 10 rings of 4096: the slots' dry signals (latency matched), the drum gate's look-ahead
+CH_DN = 4096;                                             // (room for the GATE's 10 ms look-ahead at 192 kHz)
 
 // ======================== the engines ========================
 // ======================== gfx-tony-q-550.jsfx (prefix eqt_; its sliders 1-32 at 25-56) ========================
@@ -2503,8 +2517,703 @@ gxo_pkO = max(gxo_pkO, max(abs(spl0), abs(spl1)));
 0;
 );
 
+// ======================== gfx-headsmoother.jsfx (prefix sth_; its sliders 1-4 at 177-180) ========================
+function sth_defaults() (
+  slider(177) = 3;
+  slider(178) = 0;
+  slider(179) = 0;
+  slider(180) = 0;
+  0;
+);
+function sth_consts() (
+  sth_own_s5 = 0;
+  sth_own_s6 = 1;
+  sth_own_s7 = 1;
+  sth_own_s8 = 0;
+  sth_own_s9 = 100;
+  sth_own_s10 = 1;
+  sth_own_s11 = 0;
+  sth_own_s12 = 0;
+  sth_own_s13 = 1;
+  sth_own_s14 = 0;
+  sth_own_s15 = 0;
+  sth_own_s16 = 0;
+  sth_own_s17 = 0.25;
+  sth_own_s18 = 0;
+  sth_own_s19 = 0;
+  sth_own_s20 = 120;
+  sth_own_s21 = 6000;
+  sth_own_s22 = -0.3;
+  sth_own_s23 = 1;
+  sth_own_s24 = 0;
+  0;
+);
+function sth_hs_bqset(sth_type, f, sth_q, sth_gdb, sth_fs) instance(b0, b1, b2, a1, a2) local(sth_w0, sth_cw, sth_sw, sth_al, sth_amp, sth_sa, n) (
+  sth_w0 = 2 * $pi * min(f, sth_fs * 0.45) / sth_fs; sth_cw = cos(sth_w0); sth_sw = sin(sth_w0); sth_al = sth_sw / (2 * sth_q);
+  sth_amp = 10 ^ (sth_gdb / 40);
+  sth_type == 0 ? (                                    // low-pass
+    n = 1 + sth_al; b0 = (1 - sth_cw) * 0.5 / n; b1 = (1 - sth_cw) / n; b2 = b0; a1 = -2 * sth_cw / n; a2 = (1 - sth_al) / n;
+  ) : sth_type == 1 ? (                                // high-pass
+    n = 1 + sth_al; b0 = (1 + sth_cw) * 0.5 / n; b1 = -(1 + sth_cw) / n; b2 = b0; a1 = -2 * sth_cw / n; a2 = (1 - sth_al) / n;
+  ) : sth_type == 2 ? (                                // peak
+    n = 1 + sth_al / sth_amp; b0 = (1 + sth_al * sth_amp) / n; b1 = -2 * sth_cw / n; b2 = (1 - sth_al * sth_amp) / n; a1 = b1; a2 = (1 - sth_al / sth_amp) / n;
+  ) : (                                            // high shelf
+    sth_sa = 2 * sqrt(sth_amp) * sth_al;
+    n = (sth_amp + 1) - (sth_amp - 1) * sth_cw + sth_sa;
+    b0 = sth_amp * ((sth_amp + 1) + (sth_amp - 1) * sth_cw + sth_sa) / n; b1 = -2 * sth_amp * ((sth_amp - 1) + (sth_amp + 1) * sth_cw) / n;
+    b2 = sth_amp * ((sth_amp + 1) + (sth_amp - 1) * sth_cw - sth_sa) / n; a1 = 2 * ((sth_amp - 1) - (sth_amp + 1) * sth_cw) / n;
+    a2 = ((sth_amp + 1) - (sth_amp - 1) * sth_cw - sth_sa) / n;
+  );
+);
+function sth_hs_bqrun(sth_x) instance(b0, b1, b2, a1, a2, x1, x2, y1, y2) local(y) (
+  y = b0 * sth_x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+  x2 = x1; x1 = sth_x; y2 = y1; y1 = y;
+  y;
+);
+function sth_tc(sth_ms) ( 1 - exp(-1 / (max(sth_ms, 0.05) * 0.001 * srate)); );
+function sth_hd_aa() instance(sth_u1, sth_u2, sth_u3, sth_u4, sth_d1, sth_d2, sth_d3, sth_d4) local(sth_fc, sth_fs2) (
+  sth_fs2 = 2 * srate; sth_fc = min(0.42 * srate, 20000);
+  sth_u1.sth_hs_bqset(0, sth_fc, 0.5098, 0, sth_fs2); sth_u2.sth_hs_bqset(0, sth_fc, 0.6013, 0, sth_fs2);
+  sth_u3.sth_hs_bqset(0, sth_fc, 0.9000, 0, sth_fs2); sth_u4.sth_hs_bqset(0, sth_fc, 2.5629, 0, sth_fs2);
+  sth_d1.sth_hs_bqset(0, sth_fc, 0.5098, 0, sth_fs2); sth_d2.sth_hs_bqset(0, sth_fc, 0.6013, 0, sth_fs2);
+  sth_d3.sth_hs_bqset(0, sth_fc, 0.9000, 0, sth_fs2); sth_d4.sth_hs_bqset(0, sth_fc, 2.5629, 0, sth_fs2);
+);
+function sth_hd_eq(sth_gapmul) instance(sth_emp, sth_dem, sth_vpre, sth_vpost, sth_bump, sth_gap, sth_dcb, sth_lop) (
+  sth_emp.sth_hs_bqset(3, 3000, 0.7, 4, srate);  sth_dem.sth_hs_bqset(3, 3000, 0.7, -4, srate);
+  sth_voice == 1 ? ( sth_vpre.sth_hs_bqset(2, 1400, 0.6, 3.5, srate); sth_vpost.sth_hs_bqset(2, 1400, 0.6, -1.5, srate); ) :
+  sth_voice == 2 ? ( sth_vpre.sth_hs_bqset(3, 6000, 0.7, 5, srate);   sth_vpost.sth_hs_bqset(3, 6000, 0.7, -2, srate); ) :
+               ( sth_vpre.sth_hs_bqset(2, 1000, 0.7, 0, srate);   sth_vpost.sth_hs_bqset(2, 1000, 0.7, 0, srate); );
+  sth_bump.sth_hs_bqset(2, 70, 0.9, sth_hd_bump, srate);
+  sth_gap.sth_hs_bqset(0, (sth_voice == 2 ? 21000 : sth_voice == 1 ? 18000 : 16000) * sth_gapmul, 0.55, 0, srate);
+  sth_dcb.sth_hs_bqset(1, 10, 0.7, 0, srate);
+  sth_lop.sth_hs_bqset(0, 250, 0.6, 0, srate);               // the low band that bypasses the curve
+);
+function sth_hd_sat(sth_x, b) local(sth_tb, sth_c) (
+  sth_tb = ost_tanh(b);
+  sth_c = 0.25 / ((ost_tanh(sth_hd_g * 0.125 + b) - sth_tb) - (ost_tanh(-sth_hd_g * 0.125 + b) - sth_tb));
+  (ost_tanh(sth_hd_g * sth_x + b) - sth_tb) * sth_c;
+);
+function sth_hd_run(sth_x, b) instance(sth_emp, sth_dem, sth_vpre, sth_vpost, sth_bump, sth_gap, sth_dcb, sth_lop, sth_u1, sth_u2, sth_u3, sth_u4, sth_d1, sth_d2, sth_d3, sth_d4) local(y, sth_z, sth_lo) (
+  sth_lo = sth_lop.sth_hs_bqrun(sth_x) * sth_hd_lb;                      // the part of the lows that bypasses the curve
+  y = sth_vpre.sth_hs_bqrun(sth_emp.sth_hs_bqrun(sth_x - sth_lo)) * 0.5;       // into the curve with 6 dB of headroom
+  // 2x: zero-stuffed upsample, filter, curve, filter, keep every second sample
+  sth_z = sth_u4.sth_hs_bqrun(sth_u3.sth_hs_bqrun(sth_u2.sth_hs_bqrun(sth_u1.sth_hs_bqrun(y * 2))));
+  sth_d4.sth_hs_bqrun(sth_d3.sth_hs_bqrun(sth_d2.sth_hs_bqrun(sth_d1.sth_hs_bqrun(sth_hd_sat(sth_z, b)))));
+  sth_z = sth_u4.sth_hs_bqrun(sth_u3.sth_hs_bqrun(sth_u2.sth_hs_bqrun(sth_u1.sth_hs_bqrun(0))));
+  y = sth_d4.sth_hs_bqrun(sth_d3.sth_hs_bqrun(sth_d2.sth_hs_bqrun(sth_d1.sth_hs_bqrun(sth_hd_sat(sth_z, b))))) * 2;
+  sth_dcb.sth_hs_bqrun(sth_gap.sth_hs_bqrun(sth_bump.sth_hs_bqrun(sth_vpost.sth_hs_bqrun(sth_dem.sth_hs_bqrun(y)) + sth_lo * sth_hd_lg)));
+);
+function sth_head_proc(l, r) (
+  sth_hon_s += (sth_own_s10 - sth_hon_s) * sth_sm;                // ON fades over ~30 ms (no click)
+  sth_hl = sth_hL.sth_hd_run(l, sth_bL) * sth_trim_s; sth_hr = sth_hR.sth_hd_run(r, sth_bR) * sth_trim_s;
+  sth_hl = l + (sth_hl - l) * sth_hon_s; sth_hr = r + (sth_hr - r) * sth_hon_s;
+  sth_hpk = max(sth_hpk, max(abs(sth_hl), abs(sth_hr)));
+);
+function sth_gr_curve(sth_lv) local(sth_o) (
+  sth_o = sth_lv - sth_thr;
+  sth_o <= -sth_kn * 0.5 ? 0 :
+  sth_o >= sth_kn * 0.5 ? sth_o * (1 - 1 / sth_ratio) :
+  (1 - 1 / sth_ratio) * (sth_o + sth_kn * 0.5) ^ 2 / (2 * sth_kn);
+);
+function sth_colour(sth_x, sth_k, b) local(sth_tb) (
+  sth_tb = ost_tanh(b);
+  (ost_tanh(sth_k * sth_x + b) - sth_tb) / (sth_k * (1 - sth_tb * sth_tb));
+);
+function sth_smooth_proc(l, r) local(sth_dl, sth_dr, sth_lv, sth_tgt, sth_g, sth_yl, sth_yr) (
+  sth_son_s += (sth_own_s11 - sth_son_s) * sth_sm;
+  sth_dl = sth_scL.sth_hs_bqrun(l); sth_dr = sth_scR.sth_hs_bqrun(r);
+  sth_env += (0.5 * (sth_dl * sth_dl + sth_dr * sth_dr) - sth_env) * sth_crms;
+  sth_lv = 10 * log10(max(sth_env, 0.000000000001)) + 3;
+  sth_tgt = sth_gr_curve(sth_lv);
+  sth_hold += (sth_gr - sth_hold) * sth_chold;
+  sth_tgt > sth_gr ? ( sth_gr += (sth_tgt - sth_gr) * sth_catt; sth_grpk = sth_gr; )
+           : sth_gr += (sth_tgt - sth_gr) * sth_tc(sth_gr > sth_grpk * 0.6 ? sth_rel_ms * 0.3 : sth_rel_ms * (1 + 2 * min(sth_hold / 6, 1)));
+  sth_g = 10 ^ (-sth_gr / 20);
+  sth_grdisp = max(sth_grdisp, sth_gr * sth_son_s);
+  sth_own_s13 ? ( sth_yl = sth_colour(l * sth_g * 0.5, sth_kL, sth_cbL) * 2; sth_yr = sth_colour(r * sth_g * 0.5, sth_kR, sth_cbR) * 2; )
+           : ( sth_yl = l * sth_g; sth_yr = r * sth_g; );
+  sth_cl = (l + (sth_yl - l) * sth_blend_s) * sth_mk_s; sth_cr = (r + (sth_yr - r) * sth_blend_s) * sth_mk_s;
+  sth_cl = l + (sth_cl - l) * sth_son_s; sth_cr = r + (sth_cr - r) * sth_son_s;
+  sth_spk = max(sth_spk, max(abs(sth_cl), abs(sth_cr)));
+);
+function sth_update() (
+  sth_hd_g = 10 ^ (slider(177) * 2.2 / 20);
+  sth_own_s18 = slider(180) * sth_own_s10;                  // Link saturation amount to BOOST, but only while Head is On -
+                                                    // the output stage runs unconditionally, so otherwise BOOST
+                                                    // kept leaking saturation into the signal even with Head off.
+  sth_hd_b0 = (slider(180) / 100) * 0.2;                  // Scale tape asymmetry from BOOST (0 to 0.20)
+  sth_hd_lb = (slider(177) / 10) ^ 1.2;                    // how much of the low band bypasses the curve
+  // the bypassed lows rejoin at the curve's gain around 0 VU (-18 dBFS): between its quiet-signal gain
+  // and its unity gain at -12 dBFS, so the low end keeps its place as the drive goes up
+  sth_hd_c = 0.25 / ((ost_tanh(sth_hd_g * 0.125 + sth_hd_b0) - ost_tanh(sth_hd_b0)) - (ost_tanh(-sth_hd_g * 0.125 + sth_hd_b0) - ost_tanh(sth_hd_b0)));
+  sth_hd_lg = sqrt(sth_hd_g * sth_hd_c * (1 - ost_tanh(sth_hd_b0) ^ 2));
+  sth_hd_bump = 1.5 * (1 - 0.5 * slider(177) / 10);        // a gentler head bump as the drive goes up
+  sth_voice = slider(179);
+  sth_trim_t = 10 ^ (slider(178) / 20);
+  sth_thr = 0;
+  sth_mk_t = 10 ^ (sth_own_s5 / 20);
+  sth_ratio = sth_own_s8 ? 20 : 3; sth_kn = sth_own_s8 ? 2 : 12;
+  sth_att_ms = (sth_own_s6 == 0 ? 25 : sth_own_s6 == 1 ? 8 : 1.5) * (sth_own_s8 ? 0.5 : 1);
+  sth_rel_ms = sth_own_s7 == 0 ? 900 : sth_own_s7 == 1 ? 350 : 90;
+  sth_catt = sth_tc(sth_att_ms);
+  sth_blend_t = sth_own_s9 / 100;
+  drift_macro(0);                 // DRIFT dial: 50% = the drift settings, 100% = twice, 0 = none
+  sth_drift = sth_own_s16 / 100 * sth_own_dm_a; sth_dspd = sth_own_s17 * sth_own_dm_s;
+  0;
+  0;   // output stage: CLIP, always on
+);
+function sth_init() (
+#sth_own_ui_man = "gfx-headsmoother";                                  // the ? pop-up links to this manual
+
+// ---------- biquads (RBJ); fs = the rate the filter runs at ----------
+
+
+
+
+// ================= HEAD: tape stage (as GFX Head) =================
+
+// voicing + tape EQ (the gap loss follows this side's drift)
+
+// the curve: tanh with a small fixed bias ("tight bias"): mostly odd harmonics with a little even-order
+// warmth that no longer grows with the drive. The gain is set so a signal peaking around -12 dBFS comes
+// out at the same level whatever the drive: DRIVE changes the character, not the loudness.
+
+// The lows are split off with a complementary filter (low + rest = the input exactly); as DRIVE goes up,
+// more of the low band skips the curve and rejoins untouched afterwards, so the bass stops pushing the
+// mids and highs in and out of saturation (no "clumping").
+
+// the whole unit, stereo: result in hl / hr
+
+
+// ================= SMOOTH: optical compressor (as GFX Smooth) =================
+
+
+// result in cl / cr
+
+
+
+
+sth_sm = sth_tc(30);
+sth_hL.sth_hd_aa(); sth_hR.sth_hd_aa();
+sth_scL.sth_hs_bqset(1, 80, 0.70710678, 0, srate); sth_scR.sth_hs_bqset(1, 80, 0.70710678, 0, srate);
+sth_crms = sth_tc(5); sth_chold = sth_tc(1500);
+sth_dBL.drift_init(0.8 + rand(0.5)); sth_dBR.drift_init(0.8 + rand(0.5));      // head: bias
+sth_dGL.drift_init(0.8 + rand(0.5)); sth_dGR.drift_init(0.8 + rand(0.5));      // head: gap loss
+sth_dKL.drift_init(0.8 + rand(0.5)); sth_dKR.drift_init(0.8 + rand(0.5));      // smooth: colour drive
+sth_dCL.drift_init(0.8 + rand(0.5)); sth_dCR.drift_init(0.8 + rand(0.5));      // smooth: colour asymmetry
+0; 0; 0;
+0;
+sth_env = 0; sth_gr = 0; sth_grpk = 0; sth_hold = 0; sth_grdisp = 0; sth_hpk = 0; sth_spk = 0;
+!sth_ui_dflt ? sth_own_ui_hw = 1; !sth_ui_dflt ? sth_own_ui_kstyle = 0;
+sth_update();
+sth_trim_s = sth_trim_t; sth_mk_s = sth_mk_t; sth_blend_s = sth_blend_t; sth_hon_s = sth_own_s10; sth_son_s = sth_own_s11;
+sth_ui_dflt = 1;   // theme defaults above apply once: @init re-runs (playback start, device reset) must not undo the saved theme
+0;
+);
+
+function sth_slider() (
+sth_update();
+0;
+);
+
+function sth_block() (
+sth_update();
+sth_dinc = sth_dspd * samplesblock / srate;
+sth_vbL = sth_dBL.drift_tick(sth_dinc); sth_vbR = sth_dBR.drift_tick(sth_dinc);
+sth_vgL = sth_dGL.drift_tick(sth_dinc); sth_vgR = sth_dGR.drift_tick(sth_dinc);
+sth_bL = sth_hd_b0 + sth_vbL * sth_drift * 0.06; sth_bR = sth_hd_b0 + sth_vbR * sth_drift * 0.06;
+sth_hL.sth_hd_eq(2 ^ (sth_vgL * sth_drift * 0.25)); sth_hR.sth_hd_eq(2 ^ (sth_vgR * sth_drift * 0.25));
+sth_vkL = sth_dKL.drift_tick(sth_dinc); sth_vkR = sth_dKR.drift_tick(sth_dinc);
+sth_vcL = sth_dCL.drift_tick(sth_dinc); sth_vcR = sth_dCR.drift_tick(sth_dinc);
+sth_kL = 1.2 * (1 + 0.6 * sth_drift * sth_vkL); sth_kR = 1.2 * (1 + 0.6 * sth_drift * sth_vkR);
+sth_cbL = 0.05 + 0.08 * sth_drift * sth_vcL;    sth_cbR = 0.05 + 0.08 * sth_drift * sth_vcR;
+0;
+);
+
+function sth_sample() (
+sth_trim_s += (sth_trim_t - sth_trim_s) * sth_sm; sth_mk_s += (sth_mk_t - sth_mk_s) * sth_sm; sth_blend_s += (sth_blend_t - sth_blend_s) * sth_sm;
+sth_own_s12 ? (
+  sth_head_proc(spl0, spl1); sth_smooth_proc(sth_hl, sth_hr); sth_oL = sth_cl; sth_oR = sth_cr;
+) : (
+  sth_smooth_proc(spl0, spl1); sth_head_proc(sth_cl, sth_cr); sth_oL = sth_hl; sth_oR = sth_hr;
+);
+sth_oL = (sth_oL); sth_oR = (sth_oR);
+(ost_l = (sth_oL); ost_r = (sth_oR));
+spl0 = ost_l;
+spl1 = ost_r;
+0;
+);
+
+// ======================== gfx-ts7.jsfx (prefix tsv_; its sliders 2-11 at 196-205) ========================
+function tsv_defaults() (
+  slider(196) = 0;
+  slider(197) = 0;
+  slider(198) = 0;
+  slider(199) = 0;
+  slider(200) = 1;
+  slider(201) = 100;
+  slider(202) = 0;
+  slider(203) = 1;
+  slider(204) = 1;
+  slider(205) = 0;
+  0;
+);
+function tsv_consts() (
+  tsv_own_s1 = 0;
+  slider(202) = 0;
+  slider(205) = 0;
+  0;
+);
+function tsv_alloc(n) local(p) ( p = tsv_nextmem; tsv_nextmem += n; memset(p, 0, n); p; );
+function tsv_db2g(d) ( exp(d*0.11512925465); );
+function tsv_g2db(g) ( 8.68588963807*log(max(g, 0.0000000001)); );
+function tsv_tanh(tsv_v) ( tsv_v = max(-20, min(20, tsv_v)); 1 - 2/(exp(2*tsv_v) + 1); );
+function tsv_bi0(tsv_x) local(s, t, tsv_k) ( s = 1; t = 1; tsv_k = 1; loop(30, t *= (tsv_x/(2*tsv_k))^2; s += t; tsv_k += 1; ); s; );
+function tsv_hb_design(h, n, tsv_beta) local(tsv_c, t, tsv_k, tsv_w, tsv_x, tsv_se, tsv_i0) (
+  tsv_c = (n - 1)/2; tsv_i0 = tsv_bi0(tsv_beta); t = 0;
+  loop(n,
+    tsv_k = t - tsv_c; tsv_x = 2*t/(n - 1) - 1;
+    tsv_w = tsv_bi0(tsv_beta*sqrt(max(0, 1 - tsv_x*tsv_x)))/tsv_i0;
+    h[t] = tsv_k == 0 ? 0.5 : sin($pi*tsv_k/2)/($pi*tsv_k)*tsv_w;
+    t += 1;
+  );
+  tsv_se = 0; t = 0; loop((n + 1)/2, tsv_se += h[2*t]; t += 1; );
+  t = 0; loop((n + 1)/2, h[2*t] *= 0.5/tsv_se; t += 1; );          // each polyphase branch: unity at DC
+);
+function tsv_hbu_init(n, h, tsv_sz) instance(tsv_buf, tsv_m, tsv_w, tsv_hh, tsv_nt, tsv_cc) ( tsv_buf = tsv_alloc(tsv_sz); tsv_m = tsv_sz - 1; tsv_w = 0; tsv_hh = h; tsv_nt = n; tsv_cc = (n - 1)/2; );
+function tsv_hbu(tsv_x) instance(tsv_buf, tsv_m, tsv_w, tsv_hh, tsv_nt, tsv_cc, tsv_o0, tsv_o1) local(j, s) (
+  tsv_w = (tsv_w + 1) & tsv_m; tsv_buf[tsv_w] = tsv_x;
+  s = 0; j = 0; loop((tsv_nt + 1)/2, s += tsv_hh[2*j]*tsv_buf[(tsv_w - j) & tsv_m]; j += 1; );
+  tsv_o0 = 2*s; tsv_o1 = tsv_buf[(tsv_w - (tsv_cc - 1)/2) & tsv_m];
+);
+function tsv_hbd_init(n, h, tsv_sz) instance(tsv_buf, tsv_m, tsv_w, tsv_hh, tsv_nt, tsv_cc) ( tsv_buf = tsv_alloc(tsv_sz); tsv_m = tsv_sz - 1; tsv_w = 0; tsv_hh = h; tsv_nt = n; tsv_cc = (n - 1)/2; );
+function tsv_hbd(tsv_x0, x1) instance(tsv_buf, tsv_m, tsv_w, tsv_hh, tsv_nt, tsv_cc) local(j, s) (
+  tsv_w = (tsv_w + 1) & tsv_m; tsv_buf[tsv_w] = tsv_x0; tsv_w = (tsv_w + 1) & tsv_m; tsv_buf[tsv_w] = x1;
+  s = 0; j = 0; loop((tsv_nt + 1)/2, s += tsv_hh[2*j]*tsv_buf[(tsv_w - 2*j) & tsv_m]; j += 1; );
+  s + 0.5*tsv_buf[(tsv_w - tsv_cc) & tsv_m];
+);
+function tsv_iron(tsv_x) instance(tsv_lp, env, tsv_dx, tsv_dy) local(tsv_lo, b, y) (
+  env += (abs(tsv_x) - env)*(abs(tsv_x) > env ? tsv_irA : tsv_irR);
+  tsv_lp += (tsv_x - tsv_lp)*tsv_irC;
+  b = 0.06 + 0.24*min(1, env) + tsv_irBw;                // the asymmetry grows with level (+ the supply wander)
+  tsv_lo = (tsv_tanh(tsv_lp*1.6*tsv_irDw + b) - tsv_tanh(b))/(1.6*tsv_irDw);  // the low band saturates the core first
+  y = tsv_lo + (tsv_x - tsv_lp);
+  y = (tsv_tanh(y*0.85 + 0.5*b) - tsv_tanh(0.5*b))/0.85;     // gentle whole-band asymmetric soft clip
+  tsv_dy = y - tsv_dx + tsv_dcR*tsv_dy; tsv_dx = y;                      // the bias leaves no DC
+  tsv_dy;
+);
+function tsv_proc(l, r) local(e, tsv_lev, tsv_over, tsv_gt, g, d, tsv_pl_, tsv_pr_, tsv_ms_) (
+  tsv_ironOn ? ( l = tsv_irL.tsv_iron(l); r = tsv_irR.tsv_iron(r); );
+  // WARMTH: linked HF side-chain, fast down, slow back
+  tsv_wLpL += (l - tsv_wLpL)*tsv_wmC; tsv_wLpR += (r - tsv_wLpR)*tsv_wmC;
+  tsv_wmOn ? (
+    e = max(abs(l - tsv_wLpL), abs(r - tsv_wLpR));
+    tsv_wmE += (e - tsv_wmE)*(e > tsv_wmE ? tsv_wmA : tsv_wmR);
+    tsv_gt = min(14, max(0, tsv_g2db(tsv_wmE) - tsv_wmThr)*0.67);
+    tsv_wmG += (tsv_gt - tsv_wmG)*(tsv_gt > tsv_wmG ? tsv_wmGA : tsv_wmGR);
+    g = tsv_db2g(-tsv_wmG);
+    l = tsv_wLpL + (l - tsv_wLpL)*g; r = tsv_wLpR + (r - tsv_wLpR)*g;
+  ) : tsv_wmG = 0;
+  tsv_pl_ = l; tsv_pr_ = r;
+  // COMP
+  tsv_cMode ? (
+    e = tsv_cFb ? max(abs(tsv_cYL), abs(tsv_cYR)) : max(abs(l), abs(r));
+    tsv_cPk ? tsv_ms_ = e*e : ( tsv_cMs += (e*e - tsv_cMs)*tsv_cRms; tsv_ms_ = tsv_cMs; );
+    tsv_lev = 10*log10(max(tsv_ms_, 0.0000000001));
+    tsv_over = tsv_lev - tsv_cThr;
+    tsv_cFb ? tsv_gt = max(0, tsv_over)*tsv_cSlope : (
+      tsv_gt = tsv_over <= -tsv_cKn*0.5 ? 0 : tsv_over >= tsv_cKn*0.5 ? tsv_over*tsv_cSlope : tsv_cSlope*(tsv_over + tsv_cKn*0.5)^2/(2*tsv_cKn);
+    );
+    tsv_gt = min(tsv_gt, 30);
+    tsv_cGf += (tsv_gt - tsv_cGf)*(tsv_gt > tsv_cGf ? tsv_cAf : tsv_cRf);         // fast envelope: the peaks
+    tsv_cGs += (tsv_gt - tsv_cGs)*(tsv_gt > tsv_cGs ? tsv_cAs : tsv_cRs);         // slow envelope: the body
+    tsv_cGr = max(tsv_cGf, tsv_cGs);
+    g = tsv_db2g(-tsv_cGr);
+    l *= g; r *= g;
+    tsv_cYL = l; tsv_cYR = r;                               // SLAM's feedback detector listens here (before make-up)
+    g = tsv_db2g(tsv_cMk); l *= g; r *= g;
+    d = tsv_cDrv;
+    l = (tsv_tanh(l*d + tsv_cBias) - tsv_tanh(tsv_cBias))/d; r = (tsv_tanh(r*d + tsv_cBias) - tsv_tanh(tsv_cBias))/d;
+    l = tsv_pl_ + (l - tsv_pl_)*tsv_mix; r = tsv_pr_ + (r - tsv_pr_)*tsv_mix;
+  ) : ( tsv_cGr = 0; tsv_cGf = tsv_cGs = 0; );
+  tsv_pOL = l; tsv_pOR = r;
+);
+function tsv_setup() local(tsv_fso) (
+  tsv_os4 = slider(204) > 0.5; tsv_osf = tsv_os4 ? 4 : 2; tsv_fso = srate*tsv_osf;
+  tsv_inG = tsv_db2g(slider(196)); tsv_outG = tsv_db2g(slider(197));
+  tsv_ironOn = slider(200) > 0.5;
+  tsv_irC = 1 - exp(-2*$pi*120/tsv_fso); tsv_irA = 1 - exp(-1/(0.002*tsv_fso)); tsv_irR = 1 - exp(-1/(0.2*tsv_fso)); tsv_dcR = exp(-2*$pi*8/tsv_fso);
+  tsv_wmL = floor(slider(198) + 0.5); tsv_wmOn = tsv_wmL > 0;
+  tsv_wmThr = -6 - 4*(tsv_wmL - 1);
+  tsv_wmC = 1 - exp(-2*$pi*3500/tsv_fso);
+  tsv_wmA = 1 - exp(-1/(0.0003*tsv_fso)); tsv_wmR = 1 - exp(-1/(0.03*tsv_fso));
+  tsv_wmGA = 1 - exp(-1/(0.0005*tsv_fso)); tsv_wmGR = 1 - exp(-1/(0.12*tsv_fso));
+  tsv_cMode = floor(slider(199) + 0.5);
+  // thr, ratio, knee, attack ms, fast rel ms, slow rel ms, rms ms (0 = peak), make-up, drive, bias, feedback
+  tsv_cMode == 1 ? ( tsv_cThr = -14; tsv_cR = 2;  tsv_cKn = 10; tsv_cAt = 8;   tsv_cRF = 150; tsv_cRS = 1200; tsv_cRm = 10; tsv_cMk = 3;  tsv_cDrv = 1.6; tsv_cBias = 0.06; tsv_cFb = 0; ) :
+  tsv_cMode == 2 ? ( tsv_cThr = -18; tsv_cR = 3;  tsv_cKn = 6;  tsv_cAt = 15;  tsv_cRF = 120; tsv_cRS = 900;  tsv_cRm = 5;  tsv_cMk = 5;  tsv_cDrv = 1.1; tsv_cBias = 0.03; tsv_cFb = 0; ) :
+  tsv_cMode == 3 ? ( tsv_cThr = -24; tsv_cR = 6;  tsv_cKn = 0;  tsv_cAt = 0.1; tsv_cRF = 40;  tsv_cRS = 250;  tsv_cRm = 0;  tsv_cMk = 12; tsv_cDrv = 2.2; tsv_cBias = 0.08; tsv_cFb = 1; );
+  tsv_cSlope = tsv_cFb ? tsv_cR - 1 : 1 - 1/tsv_cR;
+  tsv_cPk = tsv_cRm == 0; tsv_cRms = 1 - exp(-1/(max(tsv_cRm, 0.1)*0.001*tsv_fso));
+  tsv_cAf = 1 - exp(-1/(tsv_cAt*0.001*tsv_fso)); tsv_cAs = 1 - exp(-1/(tsv_cAt*5*0.001*tsv_fso));
+  tsv_cRf = 1 - exp(-1/(tsv_cRF*0.001*tsv_fso)); tsv_cRs = 1 - exp(-1/(tsv_cRS*0.001*tsv_fso));
+  tsv_mix = slider(201)/100;
+  tsv_byp = slider(202) > 0.5;
+  tsv_osLat = tsv_os4 ? 36 : 31;
+  0;   // output stage: straight through
+  tsv_own_pdc_delay = tsv_osLat; tsv_own_pdc_bot = 0; tsv_own_pdc_top = 2;
+);
+function tsv_pset(i, o, tsv_w, tsv_c, tsv_ir, tsv_m) ( slider(196) = i; slider(197) = o; slider(198) = tsv_w; slider(199) = tsv_c; slider(200) = tsv_ir; slider(201) = tsv_m; );
+function tsv_apply_preset(n) (
+  tsv_t7_dst = 1;                                 // duck the output, swap the settings at silence, fade back in
+  tsv_pset(0, 0, 0, 0, 1, 100); slider(202) = 0;
+  n == 1 ? tsv_pset(3, -2, 2, 2, 1, 100) :      // Tape Glue Bus
+  n == 2 ? tsv_pset(6, -4, 3, 3, 1, 100) :      // Drum Slam
+  n == 3 ? tsv_pset(4, -2, 2, 1, 1, 100) :      // Vocal Tx
+  n == 4 ? tsv_pset(2, -1, 1, 2, 1, 60) :       // Warm Master
+  n == 5 ? tsv_pset(8, -6, 0, 1, 1, 100) :      // Bass Iron
+  n == 6 ? tsv_pset(8, -3, 2, 3, 1, 35) :       // Parallel Smash
+  n == 7 ? tsv_pset(12, -8, 6, 3, 1, 100);      // Lo-Fi Tape
+);
+function tsv_pname(n) (
+  n == 0 ? "INIT" : n == 1 ? "TAPE GLUE BUS" : n == 2 ? "DRUM SLAM" : n == 3 ? "VOCAL TX" :
+  n == 4 ? "WARM MASTER" : n == 5 ? "BASS IRON" : n == 6 ? "PARALLEL SMASH" : "LO-FI TAPE";
+);
+function tsv_init() (
+#tsv_own_ui_man = "gfx-ts7";
+tsv_nextmem = 1400000;
+
+
+
+
+
+// ---------- oversampling: linear-phase halfband filters (Kaiser windowed) ----------
+
+
+// up 2x: one input sample -> o0, o1 (polyphase; the odd branch is a pure delay in a halfband)
+
+
+// down 2x: two input samples -> one output
+
+
+tsv_N1 = 63; tsv_N2 = 23;
+tsv_H1 = tsv_alloc(tsv_N1); tsv_H2 = tsv_alloc(tsv_N2);
+tsv_hb_design(tsv_H1, tsv_N1, 8); tsv_hb_design(tsv_H2, tsv_N2, 7);
+tsv_uL1.tsv_hbu_init(tsv_N1, tsv_H1, 64); tsv_uR1.tsv_hbu_init(tsv_N1, tsv_H1, 64); tsv_dL1.tsv_hbd_init(tsv_N1, tsv_H1, 64); tsv_dR1.tsv_hbd_init(tsv_N1, tsv_H1, 64);
+tsv_uL2.tsv_hbu_init(tsv_N2, tsv_H2, 16); tsv_uR2.tsv_hbu_init(tsv_N2, tsv_H2, 16); tsv_dL2.tsv_hbd_init(tsv_N2, tsv_H2, 32); tsv_dR2.tsv_hbd_init(tsv_N2, tsv_H2, 32);
+tsv_BPN = 64; tsv_BPL = tsv_alloc(tsv_BPN); tsv_BPR = tsv_alloc(tsv_BPN); tsv_bpw = 0;      // latency-matched dry for BYPASS
+0;
+
+// ---------- stage A: the transformer ----------
+
+
+// ---------- one oversampled sample through IRON -> WARMTH -> COMP (+ MIX) ----------
+
+
+// ---------- parameters ----------
+
+
+// ---------- presets: input, output, warmth, comp, iron, mix ----------
+
+
+
+
+tsv_TH = tsv_alloc(16); tsv_CL = tsv_alloc(16); tsv_LB = tsv_alloc(16);       // GUI tables
+tsv_irDw = 1; tsv_irBw = 0; tsv_drA = tsv_drB = 0; tsv_drSa = tsv_drSb = tsv_drTa = tsv_drTb = 0;
+tsv_bpS = 0; mIn = tsv_mOut = 0; tsv_mWm = tsv_mGr = 0;
+tsv_mDec = exp(-1/(0.3*srate));
+!tsv_ui_dflt ? ( tsv_own_ui_hw = 1; tsv_lastPreset = tsv_own_s1; );
+tsv_ui_dflt = 1;
+tsv_setup();
+tsv_t7_dkr = 1 / (0.012*srate); tsv_t7_dk = 1; tsv_t7_dst = 0;   // preset duck: 12 ms out, hold through the latency, 12 ms in
+0;
+);
+
+function tsv_slider() (
+tsv_own_s1 != tsv_lastPreset ? ( tsv_apply_preset(tsv_own_s1); tsv_lastPreset = tsv_own_s1; );
+tsv_t7_dst != 1 ? tsv_setup();                        // during a preset duck the swap applies the new settings
+0;
+);
+
+function tsv_block() (
+tsv_t7_dst != 1 ? tsv_setup();
+// DRIFT: an uneven supply under the iron - two slow random walks (drive, asymmetry), level-neutral
+tsv_drA -= samplesblock; tsv_drA <= 0 ? ( tsv_drA = srate*(0.6 + rand(1.4)); tsv_drTa = rand(2) - 1; );
+tsv_drB -= samplesblock; tsv_drB <= 0 ? ( tsv_drB = srate*(0.25 + rand(0.5)); tsv_drTb = rand(2) - 1; );
+tsv_drSa += (tsv_drTa - tsv_drSa)*min(1, samplesblock/(0.5*srate)); tsv_drSb += (tsv_drTb - tsv_drSb)*min(1, samplesblock/(0.15*srate));
+tsv_drAmt = slider(205)/100;
+tsv_irDw = 1 + tsv_drAmt*(0.10*tsv_drSa + 0.03*tsv_drSb); tsv_irBw = tsv_drAmt*(0.03*tsv_drSa + 0.015*tsv_drSb);
+0;
+);
+
+function tsv_sample() (
+// preset duck-and-swap: comp mode, warmth, levels and oversampling change in silence
+tsv_t7_dst == 1 ? ( tsv_t7_dk -= tsv_t7_dkr; tsv_t7_dk <= 0 ? ( tsv_t7_dk = 0; tsv_setup(); tsv_t7_hc = tsv_osLat + floor(0.002*srate); tsv_t7_dst = 2; ); ) :
+tsv_t7_dst == 2 ? ( tsv_t7_hc > 0 ? tsv_t7_hc -= 1 : ( tsv_t7_dk += tsv_t7_dkr; tsv_t7_dk >= 1 ? ( tsv_t7_dk = 1; tsv_t7_dst = 0; ); ); );
+tsv_xL = spl0*tsv_inG; tsv_xR = spl1*tsv_inG;
+tsv_a_ = max(abs(tsv_xL), abs(tsv_xR)); mIn = tsv_a_ > mIn ? tsv_a_ : mIn*tsv_mDec;
+// latency-matched dry for BYPASS
+tsv_bpw = (tsv_bpw + 1) & (tsv_BPN - 1); tsv_BPL[tsv_bpw] = spl0; tsv_BPR[tsv_bpw] = spl1;
+tsv_dryL = tsv_BPL[(tsv_bpw - tsv_osLat) & (tsv_BPN - 1)]; tsv_dryR = tsv_BPR[(tsv_bpw - tsv_osLat) & (tsv_BPN - 1)];
+
+tsv_uL1.tsv_hbu(tsv_xL); tsv_uR1.tsv_hbu(tsv_xR);
+!tsv_os4 ? (
+  tsv_proc(tsv_uL1.tsv_o0, tsv_uR1.tsv_o0); tsv_q0L = tsv_pOL; tsv_q0R = tsv_pOR;
+  tsv_proc(tsv_uL1.tsv_o1, tsv_uR1.tsv_o1);
+  tsv_yL = tsv_dL1.tsv_hbd(tsv_q0L, tsv_pOL); tsv_yR = tsv_dR1.tsv_hbd(tsv_q0R, tsv_pOR);
+) : (
+  tsv_a1L = tsv_uL1.tsv_o1; tsv_a1R = tsv_uR1.tsv_o1;
+  tsv_uL2.tsv_hbu(tsv_uL1.tsv_o0); tsv_uR2.tsv_hbu(tsv_uR1.tsv_o0);
+  tsv_proc(tsv_uL2.tsv_o0, tsv_uR2.tsv_o0); tsv_q0L = tsv_pOL; tsv_q0R = tsv_pOR;
+  tsv_proc(tsv_uL2.tsv_o1, tsv_uR2.tsv_o1);
+  tsv_h0L = tsv_dL2.tsv_hbd(tsv_q0L, tsv_pOL); tsv_h0R = tsv_dR2.tsv_hbd(tsv_q0R, tsv_pOR);
+  tsv_uL2.tsv_hbu(tsv_a1L); tsv_uR2.tsv_hbu(tsv_a1R);
+  tsv_proc(tsv_uL2.tsv_o0, tsv_uR2.tsv_o0); tsv_q0L = tsv_pOL; tsv_q0R = tsv_pOR;
+  tsv_proc(tsv_uL2.tsv_o1, tsv_uR2.tsv_o1);
+  tsv_h1L = tsv_dL2.tsv_hbd(tsv_q0L, tsv_pOL); tsv_h1R = tsv_dR2.tsv_hbd(tsv_q0R, tsv_pOR);
+  tsv_yL = tsv_dL1.tsv_hbd(tsv_h0L, tsv_h1L); tsv_yR = tsv_dR1.tsv_hbd(tsv_h0R, tsv_h1R);
+);
+tsv_mWm = max(tsv_mWm*tsv_mDec, tsv_wmG); tsv_mGr = max(tsv_mGr*tsv_mDec, tsv_cGr);
+
+tsv_yL *= tsv_outG; tsv_yR *= tsv_outG;
+tsv_t7_dst ? ( tsv_t7_dkg = tsv_t7_dk*tsv_t7_dk*(3 - 2*tsv_t7_dk); tsv_yL *= tsv_t7_dkg; tsv_yR *= tsv_t7_dkg; );
+tsv_bpS += ((tsv_byp ? 1 : 0) - tsv_bpS)*0.002;
+tsv_yL += (tsv_dryL - tsv_yL)*tsv_bpS; tsv_yR += (tsv_dryR - tsv_yR)*tsv_bpS;
+(ost_l = (tsv_yL); ost_r = (tsv_yR));
+spl0 = ost_l; spl1 = ost_r;
+tsv_a_ = max(abs(spl0), abs(spl1)); tsv_mOut = tsv_a_ > tsv_mOut ? tsv_a_ : tsv_mOut*tsv_mDec;
+0;
+);
+
 
 // ======================== the strip ========================
+// ---------- presets: the Init values of every slider, and each preset as changes from Init ----------
+function ch_defaults() (
+  slider1 = 20;
+  slider2 = 22000;
+  slider3 = 0;
+  slider4 = 1;
+  slider5 = 0;
+  slider6 = 1;
+  slider7 = 0;
+  slider8 = 1;
+  slider9 = 0;
+  slider10 = 0;
+  slider11 = 0;
+  slider12 = 1;
+  slider13 = 0;
+  slider14 = 0;
+  slider15 = 50;
+  slider16 = 0;
+  slider17 = 30;
+  slider18 = 120;
+  slider19 = 6000;
+  slider20 = -0.3;
+  slider25 = 0;
+  slider26 = 1;
+  slider27 = 50;
+  slider28 = 1;
+  slider29 = 0;
+  slider30 = 2;
+  slider31 = 0;
+  slider32 = 1;
+  slider33 = 4;
+  slider34 = 0;
+  slider35 = 3;
+  slider36 = 0;
+  slider37 = 1;
+  slider38 = 20;
+  slider39 = 0;
+  slider40 = 22000;
+  slider41 = 0;
+  slider42 = 0;
+  slider43 = 0;
+  slider44 = 1;
+  slider45 = 5;
+  slider46 = 1;
+  slider47 = 2;
+  slider48 = 5;
+  slider49 = 2;
+  slider50 = 5;
+  slider51 = 1;
+  slider52 = 20;
+  slider53 = 0;
+  slider54 = 22000;
+  slider55 = 0;
+  slider56 = 0;
+  slider57 = 20;
+  slider58 = 22000;
+  slider59 = 0;
+  slider60 = 100;
+  slider61 = 0;
+  slider62 = 0;
+  slider63 = 600;
+  slider64 = 1;
+  slider65 = 0;
+  slider66 = 2500;
+  slider67 = 1;
+  slider68 = 0;
+  slider69 = 8000;
+  slider70 = 0;
+  slider71 = 1;
+  slider72 = 1;
+  slider73 = 0;
+  slider74 = 0;
+  slider75 = 100;
+  slider76 = 1;
+  slider77 = 0;
+  slider78 = 1;
+  slider79 = 500;
+  slider80 = 1;
+  slider81 = 0;
+  slider82 = 1;
+  slider83 = 2500;
+  slider84 = 1;
+  slider85 = 0;
+  slider86 = 1;
+  slider87 = 8000;
+  slider88 = 1;
+  slider89 = 0;
+  slider90 = 1;
+  slider91 = 0;
+  slider92 = 1;
+  slider93 = 20;
+  slider94 = 1;
+  slider95 = 30;
+  slider96 = 0;
+  slider97 = 0;
+  slider98 = 18000;
+  slider99 = 0;
+  slider100 = 0;
+  slider101 = 0;
+  slider102 = 0;
+  slider103 = 0;
+  slider104 = 0;
+  slider105 = 0;
+  slider106 = 3;
+  slider107 = 7;
+  slider108 = 0;
+  slider109 = 1;
+  slider110 = 100;
+  slider111 = 50;
+  slider112 = 1;
+  slider113 = -18;
+  slider114 = 3;
+  slider115 = 3;
+  slider116 = 250;
+  slider117 = 0;
+  slider118 = 0;
+  slider119 = 0;
+  slider120 = -50;
+  slider121 = 20;
+  slider122 = 200;
+  slider123 = 1;
+  slider124 = 1;
+  slider125 = 1;
+  slider126 = 100;
+  slider127 = 3;
+  slider128 = 0;
+  slider129 = 1;
+  slider130 = 1;
+  slider131 = 0;
+  slider132 = 100;
+  slider133 = 0;
+  slider134 = 0;
+  slider135 = 0;
+  slider136 = -40;
+  slider137 = 60;
+  slider138 = 2;
+  slider139 = 0.5;
+  slider140 = 50;
+  slider141 = 150;
+  slider142 = 4;
+  slider143 = 0;
+  slider144 = 0;
+  slider145 = 0;
+  slider146 = 0;
+  slider147 = 100;
+  slider148 = 20;
+  slider149 = 20000;
+  slider150 = 1000;
+  slider151 = 0;
+  slider152 = 0;
+  slider153 = 100;
+  slider154 = 0;
+  slider155 = -50;
+  slider156 = 20;
+  slider157 = 200;
+  slider158 = -30;
+  slider159 = 40;
+  slider160 = 40;
+  slider161 = 120;
+  slider162 = 150;
+  slider163 = 0;
+  slider171 = 20;
+  slider177 = 3;
+  slider178 = 0;
+  slider179 = 0;
+  slider180 = 0;
+  slider196 = 0;
+  slider197 = 0;
+  slider198 = 0;
+  slider199 = 0;
+  slider200 = 1;
+  slider201 = 100;
+  slider202 = 0;
+  slider203 = 1;
+  slider204 = 1;
+  slider205 = 20;
+  0;
+);
+#ch_pm = "Init|Vocal Chain|Vocal Smooth|Kick|Snare|Toms|Bass DI|Electric Guitar|Acoustic Guitar|Piano|Drum Bus|Broadcast Voice|Room Smash|Lo-Fi";
+ch_npre = 14;
+function ch_pstr(p) (
+  p == 2 ? "14:4.2 1:90 9:1 10:1 155:-55 156:12 157:250 7:0 103:0 104:10 105:-7 106:4 107:6 5:1 59:-1.5 60:180 62:-2 63:300 64:1.2 65:2.5 66:3200 67:1.2 68:3 69:12000 72:1 11:0 171:20" :
+  p == 3 ? "14:-1.7 1:80 7:2 127:4.5 128:2 129:1 130:1 132:100 5:2 75:200 76:1.5 77:-2 79:450 80:1.2 81:-1.5 83:3500 84:1.2 85:2 87:11000 88:1.2 89:3 102:1 11:2 177:2.5 179:1" :
+  p == 4 ? "1:30 9:2 10:1 158:-30 159:40 160:30 161:90 162:70 163:0 7:0 103:0 104:8 105:-6 106:3 107:6 5:0 29:4 30:1 31:5 32:0 33:0 34:-4 35:1 36:3 37:0 11:0 171:35" :
+  p == 5 ? "14:2.8 1:80 9:2 10:1 158:-28 159:30 160:40 161:140 162:220 163:0 7:0 103:4 104:6 105:-6 106:5 107:5 110:70 5:1 59:2 60:200 61:1 62:-3 63:500 65:3 66:5000 67:1.4 68:2 69:10000 11:1 171:30" :
+  p == 6 ? "14:-0.6 1:50 9:0 10:1 136:-36 137:30 140:120 141:400 143:2 148:60 149:3000 7:1 113:-22 114:4 115:5 116:200 117:4 5:1 59:3 60:100 61:1 62:-4 63:400 64:1.4 65:2 66:4000 11:0 171:25" :
+  p == 7 ? "14:2.1 1:30 2:12000 7:0 103:0 104:9 105:-7 106:2 107:3 5:0 25:1 43:3 44:1 45:7 46:1 47:1 48:4 49:1 50:6 11:2 177:4.5 179:0 180:15" :
+  p == 8 ? "1:90 2:9500 7:1 113:-20 114:3 115:8 116:250 117:3 5:1 62:-3 63:350 64:1 65:2 66:2200 67:0.8 68:-2 69:7000 70:1 11:1 171:25" :
+  p == 9 ? "1:80 7:1 113:-20 114:2.5 115:10 116:300 117:2.5 5:2 75:150 76:1.5 77:-2.5 79:250 80:1.2 81:-2 83:4000 84:0.8 85:1.5 87:12000 88:1.5 89:3.5 102:1 11:3 196:2 197:-1.5 198:1 199:0 200:1" :
+  p == 10 ? "14:-1.3 1:40 7:2 127:3 128:1 129:1 130:0 132:80 5:0 29:3 30:1 31:1 33:3 34:-2 35:4 36:2 37:1 11:0 171:15" :
+  p == 11 ? "14:-4 1:30 7:1 113:-24 114:4 115:10 116:150 117:4 126:60 5:1 59:2 60:60 62:-1.5 63:400 68:2.5 69:12000 11:3 196:3 197:-2 198:2 199:2 200:1 201:100" :
+  p == 12 ? "14:1.3 1:100 2:14000 9:1 10:1 155:-50 156:15 157:300 7:1 113:-26 114:4 115:2 116:150 117:6 118:-2 5:2 75:90 77:-3 79:250 80:1.5 81:1.5 83:2500 85:2.5 87:7000 89:-1.5 11:0 171:15" :
+  p == 13 ? "14:1.1 1:60 7:0 103:4 104:18 105:-12 106:3 107:7 110:60 5:1 59:3 60:90 62:-3 63:600 68:4 69:9000 11:1 171:50" :
+  p == 14 ? "14:2.2 1:200 2:5000 7:0 103:4 104:14 105:-10 106:6 107:6 5:0 25:1 47:2 48:8 11:3 196:8 197:-6 198:6 199:3 200:1 201:100" :
+  "";
+);
+CH_PT = 900000;                                           // preset parser scratch
+function ch_nums(s, dst) local(i, n, c, len, acc, neg, fr, scl, inn) (
+  n = 0; i = 0; inn = 0; len = strlen(s);
+  loop(len + 1,
+    c = i < len ? str_getchar(s, i) : 32;
+    c >= 48 && c <= 57 ? (
+      !inn ? ( inn = 1; acc = 0; fr = 0; scl = 1; neg = 0; );
+      fr ? ( scl *= 0.1; acc += (c - 48) * scl; ) : acc = acc * 10 + c - 48;
+    ) : c == 46 ? (
+      !inn ? ( inn = 1; acc = 0; scl = 1; neg = 0; ); fr = 1;
+    ) : c == 45 ? (
+      inn = 1; acc = 0; fr = 0; scl = 1; neg = 1;
+    ) : (
+      inn ? ( dst[n] = neg ? -acc : acc; n += 1; inn = 0; );
+    );
+    i += 1;
+  );
+  n;
+);
+// a preset: everything back to Init, then its changes. GUARD, DRIFT and the output stage stay as they are
+// (Reset all to defaults, p < 0: those too)
+function ch_load(p) local(n, i, k4, k15, k16, k17, k18, k19, k20) (
+  k4 = slider4; k15 = slider15; k16 = slider16; k17 = slider17; k18 = slider18; k19 = slider19; k20 = slider20;
+  ch_defaults();
+  p > 0 ? (
+    slider4 = k4; slider15 = k15; slider16 = k16; slider17 = k17; slider18 = k18; slider19 = k19; slider20 = k20;
+    n = ch_nums(ch_pstr(p), CH_PT);
+    i = 0; loop(floor(n / 2), slider(CH_PT[i * 2]) = CH_PT[i * 2 + 1]; i += 1; );
+  );
+  ch_pauto = 1;
+);
 function ch_ms(ms) ( 1 - exp(-1 / (max(ms, 0.01) * 0.001 * srate)); );
 function ch_shp(x, p) ( x / (1 + abs(x) ^ p) ^ (1 / p); );
 function ch_tanh(x) ( x = min(max(x, -3), 3); x * (27 + x * x) / (27 + 9 * x * x); );
@@ -2569,7 +3278,16 @@ function ch_gate_slider() (
 );
 // the gate's reduction for the panel (dB, positive) and whether it is open
 function ch_gate_gr() ( ch_gatem == 0 ? -min(gtg_mGA, gtg_mGB) : ch_gatem == 1 ? -gxo_gtm : -20 * log10(max(dg_g, 0.00001)); );
-function ch_sat_start(m) ( ch_satlat = 0; );
+function ch_sat_lat() ( ch_satm == 3 ? tsv_own_pdc_delay : 0; );
+function ch_sat_start(m) (
+  m == 2 ? ( sth_consts(); sth_init(); sth_consts(); sth_slider(); sth_block(); ) :
+  m == 3 ? ( tsv_consts(); tsv_init(); tsv_consts(); tsv_slider(); tsv_block(); );
+  ch_satlat = ch_sat_lat();
+);
+function ch_sat_slider() (
+  ch_satm == 2 ? ( sth_consts(); sth_slider(); ) :
+  ch_satm == 3 ? ( ch_t2 = slider204; slider204 = ch_tos; tsv_consts(); tsv_slider(); slider204 = ch_t2; );
+);
 
 function ch_latency() (
   ch_lat = ch_eqlat + ch_cmplat + ch_gatelat + ch_satlat;
@@ -2582,7 +3300,8 @@ function ch_update() local(q, tr) (
   ch_eqt = slider6 >= 0.5; ch_cmpt = slider8 >= 0.5; ch_gatet = slider10 >= 0.5; ch_satt = slider12 >= 0.5;
   ch_lev = 10 ^ (slider14 / 20);
   drift_macro(slider15);
-  ost_setup(slider16 / 100, slider17 / 100, slider18, slider19, slider20, 1);   // character unit: CLIP always on
+  // (HEAD's BOOST drives the band saturation as on the Headsmoother, on top of BAND SAT)
+  ost_setup(min(slider16 / 100 + (ch_satm == 2 && slider12 >= 0.5 ? slider180 / 100 : 0), 1), slider17 / 100, slider18, slider19, slider20, 1);
   // SAT: IRON / TRANSISTOR (the output iron, or a transistor line stage)
   tr = ch_satm == 1;
   ch_od = slider171 / 100; ch_odr = 10 ^ (ch_od * 15 / 20); ch_oco = 1 / ch_odr ^ 0.85;
@@ -2599,13 +3318,14 @@ function ch_apply() (
   (slider11 | 0) != ch_satm ? ( ch_satm = slider11 | 0; ch_sat_start(ch_satm); );
   ch_ord = slider13 >= 0.5;
   ch_gla = slider143; ch_gatem == 0 ? ( gtg_block(); ch_gatelat = ch_gate_lat(); );
-  memset(CH_DQ, 0, 8 * CH_DN);
+  ch_tos = slider204; ch_satm == 3 ? ( tsv_slider(); tsv_block(); ch_satlat = ch_sat_lat(); );
+  memset(CH_DQ, 0, 10 * CH_DN);
   ch_latency();
   ch_update();
 );
 function ch_pending() (
   (slider5 | 0) != ch_eqm || (slider7 | 0) != ch_cmpm || (slider9 | 0) != ch_gatem || (slider11 | 0) != ch_satm ||
-  (slider13 >= 0.5) != ch_ord || slider143 != ch_gla;
+  (slider13 >= 0.5) != ch_ord || slider143 != ch_gla || slider204 != ch_tos;
 );
 
 // ---------- EQ ----------
@@ -2617,7 +3337,7 @@ function ch_eq() local(wl, wr) (
   ch_l = ch_mix(ch_eqg, wl, ch_dry(0, ch_l, ch_eqlat));
   ch_r = ch_mix(ch_eqg, wr, ch_dry(1, ch_r, ch_eqlat));
 );
-// ---------- COMP, GATE (next) ----------
+// ---------- COMP ----------
 function ch_comp() local(wl, wr) (
   spl0 = ch_l * ch_ihd; spl1 = ch_r * ch_ihd;
   ch_cmpm == 0 ? cpf_sample() : ch_cmpm == 1 ? cpo_sample() : cps_sample();
@@ -2639,7 +3359,13 @@ function ch_gate() local(wl, wr) (
 // ---------- SAT ----------
 function ch_sat() local(wl, wr, t, k) (
   ch_satg = ch_satt ? min(ch_satg + ch_xs, 1) : max(ch_satg - ch_xs, 0);
-  ch_satg > 0 ? (
+  ch_satm >= 2 ? (
+    // HEAD (the Headsmoother's tape head) / TS-7: always running, the IN key crossfades (latency kept)
+    spl0 = ch_l * ch_ihd; spl1 = ch_r * ch_ihd;
+    ch_satm == 2 ? sth_sample() : tsv_sample();
+    wl = spl0 * ch_hd; wr = spl1 * ch_hd;
+    ch_l = ch_mix(ch_satg, wl, ch_dry(8, ch_l, ch_satlat)); ch_r = ch_mix(ch_satg, wr, ch_dry(9, ch_r, ch_satlat));
+  ) : ch_satg > 0 ? (
     t = ch_hd * 1.1;
     ch_satm == 1 ? (
       // TRANSISTOR: a harder knee, a touch of asymmetry, a little brighter
@@ -2674,13 +3400,14 @@ function ch_srinit() (
   ch_sga = ch_ms(80); ch_sgr = ch_ms(400);                // the supply's sag follower
   ch_ilc = 1 - exp(-2 * $pi * 150 / srate);               // IRON: the low band that saturates first
   ch_vuk = 1 - exp(-1 / (0.3 * srate));                   // VU ballistics (the needle has its own mass as well)
-  ch_gla = slider143;
+  ch_gla = slider143; ch_tos = slider204;
   ch_eqm = slider5 | 0; ch_cmpm = slider7 | 0; ch_gatem = slider9 | 0; ch_satm = slider11 | 0; ch_ord = slider13 >= 0.5;
   // every engine starts once (each keeps its own settings); the strip runs the chosen one per slot
   ch_eq_start(1); ch_eq_start(2); ch_eq_start(0); ch_eq_start(ch_eqm);
   ch_cmp_start(1); ch_cmp_start(2); ch_cmp_start(0); ch_cmp_start(ch_cmpm);
-  ch_gate_start(1); ch_gate_start(2); ch_gate_start(0); ch_gate_start(ch_gatem); ch_sat_start(ch_satm);
-  memset(CH_DQ, 0, 8 * CH_DN); ch_dw = 0;
+  ch_gate_start(1); ch_gate_start(2); ch_gate_start(0); ch_gate_start(ch_gatem);
+  ch_sat_start(2); ch_sat_start(3); ch_sat_start(ch_satm);
+  memset(CH_DQ, 0, 10 * CH_DN); ch_dw = 0;
   ch_latency();
   ch_update();
 );
@@ -2692,18 +3419,20 @@ ch_hl.bq_set(1, slider1, 0.7071, 0); ch_hr.bq_set(1, slider1, 0.7071, 0); ch_ll.
 ch_dflt = 1;
 
 @slider
-!ch_pcf && !ch_pcq ? ( ch_update(); ch_eq_slider(); ch_cmp_slider(); ch_gate_slider(); );
+!ch_pcf && !ch_pcq ? ( ch_update(); ch_eq_slider(); ch_cmp_slider(); ch_gate_slider(); ch_sat_slider(); );
 
 @block
 srate != ch_sr ? ch_srinit();
 // an engine, ORDER or preset change: fade out (12 ms), switch at the silent point, fade back in (20 ms)
 (ch_pending() || ch_pcq) && !ch_pcf ? ( ch_pcf = 1; ch_pcq = 0; );
-ch_pcf == 2 ? ( ch_apply(); ch_eq_slider(); ch_cmp_slider(); ch_gate_slider(); ch_pcf = 3; ch_pch = ch_lat + 32; );
-ch_pcf != 1 ? ( ch_update(); ch_eq_slider(); ch_cmp_slider(); ch_gate_slider(); );
+ch_pcf == 2 ? ( ch_pnext ? ( ch_load(ch_pnext); ch_pnext = 0; ); ch_apply(); ch_eq_slider(); ch_cmp_slider(); ch_gate_slider(); ch_sat_slider(); ch_pcf = 3; ch_pch = ch_lat + 32; );
+ch_pcf != 1 ? ( ch_update(); ch_eq_slider(); ch_cmp_slider(); ch_gate_slider(); ch_sat_slider(); );
 ch_eqm == 0 ? eqt_block() : ch_eqm == 1 ? eqb_block() : eqs_block();
 ch_cmpm == 0 ? cpf_block() : ch_cmpm == 1 ? cpo_block() : cps_block();
 // (the GATE's look-ahead changes the latency: the engine keeps the old one until the fade's silent point)
 ch_gatem == 0 ? ( ch_t = slider143; slider143 = ch_gla; gtg_block(); slider143 = ch_t; ) : ch_gatem == 1 ? gxo_block() : 0;
+// (TS-7's oversampling changes its latency too: the same hold until the silent point)
+ch_satm == 2 ? sth_block() : ch_satm == 3 ? ( ch_t = slider204; slider204 = ch_tos; tsv_block(); slider204 = ch_t; );
 // DRIFT: the supply voltage wanders slowly (its sag under load is followed per sample)
 // LOW CUT / HIGH CUT: the corners glide (about 20 ms), the filters always run and fade in and out (10 ms)
 ch_k = 1 - exp(-samplesblock / (0.02 * srate));
@@ -2807,8 +3536,10 @@ rd_sub(52, 36, "MODULAR CHANNEL STRIP", RULE, 1);
 ui_col(ACC); gfx_rect(232 * sc, 12 * sc, 46 * sc, 28 * sc);
 rd_title(240, 13, "45", 20, INK);
 pk_pextra = "Reset all to defaults";
-k_ = pk_preset(300 * sc, 9 * sc, 440 * sc, 34 * sc, pr_cur, "Init");
-k_ > 0 ? ( pr_cur = 1; );
+k_ = pk_preset(300 * sc, 9 * sc, 440 * sc, 34 * sc, pr_cur, #ch_pm);
+// the preset applies at the silent point of the strip's fade (no click), then the host hears every slider
+k_ > 0 ? ( ch_pnext = k_ > ch_npre ? -1 : k_; pr_cur = k_ > ch_npre ? 1 : k_; ch_pcq = 1; );
+ch_pauto ? ( gi = 1; loop(205, ui_auto(gi); gi += 1; ); ch_pauto = 0; );
 ui_size_picker(862 * sc, 16 * sc);
 
 // ======================== INPUT ========================
@@ -2987,7 +3718,24 @@ sat_ <= 1 ? (
   rd_lbl(850, 136, sat_ ? "TRANSISTOR LINE STAGE" : "OUTPUT IRON", INK, 0.9);
   rd_lbl(850, 154, sat_ ? "harder knee, a little brighter," : "the low end saturates first,", DIM, 0.75);
   rd_lbl(850, 168, sat_ ? "a touch of asymmetry" : "the top softens as it is driven", DIM, 0.75);
-) : rd_lbl(796, 156, "(HEAD and TS-7 come next)", DIM, 0.6);
+) : sat_ == 2 ? (
+  // ---- HEAD (the Headsmoother's tape head): DRIVE, TRIM, BOOST; NORMAL / MEDIUM / BRIGHT
+  sprintf(#v, "%.1f", slider177); dy_knob(690, 148, 20, 177, 0, 10, 3, 0, C_DRV, "DRIVE", #v);
+  sprintf(#v, "%+.1f dB", slider178); dy_knob(770, 148, 16, 178, -24, 6, 0, 0, C_FREQ, "TRIM", #v);
+  sprintf(#v, "%.0f%%", slider180); dy_knob(840, 148, 16, 180, 0, 100, 0, 0, C_GAIN, "BOOST", #v);
+  gi = 0; loop(3, key(886, 118 + gi * 24, 58, 20, (slider179 | 0) == gi, gi == 0 ? "NORMAL" : gi == 1 ? "MEDIUM" : "BRIGHT") ? setv(179, gi); gi += 1; );
+  rd_lbl(796, 204, "tape head: the lows skip the curve as it is driven", DIM, 0.7);
+) : (
+  // ---- TS-7: INPUT, WARMTH, MIX, OUTPUT; COMP OFF / TX / BUS / SLAM, IRON, 2x / 4x
+  sprintf(#v, "%+.1f dB", slider196); dy_knob(676, 142, 16, 196, -12, 24, 0, 0, C_DRV, "INPUT", #v);
+  sprintf(#v, "%d", slider198); sk(740, 142, 16, 198, 7, 0, C_GAIN, "WARMTH", slider198 < 0.5 ? "OFF" : #v);
+  sprintf(#v, "%.0f%%", slider201); dy_knob(804, 142, 16, 201, 0, 100, 100, 0, C_FREQ, "MIX", #v);
+  sprintf(#v, "%+.1f dB", slider197); dy_knob(868, 142, 16, 197, -24, 12, 0, 0, C_FREQ, "OUTPUT", #v);
+  gi = 0; loop(4, key(648 + gi * 44, 194, 40, 20, (slider199 | 0) == gi, gi == 0 ? "OFF" : gi == 1 ? "TX" : gi == 2 ? "BUS" : "SLAM") ? setv(199, gi); gi += 1; );
+  key(828, 194, 46, 20, slider200 >= 0.5, "IRON") ? setv(200, slider200 >= 0.5 ? 0 : 1);
+  key(880, 194, 30, 20, slider204 < 0.5, "2x") ? setv(204, 0); key(914, 194, 30, 20, slider204 >= 0.5, "4x") ? setv(204, 1);
+  rd_lbl(736, 222, "COMP", DIM, 0.75);
+);
 
 // ======================== OUTPUT ========================
 md(640, 236, 312, 376, "OUTPUT");
