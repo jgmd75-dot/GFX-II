@@ -124,6 +124,7 @@ AMPS & DRIVE
   Tuner 45        gfx-tuner-45.jsfx
 
 DYNAMICS
+  Channel 45      gfx-channel-45.jsfx
   Channel 92      gfx-channel-92.jsfx
   Compressor Q    gfx-compressor-q.jsfx
   De-Ess          gfx-de-ess.jsfx
@@ -132,7 +133,6 @@ DYNAMICS
   Gate            gfx-gate.jsfx
   Headsmoother    gfx-headsmoother.jsfx
   Heft            gfx-heft.jsfx
-  Linea 78        gfx-linea-78.jsfx
   MK3             gfx-mk3.jsfx
   MUTO            gfx-muto.jsfx
   OB Q            gfx-ob-q.jsfx
